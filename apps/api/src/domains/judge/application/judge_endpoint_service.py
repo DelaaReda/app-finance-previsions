@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha1
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
-from storage.io import load_json
+from storage.io import load_json, save_json
 
 try:
     from services.judge_quality import build_judge_quality_report  # type: ignore
@@ -45,7 +45,11 @@ except Exception:  # pragma: no cover
 
 
 JudgeVerdictsComputeFn = Callable[..., Awaitable[Dict[str, Any]]]
+DECISION_JOURNAL_STORAGE_KEY = "decision_journal"
+DECISION_JOURNAL_SCHEMA_VERSION = "decision_journal_v1"
 DECISION_JOURNAL_FEEDBACK_HORIZONS = ("1d", "1w", "1m")
+DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY = "judge_decision_outcome_feedback_records"
+DECISION_OUTCOME_FEEDBACK_RECORDS_SCHEMA_VERSION = "decision_outcome_feedback_records_v1"
 _DECISION_JOURNAL_FEEDBACK_DELTAS = {
     "1d": timedelta(days=1),
     "1w": timedelta(weeks=1),
@@ -55,6 +59,27 @@ _DECISION_JOURNAL_FEEDBACK_DELTAS = {
 
 def _default_risk_levels() -> List[str]:
     return ["low", "medium", "high", "critical"]
+
+
+def _decision_journal_dir() -> Path:
+    override = str(os.getenv("JUDGE_DECISION_JOURNAL_DIR") or "").strip()
+    if override:
+        path = Path(override)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+    try:
+        from platform.legacy.core.path_resolver import get_data_directory  # type: ignore
+
+        base_dir = get_data_directory()
+    except Exception:  # pragma: no cover
+        base_dir = Path(__file__).resolve().parents[4] / "runtime" / "data"
+    path = base_dir / "decision_journal"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _decision_journal_store() -> VersionedNotesStore:
+    return VersionedNotesStore(storage_dir=str(_decision_journal_dir()))
 
 
 def _coerce_text_list(*values: Any) -> List[str]:
@@ -153,6 +178,241 @@ def _build_outcome_feedback(captured_at: str) -> Dict[str, Any]:
     }
 
 
+def _coerce_feedback_status(raw_status: Any) -> str:
+    text = str(raw_status or "").strip().lower()
+    return text or "recorded"
+
+
+def _coerce_feedback_horizon(raw_horizon: Any) -> str:
+    raw = str(raw_horizon or "").strip().lower()
+    if raw in DECISION_JOURNAL_FEEDBACK_HORIZONS:
+        return raw
+    return ""
+
+
+def _coerce_outcome_feedback_payload(payload: Dict[str, Any], *, now_iso: str) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("feedback must be an object")
+
+    decision_id = str(payload.get("decision_id") or "").strip()
+    if not decision_id:
+        raise ValueError("decision_id is required")
+
+    horizon = _coerce_feedback_horizon(payload.get("horizon"))
+    if not horizon:
+        raise ValueError(
+            "horizon is required and must be one of 1d, 1w, 1m"
+        )
+
+    outcome = payload.get("outcome")
+    if isinstance(outcome, str):
+        outcome_text = outcome.strip().lower()
+    elif outcome is not None:
+        outcome_text = str(outcome).strip()
+    else:
+        outcome_text = None
+
+    recorded_at_raw = str(payload.get("recorded_at") or now_iso).strip() or now_iso
+    recorded_at = _utc_datetime_iso(_parse_utc_datetime(recorded_at_raw))
+
+    notes = str(payload.get("notes") or "").strip() or None
+    record = {
+        "schema_version": DECISION_OUTCOME_FEEDBACK_RECORDS_SCHEMA_VERSION,
+        "record_id": sha1(
+            f"{decision_id}|{horizon}|{recorded_at}".encode("utf-8")
+        ).hexdigest()[:16],
+        "decision_id": decision_id,
+        "horizon": horizon,
+        "status": _coerce_feedback_status(payload.get("status")),
+        "outcome": outcome_text,
+        "recorded_at": recorded_at,
+    }
+
+    actual_return = _safe_float(payload.get("actual_return"))
+    if actual_return is not None:
+        record["actual_return"] = actual_return
+    if notes is not None:
+        record["notes"] = notes
+    return record
+
+
+def _load_outcome_feedback_records() -> List[Dict[str, Any]]:
+    store = load_json(DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY) or {}
+    if not isinstance(store, dict):
+        return []
+    records = store.get("records")
+    if not isinstance(records, list):
+        return []
+    return [record for record in records if isinstance(record, dict)]
+
+
+def _build_outcome_feedback_store_payload(
+    records: List[Dict[str, Any]],
+    *,
+    freshness: str,
+) -> Dict[str, Any]:
+    return {
+        "schema_version": DECISION_OUTCOME_FEEDBACK_RECORDS_SCHEMA_VERSION,
+        "record_mode": "append_only",
+        "count": len(records),
+        "updated_at": freshness,
+        "records": records,
+    }
+
+
+async def append_judge_decision_outcome_feedback(
+    *,
+    feedback: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Persist outcome feedback as an append-only decision feedback record."""
+    now_iso = utc_now_iso()
+    try:
+        record = _coerce_outcome_feedback_payload(feedback, now_iso=now_iso)
+        records = list(_load_outcome_feedback_records())
+        records.append(record)
+
+        payload = _build_outcome_feedback_store_payload(records, freshness=now_iso)
+        saved_path = save_json(
+            DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY,
+            payload,
+            source=["judge_outcome_feedback_service", "append_only_record"],
+            version=DECISION_OUTCOME_FEEDBACK_RECORDS_SCHEMA_VERSION,
+        )
+        if not saved_path:
+            raise RuntimeError(
+                "failed to persist judge outcome feedback record"
+            )
+
+        return service_response_with_metadata(
+            {
+                "schema_version": DECISION_OUTCOME_FEEDBACK_RECORDS_SCHEMA_VERSION,
+                "status": "recorded",
+                "decision_id": record["decision_id"],
+                "horizon": record["horizon"],
+                "record_id": record["record_id"],
+                "recorded_at": record["recorded_at"],
+                "stored_records": len(records),
+                "feedback": record,
+                "store": {
+                    "storage_key": DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY,
+                    "status": "persisted",
+                    "path": str(saved_path),
+                },
+                "source": ["judge_outcome_feedback_service"],
+            },
+            default_source="judge_outcome_feedback_service",
+            freshness=record["recorded_at"],
+            status="ok",
+        )
+    except Exception as exc:
+        return service_response_with_metadata(
+            {
+                "schema_version": DECISION_OUTCOME_FEEDBACK_RECORDS_SCHEMA_VERSION,
+                "status": "degraded",
+                "message": "Unable to record decision outcome feedback.",
+                "error": str(exc),
+                "stored_records": 0,
+                "source": ["judge_outcome_feedback_service", "fallback"],
+            },
+            default_source="judge_outcome_feedback_service",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
+        )
+
+
+async def get_judge_decision_outcome_feedback(
+    *,
+    decision_id: Optional[str] = None,
+    horizon: Optional[str] = None,
+    status_filter: Optional[str] = None,
+    limit: int = 200,
+) -> Dict[str, Any]:
+    """Return persisted decision outcome feedback records with optional filters."""
+    now_iso = utc_now_iso()
+    try:
+        records = list(_load_outcome_feedback_records())
+        normalized_decision_id = str(decision_id or "").strip()
+        normalized_horizon = _coerce_feedback_horizon(horizon) if horizon else ""
+        if horizon and not normalized_horizon:
+            raise ValueError("horizon must be one of 1d, 1w, 1m")
+        normalized_status = str(status_filter or "").strip().lower() or None
+
+        filtered_records = records
+        if normalized_decision_id:
+            filtered_records = [
+                item
+                for item in filtered_records
+                if str(item.get("decision_id") or "").strip() == normalized_decision_id
+            ]
+        if normalized_horizon:
+            filtered_records = [
+                item
+                for item in filtered_records
+                if str(item.get("horizon") or "").strip() == normalized_horizon
+            ]
+        if normalized_status:
+            filtered_records = [
+                item
+                for item in filtered_records
+                if str(item.get("status") or "").strip().lower() == normalized_status
+            ]
+
+        try:
+            max_items = max(1, int(limit))
+        except Exception:
+            max_items = 200
+
+        ordered_records = sorted(
+            filtered_records,
+            key=lambda record: str(record.get("recorded_at") or ""),
+            reverse=True,
+        )
+        returned_records = ordered_records[:max_items]
+
+        return service_response_with_metadata(
+            {
+                "schema_version": DECISION_OUTCOME_FEEDBACK_RECORDS_SCHEMA_VERSION,
+                "record_mode": "append_only",
+                "filters": {
+                    "decision_id": normalized_decision_id or None,
+                    "horizon": normalized_horizon or None,
+                    "status": normalized_status or None,
+                },
+                "count": len(records),
+                "filtered_count": len(filtered_records),
+                "returned_count": len(returned_records),
+                "records": returned_records,
+            },
+            default_source="judge_outcome_feedback_service",
+            freshness=now_iso,
+            status="ok",
+        )
+    except Exception as exc:
+        return service_response_with_metadata(
+            {
+                "schema_version": DECISION_OUTCOME_FEEDBACK_RECORDS_SCHEMA_VERSION,
+                "record_mode": "append_only",
+                "filters": {
+                    "decision_id": str(decision_id or "").strip() or None,
+                    "horizon": horizon or None,
+                    "status": str(status_filter or "").strip() or None,
+                },
+                "count": 0,
+                "filtered_count": 0,
+                "returned_count": 0,
+                "records": [],
+                "message": "Unable to read decision outcome feedback records.",
+                "error": str(exc),
+                "source": ["judge_outcome_feedback_service", "fallback"],
+            },
+            default_source="judge_outcome_feedback_service",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
+        )
+
+
 def _build_journal_entry(
     verdict: Dict[str, Any],
     *,
@@ -241,6 +501,78 @@ def _build_journal_entry(
     }
 
 
+def _serialize_stored_decision_note(note: Any) -> Dict[str, Any]:
+    metadata = dict(note.metadata) if isinstance(getattr(note, "metadata", None), dict) else {}
+    version = note.versions[-1] if getattr(note, "versions", None) else None
+    captured_at = str(
+        metadata.get("captured_at")
+        or metadata.get("recorded_at")
+        or note.created_at
+        or utc_now_iso()
+    ).strip() or utc_now_iso()
+    entry = {
+        "decision_id": str(
+            metadata.get("decision_id")
+            or metadata.get("note_id")
+            or note.note_id
+        ),
+        "date": str(metadata.get("date") or captured_at[:10]),
+        "captured_at": captured_at,
+        "recorded_at": str(metadata.get("recorded_at") or captured_at),
+        "ticker": str(metadata.get("ticker") or note.ticker or "UNKNOWN").strip().upper() or "UNKNOWN",
+        "action": coerce_verdict(metadata.get("action") or metadata.get("verdict"), default="hold"),
+        "confidence": coerce_confidence(metadata.get("confidence"), default=0.5),
+        "horizon": str(metadata.get("horizon") or "1w").strip() or "1w",
+        "why": _coerce_text_list(metadata.get("why")),
+        "risk": (
+            dict(metadata.get("risk"))
+            if isinstance(metadata.get("risk"), dict)
+            else {
+                "level": normalize_risk_level(metadata.get("risk_level"), default="medium"),
+                "caveat": str(metadata.get("risk_caveat") or "").strip(),
+            }
+        ),
+        "prediction": (
+            dict(metadata.get("prediction"))
+            if isinstance(metadata.get("prediction"), dict)
+            else {
+                "expected_return": _safe_float(metadata.get("expected_return")),
+                "score": _safe_float(metadata.get("score")),
+            }
+        ),
+        "outcome_feedback": (
+            dict(metadata.get("outcome_feedback"))
+            if isinstance(metadata.get("outcome_feedback"), dict)
+            else _build_outcome_feedback(captured_at)
+        ),
+        "sources": ensure_source_list(
+            metadata.get("sources") or getattr(version, "references", None),
+            default_source="judge_decision_journal_service",
+        ),
+        "profile": str(metadata.get("profile") or "manual").strip() or "manual",
+        "provenance": str(metadata.get("provenance") or "manual").strip() or "manual",
+        "recommendation_id": metadata.get("recommendation_id"),
+        "context": metadata.get("context") if isinstance(metadata.get("context"), dict) else {},
+        "created_at": note.created_at,
+        "updated_at": note.updated_at,
+        "title": note.title,
+        "summary": getattr(version, "summary", "") or note.title,
+        "note_id": note.note_id,
+        "source": ["judge_decision_journal_service"],
+    }
+    ensure_decision_contract(
+        entry,
+        default_source="judge_decision_journal_service",
+        verdict=entry.get("action"),
+        confidence=entry.get("confidence"),
+        why=entry.get("why"),
+        risk_level=(entry.get("risk") or {}).get("level"),
+        risk_caveat=(entry.get("risk") or {}).get("caveat"),
+        freshness=entry.get("recorded_at"),
+    )
+    return entry
+
+
 def _attach_decision_journal_projection(
     data: Dict[str, Any],
     *,
@@ -278,8 +610,9 @@ def _attach_decision_journal_projection(
         for entry in entries
         if isinstance(entry, dict)
     )
+    store = _persist_decision_journal_entries(entries, generated_at=generated_at)
     data["decision_journal"] = {
-        "schema_version": "decision_journal_v1",
+        "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
         "generated_at": generated_at,
         "count": len(entries),
         "append_only": True,
@@ -294,6 +627,7 @@ def _attach_decision_journal_projection(
             "pending_feedback_records": pending_feedback_records,
         },
         "entries": entries,
+        "store": store,
     }
     append_source_tag(
         data,
@@ -305,7 +639,100 @@ def _attach_decision_journal_projection(
         "decision_outcome_feedback_v1",
         default_source="judge_endpoint_service",
     )
+    append_source_tag(
+        data,
+        "decision_journal_store_v1" if store.get("status") == "persisted" else "decision_journal_store_degraded",
+        default_source="judge_endpoint_service",
+    )
+    if store.get("status") != "persisted":
+        warnings = data.get("warnings")
+        if not isinstance(warnings, list):
+            warnings = [] if warnings in (None, "") else [str(warnings)]
+        warning = "decision_journal_store_unavailable"
+        if warning not in warnings:
+            warnings.append(warning)
+        data["warnings"] = warnings
     return data
+
+
+def _persist_decision_journal_entries(
+    entries: List[Dict[str, Any]],
+    *,
+    generated_at: str,
+) -> Dict[str, Any]:
+    if not entries:
+        return {
+            "status": "skipped",
+            "storage_key": DECISION_JOURNAL_STORAGE_KEY,
+            "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
+            "persisted_count": 0,
+            "total_entries": 0,
+            "path": None,
+        }
+
+    try:
+        existing_payload = load_json(DECISION_JOURNAL_STORAGE_KEY) or {}
+        existing_entries_raw = existing_payload.get("entries") if isinstance(existing_payload, dict) else []
+        existing_entries = [
+            entry
+            for entry in existing_entries_raw
+            if isinstance(entry, dict)
+        ]
+        existing_ids = {
+            str(entry.get("decision_id") or "").strip()
+            for entry in existing_entries
+            if str(entry.get("decision_id") or "").strip()
+        }
+        new_entries: List[Dict[str, Any]] = []
+        for entry in entries:
+            decision_id = str(entry.get("decision_id") or "").strip()
+            if not decision_id or decision_id in existing_ids:
+                continue
+            existing_ids.add(decision_id)
+            new_entries.append(entry)
+
+        merged_entries = existing_entries + new_entries
+        saved_path = save_json(
+            DECISION_JOURNAL_STORAGE_KEY,
+            {
+                "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
+                "generated_at": generated_at,
+                "count": len(merged_entries),
+                "append_only": True,
+                "link_field": "decision_id",
+                "outcomes_update_mode": "separate_records",
+                "feedback_horizons": list(DECISION_JOURNAL_FEEDBACK_HORIZONS),
+                "entries": merged_entries,
+            },
+            source=["judge_endpoint_service", "decision_journal_store_v1"],
+            version=DECISION_JOURNAL_SCHEMA_VERSION,
+        )
+        if not saved_path:
+            return {
+                "status": "degraded",
+                "storage_key": DECISION_JOURNAL_STORAGE_KEY,
+                "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
+                "persisted_count": 0,
+                "total_entries": len(merged_entries),
+                "path": None,
+            }
+        return {
+            "status": "persisted",
+            "storage_key": DECISION_JOURNAL_STORAGE_KEY,
+            "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
+            "persisted_count": len(new_entries),
+            "total_entries": len(merged_entries),
+            "path": str(saved_path),
+        }
+    except Exception:
+        return {
+            "status": "degraded",
+            "storage_key": DECISION_JOURNAL_STORAGE_KEY,
+            "schema_version": DECISION_JOURNAL_SCHEMA_VERSION,
+            "persisted_count": 0,
+            "total_entries": 0,
+            "path": None,
+        }
 
 
 async def get_judge_verdicts_payload(
@@ -550,4 +977,6 @@ __all__ = [
     "get_judge_quality_payload",
     "get_judge_quality_history_payload",
     "get_judge_options_payload",
+    "append_judge_decision_outcome_feedback",
+    "get_judge_decision_outcome_feedback",
 ]

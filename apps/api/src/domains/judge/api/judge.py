@@ -14,6 +14,7 @@ import time
 from typing import Dict, Any, List, Optional, Awaitable, Callable, Literal, Tuple
 
 from fastapi import APIRouter, Query, HTTPException, Header
+from pydantic import BaseModel, Field
 from statistics import stdev
 
 # Ensure nested event loops don't break g4f client
@@ -3440,6 +3441,16 @@ async def _legacy_get_judge_options():
     return await get_judge_options_payload(risk_levels_fn=_judge_risk_levels)
 
 
+class JudgeDecisionOutcomeFeedbackRequest(BaseModel):
+    decision_id: str = Field(..., description="Judge decision id used in decision journal.")
+    horizon: str = Field(..., description="Feedback horizon: 1d, 1w, or 1m.")
+    status: Optional[str] = Field(default="recorded", description="Outcome status.")
+    outcome: Optional[str] = Field(default=None, description="Outcome label.")
+    actual_return: Optional[float] = Field(default=None, description="Observed return.")
+    notes: Optional[str] = Field(default=None, description="Optional outcome notes.")
+    recorded_at: Optional[str] = Field(default=None, description="Optional UTC ISO timestamp.")
+
+
 @router.get(
     "",
     response_model=JudgeResponse if JudgeResponse is not None else None,
@@ -3535,3 +3546,33 @@ async def get_judge_options():
     from services.judge_endpoint_service import get_judge_options_payload
 
     return await get_judge_options_payload(risk_levels_fn=_judge_risk_levels)
+
+
+@router.post("/decision-journal/outcomes")
+async def post_judge_decision_outcome_feedback(
+    payload: JudgeDecisionOutcomeFeedbackRequest,
+):
+    """Record one judge decision outcome event (append-only feedback log)."""
+    from services.judge_endpoint_service import append_judge_decision_outcome_feedback
+
+    return await append_judge_decision_outcome_feedback(
+        feedback=payload.model_dump()
+    )
+
+
+@router.get("/decision-journal/outcomes")
+async def get_judge_decision_outcome_feedback(
+    decision_id: Optional[str] = Query(default=None, description="Filter by decision id"),
+    horizon: Optional[str] = Query(default=None, description="Filter by horizon"),
+    status: Optional[str] = Query(default=None, description="Filter by status"),
+    limit: int = Query(default=200, ge=1, le=5000, description="Max records returned"),
+):
+    """Get stored judge decision outcome feedback records."""
+    from services.judge_endpoint_service import get_judge_decision_outcome_feedback
+
+    return await get_judge_decision_outcome_feedback(
+        decision_id=decision_id,
+        horizon=horizon,
+        status_filter=status,
+        limit=limit,
+    )

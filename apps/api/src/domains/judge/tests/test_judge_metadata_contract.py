@@ -11,8 +11,9 @@ if str(SRC_ROOT) not in sys.path:
 from domains.judge.application import judge_endpoint_service
 
 
-def test_judge_verdicts_payload_exposes_stable_metadata():
+def test_judge_verdicts_payload_exposes_stable_metadata(monkeypatch):
     now_iso = "2026-03-07T16:54:00Z"
+    saved = {}
 
     async def fake_compute_verdicts_fn(**_kwargs):
         return {
@@ -32,6 +33,22 @@ def test_judge_verdicts_payload_exposes_stable_metadata():
             },
             "freshness": now_iso,
         }
+
+    def fake_load_json(_key):
+        return {
+            "schema_version": "decision_journal_v1",
+            "entries": [],
+        }
+
+    def fake_save_json(key, payload, source=None, version="v1"):
+        saved["key"] = key
+        saved["payload"] = payload
+        saved["source"] = source
+        saved["version"] = version
+        return Path("runtime/data/decision_journal.json")
+
+    monkeypatch.setattr(judge_endpoint_service, "load_json", fake_load_json)
+    monkeypatch.setattr(judge_endpoint_service, "save_json", fake_save_json)
 
     payload = asyncio.run(
         judge_endpoint_service.get_judge_verdicts_payload(
@@ -65,6 +82,14 @@ def test_judge_verdicts_payload_exposes_stable_metadata():
         "tracked_horizons": ["1d", "1w", "1m"],
         "pending_entries": 1,
         "pending_feedback_records": 3,
+    }
+    assert payload["data"]["decision_journal"]["store"] == {
+        "status": "persisted",
+        "storage_key": "decision_journal",
+        "schema_version": "decision_journal_v1",
+        "persisted_count": 1,
+        "total_entries": 1,
+        "path": "runtime/data/decision_journal.json",
     }
     assert payload["data"]["decision_journal"]["count"] == 1
     entry = payload["data"]["decision_journal"]["entries"][0]
@@ -108,6 +133,13 @@ def test_judge_verdicts_payload_exposes_stable_metadata():
     assert "metadata_contract_v1" in (payload["data"].get("source") or [])
     assert "decision_journal_projection_v1" in (payload["data"].get("source") or [])
     assert "decision_outcome_feedback_v1" in (payload["data"].get("source") or [])
+    assert "decision_journal_store_v1" in (payload["data"].get("source") or [])
+    assert saved["key"] == "decision_journal"
+    assert saved["source"] == ["judge_endpoint_service", "decision_journal_store_v1"]
+    assert saved["version"] == "decision_journal_v1"
+    assert saved["payload"]["append_only"] is True
+    assert saved["payload"]["outcomes_update_mode"] == "separate_records"
+    assert saved["payload"]["entries"][0]["decision_id"] == entry["decision_id"]
 
 
 def test_judge_options_fallback_exposes_degraded_metadata():
@@ -127,3 +159,54 @@ def test_judge_options_fallback_exposes_degraded_metadata():
     assert payload["data"]["status"] == "degraded"
     assert "judge options exploded" in str(payload["data"]["error"])
     assert payload["data"]["risk_levels"] == ["low", "medium", "high", "critical"]
+
+
+def test_judge_decision_outcome_feedback_persists_append_only(monkeypatch):
+    store = {}
+
+    def fake_load_json(key):
+        if key != judge_endpoint_service.DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY:
+            return None
+        return {"records": list(store.get("records", []))}
+
+    def fake_save_json(key, payload, source=None, version="v1"):
+        assert key == judge_endpoint_service.DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY
+        store["records"] = payload.get("records", [])
+        return Path("/tmp/judge_decision_outcome_feedback_records.json")
+
+    monkeypatch.setattr(judge_endpoint_service, "load_json", fake_load_json)
+    monkeypatch.setattr(judge_endpoint_service, "save_json", fake_save_json)
+
+    first = asyncio.run(
+        judge_endpoint_service.append_judge_decision_outcome_feedback(
+            feedback={
+                "decision_id": "judge_1",
+                "horizon": "1d",
+                "status": "resolved",
+                "outcome": "hit",
+                "actual_return": 0.015,
+            }
+        )
+    )
+    second = asyncio.run(
+        judge_endpoint_service.append_judge_decision_outcome_feedback(
+            feedback={
+                "decision_id": "judge_2",
+                "horizon": "1w",
+                "status": "resolved",
+                "outcome": "miss",
+                "actual_return": -0.013,
+            }
+        )
+    )
+
+    assert first["status"] == "ok"
+    assert first["data"]["stored_records"] == 1
+    assert second["status"] == "ok"
+    assert second["data"]["stored_records"] == 2
+    assert (
+        first["data"]["store"]["storage_key"]
+        == judge_endpoint_service.DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY
+    )
+    assert second["data"]["stored_records"] == len(store["records"])
+    assert store["records"][-1]["decision_id"] == "judge_2"
