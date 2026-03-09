@@ -748,7 +748,14 @@ function normalizeCopilotOpenTarget(target, id) {
   ) {
     return 'brief';
   }
-  if (normalizedId === 'ask_copilot' || normalizedTarget === '/copilot/ask' || normalizedTarget === '/copilot') {
+  if (
+    normalizedId === 'ask_copilot'
+    || normalizedId === 'open_copilot'
+    || normalizedId === 'copilot'
+    || normalizedTarget === '/copilot/ask'
+    || normalizedTarget === '/copilot'
+    || normalizedTarget === 'copilot'
+  ) {
     return 'copilot';
   }
   return normalizedTarget.replace(/^\/+/, '');

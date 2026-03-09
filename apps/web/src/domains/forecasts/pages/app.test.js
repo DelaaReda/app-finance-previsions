@@ -243,6 +243,16 @@ function loadSanitizeCopilotStart() {
       ) {
         return 'brief';
       }
+      if (
+        normalizedId === 'ask_copilot'
+        || normalizedId === 'open_copilot'
+        || normalizedId === 'copilot'
+        || normalizedTarget === '/copilot'
+        || normalizedTarget === '/copilot/ask'
+        || normalizedTarget === 'copilot'
+      ) {
+        return 'copilot';
+      }
       return normalizedTarget.replace(/^\/+/, '');
     },
   };
@@ -1250,6 +1260,23 @@ test('sanitizeCopilotStart preserves starter tickers and normalizes brief open t
 
   assert.deepEqual(JSON.parse(JSON.stringify(result.ask[0].tickers)), ['NVDA', 'MSFT']);
   assert.equal(result.open[0].target, 'brief');
+});
+
+test('sanitizeCopilotStart maps open_copilot open action to copilot without relying on target', () => {
+  const sandbox = loadSanitizeCopilotStart();
+
+  const result = sandbox.sanitizeCopilotStart({
+    open: [
+      {
+        id: 'open_copilot',
+        label: 'Open copilot',
+      },
+    ],
+  });
+
+  assert.equal(result.open.length, 1);
+  assert.equal(result.open[0].id, 'open_copilot');
+  assert.equal(result.open[0].target, 'copilot');
 });
 
 test('sanitizeCopilotStart prefers direct ask tickers over prefill tickers', () => {

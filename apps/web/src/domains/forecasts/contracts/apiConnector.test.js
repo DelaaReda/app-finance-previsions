@@ -460,6 +460,39 @@ test('getCopilotStart unwraps the dedicated starter contract and normalizes open
   assert.deepEqual(payload.stats, { ask_count: 1, open_count: 2 });
 });
 
+test('getCopilotStart maps open_copilot without explicit target to the copilot landing', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          brief_of_day: {
+            title: 'Brief of the day',
+            summary: 'AI names are still driving momentum.',
+            sentiment: 'positive',
+            generated_at: '2026-03-09T06:00:00.000Z',
+          },
+          ask: [],
+          open: [
+            {
+              id: 'open_copilot',
+              label: 'Open copilot',
+            },
+          ],
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotStart();
+  const copilotStart = payload.copilot_start || {};
+
+  assert.deepEqual(
+    copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
+    [{ id: 'open_copilot', target: 'copilot' }]
+  );
+});
+
 test('getCopilotStart falls back to copilot context when the starter route is unavailable', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {
