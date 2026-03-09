@@ -21,6 +21,7 @@ function loadSync(overrides = {}) {
               summary: 'Rates are steady and breadth is improving.',
             },
           },
+          scope_tickers: ['NVDA', 'MSFT'],
           story: {
             headline: 'Brief of the day'
           }
@@ -83,16 +84,18 @@ test('syncMountedDashboardUI replays live data, restores the hero entry point, a
           summary: 'Rates are steady and breadth is improving.',
         },
       },
+      scope_tickers: ['NVDA', 'MSFT'],
       story: {
         headline: 'Brief of the day'
       }
     }
   });
-  assert.deepEqual(heroBriefCalls, [
+  assert.deepEqual(JSON.parse(JSON.stringify(heroBriefCalls)), [
     {
       brief_of_day: {
         summary: 'Rates are steady and breadth is improving.',
       },
+      scope_tickers: ['NVDA', 'MSFT'],
     },
   ]);
   assert.equal(heroSection.style.display, 'block');

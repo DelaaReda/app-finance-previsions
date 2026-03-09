@@ -35,11 +35,19 @@
       const payloadData = payload.data && typeof payload.data === 'object'
         ? payload.data
         : payload;
-      const copilotStart = payloadData.copilot_start && typeof payloadData.copilot_start === 'object'
+      const rawCopilotStart = payloadData.copilot_start && typeof payloadData.copilot_start === 'object'
         ? payloadData.copilot_start
         : (payloadData.copilotStart && typeof payloadData.copilotStart === 'object'
           ? payloadData.copilotStart
           : payloadData);
+      const copilotStart = rawCopilotStart && typeof rawCopilotStart === 'object'
+        ? {
+          ...rawCopilotStart,
+          scope_tickers: Array.isArray(rawCopilotStart.scope_tickers)
+            ? rawCopilotStart.scope_tickers
+            : payloadData.scope_tickers
+        }
+        : rawCopilotStart;
       win.renderHeroCopilotBrief(copilotStart);
     }
 
