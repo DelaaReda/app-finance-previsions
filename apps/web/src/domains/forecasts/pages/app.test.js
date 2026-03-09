@@ -203,9 +203,9 @@ function loadSanitizeCopilotStart() {
       ],
       open: [
         {
-          id: 'market',
-          label: 'Open market view',
-          target: 'market',
+          id: 'brief_of_day',
+          label: 'Open Live Brief',
+          target: '/brief/daily',
         },
       ],
     },
@@ -233,8 +233,15 @@ function loadSanitizeCopilotStart() {
     normalizeCopilotStartOpenTarget(target, id = '') {
       const normalizedTarget = String(target || '').trim().toLowerCase();
       const normalizedId = String(id || '').trim().toLowerCase();
-      if (normalizedId === 'brief_of_day' || normalizedTarget === '/brief/daily') {
-        return 'market';
+      if (
+        normalizedId === 'brief_of_day'
+        || normalizedTarget === '/brief/daily'
+        || normalizedTarget === 'brief_of_day'
+        || normalizedTarget === 'brief'
+        || normalizedTarget === 'live_brief'
+        || normalizedTarget === 'daily_brief'
+      ) {
+        return 'brief';
       }
       return normalizedTarget.replace(/^\/+/, '');
     },
@@ -297,9 +304,9 @@ function loadRenderHeroCopilotBriefWithHeroIds(resolvedState) {
         ],
         open: [
           {
-            id: 'market',
-            label: 'Open market view',
-            target: 'market',
+            id: 'brief_of_day',
+            label: 'Open Live Brief',
+            target: 'brief',
           },
         ],
       };
@@ -431,7 +438,11 @@ function loadRunCopilotStartPrompt() {
 
 function loadRunCopilotStartOpen() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
-  const functionSource = extractFunction(source, 'runCopilotStartOpen', '\n\nfunction resolveCopilotStartState(');
+  const functionSource = extractSection(
+    source,
+    'function resolveCopilotStartOpenDestination(',
+    '\n\nfunction resolveCopilotStartState('
+  );
   const overlay = {
     style: { display: '' },
     classList: {
@@ -442,7 +453,13 @@ function loadRunCopilotStartOpen() {
     focused: 0,
     toggled: 0,
     switched: [],
+    scrolled: 0,
     toasts: [],
+  };
+  const overviewAnchor = {
+    scrollIntoView() {
+      calls.scrolled += 1;
+    },
   };
   const sandbox = {
     console,
@@ -453,10 +470,15 @@ function loadRunCopilotStartOpen() {
     document: {
       getElementById(id) {
         if (id === 'aiCopilotOverlay') return overlay;
+        if (id === 'tab-overview') return { id: 'tab-overview' };
         if (id === 'tab-market') return { id: 'tab-market' };
+        if (id === 'market-pulse-widget-container') return overviewAnchor;
         return null;
       },
       querySelector(selector) {
+        if (selector === '.tab-btn[data-tab="overview"]') {
+          return { id: 'tab-btn-overview' };
+        }
         if (selector === '.tab-btn[data-tab="market"]') {
           return { id: 'tab-btn-market' };
         }
@@ -469,8 +491,15 @@ function loadRunCopilotStartOpen() {
     normalizeCopilotStartOpenTarget(target, id = '') {
       const normalizedTarget = String(target || '').trim().toLowerCase();
       const normalizedId = String(id || '').trim().toLowerCase();
-      if (normalizedId === 'brief_of_day' || normalizedTarget === '/brief/daily') {
-        return 'market';
+      if (
+        normalizedId === 'brief_of_day'
+        || normalizedTarget === '/brief/daily'
+        || normalizedTarget === 'brief_of_day'
+        || normalizedTarget === 'brief'
+        || normalizedTarget === 'live_brief'
+        || normalizedTarget === 'daily_brief'
+      ) {
+        return 'brief';
       }
       if (normalizedId === 'ask_copilot' || normalizedTarget === '/copilot' || normalizedTarget === '/copilot/ask') {
         return 'copilot';
@@ -527,6 +556,8 @@ function loadRenderHeroCopilotBrief() {
   };
   const marketTab = { id: 'tab-market' };
   const marketTabButton = { id: 'tab-btn-market' };
+  const overviewTab = { id: 'tab-overview' };
+  const overviewTabButton = { id: 'tab-btn-overview' };
   const promptCalls = [];
   const openCalls = [];
   const sandbox = {
@@ -542,12 +573,14 @@ function loadRenderHeroCopilotBrief() {
         if (selector === '.hero-daily-brief .ai-summary-content') return summaryEl;
         if (selector === '.hero-daily-brief .ai-timestamp') return timestampEl;
         if (selector === '.hero-daily-brief .hero-brief-actions') return actionsRoot;
+        if (selector === '.tab-btn[data-tab="overview"]') return overviewTabButton;
         if (selector === '.tab-btn[data-tab="market"]') return marketTabButton;
         return null;
       },
       getElementById(id) {
         if (id === 'aiCopilotOverlay') return overlay;
         if (id === 'aiOverlayInput') return input;
+        if (id === 'tab-overview') return overviewTab;
         if (id === 'tab-market') return marketTab;
         return null;
       },
@@ -768,7 +801,7 @@ test('applyLiveDashboardData hydrates the hero brief from live copilot_start dat
     open: [
       {
         label: 'Open live brief',
-        target: 'market',
+        target: 'brief',
       },
     ],
   });
@@ -800,7 +833,7 @@ test('applyLiveDashboardData hydrates the hero brief from live copilot_start dat
     open: [
       {
         label: 'Open live brief',
-        target: 'market',
+        target: 'brief',
       },
     ],
   });
@@ -831,6 +864,17 @@ test('runCopilotStartOpen opens the overlay when the hero starter targets copilo
   assert.deepEqual(calls.toasts, []);
 });
 
+test('runCopilotStartOpen routes the landing brief to overview and scrolls the live brief widget', () => {
+  const { sandbox, overlay, calls } = loadRunCopilotStartOpen();
+
+  sandbox.runCopilotStartOpen('/brief/daily');
+
+  assert.equal(overlay.style.display, 'none');
+  assert.deepEqual(calls.switched, ['overview']);
+  assert.equal(calls.scrolled, 1);
+  assert.deepEqual(calls.toasts, []);
+});
+
 test('renderHeroCopilotBrief swaps the static hero copy for live brief and actions', () => {
   const { sandbox, summaryEl, timestampEl, actionsRoot, promptCalls, openCalls } = loadRenderHeroCopilotBrief();
 
@@ -849,7 +893,7 @@ test('renderHeroCopilotBrief swaps the static hero copy for live brief and actio
     open: [
       {
         label: 'Open live brief',
-        target: 'market',
+        target: 'brief',
       },
       {
         label: 'Open copilot',
@@ -873,7 +917,7 @@ test('renderHeroCopilotBrief swaps the static hero copy for live brief and actio
       tickers: ['NVDA'],
     },
   ]);
-  assert.deepEqual(openCalls, ['market']);
+  assert.deepEqual(openCalls, ['overview']);
 });
 
 test('renderHeroCopilotBrief accepts raw copilot_start payloads from app state', () => {
@@ -913,7 +957,7 @@ test('renderHeroCopilotBrief accepts raw copilot_start payloads from app state',
       tickers: ['NVDA', 'MSFT'],
     },
   ]);
-  assert.deepEqual(openCalls, ['market']);
+  assert.deepEqual(openCalls, ['overview']);
 });
 
 test('renderPortfolioHealthFullDetails maps portfolio state and risk profile into the full analysis panel', () => {
@@ -975,7 +1019,7 @@ test('sanitizeCopilotStart preserves starter tickers and normalizes brief open t
   });
 
   assert.deepEqual(JSON.parse(JSON.stringify(result.ask[0].tickers)), ['NVDA', 'MSFT']);
-  assert.equal(result.open[0].target, 'market');
+  assert.equal(result.open[0].target, 'brief');
 });
 
 test('sanitizeCopilotStart prefers direct ask tickers over prefill tickers', () => {
@@ -1024,9 +1068,9 @@ test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actio
     ],
     open: [
       {
-        id: 'market',
+        id: 'brief_of_day',
         label: 'Open Live Brief',
-        target: 'market',
+        target: 'brief',
       },
       {
         id: 'opportunities',
@@ -1061,7 +1105,7 @@ test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actio
       tickers: ['NVDA', 'MSFT'],
     },
   ]);
-  assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['market']);
+  assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['brief']);
 
   assert.equal(elements.heroSuggestionChips.children.length, 2);
   assert.equal(elements.heroSuggestionChips.children[0].textContent, 'Watch next');
@@ -1080,5 +1124,5 @@ test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actio
       tickers: [],
     },
   ]);
-  assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['market', 'opportunities']);
+  assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['brief', 'opportunities']);
 });

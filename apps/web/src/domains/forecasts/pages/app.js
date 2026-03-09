@@ -1351,9 +1351,9 @@ const FALLBACK_COPILOT_START = {
   ],
   open: [
     {
-      id: 'market',
-      label: 'Open market view',
-      target: 'market'
+      id: 'brief_of_day',
+      label: 'Open Live Brief',
+      target: '/brief/daily'
     },
     {
       id: 'opportunities',
@@ -3260,7 +3260,7 @@ function buildDefaultCopilotStartState() {
       }
     ],
     open: [
-      { id: 'market', label: 'Open market view', target: 'market' },
+      { id: 'brief_of_day', label: 'Open Live Brief', target: '/brief/daily' },
       { id: 'opportunities', label: 'Open opportunities', target: 'opportunities' },
       { id: 'copilot', label: 'Ask a custom question', target: 'copilot' }
     ]
@@ -3303,8 +3303,15 @@ function normalizeCopilotStartOpen(value) {
 function normalizeCopilotStartOpenTarget(target, id = '') {
   const normalizedTarget = toString(target, '').trim().toLowerCase();
   const normalizedId = toString(id, '').trim().toLowerCase();
-  if (normalizedId === 'brief_of_day' || normalizedTarget === '/brief/daily') {
-    return 'market';
+  if (
+    normalizedId === 'brief_of_day'
+    || normalizedTarget === '/brief/daily'
+    || normalizedTarget === 'brief_of_day'
+    || normalizedTarget === 'brief'
+    || normalizedTarget === 'live_brief'
+    || normalizedTarget === 'daily_brief'
+  ) {
+    return 'brief';
   }
   if (normalizedId === 'ask_copilot' || normalizedTarget === '/copilot' || normalizedTarget === '/copilot/ask') {
     return 'copilot';
@@ -3423,8 +3430,40 @@ function runCopilotStartPrompt(prompt, tickers = []) {
 
 function runCopilotStartOpen(target) {
   const normalizedTarget = normalizeCopilotStartOpenTarget(target);
+  const route = normalizedTarget
+    ? {
+      brief: {
+        tab: 'overview',
+        anchorId: 'market-pulse-widget-container'
+      },
+      overview: {
+        tab: 'overview'
+      },
+      market: {
+        tab: 'market'
+      },
+      opportunities: {
+        tab: 'opportunities'
+      },
+      performance: {
+        tab: 'performance'
+      },
+      ailab: {
+        tab: 'ailab'
+      },
+      copilot: {
+        tab: 'copilot'
+      }
+    }[normalizedTarget]
+    : null;
+  const destination = route
+    ? {
+      target: normalizedTarget,
+      ...route
+    }
+    : null;
   const overlay = document.getElementById('aiCopilotOverlay');
-  if (!normalizedTarget || normalizedTarget === 'copilot') {
+  if (!destination || destination.target === 'copilot') {
     const overlayClosed = !!overlay && (overlay.style.display === 'none' || !overlay.style.display);
     if (overlayClosed) {
       toggleAICopilot();
@@ -3434,9 +3473,9 @@ function runCopilotStartOpen(target) {
     return;
   }
 
-  const targetPanel = document.getElementById(`tab-${normalizedTarget}`);
+  const targetPanel = document.getElementById(`tab-${destination.tab}`);
   if (!targetPanel) {
-    showToast(`Open ${normalizedTarget} is unavailable`, 'error');
+    showToast(`Open ${destination.target} is unavailable`, 'error');
     return;
   }
 
@@ -3448,7 +3487,12 @@ function runCopilotStartOpen(target) {
   }
 
   setTimeout(() => {
-    safeSwitchTab(document.querySelector(`.tab-btn[data-tab="${normalizedTarget}"]`), normalizedTarget);
+    safeSwitchTab(document.querySelector(`.tab-btn[data-tab="${destination.tab}"]`), destination.tab);
+    if (destination.anchorId) {
+      setTimeout(() => {
+        document.getElementById(destination.anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 30);
+    }
   }, 30);
 }
 
