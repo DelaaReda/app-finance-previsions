@@ -46,6 +46,7 @@ except Exception:  # pragma: no cover
 get_portfolio_service = _portfolio_module.get_portfolio_service
 Portfolio = _portfolio_module.Portfolio
 PortfolioPerformance = _portfolio_module.PortfolioPerformance
+PortfolioRiskProfile = _portfolio_module.PortfolioRiskProfile
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +148,10 @@ def _serialize_portfolio(portfolio: Portfolio) -> Dict[str, Any]:
 
 def _serialize_performance(perf: PortfolioPerformance) -> Dict[str, Any]:
     return perf.model_dump()
+
+
+def _serialize_risk_profile(profile: PortfolioRiskProfile) -> Dict[str, Any]:
+    return profile.model_dump()
 
 
 @router.get("/portfolios")
@@ -361,6 +366,55 @@ def get_portfolio_performance(
             source="portfolio_performance",
             error=str(exc),
             route_payload={"id": portfolio_id},
+        )
+
+
+@router.get("/portfolios/{portfolio_id}/risk-profile")
+def get_portfolio_risk_profile(
+    portfolio_id: str,
+    benchmark: str = Query("SPY", description="Benchmark ticker"),
+    start_date: Optional[str] = Query(
+        None, description="Start date (YYYY-MM-DD). Defaults to 1 year ago."
+    ),
+    end_date: Optional[str] = Query(
+        None, description="End date (YYYY-MM-DD). Defaults to today."
+    ),
+):
+    try:
+        service = get_portfolio_service()
+        risk_profile = service.get_risk_profile(
+            portfolio_id,
+            benchmark=benchmark,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if not risk_profile:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Portfolio {portfolio_id} not found",
+            )
+        return _ok(
+            _serialize_risk_profile(risk_profile),
+            source="portfolio_risk_profile",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(
+            "Error getting portfolio risk profile %s: %s",
+            portfolio_id,
+            exc,
+            exc_info=True,
+        )
+        return _error_payload(
+            source="portfolio_risk_profile",
+            error=str(exc),
+            route_payload={
+                "id": portfolio_id,
+                "benchmark": benchmark,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
         )
 
 

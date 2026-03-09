@@ -3,7 +3,7 @@ Portfolio Service - Manage user portfolios/watchlists
 Author: ELENA-INTEGRATION-UX-ENGINEER-BLACKWIDOW-39
 Task: API-PORTFOLIO-001 - Portfolio/Watchlist management
 """
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 import uuid
@@ -12,6 +12,100 @@ from pathlib import Path
 import json
 
 logger = logging.getLogger(__name__)
+
+try:
+    from services import portfolio_performance_service as _performance_module
+except Exception:  # pragma: no cover
+    try:
+        from domains.market_data.application import portfolio_performance_service as _performance_module
+    except Exception:  # pragma: no cover
+        _performance_module = None
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _get_performance_service():
+    if _performance_module is None:
+        raise ImportError("portfolio_performance_service is unavailable")
+    return _performance_module.get_performance_service()
+
+
+def _equal_weights(tickers: List[str]) -> Dict[str, float]:
+    if not tickers:
+        return {}
+    weight = round(1.0 / len(tickers), 4)
+    return {ticker: weight for ticker in sorted(tickers)}
+
+
+def _classify_risk_profile(
+    tickers: List[str],
+    *,
+    volatility: Optional[float],
+    max_drawdown: Optional[float],
+    beta: Optional[float],
+    sharpe_ratio: Optional[float],
+) -> Tuple[str, str, List[str], List[str]]:
+    tickers_count = len(tickers)
+    score = 0
+    why: List[str] = []
+    warnings: List[str] = []
+
+    if tickers_count <= 2:
+        score += 1
+        warnings.append(f"Portfolio is concentrated across {tickers_count or 0} ticker(s).")
+        why.append("Risk view uses an equal-weight assumption on a concentrated portfolio.")
+    elif tickers_count >= 8:
+        score -= 1
+        why.append(f"Diversification improves with {tickers_count} tickers.")
+    else:
+        why.append(f"Portfolio spans {tickers_count} tickers under equal-weight assumptions.")
+
+    if volatility is not None:
+        if volatility >= 0.35:
+            score += 2
+            warnings.append(f"Realized volatility is elevated at {volatility:.2f}.")
+            why.append("Realized volatility is firmly above the medium-risk band.")
+        elif volatility >= 0.20:
+            score += 1
+            why.append(f"Realized volatility is moderate-to-high at {volatility:.2f}.")
+        elif volatility <= 0.12:
+            score -= 1
+            why.append(f"Realized volatility is contained at {volatility:.2f}.")
+
+    if beta is not None:
+        if beta >= 1.20:
+            score += 2
+            warnings.append(f"Benchmark beta is elevated at {beta:.2f}.")
+            why.append("Portfolio beta implies amplified moves versus the benchmark.")
+        elif beta >= 0.90:
+            score += 1
+            why.append(f"Benchmark beta is near market sensitivity at {beta:.2f}.")
+        elif beta <= 0.75:
+            score -= 1
+            why.append(f"Benchmark beta is defensive at {beta:.2f}.")
+
+    if max_drawdown is not None:
+        drawdown_abs = abs(max_drawdown)
+        if drawdown_abs >= 0.25:
+            score += 2
+            warnings.append(f"Historical max drawdown reached {drawdown_abs:.2f}.")
+            why.append("Historical drawdown is deep enough to warrant a high-risk flag.")
+        elif drawdown_abs >= 0.12:
+            score += 1
+            why.append(f"Historical max drawdown reached {drawdown_abs:.2f}.")
+
+    if sharpe_ratio is not None and sharpe_ratio < 0:
+        score += 1
+        warnings.append("Sharpe ratio is negative, which weakens risk-adjusted returns.")
+        why.append("Risk-adjusted returns are currently negative.")
+
+    if score <= 0:
+        return "defensive", "low", why[:3], warnings
+    if score <= 2:
+        return "balanced", "medium", why[:3], warnings
+    return "high_beta", "high", why[:3], warnings
 
 
 class Portfolio(BaseModel):
@@ -36,6 +130,28 @@ class PortfolioPerformance(BaseModel):
     sharpe_ratio: Optional[float] = None
     vs_benchmark: Optional[Dict[str, float]] = None
     calculated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class PortfolioRiskProfile(BaseModel):
+    """Portfolio state plus risk-profile snapshot."""
+
+    portfolio: Dict[str, Any]
+    benchmark: str
+    weights: Dict[str, float] = Field(default_factory=dict)
+    metrics: Dict[str, Optional[float]] = Field(default_factory=dict)
+    risk_profile: str = "balanced"
+    risk_level: str = "medium"
+    risk: Dict[str, Any] = Field(default_factory=dict)
+    why: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    filters_applied: Dict[str, Any] = Field(default_factory=dict)
+    stats: Dict[str, Any] = Field(default_factory=dict)
+    confidence: float = 0.45
+    generated_at: str = Field(default_factory=_now_iso)
+    source: List[str] = Field(
+        default_factory=lambda: ["portfolio_service", "portfolio_risk_profile"]
+    )
+    error: Optional[str] = None
 
 
 class PortfolioService:
@@ -297,9 +413,7 @@ class PortfolioService:
         
         # Use performance service for real calculations
         try:
-            from backend.services.portfolio_performance_service import get_performance_service
-            
-            perf_service = get_performance_service()
+            perf_service = _get_performance_service()
             metrics, comparison, _ = perf_service.calculate_performance(
                 tickers=portfolio.tickers,
                 weights=None,  # Equal-weighted for now
@@ -342,6 +456,143 @@ class PortfolioService:
                     "outperformance": None
                 }
             )
+
+    def get_risk_profile(
+        self,
+        portfolio_id: str,
+        benchmark: str = "SPY",
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> Optional[PortfolioRiskProfile]:
+        """Return a stable risk-profile snapshot for a persisted portfolio."""
+        portfolio = self.portfolios.get(portfolio_id)
+        if not portfolio:
+            return None
+
+        tickers = sorted(portfolio.tickers)
+        payload = PortfolioRiskProfile(
+            portfolio={
+                "id": portfolio.id,
+                "name": portfolio.name,
+                "description": portfolio.description,
+                "tickers": tickers,
+                "tickers_count": len(tickers),
+                "updated_at": portfolio.updated_at,
+            },
+            benchmark=benchmark,
+            weights=_equal_weights(tickers),
+            filters_applied={
+                "portfolio_id": portfolio.id,
+                "benchmark": benchmark,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            stats={
+                "tickers_count": len(tickers),
+                "equal_weight_assumption": True,
+                "has_live_metrics": False,
+                "non_null_metrics": 0,
+            },
+        )
+
+        if not tickers:
+            payload.risk_profile = "defensive"
+            payload.risk_level = "low"
+            payload.risk = {
+                "level": "low",
+                "caveat": "Portfolio has no holdings yet, so the profile is low-information.",
+            }
+            payload.why = [
+                "No holdings are stored yet, so the endpoint returns an empty-state risk view."
+            ]
+            payload.warnings = [
+                "Add at least one ticker to compute realized portfolio risk metrics."
+            ]
+            payload.confidence = 0.3
+            return payload
+
+        try:
+            perf_service = _get_performance_service()
+            metrics, comparison, _ = perf_service.calculate_performance(
+                tickers=tickers,
+                weights=None,
+                start_date=start_date,
+                end_date=end_date,
+                benchmark=benchmark,
+            )
+
+            raw_metrics = {
+                "total_return": metrics.total_return,
+                "annualized_return": metrics.annualized_return,
+                "volatility": metrics.volatility,
+                "sharpe_ratio": metrics.sharpe_ratio,
+                "max_drawdown": metrics.max_drawdown,
+                "win_rate": metrics.win_rate,
+                "beta": comparison.beta,
+                "alpha": comparison.alpha,
+                "correlation": comparison.correlation,
+                "outperformance": comparison.outperformance,
+            }
+            non_null_metrics = sum(value is not None for value in raw_metrics.values())
+            risk_profile, risk_level, why, warnings = _classify_risk_profile(
+                tickers,
+                volatility=metrics.volatility,
+                max_drawdown=metrics.max_drawdown,
+                beta=comparison.beta,
+                sharpe_ratio=metrics.sharpe_ratio,
+            )
+
+            payload.metrics = raw_metrics
+            payload.risk_profile = risk_profile
+            payload.risk_level = risk_level
+            payload.risk = {
+                "level": risk_level,
+                "caveat": (
+                    warnings[0]
+                    if warnings
+                    else "Profile derived from equal-weight performance metrics."
+                ),
+            }
+            payload.why = why or [
+                "Risk profile derived from equal-weight performance metrics and benchmark comparison."
+            ]
+            payload.warnings = warnings
+            payload.stats = {
+                "tickers_count": len(tickers),
+                "equal_weight_assumption": True,
+                "has_live_metrics": non_null_metrics > 0,
+                "non_null_metrics": non_null_metrics,
+                "largest_position_weight": payload.weights.get(tickers[0]) if tickers else None,
+            }
+            payload.confidence = round(min(0.85, 0.35 + (0.05 * non_null_metrics)), 2)
+            payload.generated_at = _now_iso()
+            return payload
+        except Exception as e:
+            logger.error(f"Error calculating risk profile for {portfolio_id}: {str(e)}")
+            risk_profile, risk_level, why, warnings = _classify_risk_profile(
+                tickers,
+                volatility=None,
+                max_drawdown=None,
+                beta=None,
+                sharpe_ratio=None,
+            )
+            payload.risk_profile = risk_profile
+            payload.risk_level = risk_level
+            payload.risk = {
+                "level": risk_level,
+                "caveat": "Performance metrics unavailable; profile uses composition-only fallback.",
+            }
+            payload.why = why or [
+                "Performance metrics were unavailable, so the profile falls back to holdings concentration only."
+            ]
+            payload.warnings = warnings + [
+                "Performance metrics unavailable; returned a composition-only fallback profile."
+            ]
+            payload.error = str(e)
+            payload.confidence = 0.35
+            payload.generated_at = _now_iso()
+            payload.source.append("portfolio_risk_profile_fallback")
+            return payload
 
 
 # Singleton instance
