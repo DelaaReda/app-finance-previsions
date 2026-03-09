@@ -754,7 +754,9 @@ function normalizeCopilotOpenTarget(target, id) {
     || normalizedId === 'copilot'
     || normalizedTarget === '/copilot/ask'
     || normalizedTarget === '/copilot'
+    || normalizedTarget === '/copilot/'
     || normalizedTarget === 'copilot'
+    || normalizedTarget === 'copilot/'
   ) {
     return 'copilot';
   }

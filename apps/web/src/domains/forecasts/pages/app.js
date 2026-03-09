@@ -3340,7 +3340,9 @@ function normalizeCopilotStartOpenTarget(target, id = '') {
     || normalizedId === 'open_copilot'
     || normalizedId === 'copilot'
     || normalizedTarget === '/copilot'
+    || normalizedTarget === '/copilot/'
     || normalizedTarget === '/copilot/ask'
+    || normalizedTarget === 'copilot/'
     || normalizedTarget === 'copilot'
   ) {
     return 'copilot';
@@ -3494,6 +3496,12 @@ function resolveCopilotStartOpenDestination(target) {
     },
     ailab: {
       tab: 'ailab'
+    },
+    '/copilot/': {
+      tab: 'copilot'
+    },
+    'copilot/': {
+      tab: 'copilot'
     },
     copilot: {
       tab: 'copilot'

@@ -266,6 +266,50 @@ test('getCopilotContext normalizes direct copilot_start open targets for the exi
   );
 });
 
+test('getCopilotContext normalizes copilot slashed targets to the copilot overlay', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          copilot_start: {
+            brief_of_day: {
+              title: 'Brief of the day',
+              summary: 'Markets remain resilient after the last macro print.',
+              sentiment: 'balanced',
+              generated_at: '2026-03-09T06:00:00.000Z',
+            },
+            ask: [
+              {
+                id: 'ask_copilot',
+                label: 'Ask about NVDA',
+                prefill: {
+                  question: 'What should I watch in NVDA today?',
+                  tickers: ['NVDA'],
+                },
+              },
+            ],
+            open: [
+              {
+                id: 'open_copilot',
+                label: 'Open copilot',
+                target: '/copilot/',
+              },
+            ],
+          },
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotContext();
+  const copilotStart = payload.copilot_start || {};
+
+  assert.deepEqual(copilotStart.open.map((item) => ({ id: item.id, target: item.target })), [
+    { id: 'open_copilot', target: 'copilot' },
+  ]);
+});
+
 test('getCopilotContext forwards scoped tickers to the backend starter endpoint', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {

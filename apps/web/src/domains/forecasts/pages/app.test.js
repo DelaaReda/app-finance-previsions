@@ -511,7 +511,15 @@ function loadRunCopilotStartOpen() {
       ) {
         return 'brief';
       }
-      if (normalizedId === 'ask_copilot' || normalizedTarget === '/copilot' || normalizedTarget === '/copilot/ask') {
+      if (
+        normalizedId === 'ask_copilot'
+        || normalizedId === 'open_copilot'
+        || normalizedId === 'copilot'
+        || normalizedTarget === '/copilot'
+        || normalizedTarget === '/copilot/'
+        || normalizedTarget === '/copilot/ask'
+        || normalizedTarget === 'copilot/'
+      ) {
         return 'copilot';
       }
       return normalizedTarget.replace(/^\/+/, '');
@@ -1021,6 +1029,18 @@ test('runCopilotStartOpen opens the overlay when the hero starter targets copilo
   assert.deepEqual(calls.toasts, []);
 });
 
+test('runCopilotStartOpen opens the overlay for a trailing-slash copilot target', () => {
+  const { sandbox, overlay, calls } = loadRunCopilotStartOpen();
+
+  sandbox.runCopilotStartOpen('/copilot/');
+
+  assert.equal(calls.toggled, 1);
+  assert.equal(calls.focused, 1);
+  assert.equal(overlay.style.display, 'block');
+  assert.deepEqual(calls.switched, []);
+  assert.deepEqual(calls.toasts, []);
+});
+
 test('runCopilotStartOpen routes the landing brief to overview and scrolls the live brief widget', () => {
   const { sandbox, overlay, calls } = loadRunCopilotStartOpen();
 
@@ -1270,6 +1290,24 @@ test('sanitizeCopilotStart maps open_copilot open action to copilot without rely
       {
         id: 'open_copilot',
         label: 'Open copilot',
+      },
+    ],
+  });
+
+  assert.equal(result.open.length, 1);
+  assert.equal(result.open[0].id, 'open_copilot');
+  assert.equal(result.open[0].target, 'copilot');
+});
+
+test('sanitizeCopilotStart maps trailing-slash copilot open action to copilot', () => {
+  const sandbox = loadSanitizeCopilotStart();
+
+  const result = sandbox.sanitizeCopilotStart({
+    open: [
+      {
+        id: 'open_copilot',
+        label: 'Open copilot',
+        target: '/copilot/',
       },
     ],
   });
