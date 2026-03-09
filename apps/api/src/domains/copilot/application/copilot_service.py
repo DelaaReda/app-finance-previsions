@@ -10,6 +10,11 @@ from importlib import import_module
 from typing import Any, Dict, List, Optional
 
 try:
+    from storage import io as storage_io
+except Exception:  # pragma: no cover
+    storage_io = None  # type: ignore
+
+try:
     from services.service_standard import coerce_confidence, ensure_decision_contract  # type: ignore
 except Exception:  # pragma: no cover
     try:
@@ -578,12 +583,10 @@ def _load_daily_brief_payload() -> Dict[str, Any]:
         "source": ["brief_daily_fallback"],
     }
 
-    try:
-        from storage.io import load_json
-    except Exception:
+    if storage_io is None:
         return fallback_payload
 
-    snapshot = load_json("brief_daily") or load_json("brief_weekly")
+    snapshot = storage_io.load_json("brief_daily") or storage_io.load_json("brief_weekly")
     if not isinstance(snapshot, dict) or not snapshot:
         return fallback_payload
 
