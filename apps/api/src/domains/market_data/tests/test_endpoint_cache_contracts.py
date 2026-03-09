@@ -128,3 +128,57 @@ def test_news_feed_contract_and_cache_hit(monkeypatch):
     assert isinstance(cache_meta, dict)
     assert cache_meta.get("hit") is True
     assert "news_feed_cache_hit" in (data_2.get("source") or [])
+
+
+def test_copilot_context_fallback_keeps_copilot_start_contract(monkeypatch):
+    platform_main = importlib.import_module("platform.main")
+
+    def fake_market_context_snapshot():
+        raise RuntimeError("context unavailable")
+
+    def fake_copilot_start_payload(*, context_timestamp=None):
+        return {
+            "brief_of_day": {
+                "title": "Brief of the day",
+                "summary": "No daily brief available yet.",
+                "market_sentiment": "UNKNOWN",
+                "top_signals": [],
+                "top_risks": [],
+                "macro_signals": [],
+                "sector_rotation": {"top": [], "bottom": []},
+                "generated_at": context_timestamp,
+                "freshness": context_timestamp,
+                "source": ["brief_daily_fallback"],
+            },
+            "ask": [
+                {
+                    "id": "portfolio_today",
+                    "label": "Portfolio today?",
+                    "prompt": "What should I do with my portfolio today?",
+                }
+            ],
+            "open": [
+                {
+                    "id": "market",
+                    "label": "Open market view",
+                    "target": "market",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(platform_main, "get_market_context_snapshot", fake_market_context_snapshot)
+    monkeypatch.setattr(platform_main, "build_copilot_start_payload", fake_copilot_start_payload)
+
+    endpoint = _route_endpoint("/api/copilot/context")
+    payload = asyncio.run(endpoint())
+
+    assert payload.get("ok") is True
+    data = payload.get("data") or {}
+    copilot_start = data.get("copilot_start") or {}
+    brief_of_day = copilot_start.get("brief_of_day") or {}
+
+    assert data.get("note") == "Market context service temporarily unavailable."
+    assert brief_of_day.get("summary") == "No daily brief available yet."
+    assert brief_of_day.get("source") == ["brief_daily_fallback"]
+    assert copilot_start.get("ask", [])[0]["id"] == "portfolio_today"
+    assert copilot_start.get("open", [])[0]["target"] == "market"

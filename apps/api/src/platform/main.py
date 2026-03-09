@@ -273,17 +273,20 @@ except ImportError:  # pragma: no cover
         )
 try:
     from .services.intelligence_service import (
+        build_copilot_start_payload,
         get_market_context_snapshot,
         get_market_intelligence_snapshot,
     )
 except ImportError:  # pragma: no cover
     try:
         from api.services.intelligence_service import (  # type: ignore
+            build_copilot_start_payload,
             get_market_context_snapshot,
             get_market_intelligence_snapshot,
         )
     except ImportError:
         from services.intelligence_service import (
+            build_copilot_start_payload,
             get_market_context_snapshot,
             get_market_intelligence_snapshot,
         )
@@ -807,6 +810,7 @@ def _fallback_intelligence_snapshot(message: str) -> Dict[str, Any]:
 
 
 def _fallback_market_context(message: str) -> Dict[str, Any]:
+    generated_at = datetime.utcnow().isoformat() + "Z"
     return {
         "regime": "NORMAL",
         "confidence": 0.0,
@@ -822,7 +826,8 @@ def _fallback_market_context(message: str) -> Dict[str, Any]:
             "primary_widgets": ["intelligence", "forecasts", "news"],
             "emphasis": "opportunities",
         },
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "copilot_start": build_copilot_start_payload(context_timestamp=generated_at),
+        "timestamp": generated_at,
         "note": message,
     }
 

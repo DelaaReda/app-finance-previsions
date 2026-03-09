@@ -274,6 +274,13 @@ def _build_copilot_start_payload(brief: Dict[str, Any], *, context_timestamp: Op
         "open": [dict(item) for item in COPILOT_STARTER_OPEN],
     }
 
+
+def build_copilot_start_payload(*, context_timestamp: Optional[str] = None) -> Dict[str, Any]:
+    return _build_copilot_start_payload(
+        _load_brief(),
+        context_timestamp=context_timestamp,
+    )
+
 # ---------- loading sources ----------
 
 def _load_forecasts() -> List[Dict[str, Any]]:
