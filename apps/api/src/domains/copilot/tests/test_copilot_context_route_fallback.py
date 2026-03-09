@@ -154,3 +154,46 @@ def test_copilot_context_route_fallback_keeps_scope_tickers_in_copilot_start(mon
         "nvda_memo",
     ]
     assert copilot_start.get("ask", [])[0].get("prefill", {}).get("tickers") == ["MSFT", "NVDA"]
+
+
+def test_copilot_start_route_is_mounted_in_runtime_app(monkeypatch):
+    captured = {}
+
+    async def _fake_build_context_payload(*_args, **kwargs):
+        captured["scope"] = kwargs.get("scope")
+        return {
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "Daily brief ready.",
+                    "generated_at": "2026-03-09T10:00:00Z",
+                    "freshness": "2026-03-09T10:00:00Z",
+                    "source": ["copilot_start_runtime_test"],
+                },
+                "ask": [
+                    {"id": "portfolio_today", "target": "/copilot/ask"},
+                ],
+                "open": [
+                    {"id": "brief_of_day", "target": "/brief/daily"},
+                    {"id": "open_copilot", "target": "/copilot"},
+                ],
+            }
+        }
+
+    monkeypatch.setattr(copilot_service, "build_context_payload", _fake_build_context_payload)
+
+    client = _client()
+    response = client.get("/api/copilot/start?tickers=nvda&tickers=msft&tickers=NVDA")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("ok") is True
+    assert captured.get("scope") == {"tickers": ["NVDA", "MSFT"]}
+
+    data = payload.get("data") or {}
+    assert data.get("brief_of_day", {}).get("summary") == "Daily brief ready."
+    assert [item.get("id") for item in data.get("ask", [])] == ["portfolio_today"]
+    assert [item.get("id") for item in data.get("open", [])] == ["brief_of_day", "open_copilot"]
+    assert data.get("filters_applied") == {"tickers": ["NVDA", "MSFT"]}
+    assert data.get("stats") == {"ask_count": 1, "open_count": 2}
+    assert data.get("scope_tickers") == ["NVDA", "MSFT"]
+    assert "copilot_start_route" in (data.get("source") or [])

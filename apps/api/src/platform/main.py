@@ -4445,6 +4445,45 @@ def register_routes(app: FastAPI):
                 pass
             return _ok(fallback)
 
+    @app.get("/api/copilot/start")
+    async def copilot_start_alias(
+        tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+    ):
+        try:
+            from domains.copilot.api.copilot import copilot_start as canonical_copilot_start
+
+            return await canonical_copilot_start(tickers=tickers)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("copilot_start.bootstrap_failed", exc_info=exc)
+            scope_tickers = []
+            for item in tickers or []:
+                normalized = str(item or "").strip().upper()
+                if normalized and normalized not in scope_tickers:
+                    scope_tickers.append(normalized)
+            generated_at = datetime.utcnow().isoformat() + "Z"
+            fallback = {
+                "brief_of_day": {
+                    "summary": "No daily brief available yet.",
+                    "market_sentiment": "UNKNOWN",
+                    "generated_at": generated_at,
+                    "freshness": generated_at,
+                    "source": ["copilot_daily_brief_fallback"],
+                },
+                "ask": [],
+                "open": [],
+                "generated_at": generated_at,
+                "freshness": generated_at,
+                "source": ["copilot_start_route", "critical_error_fallback"],
+                "filters_applied": {"tickers": scope_tickers},
+                "stats": {"ask_count": 0, "open_count": 0},
+                "warnings": [],
+                "note": "Market context service temporarily unavailable.",
+                "error": str(exc),
+            }
+            if scope_tickers:
+                fallback["scope_tickers"] = scope_tickers
+            return _ok(fallback)
+
     @app.get("/api/dashboard/kpis")
     async def dashboard_kpis(
         sectors: List[str] = Query([], description="Filter by sectors (e.g., Technology, Healthcare, Financials)"),
