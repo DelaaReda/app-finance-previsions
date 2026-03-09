@@ -82,6 +82,14 @@ function resolveFreshnessTimestamp(value) {
   return null;
 }
 
+function normalizeFreshnessStatus(value) {
+  const status = String(value || '').trim().toLowerCase();
+  if (!status) return '';
+  if (status === 'fresh' || status === 'ok' || status === 'healthy') return 'fresh';
+  if (status === 'stale' || status === 'aged' || status === 'delay' || status === 'delayed') return 'stale';
+  return 'degraded';
+}
+
 async function getNewsFeed(limit) {
   if (!limit) limit = 20;
   const payload = getResponseData(await fetchWithCache('/news/feed?limit=' + limit, 'news'));
@@ -805,21 +813,33 @@ function transformJudgeData(payload) {
   };
 }
 
-function buildLiveFreshnessContract(ingestionHealth, apiHealth) {
+function buildLiveFreshnessContract(ingestionHealth, apiHealth, extraSources) {
   const sourceEntries = ingestionHealth && Array.isArray(ingestionHealth.sources) ? ingestionHealth.sources : [];
-  const statuses = sourceEntries
-    .map((entry) => String(entry && entry.status ? entry.status : '').toLowerCase())
-    .filter(Boolean);
+  const supplementalSources = Array.isArray(extraSources)
+    ? extraSources
+    : (extraSources && typeof extraSources === 'object' ? [extraSources] : []);
   const healthStatus = String(ingestionHealth && ingestionHealth.status ? ingestionHealth.status : '').toLowerCase();
   const timestamps = [];
   const ttlCandidates = [];
+  const statuses = [];
 
-  sourceEntries.forEach((entry) => {
-    const timestamp = resolveFreshnessTimestamp(entry && entry.freshness);
+  [...sourceEntries, ...supplementalSources].forEach((entry) => {
+    const normalizedStatus = normalizeFreshnessStatus(entry && entry.status);
+    if (normalizedStatus) {
+      statuses.push(normalizedStatus);
+    }
+
+    const freshness = entry && Object.prototype.hasOwnProperty.call(entry, 'freshness')
+      ? entry.freshness
+      : entry;
+    const timestamp = resolveFreshnessTimestamp(freshness);
     if (timestamp !== null) {
       timestamps.push(timestamp);
     }
-    const ttlSeconds = normalizeNumber(entry && entry.freshness ? entry.freshness.ttl_seconds : 0, 0);
+    const ttlSeconds = normalizeNumber(
+      freshness && typeof freshness === 'object' ? freshness.ttl_seconds : 0,
+      0,
+    );
     if (ttlSeconds > 0) {
       ttlCandidates.push(ttlSeconds * 1000);
     }
@@ -843,10 +863,18 @@ function buildLiveFreshnessContract(ingestionHealth, apiHealth) {
     } else {
       contractState = 'degraded';
     }
-  } else if (healthStatus === 'ok' || (ingestionHealth && ingestionHealth.all_fresh === true)) {
-    contractState = 'ok';
-  } else if (healthStatus === 'degraded' || (ingestionHealth && normalizeNumber(ingestionHealth.degraded_count, 0) > 0)) {
+  }
+
+  if (contractState !== 'stale' && (
+    healthStatus === 'degraded'
+    || (ingestionHealth && normalizeNumber(ingestionHealth.degraded_count, 0) > 0)
+  )) {
     contractState = 'degraded';
+  } else if (
+    contractState === 'unknown'
+    && (healthStatus === 'ok' || healthStatus === 'healthy' || (ingestionHealth && ingestionHealth.all_fresh === true))
+  ) {
+    contractState = 'ok';
   }
 
   return {
@@ -1029,7 +1057,27 @@ async function populateWindowGlobals() {
       }
     }
 
-    const liveFreshnessContract = buildLiveFreshnessContract(window.ingestionHealth || null, window.apiHealth || null);
+    const portfolioRiskFreshnessSource = portfolioRiskProfile && (
+      portfolioRiskProfile.status
+      || portfolioRiskProfile.freshness
+      || (portfolioRiskProfile.data && portfolioRiskProfile.data.generated_at)
+    )
+      ? {
+          status: String(
+            portfolioRiskProfile.status
+              || (portfolioRiskProfile.data && portfolioRiskProfile.data.status)
+              || '',
+          ).trim().toLowerCase(),
+          freshness: portfolioRiskProfile.freshness
+            || (portfolioRiskProfile.data && (portfolioRiskProfile.data.freshness || portfolioRiskProfile.data.generated_at))
+            || null,
+        }
+      : null;
+    const liveFreshnessContract = buildLiveFreshnessContract(
+      window.ingestionHealth || null,
+      window.apiHealth || null,
+      portfolioRiskFreshnessSource,
+    );
     window.liveFreshnessContract = liveFreshnessContract;
     if (liveFreshnessContract.contractState === 'stale') {
       contractWarnings.push('ingestion-contract-stale');

@@ -425,6 +425,36 @@ test('transformPortfolioRiskProfileToHealth maps raw risk profile payloads for U
   assert.equal(health.updatedAt, '2026-03-09T06:30:00Z');
 });
 
+test('buildLiveFreshnessContract folds portfolio risk profile status into the shared freshness state', () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {};
+    },
+  }));
+
+  const okContract = sandbox.buildLiveFreshnessContract(null, null, {
+    status: 'ok',
+    freshness: {
+      generated_at: '2026-03-09T06:30:00Z',
+      ttl_seconds: 90,
+    },
+  });
+  const degradedContract = sandbox.buildLiveFreshnessContract(null, null, {
+    status: 'degraded',
+    freshness: {
+      generated_at: '2026-03-09T05:30:00Z',
+      ttl_seconds: 180,
+    },
+  });
+
+  assert.equal(okContract.contractState, 'ok');
+  assert.equal(okContract.freshness.lastFetchedAt, Date.parse('2026-03-09T06:30:00Z'));
+  assert.equal(okContract.freshness.ttlMs, 90000);
+  assert.equal(degradedContract.contractState, 'degraded');
+  assert.equal(degradedContract.freshness.lastFetchedAt, Date.parse('2026-03-09T05:30:00Z'));
+  assert.equal(degradedContract.freshness.ttlMs, 180000);
+});
+
 test('getLiveDashboardData preserves portfolio risk profile freshness and status for downstream UI mapping', async () => {
   const sandbox = loadConnector(async () => ({
     async json() {
