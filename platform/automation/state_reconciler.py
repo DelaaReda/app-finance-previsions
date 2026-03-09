@@ -31,6 +31,7 @@ RUNTIME_BLOCKERS = {
 READY_STATES = {"READY", "READY_PLANNER", "READY_DEV"}
 ACTIVE_IN_PROGRESS_STATES = {"IN_PROGRESS", "REVIEW"}
 CORE_ROLES = ("planner", "dev", "admin", "scrum_master")
+DONE_STATES = {"DONE", "CLOSED"}
 
 
 @dataclass
@@ -177,6 +178,13 @@ def _task_has_delivery_evidence(task: dict) -> bool:
     return False
 
 
+def _task_effectively_done(task: dict) -> bool:
+    state = str(task.get("state", "")).strip().upper()
+    if state in DONE_STATES:
+        return True
+    return bool(str(task.get("completed_at", "")).strip())
+
+
 def _parse_contract(text: str) -> dict[str, str]:
     values: dict[str, str] = {}
     for raw in text.splitlines():
@@ -281,6 +289,7 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
         "stale_inprogress_marked": 0,
         "ready_starvation_detected": 0,
         "dependency_starvation_detected": 0,
+        "completed_state_repaired": 0,
     }
     active_subagent_owner_tasks = _active_planner_subagent_owner_tasks(config.root)
     capability_stall_seconds = max(60, int(os.environ.get("FC_RECONCILE_CAPABILITY_STALL_SECONDS", "300")))
@@ -293,6 +302,16 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
         # 1) parked + in_progress contradictions
         for task in board.get("tasks", []):
             if not isinstance(task, dict):
+                continue
+            if _task_effectively_done(task) and str(task.get("state", "")).strip().upper() not in DONE_STATES:
+                task["state"] = "DONE"
+                task["blocked_reason"] = ""
+                task["stalled_reason"] = ""
+                task["planner_takeover_required"] = False
+                task["planner_takeover_reason"] = ""
+                task["reconciled_at"] = now
+                task["updated_at"] = now
+                report["completed_state_repaired"] = int(report["completed_state_repaired"]) + 1
                 continue
             if not task.get("parked_by_rebuild"):
                 continue
@@ -410,6 +429,7 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
             or int(report["stale_inprogress_marked"])
             or int(report["ready_starvation_detected"])
             or int(report["dependency_starvation_detected"])
+            or int(report["completed_state_repaired"])
         ):
             append_event(
                 board,
@@ -420,6 +440,7 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
                     "stale_inprogress_marked": str(report["stale_inprogress_marked"]),
                     "ready_starvation_detected": str(report["ready_starvation_detected"]),
                     "dependency_starvation_detected": str(report["dependency_starvation_detected"]),
+                    "completed_state_repaired": str(report["completed_state_repaired"]),
                 },
             )
             save_board(config.board_path, board)
@@ -489,6 +510,7 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
         + int(report["stale_inprogress_marked"])
         + int(report["ready_starvation_detected"])
         + int(report["dependency_starvation_detected"])
+        + int(report["completed_state_repaired"])
     )
     _write_json(config.report_path, report)
     return report

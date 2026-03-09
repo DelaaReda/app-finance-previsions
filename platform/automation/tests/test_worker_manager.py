@@ -132,6 +132,44 @@ class WorkerManagerTests(unittest.TestCase):
         self.assertEqual(snapshot["active_count"], 0)
         self.assertTrue(any(item["worker_id"] == worker_id for item in snapshot["recent"]))
 
+    def test_collect_rejects_invalid_banner_only_worker_result(self) -> None:
+        record = WorkerRecord(
+            worker_id="worker_qa_banner",
+            worker_type="qa_review_worker",
+            parent_role="planner",
+            owner_task_id="BATCH-60-DEV-01",
+            task_kind="qa_review",
+            status="completed",
+            created_at="2099-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="openclaw",
+        )
+        _save_registry(self.config.registry_path, [record])
+        self.config.results_dir.mkdir(parents=True, exist_ok=True)
+        (self.config.results_dir / "worker_qa_banner.result.json").write_text(
+            json.dumps(
+                {
+                    "worker_id": "worker_qa_banner",
+                    "worker_type": "qa_review_worker",
+                    "owner_task_id": "BATCH-60-DEV-01",
+                    "parent_role": "planner",
+                    "result_kind": "qa_fix_result",
+                    "status": "completed",
+                    "summary": "OpenAI Codex v0.0 failed to refresh available models",
+                    "artifact": "none",
+                    "verify": "none",
+                }
+            ),
+            encoding="utf-8",
+        )
+        rc_collect, payload = collect_worker(self.config, "planner", "worker_qa_banner", "", mark_merged=True)
+        self.assertNotEqual(rc_collect, 0)
+        self.assertFalse(payload["ok"])
+        snapshot = status_snapshot(self.config, "planner")
+        recent = next(item for item in snapshot["recent"] if item["worker_id"] == "worker_qa_banner")
+        self.assertEqual(recent["status"], "failed")
+
     def test_cleanup_removes_expired_worker(self) -> None:
         record = WorkerRecord(
             worker_id="worker_expired_01",

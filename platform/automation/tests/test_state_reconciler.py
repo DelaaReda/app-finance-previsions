@@ -145,6 +145,31 @@ class StateReconcilerTests(unittest.TestCase):
         self.assertEqual(board["tasks"][0]["state"], "READY_DEV")
         self.assertEqual(board["tasks"][0]["stalled_reason"], "planner_capability_stall_no_active_subagent")
 
+    def test_completed_task_is_repaired_to_done_state(self) -> None:
+        self.board_path.write_text(json.dumps({
+            "version": "x",
+            "tasks": [{
+                "id": "BATCH-60-DEV-02",
+                "stream_id": "BATCH-60",
+                "role": "dev",
+                "state": "BLOCKED",
+                "blocked_reason": "planner_dev_capability_failed:old_failure",
+                "completed_at": "2026-03-09T05:11:49Z",
+                "commit_sha": "99d0a027fc0ca7d83774db713a91f9a1eaae756b",
+                "artifact": "commit=99d0a027fc0ca7d83774db713a91f9a1eaae756b",
+                "verify": "before=a; after=b; test=c",
+                "updated_at": "2026-03-09T05:11:49Z",
+            }],
+            "streams": [{"id": "BATCH-60", "state": "BLOCKED", "updated_at": "2026-03-09T05:11:49Z"}],
+            "events": [],
+        }), encoding="utf-8")
+        self.queue_path.write_text(json.dumps({"items": [{"id": "BATCH-60", "state": "IN_PROGRESS", "updated_at": "2026-03-09T05:11:49Z"}]}), encoding="utf-8")
+        report = run_reconciler(self._config(), probe_runtime_ok=lambda: False, now_epoch=1773033600)
+        board = json.loads(self.board_path.read_text())
+        self.assertEqual(report["completed_state_repaired"], 1)
+        self.assertEqual(board["tasks"][0]["state"], "DONE")
+        self.assertEqual(board["tasks"][0]["blocked_reason"], "")
+
 
 if __name__ == "__main__":
     unittest.main()

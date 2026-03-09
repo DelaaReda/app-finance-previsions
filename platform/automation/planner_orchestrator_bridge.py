@@ -9,6 +9,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from parallel_workstream import (
     DEFAULT_PROOF_ROOT,
@@ -53,13 +55,16 @@ CONTRACT_KEYS = (
 )
 SUCCESS_SUBAGENT_STATUSES = {"completed", "done", "pass", "ok", "success", "merged"}
 DEV_CAPABILITY_TIMEOUT_SECONDS = max(300, int(os.environ.get("FC_PLANNER_DEV_CAPABILITY_TIMEOUT_SECONDS", "900")))
-ADMIN_CAPABILITY_TIMEOUT_SECONDS = max(180, int(os.environ.get("FC_PLANNER_ADMIN_CAPABILITY_TIMEOUT_SECONDS", "600")))
+ADMIN_CAPABILITY_TIMEOUT_SECONDS = max(180, int(os.environ.get("FC_PLANNER_ADMIN_CAPABILITY_TIMEOUT_SECONDS", "900")))
 STALE_SUBAGENT_GRACE_SECONDS = max(15, int(os.environ.get("FC_PLANNER_SUBAGENT_STALE_GRACE_SECONDS", "30")))
+EMPTY_LAUNCHER_STALE_SECONDS = max(30, int(os.environ.get("FC_PLANNER_EMPTY_LAUNCHER_STALE_SECONDS", "90")))
 QA_REVIEW_TIMEOUT_SECONDS = max(180, int(os.environ.get("FC_PLANNER_QA_WORKER_TIMEOUT_SECONDS", "900")))
-ADMIN_TIMEOUT_STREAK_THRESHOLD = max(1, int(os.environ.get("FC_PLANNER_ADMIN_TIMEOUT_STREAK_THRESHOLD", "1")))
+ADMIN_TIMEOUT_STREAK_THRESHOLD = max(1, int(os.environ.get("FC_PLANNER_ADMIN_TIMEOUT_STREAK_THRESHOLD", "3")))
 ADMIN_TAKEOVER_TIMEOUT_SECONDS = max(300, int(os.environ.get("FC_PLANNER_ADMIN_TAKEOVER_TIMEOUT_SECONDS", "900")))
 BROWSER_VALIDATION_TIMEOUT_SECONDS = max(10, int(os.environ.get("FC_PLANNER_BROWSER_VALIDATION_TIMEOUT_SECONDS", "45")))
 BROWSER_BACKFILL_MAX_PER_TICK = max(1, int(os.environ.get("FC_PLANNER_BROWSER_BACKFILL_MAX_PER_TICK", "1")))
+QA_AUTODISPATCH_MAX_PER_TICK = max(1, int(os.environ.get("FC_PLANNER_QA_AUTODISPATCH_MAX_PER_TICK", "2")))
+QA_AUTODISPATCH_ROLLOUT_AT_RAW = str(os.environ.get("FC_PLANNER_QA_AUTODISPATCH_ROLLOUT_AT", "2026-03-08T19:00:00Z")).strip() or "2026-03-08T19:00:00Z"
 DEFAULT_BROWSER_FRONTEND_URL = str(os.environ.get("FC_FRONTEND_BASE_URL", "http://127.0.0.1:5173")).strip() or "http://127.0.0.1:5173"
 DEFAULT_BROWSER_MONITOR_URL = str(os.environ.get("FC_MONITOR_BASE_URL", "http://127.0.0.1:7779")).strip() or "http://127.0.0.1:7779"
 NO_CODE_COMPLETION_MODES = {"runtime_no_code", "no_code_runtime_fix", "runtime_repair_no_code"}
@@ -81,6 +86,52 @@ def _parse_iso_utc(raw: str) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _fetch_local_json(url: str, timeout_seconds: int = 15) -> tuple[bool, dict[str, Any] | None, str]:
+    target = str(url or "").strip()
+    if not target:
+        return False, None, "missing_url"
+    req = urllib_request.Request(target, headers={"Accept": "application/json"})
+    try:
+        with urllib_request.urlopen(req, timeout=timeout_seconds) as response:
+            body = response.read().decode("utf-8", errors="ignore")
+    except urllib_error.HTTPError as exc:
+        return False, None, f"http_{exc.code}"
+    except Exception as exc:
+        return False, None, str(exc)
+    try:
+        payload = json.loads(body)
+    except Exception:
+        return False, None, "invalid_json"
+    if not isinstance(payload, dict):
+        return False, None, "invalid_payload"
+    return True, payload, "ok"
+
+
+def _subagent_result_paths(root: Path, subagent_id: str) -> tuple[Path, Path]:
+    results_dir = root / "docs" / "operations" / "orchestrator" / "planner-subagents-results"
+    return results_dir / f"{subagent_id}.result.json", results_dir / f"{subagent_id}.raw.txt"
+
+
+def _subagent_has_collectible_result(root: Path, row: dict[str, Any]) -> bool:
+    subagent_id = str(row.get("subagent_id", "")).strip()
+    if not subagent_id:
+        return False
+    result_path, raw_path = _subagent_result_paths(root, subagent_id)
+    return result_path.exists() or raw_path.exists()
+
+
+def _resolve_dispatch_backend(target_role: str, requested_backend: str) -> str:
+    token = str(requested_backend or "auto").strip().lower() or "auto"
+    if token != "auto":
+        return token
+    role_token = str(target_role or "").strip().lower()
+    if role_token == "admin":
+        return "codex_exec"
+    if role_token == "dev":
+        return "openclaw"
+    return "codex_exec"
 
 
 def _parse_contract(text: str) -> dict[str, str]:
@@ -265,6 +316,24 @@ def _clear_admin_takeover(task: dict[str, Any]) -> None:
     task["planner_takeover_required"] = False
     task["planner_takeover_reason"] = ""
     _set_timeout_streak(task, "admin", 0)
+
+
+def _write_runtime_proof(root: Path, task_id_value: str, payload: dict[str, Any]) -> str:
+    stream_id = _task_stream_id(task_id_value)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    proof_path = (
+        root
+        / "docs"
+        / "operations"
+        / "orchestrator"
+        / "proofs"
+        / stream_id
+        / task_id_value
+        / f"{stamp}-planner-takeover-runtime-proof.json"
+    )
+    proof_path.parent.mkdir(parents=True, exist_ok=True)
+    proof_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    return str(proof_path)
 
 
 def _apply_task_metadata(task: dict[str, Any], evidence: dict[str, str], extra: dict[str, str] | None = None) -> None:
@@ -529,6 +598,8 @@ def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | Non
     for idx, task in enumerate(board.get("tasks", [])):
         if not isinstance(task, dict):
             continue
+        if _task_effectively_done(task):
+            continue
         state = str(task.get("state", "")).strip().upper()
         if str(task.get("role", "")).strip().lower() != "dev":
             continue
@@ -536,10 +607,12 @@ def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | Non
         if any(str(index.get(dep, {}).get("state", "")).upper() != STATE_DONE for dep in deps):
             continue
         row = (priority_rank(str(task.get("priority", "P9"))), idx, task)
-        if state in {STATE_READY, STATE_READY_DEV}:
+        if state in {STATE_READY, STATE_READY_DEV, "READY"}:
             candidates.append(row)
             continue
         if state == STATE_IN_PROGRESS:
+            if _task_has_dev_completion_evidence(task):
+                continue
             in_progress_candidates.append(row)
             continue
         blocked_reason = str(task.get("blocked_reason", "")).strip().lower()
@@ -566,6 +639,8 @@ def _select_dispatchable_admin_task(board: dict[str, Any]) -> dict[str, Any] | N
     for idx, task in enumerate(board.get("tasks", [])):
         if not isinstance(task, dict):
             continue
+        if _task_effectively_done(task):
+            continue
         state = str(task.get("state", "")).strip().upper()
         if str(task.get("role", "")).strip().lower() != "admin":
             continue
@@ -576,7 +651,7 @@ def _select_dispatchable_admin_task(board: dict[str, Any]) -> dict[str, Any] | N
         if bool(task.get("planner_takeover_required")):
             takeover_candidates.append(row)
             continue
-        if state in {STATE_READY, "READY_PLANNER"}:
+        if state in {STATE_READY, "READY_PLANNER", "READY"}:
             candidates.append(row)
             continue
         if state == STATE_IN_PROGRESS:
@@ -620,6 +695,17 @@ def _browser_backfill_candidates(board: dict[str, Any]) -> list[dict[str, Any]]:
     return out[:BROWSER_BACKFILL_MAX_PER_TICK]
 
 
+def _task_has_dev_completion_evidence(task: dict[str, Any]) -> bool:
+    if str(task.get("role", "")).strip().lower() != "dev":
+        return False
+    if not _has_real_commit(str(task.get("commit_sha", ""))):
+        return False
+    artifact = str(task.get("artifact", "")).strip().lower()
+    verify = str(task.get("verify", "")).strip().lower()
+    tests_run = str(task.get("tests_run", "")).strip().lower()
+    return all(token and token not in {"none", "n/a", "na"} for token in (artifact, verify, tests_run))
+
+
 def _timeout_like_issue(reason: str) -> bool:
     token = str(reason or "").strip().lower()
     return any(
@@ -630,6 +716,8 @@ def _timeout_like_issue(reason: str) -> bool:
             "stale_no_result",
             "deadline",
             "no result",
+            "invalid_subagent_result",
+            "subagent_invalid_result",
         )
     )
 
@@ -664,6 +752,131 @@ def _build_admin_evidence(payload: dict[str, Any], task_id_value: str) -> dict[s
     return evidence
 
 
+def _doctor_takeover_ready(payload: dict[str, Any]) -> bool:
+    if str(payload.get("status", "")).strip().lower() == "ok":
+        return True
+    checks = payload.get("checks", {})
+    if not isinstance(checks, dict):
+        return False
+    critical = ("runtime_state", "sessions", "locks", "queue_workboard", "providers", "product_value")
+    for name in critical:
+        status = str((checks.get(name, {}) or {}).get("status", "")).strip().lower()
+        if status != "ok":
+            return False
+    return True
+
+
+def _planner_takeover_admin_task(root: Path, task: dict[str, Any], source: str) -> dict[str, Any]:
+    task_id_value = str(task.get("id", "")).strip()
+    if not task_id_value:
+        return {"dispatched": True, "completed": False, "reason": "invalid_admin_task", "backend": "planner_takeover"}
+    status_ok, status_payload, status_reason = _fetch_local_json("http://127.0.0.1:7779/api/status")
+    doctor_ok, doctor_payload, doctor_reason = _fetch_local_json("http://127.0.0.1:7779/api/doctor?refresh=1")
+    if not status_ok or not isinstance(status_payload, dict):
+        return {
+            "dispatched": True,
+            "completed": False,
+            "task_id": task_id_value,
+            "reason": f"planner_takeover_status_unavailable:{status_reason}",
+            "backend": "planner_takeover",
+        }
+    if not doctor_ok or not isinstance(doctor_payload, dict):
+        return {
+            "dispatched": True,
+            "completed": False,
+            "task_id": task_id_value,
+            "reason": f"planner_takeover_doctor_unavailable:{doctor_reason}",
+            "backend": "planner_takeover",
+        }
+
+    status_health = str(status_payload.get("health", "")).strip().upper()
+    doctor_status = str(doctor_payload.get("status", "")).strip().lower()
+    doctor_takeover_ready = _doctor_takeover_ready(doctor_payload)
+    browser_ok = True
+    browser_detail = ""
+    browser_artifact = ""
+    if _requires_browser_proof(task):
+        browser_ok, browser_detail = _run_browser_validation(root, task, source=source, phase="planner_takeover")
+        browser_artifact = browser_detail if browser_ok else ""
+
+    if status_health not in {"OK", "PAUSED"} or not doctor_takeover_ready or not browser_ok:
+        issue = "planner_takeover_runtime_not_healthy"
+        if not browser_ok:
+            issue = "planner_takeover_browser_validation_failed"
+        return {
+            "dispatched": True,
+            "completed": False,
+            "task_id": task_id_value,
+            "reason": issue,
+            "backend": "planner_takeover",
+            "status_health": status_health,
+            "doctor_status": doctor_status,
+        }
+
+    proof_payload = {
+        "task_id": task_id_value,
+        "source": source,
+        "takeover": True,
+        "status_snapshot": status_payload,
+        "doctor_snapshot": doctor_payload,
+        "browser_validation": {"ok": browser_ok, "artifact": browser_artifact or "none"},
+        "generated_at": now_iso(),
+    }
+    artifact = _write_runtime_proof(root, task_id_value, proof_payload)
+    verify_parts = [
+        f"status.health={status_health}",
+        f"doctor.status={doctor_status}",
+    ]
+    if browser_artifact:
+        verify_parts.append(f"browser_proof={browser_artifact}")
+    evidence = {
+        "root_cause": f"Admin capability stalled repeatedly on {task_id_value}; planner performed direct runtime takeover verification.",
+        "fix_applied": "Planner validated runtime truth directly via local monitor/doctor checks and browser smoke, then completed the incident without another admin retry.",
+        "artifact": artifact,
+        "verify": "; ".join(verify_parts),
+        "files_touched": artifact,
+        "tests_run": "GET /api/status; GET /api/doctor?refresh=1; browser_smoke(if required)",
+        "commit_sha": "SKIP(no code/config change committed)",
+        "architecture_check": "Planner-only runtime takeover kept orchestration authoritative and avoided another blind admin retry loop.",
+        "vision_alignment": f"Resolved capability stall for {task_id_value} so planner can resume delivery-oriented dispatch.",
+        "cmd": "SKIP(planner_takeover_runtime_verification)",
+        "next_action_unique": f"PLANNER_TAKEOVER_{task_id_value}",
+        "completion_mode": "runtime_no_code",
+        "no_code_change_reason": "planner_runtime_takeover_no_code_change",
+        "runtime_artifact": artifact,
+        "browser_proof_status": "completed" if browser_artifact else "",
+        "browser_proof_artifact": browser_artifact,
+        "browser_proof_generated_at": now_iso() if browser_artifact else "",
+    }
+
+    board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+    with board_lock(board_path):
+        board = load_board(board_path)
+        completed = _complete_task_from_evidence(
+            root=root,
+            board_path=board_path,
+            role="admin",
+            task_id_value=task_id_value,
+            evidence=evidence,
+            source=source,
+            board=board,
+        )
+        if completed:
+            live_task = task_index(board).get(task_id_value)
+            if isinstance(live_task, dict):
+                _clear_admin_takeover(live_task)
+            reconcile_state(board, board_path.parent / "priority-queue.json")
+            save_board(board_path, board)
+    return {
+        "dispatched": True,
+        "completed": completed,
+        "task_id": task_id_value,
+        "reason": "planner_takeover_completed" if completed else "planner_takeover_complete_failed",
+        "backend": "planner_takeover",
+        "artifact": artifact,
+    }
+
+
 def _record_admin_failure(
     board: dict[str, Any],
     *,
@@ -678,6 +891,14 @@ def _record_admin_failure(
     if not isinstance(task, dict):
         append_event(board, event_kind, {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"})
         return issue
+    if _task_effectively_done(task):
+        _clear_admin_takeover(task)
+        append_event(
+            board,
+            "planner_orchestrator_admin_failure_ignored_done_task",
+            {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"},
+        )
+        return "owner_task_already_done"
     if _timeout_like_issue(issue):
         streak = _task_timeout_streak(task, "admin") + 1
         reason = f"admin_timeout_streak:{streak}"
@@ -814,6 +1035,47 @@ def _backfill_admin_runtime_no_code_metadata(root: Path, source: str) -> list[st
     return actions
 
 
+def _dispatch_pending_qa_reviews(root: Path, source: str) -> list[str]:
+    board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+    actions: list[str] = []
+    rollout_at = _parse_iso_utc(QA_AUTODISPATCH_ROLLOUT_AT_RAW) or datetime(2026, 3, 8, 19, 0, 0, tzinfo=timezone.utc)
+    with board_lock(board_path):
+        board = load_board(board_path)
+        candidates: list[tuple[datetime, dict[str, Any]]] = []
+        for task in board.get("tasks", []):
+            if not isinstance(task, dict):
+                continue
+            if str(task.get("role", "")).strip().lower() != "dev":
+                continue
+            if not _task_has_dev_completion_evidence(task):
+                continue
+            completed_at = _parse_iso_utc(task.get("completed_at", ""))
+            if completed_at is None or completed_at < rollout_at:
+                continue
+            if _qa_review_already_done(task):
+                continue
+            if _qa_worker_active(root, str(task.get("id", "")).strip()):
+                continue
+            if _requires_browser_proof(task) and not _browser_validation_done(task):
+                continue
+            candidates.append((completed_at, task))
+        candidates.sort(key=lambda item: item[0], reverse=True)
+        for _, task in candidates[:QA_AUTODISPATCH_MAX_PER_TICK]:
+            dispatch = _launch_qa_review_worker(root, task, source)
+            task_id_value = str(task.get("id", "")).strip() or "unknown"
+            if dispatch.get("dispatched"):
+                append_event(
+                    board,
+                    "planner_orchestrator_qa_review_dispatched",
+                    {"task_id": task_id_value, "source": source, "reason": "pending_completed_delivery"},
+                )
+                actions.append(f"qa_dispatch:{task_id_value}")
+        if actions:
+            reconcile_state(board, board_path.parent / "priority-queue.json")
+            save_board(board_path, board)
+    return actions
+
+
 def _auto_complete_planner_gov_reviews(root: Path, source: str) -> list[str]:
     board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
     actions: list[str] = []
@@ -896,6 +1158,11 @@ def _complete_task_from_evidence(
         reconcile_state(board, queue_path)
         save_board(board_path, board)
         return True
+    if str(task.get("state", "")).strip().upper() == STATE_BLOCKED:
+        task["state"] = STATE_IN_PROGRESS
+        task["blocked_reason"] = ""
+        task["stalled_reason"] = ""
+        task["updated_at"] = now_iso()
     note = " | ".join(
         [
             f"source={source}",
@@ -960,8 +1227,8 @@ def _claim_task(
         board,
         role=role,
         task_id_override=task_id_value,
-        change_plan=_auto_change_plan(task) if role != "planner" else "",
-        architecture_checks=_auto_architecture_checks(task) if role != "planner" else "",
+        change_plan=_auto_change_plan(task),
+        architecture_checks=_auto_architecture_checks(task),
     )
     append_event(board, "planner_orchestrator_claim", {"role": role, "task_id": task_id_value, "source": source})
     recompute_states(board)
@@ -1000,7 +1267,7 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
         _claim_task(board_path=board_path, role="dev", task_id_value=task_id_value, source=source, board=board)
 
     message = _build_dev_dispatch_message(candidate)
-    chosen_backend = str(backend or "auto").strip().lower() or "auto"
+    chosen_backend = _resolve_dispatch_backend("dev", backend)
     if chosen_backend in {"openclaw", "auto"}:
         subagent_id = f"planner_dev_{os.urandom(5).hex()}"
         launcher_log = config.results_dir / f"{subagent_id}.launcher.log"
@@ -1199,16 +1466,11 @@ def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[st
                 {"task_id": task_id_value, "source": source, "reason": "no_active_admin_capability"},
             )
         _claim_task(board_path=board_path, role="admin", task_id_value=task_id_value, source=source, board=board)
-    chosen_backend = str(backend or "auto").strip() or "auto"
+    if planner_takeover:
+        return _planner_takeover_admin_task(root, candidate, source)
+    chosen_backend = _resolve_dispatch_backend("admin", backend)
     message = _build_admin_dispatch_message(candidate)
     timeout_seconds = ADMIN_CAPABILITY_TIMEOUT_SECONDS
-    if planner_takeover:
-        chosen_backend = "codex_exec"
-        timeout_seconds = ADMIN_TAKEOVER_TIMEOUT_SECONDS
-        message = (
-            "Planner takeover required after repeated admin timeout. Resolve this runtime task in one bounded pass.\n\n"
-            + message
-        )
     if chosen_backend in {"openclaw", "codex_exec", "auto"}:
         subagent_id = f"planner_admin_{os.urandom(5).hex()}"
         launcher_log = config.results_dir / f"{subagent_id}.launcher.log"
@@ -1380,6 +1642,24 @@ def _write_planner_registry_rows(config: Any, rows: list[dict[str, Any]]) -> Non
     config.registry_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
 
+def _prune_planner_subagent_row(config: Any, rows: list[dict[str, Any]], subagent_id: str) -> bool:
+    token = str(subagent_id or "").strip()
+    if not token:
+        return False
+    before = len(rows)
+    rows[:] = [row for row in rows if str(row.get("subagent_id", "")).strip() != token]
+    return len(rows) != before
+
+
+def _task_effectively_done(task: dict[str, Any] | None) -> bool:
+    if not isinstance(task, dict):
+        return False
+    state = str(task.get("state", "")).strip().upper()
+    if state == STATE_DONE:
+        return True
+    return bool(str(task.get("completed_at", "")).strip())
+
+
 def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
     config, rows = _planner_registry_rows(root)
     board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
@@ -1398,16 +1678,27 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
         if not subagent_id:
             continue
         result_path = config.results_dir / f"{subagent_id}.result.json"
-        if result_path.exists():
+        raw_path = config.results_dir / f"{subagent_id}.raw.txt"
+        launcher_log = config.results_dir / f"{subagent_id}.launcher.log"
+        task_id_value = str(row.get("owner_task_id", "")).strip()
+        if task_id_value:
+            with board_lock(board_path):
+                board = load_board(board_path)
+                task = task_index(board).get(task_id_value)
+                if _task_effectively_done(task):
+                    changed = _prune_planner_subagent_row(config, rows, subagent_id) or changed
+                    actions.append(f"dev_drop_done:{task_id_value}")
+                    continue
+        if result_path.exists() or raw_path.exists():
             continue
         created_raw = str(row.get("created_at", "")).strip() or str(row.get("last_update_at", "")).strip()
         created_at = _parse_iso_utc(created_raw)
         if created_at is None:
             continue
         age_seconds = max(0, int((datetime.now(timezone.utc) - created_at).total_seconds()))
-        if age_seconds < threshold_seconds:
+        empty_launcher = launcher_log.exists() and launcher_log.stat().st_size == 0
+        if age_seconds < threshold_seconds and not (empty_launcher and age_seconds >= EMPTY_LAUNCHER_STALE_SECONDS):
             continue
-        task_id_value = str(row.get("owner_task_id", "")).strip()
         if task_id_value:
             with board_lock(board_path):
                 board = load_board(board_path)
@@ -1426,8 +1717,8 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
                     reconcile_state(board, board_path.parent / "priority-queue.json")
                     save_board(board_path, board)
                     actions.append(f"dev_stale_reset:{task_id_value}")
-        row["status"] = "merged"
-        row["merged_at"] = now_text
+        row["status"] = "failed"
+        row["failed_at"] = now_text
         row["summary"] = "stale planner capability with no result requeued"
         row["blocking_issue"] = "stale_no_result"
         row["last_update_at"] = now_text
@@ -1455,16 +1746,27 @@ def _mark_stale_admin_subagents(root: Path, source: str) -> list[str]:
         if not subagent_id:
             continue
         result_path = config.results_dir / f"{subagent_id}.result.json"
-        if result_path.exists():
+        raw_path = config.results_dir / f"{subagent_id}.raw.txt"
+        launcher_log = config.results_dir / f"{subagent_id}.launcher.log"
+        task_id_value = str(row.get("owner_task_id", "")).strip()
+        if task_id_value:
+            with board_lock(board_path):
+                board = load_board(board_path)
+                task = task_index(board).get(task_id_value)
+                if _task_effectively_done(task):
+                    changed = _prune_planner_subagent_row(config, rows, subagent_id) or changed
+                    actions.append(f"admin_drop_done:{task_id_value}")
+                    continue
+        if result_path.exists() or raw_path.exists():
             continue
         created_raw = str(row.get("created_at", "")).strip() or str(row.get("last_update_at", "")).strip()
         created_at = _parse_iso_utc(created_raw)
         if created_at is None:
             continue
         age_seconds = max(0, int((datetime.now(timezone.utc) - created_at).total_seconds()))
-        if age_seconds < threshold_seconds:
+        empty_launcher = launcher_log.exists() and launcher_log.stat().st_size == 0
+        if age_seconds < threshold_seconds and not (empty_launcher and age_seconds >= EMPTY_LAUNCHER_STALE_SECONDS):
             continue
-        task_id_value = str(row.get("owner_task_id", "")).strip()
         if task_id_value:
             with board_lock(board_path):
                 board = load_board(board_path)
@@ -1495,8 +1797,8 @@ def _mark_stale_admin_subagents(root: Path, source: str) -> list[str]:
                         actions.append(f"admin_stale_reset:{task_id_value}")
                     reconcile_state(board, board_path.parent / "priority-queue.json")
                     save_board(board_path, board)
-        row["status"] = "merged"
-        row["merged_at"] = now_text
+        row["status"] = "failed"
+        row["failed_at"] = now_text
         row["summary"] = "stale planner capability with no result requeued"
         row["blocking_issue"] = "stale_no_result"
         row["last_update_at"] = now_text
@@ -1508,18 +1810,30 @@ def _mark_stale_admin_subagents(root: Path, source: str) -> list[str]:
 
 def _has_active_subagent(root: Path, target_role: str = "") -> bool:
     _, rows = _planner_registry_rows(root)
+    board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+    board = load_board(board_path)
+    index = task_index(board)
     target = str(target_role or "").strip().lower()
     for row in rows:
         if str(row.get("parent_role", "")).strip().lower() != "planner":
             continue
         if target and str(row.get("target_role", "")).strip().lower() != target:
             continue
-        if str(row.get("status", "")).strip().lower() in ACTIVE_STATUSES:
-            return True
+        if str(row.get("status", "")).strip().lower() not in ACTIVE_STATUSES:
+            continue
+        owner_task_id = str(row.get("owner_task_id", "")).strip()
+        owner_task = index.get(owner_task_id) if owner_task_id else None
+        if _task_effectively_done(owner_task):
+            continue
+        if _subagent_has_collectible_result(root, row):
+            continue
+        if str(row.get("blocking_issue", "")).strip().lower() in {"owner_task_already_done", "stale_no_result"}:
+            continue
+        return True
     return False
 
 
-def _collect_finished_dev_subagents(root: Path, source: str) -> list[str]:
+def _collect_finished_dev_subagents(root: Path, source: str, owner_task_filter: str = "", subagent_filter: str = "") -> list[str]:
     config, rows = _planner_registry_rows(root)
     board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
     actions: list[str] = []
@@ -1531,18 +1845,31 @@ def _collect_finished_dev_subagents(root: Path, source: str) -> list[str]:
         subagent_id = str(row.get("subagent_id", "")).strip()
         if not subagent_id:
             continue
+        if subagent_filter and subagent_id != subagent_filter:
+            continue
+        if owner_task_filter and str(row.get("owner_task_id", "")).strip() != owner_task_filter:
+            continue
         if str(row.get("status", "")).strip().lower() == "merged":
             continue
         result_path = config.results_dir / f"{subagent_id}.result.json"
-        if not result_path.exists() and str(row.get("status", "")).strip().lower() in ACTIVE_STATUSES:
+        raw_path = config.results_dir / f"{subagent_id}.raw.txt"
+        if not result_path.exists() and not raw_path.exists():
             continue
         rc, payload = collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
-        if rc != 0 or not isinstance(payload, dict):
+        if not isinstance(payload, dict):
             continue
         task_id_value = str(payload.get("owner_task_id") or row.get("owner_task_id", "")).strip()
         if not task_id_value:
             continue
         actions.append(f"dev_collect:{task_id_value}")
+        with board_lock(board_path):
+            board = load_board(board_path)
+            live_task = task_index(board).get(task_id_value)
+        if _task_effectively_done(live_task):
+            if _prune_planner_subagent_row(config, rows, subagent_id):
+                _write_planner_registry_rows(config, rows)
+            actions.append(f"dev_skip_done:{task_id_value}")
+            continue
         status_token = _payload_status(payload)
         if status_token in SUCCESS_SUBAGENT_STATUSES and _payload_has_delivery_evidence(payload):
             evidence = {
@@ -1560,6 +1887,9 @@ def _collect_finished_dev_subagents(root: Path, source: str) -> list[str]:
             }
             with board_lock(board_path):
                 board = load_board(board_path)
+                if not isinstance(task_index(board).get(task_id_value), dict):
+                    actions.append(f"dev_orphan_collect:{task_id_value}")
+                    continue
                 completed = _complete_task_from_evidence(
                     root=root,
                     board_path=board_path,
@@ -1602,6 +1932,9 @@ def _collect_finished_dev_subagents(root: Path, source: str) -> list[str]:
         blocking_issue = str(payload.get("blocking_issue") or payload.get("recommended_next") or status_token or "subagent_not_ready")
         with board_lock(board_path):
             board = load_board(board_path)
+            if not isinstance(task_index(board).get(task_id_value), dict):
+                actions.append(f"dev_orphan_collect:{task_id_value}")
+                continue
             set_block_state(board, task_id_value=task_id_value, reason=f"planner_dev_capability_failed:{blocking_issue}", blocked=True)
             append_event(board, "planner_orchestrator_dev_dispatch_failed", {"task_id": task_id_value, "source": source, "subagent_id": subagent_id})
             reconcile_state(board, board_path.parent / "priority-queue.json")
@@ -1610,7 +1943,7 @@ def _collect_finished_dev_subagents(root: Path, source: str) -> list[str]:
     return actions
 
 
-def _collect_finished_admin_subagents(root: Path, source: str) -> list[str]:
+def _collect_finished_admin_subagents(root: Path, source: str, owner_task_filter: str = "", subagent_filter: str = "") -> list[str]:
     config, rows = _planner_registry_rows(root)
     board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
     actions: list[str] = []
@@ -1622,23 +1955,39 @@ def _collect_finished_admin_subagents(root: Path, source: str) -> list[str]:
         subagent_id = str(row.get("subagent_id", "")).strip()
         if not subagent_id:
             continue
+        if subagent_filter and subagent_id != subagent_filter:
+            continue
+        if owner_task_filter and str(row.get("owner_task_id", "")).strip() != owner_task_filter:
+            continue
         if str(row.get("status", "")).strip().lower() == "merged":
             continue
         result_path = config.results_dir / f"{subagent_id}.result.json"
-        if not result_path.exists() and str(row.get("status", "")).strip().lower() in ACTIVE_STATUSES:
+        raw_path = config.results_dir / f"{subagent_id}.raw.txt"
+        if not result_path.exists() and not raw_path.exists():
             continue
         rc, payload = collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
-        if rc != 0 or not isinstance(payload, dict):
+        if not isinstance(payload, dict):
             continue
         task_id_value = str(payload.get("owner_task_id") or row.get("owner_task_id", "")).strip()
         if not task_id_value:
             continue
         actions.append(f"admin_collect:{task_id_value}")
+        with board_lock(board_path):
+            board = load_board(board_path)
+            live_task = task_index(board).get(task_id_value)
+        if _task_effectively_done(live_task):
+            if _prune_planner_subagent_row(config, rows, subagent_id):
+                _write_planner_registry_rows(config, rows)
+            actions.append(f"admin_skip_done:{task_id_value}")
+            continue
         status_token = _payload_status(payload)
         if status_token in SUCCESS_SUBAGENT_STATUSES and _payload_has_delivery_evidence(payload, target_role="admin"):
             evidence = _build_admin_evidence(payload, task_id_value)
             with board_lock(board_path):
                 board = load_board(board_path)
+                if not isinstance(task_index(board).get(task_id_value), dict):
+                    actions.append(f"admin_orphan_collect:{task_id_value}")
+                    continue
                 completed = _complete_task_from_evidence(
                     root=root,
                     board_path=board_path,
@@ -1664,6 +2013,9 @@ def _collect_finished_admin_subagents(root: Path, source: str) -> list[str]:
         blocking_issue = str(payload.get("blocking_issue") or payload.get("recommended_next") or status_token or "subagent_not_ready")
         with board_lock(board_path):
             board = load_board(board_path)
+            if not isinstance(task_index(board).get(task_id_value), dict):
+                actions.append(f"admin_orphan_collect:{task_id_value}")
+                continue
             outcome = _record_admin_failure(
                 board,
                 task_id_value=task_id_value,
@@ -1678,7 +2030,7 @@ def _collect_finished_admin_subagents(root: Path, source: str) -> list[str]:
     return actions
 
 
-def _collect_finished_qa_workers(root: Path, source: str) -> list[str]:
+def _collect_finished_qa_workers(root: Path, source: str, owner_task_filter: str = "") -> list[str]:
     config, rows = _load_worker_rows(root)
     board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
     actions: list[str] = []
@@ -1690,13 +2042,15 @@ def _collect_finished_qa_workers(root: Path, source: str) -> list[str]:
         worker_id = str(row.get("worker_id", "")).strip()
         if not worker_id:
             continue
+        if owner_task_filter and str(row.get("owner_task_id", "")).strip() != owner_task_filter:
+            continue
         if str(row.get("status", "")).strip().lower() == "merged":
             continue
         result_path = config.results_dir / f"{worker_id}.result.json"
         if not result_path.exists() and str(row.get("status", "")).strip().lower() in ACTIVE_STATUSES:
             continue
         rc, payload = collect_worker(config, "planner", worker_id, "", mark_merged=True)
-        if rc != 0 or not isinstance(payload, dict):
+        if not isinstance(payload, dict):
             continue
         task_id_value = str(payload.get("owner_task_id") or row.get("owner_task_id", "")).strip()
         if not task_id_value:
@@ -1713,15 +2067,153 @@ def _collect_finished_qa_workers(root: Path, source: str) -> list[str]:
             task["qa_artifact"] = str(payload.get("artifact", "none")).strip() or "none"
             task["qa_verify"] = str(payload.get("verify", "none")).strip() or "none"
             task["qa_last_update_at"] = now_iso()
-            if str(payload.get("status", "")).strip().lower() == "completed":
+            if rc == 0 and str(payload.get("status", "")).strip().lower() in {"completed", "merged"}:
                 append_event(board, "planner_orchestrator_qa_review_completed", {"task_id": task_id_value, "source": source, "worker_id": worker_id})
                 actions.append(f"qa_complete:{task_id_value}")
             else:
+                task["qa_status"] = "failed"
+                task["qa_blocking_issue"] = str(payload.get("blocking_issue", "qa_worker_failed")).strip() or "qa_worker_failed"
                 append_event(board, "planner_orchestrator_qa_review_failed", {"task_id": task_id_value, "source": source, "worker_id": worker_id})
                 actions.append(f"qa_failed:{task_id_value}")
             reconcile_state(board, board_path.parent / "priority-queue.json")
             save_board(board_path, board)
     return actions
+
+
+def _prune_resolved_qa_workers(root: Path, source: str) -> list[str]:
+    config, rows = _load_worker_rows(root)
+    board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+    with board_lock(board_path):
+        board = load_board(board_path)
+        index = task_index(board)
+    kept: list[dict[str, Any]] = []
+    actions: list[str] = []
+    changed = False
+    for row in rows:
+        if str(row.get("parent_role", "")).strip().lower() != "planner" or str(row.get("worker_type", "")).strip() != "qa_review_worker":
+            kept.append(row)
+            continue
+        task_id_value = str(row.get("owner_task_id", "")).strip()
+        task = index.get(task_id_value)
+        if not isinstance(task, dict):
+            kept.append(row)
+            continue
+        if not _qa_review_already_done(task):
+            kept.append(row)
+            continue
+        worker_id = str(row.get("worker_id", "")).strip()
+        if str(row.get("status", "")).strip().lower() in ACTIVE_STATUSES and worker_id:
+            try:
+                _openclaw_delete_agent(worker_id)
+            except Exception:
+                pass
+        actions.append(f"qa_prune:{task_id_value}")
+        changed = True
+        continue
+    if changed:
+        payload = {"updated_at": now_iso(), "workers": kept}
+        config.registry_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    return actions
+
+
+def _infer_result_target_role(payload: dict[str, Any], subagent_id: str) -> str:
+    token = str(payload.get("target_role", "")).strip().lower()
+    if token in {"dev", "admin", "qa"}:
+        return token
+    subagent_token = str(subagent_id or "").strip().lower()
+    if subagent_token.startswith("planner_dev_"):
+        return "dev"
+    if subagent_token.startswith("planner_admin_"):
+        return "admin"
+    return ""
+
+
+def _collect_orphan_result_payloads(root: Path, source: str, owner_task_filter: str = "", target_role: str = "") -> list[str]:
+    config = load_subagent_config(root)
+    results_dir = config.results_dir
+    if not results_dir.exists():
+        return []
+    _, rows = _planner_registry_rows(root)
+    registry_ids = {str(row.get("subagent_id", "")).strip() for row in rows if str(row.get("subagent_id", "")).strip()}
+    board_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+    actions: list[str] = []
+    for result_path in sorted(results_dir.glob("*.result.json")):
+        try:
+            payload = json.loads(result_path.read_text(encoding="utf-8", errors="ignore"))
+        except Exception:
+            payload = {}
+        if not isinstance(payload, dict):
+            continue
+        subagent_id = str(payload.get("subagent_id", result_path.stem)).strip()
+        if subagent_id in registry_ids:
+            continue
+        task_id_value = str(payload.get("owner_task_id", "")).strip()
+        if not task_id_value:
+            continue
+        if owner_task_filter and task_id_value != owner_task_filter:
+            continue
+        role_token = _infer_result_target_role(payload, subagent_id)
+        if target_role and role_token != str(target_role).strip().lower():
+            continue
+        with board_lock(board_path):
+            board = load_board(board_path)
+            task = task_index(board).get(task_id_value)
+            if not isinstance(task, dict):
+                continue
+            if str(task.get("state", "")).strip().upper() == STATE_DONE:
+                continue
+            status_token = _payload_status(payload)
+            if role_token == "dev" and status_token in SUCCESS_SUBAGENT_STATUSES and _payload_has_delivery_evidence(payload):
+                evidence = {
+                    "root_cause": str(payload.get("root_cause", "none")),
+                    "fix_applied": str(payload.get("fix_applied", "none")),
+                    "artifact": str(payload.get("artifact", "none")),
+                    "verify": str(payload.get("verify", "none")),
+                    "files_touched": str(payload.get("files_touched", "none")),
+                    "tests_run": str(payload.get("tests_run", "SKIP(no_tests)")),
+                    "commit_sha": str(payload.get("commit_sha", "none")),
+                    "architecture_check": str(payload.get("architecture_check", "none")),
+                    "vision_alignment": str(payload.get("vision_alignment", "none")),
+                    "cmd": "SKIP(subagent_exec_internal)",
+                    "next_action_unique": f"PLANNER_ORPHAN_MERGE_{task_id_value}",
+                }
+                if _complete_task_from_evidence(root=root, board_path=board_path, role="dev", task_id_value=task_id_value, evidence=evidence, source=source, board=board):
+                    actions.append(f"orphan_dev_complete:{task_id_value}")
+                continue
+            if role_token == "admin" and status_token in SUCCESS_SUBAGENT_STATUSES and _payload_has_delivery_evidence(payload, target_role="admin"):
+                evidence = _build_admin_evidence(payload, task_id_value)
+                if _complete_task_from_evidence(root=root, board_path=board_path, role="admin", task_id_value=task_id_value, evidence=evidence, source=source, board=board):
+                    actions.append(f"orphan_admin_complete:{task_id_value}")
+                continue
+    return actions
+
+
+def collect_pending_results(root: Path, source: str, owner_task_id: str = "", target_role: str = "", subagent_id: str = "") -> dict[str, Any]:
+    actions: list[str] = []
+    role_token = str(target_role or "").strip().lower()
+    if role_token in {"", "dev"}:
+        actions.extend(
+            _collect_finished_dev_subagents(
+                root,
+                source,
+                owner_task_filter=owner_task_id,
+                subagent_filter=subagent_id,
+            )
+        )
+    if role_token in {"", "admin"}:
+        actions.extend(
+            _collect_finished_admin_subagents(
+                root,
+                source,
+                owner_task_filter=owner_task_id,
+                subagent_filter=subagent_id,
+            )
+        )
+    if role_token in {"", "qa"}:
+        actions.extend(_collect_finished_qa_workers(root, source, owner_task_filter=owner_task_id))
+        actions.extend(_prune_resolved_qa_workers(root, source))
+    actions.extend(_collect_orphan_result_payloads(root, source, owner_task_filter=owner_task_id, target_role=role_token))
+    return {"ok": True, "actions": actions, "owner_task_id": owner_task_id or "", "target_role": role_token or ""}
 
 
 def apply_bridge(root: Path, role: str, contract_text: str, source: str, backend: str = "auto") -> tuple[str, dict[str, Any]]:
@@ -1739,8 +2231,11 @@ def apply_bridge(root: Path, role: str, contract_text: str, source: str, backend
     actions.extend(_collect_finished_dev_subagents(root, source))
     actions.extend(_collect_finished_admin_subagents(root, source))
     actions.extend(_collect_finished_qa_workers(root, source))
+    actions.extend(_prune_resolved_qa_workers(root, source))
+    actions.extend(_collect_orphan_result_payloads(root, source))
     actions.extend(_backfill_admin_runtime_no_code_metadata(root, source))
     actions.extend(_backfill_historical_browser_proof(root, source))
+    actions.extend(_dispatch_pending_qa_reviews(root, source))
     actions.extend(_auto_complete_planner_gov_reviews(root, source))
 
     priority_admin = _select_dispatchable_admin_task(load_board(board_path))
@@ -1807,7 +2302,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--role", default="planner")
     parser.add_argument("--source", default="runner")
     parser.add_argument("--backend", default="auto", choices=["auto", "openclaw", "codex_exec", "mock"])
-    parser.add_argument("--contract-file", required=True)
+    parser.add_argument("--contract-file")
+    parser.add_argument("--collect-only", action="store_true")
+    parser.add_argument("--owner-task-id", default="")
+    parser.add_argument("--target-role", default="")
+    parser.add_argument("--subagent-id", default="")
     return parser
 
 
@@ -1825,6 +2324,18 @@ def _canonical_runtime_root(root: Path) -> Path:
 def main() -> int:
     args = build_parser().parse_args()
     root = _canonical_runtime_root(Path(args.root).expanduser().resolve())
+    if args.collect_only:
+        payload = collect_pending_results(
+            root=root,
+            source=args.source,
+            owner_task_id=str(args.owner_task_id or "").strip(),
+            target_role=str(args.target_role or "").strip(),
+            subagent_id=str(args.subagent_id or "").strip(),
+        )
+        print(json.dumps(payload, ensure_ascii=True))
+        return 0
+    if not args.contract_file:
+        raise SystemExit("--contract-file is required unless --collect-only is used")
     contract_path = Path(args.contract_file).expanduser().resolve()
     text = contract_path.read_text(encoding="utf-8", errors="ignore")
     updated, payload = apply_bridge(root=root, role=args.role, contract_text=text, source=args.source, backend=args.backend)

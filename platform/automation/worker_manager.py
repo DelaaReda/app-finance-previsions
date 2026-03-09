@@ -7,11 +7,13 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+import yaml
 
 from openclaw_control_plane import sync_canonical_skills
 from worker_contract import (
@@ -28,6 +30,12 @@ from worker_contract import (
 
 ACTIVE_STATUSES = {"spawned", "running"}
 FINISHED_STATUSES = {"completed", "failed", "merged"}
+STARTUP_ONLY_MARKERS = (
+    "OpenAI Codex v",
+    "Reasoning effort:",
+    "failed to refresh available models",
+    "invalid type: integer `1`, expected struct AgentRoleToml in `agents`",
+)
 
 
 @dataclass
@@ -82,6 +90,20 @@ def _read_json(path: Path, default: Any) -> Any:
         return default
 
 
+def _read_structured(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return default
+    suffix = path.suffix.lower()
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if suffix in {".yaml", ".yml"}:
+            payload = yaml.safe_load(text)
+            return payload if payload is not None else default
+        return json.loads(text)
+    except Exception:
+        return default
+
+
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
@@ -97,7 +119,7 @@ def _load_config(root: Path) -> WorkerManagerConfig:
     cfg_path = root / "platform" / "config" / "runner" / "runner.v1.yaml"
     if not cfg_path.exists():
         cfg_path = root / "platform" / "config" / "runner" / "runner_config.v1.yaml"
-    cfg = _read_json(cfg_path, {})
+    cfg = _read_structured(cfg_path, {})
     features = cfg.get("features", {}) if isinstance(cfg, dict) else {}
     workers = features.get("dynamic_workers", {}) if isinstance(features, dict) else {}
     enabled = str(os.environ.get("FC_DYNAMIC_WORKERS_ENABLED", workers.get("enabled", 0))).strip() not in {"0", "false", "False", ""}
@@ -313,6 +335,7 @@ OPENCLAW_CAPABILITY_VISIBLE_PATHS = (
     "tests",
     "memory",
 )
+OPENCLAW_CAPABILITY_BASE = Path.home() / ".openclaw" / "workspace" / "capabilities"
 
 
 def _openclaw_env() -> dict[str, str]:
@@ -366,7 +389,7 @@ def _seed_capability_workspace_view(workspace: Path, root: Path) -> None:
 
 def _openclaw_capability_workspace(root: Path, workspace_key: str, model: str, thinking: str = "medium") -> Path:
     safe_key = canonical_role(workspace_key).replace("/", "_") or "shared"
-    workspace = root / "logs-codex-runs" / "openclaw-capabilities" / safe_key
+    workspace = OPENCLAW_CAPABILITY_BASE / safe_key
     config_path = workspace / ".codex" / "config.toml"
     config_body = OPENCLAW_CAPABILITY_CONFIG_TEMPLATE.format(
         model=str(model or "gpt-5.4").strip(),
@@ -386,6 +409,37 @@ def _openclaw_capability_workspace(root: Path, workspace_key: str, model: str, t
     return workspace
 
 
+def _openclaw_agent_list() -> list[dict[str, Any]]:
+    listed = subprocess.run(
+        ["openclaw", "agents", "list", "--json"],
+        text=True,
+        capture_output=True,
+        check=False,
+        env=_openclaw_env(),
+    )
+    if listed.returncode != 0:
+        return []
+    try:
+        payload = json.loads(listed.stdout or "[]")
+    except Exception:
+        return []
+    return payload if isinstance(payload, list) else []
+
+
+def _openclaw_agent_visible(agent_id: str, workspace: Path, model: str) -> bool:
+    expected_workspace = str(workspace)
+    expected_model = _openclaw_cli_model(model)
+    for item in _openclaw_agent_list():
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("id", "")).strip() != str(agent_id or "").strip():
+            continue
+        workspace_value = str(item.get("workspace", "")).strip()
+        model_value = str(item.get("model", "")).strip()
+        return workspace_value == expected_workspace and model_value == expected_model
+    return False
+
+
 def _ensure_agent(
     agent_id: str,
     root: Path,
@@ -402,32 +456,21 @@ def _ensure_agent(
         if workspace_path is not None
         else _openclaw_capability_workspace(root, workspace_key, model, thinking)
     )
-    listed = subprocess.run(
-        ["openclaw", "agents", "list", "--json"],
-        text=True,
-        capture_output=True,
-        check=False,
-        env=_openclaw_env(),
-    )
-    if listed.returncode == 0:
-        try:
-            payload = json.loads(listed.stdout or "[]")
-        except Exception:
-            payload = []
-        if isinstance(payload, list):
-            for item in payload:
-                if isinstance(item, dict) and str(item.get("id", "")) == agent_id:
-                    existing_workspace = str(item.get("workspace", "")).strip()
-                    existing_model = str(item.get("model", "")).strip()
-                    if existing_workspace == str(capability_workspace) and existing_model == openclaw_model:
-                        return True, agent_id
-                    subprocess.run(
-                        ["openclaw", "agents", "delete", agent_id],
-                        text=True,
-                        capture_output=True,
-                        check=False,
-                        env=_openclaw_env(),
-                    )
+    payload = _openclaw_agent_list()
+    if isinstance(payload, list):
+        for item in payload:
+            if isinstance(item, dict) and str(item.get("id", "")) == agent_id:
+                existing_workspace = str(item.get("workspace", "")).strip()
+                existing_model = str(item.get("model", "")).strip()
+                if existing_workspace == str(capability_workspace) and existing_model == openclaw_model:
+                    return True, agent_id
+                subprocess.run(
+                    ["openclaw", "agents", "delete", "--force", agent_id],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    env=_openclaw_env(),
+                )
     created = subprocess.run(
         ["openclaw", "agents", "add", agent_id, "--workspace", str(capability_workspace), "--model", openclaw_model, "--non-interactive", "--json"],
         text=True,
@@ -436,7 +479,18 @@ def _ensure_agent(
         env=_openclaw_env(),
     )
     if created.returncode == 0:
-        return True, agent_id
+        for _ in range(10):
+            if _openclaw_agent_visible(agent_id, capability_workspace, model):
+                return True, agent_id
+            time.sleep(0.3)
+        subprocess.run(
+            ["openclaw", "agents", "delete", "--force", agent_id],
+            text=True,
+            capture_output=True,
+            check=False,
+            env=_openclaw_env(),
+        )
+        return False, "openclaw_agent_not_visible_after_add"
     detail = (created.stderr or created.stdout or "").strip()
     if not detail:
         detail = "openclaw_agent_add_failed"
@@ -471,6 +525,28 @@ def _extract_summary(stdout: str) -> tuple[str, str]:
     walk(payload)
     summary = _compact(candidates[-1] if candidates else json.dumps(payload, ensure_ascii=True), 220)
     return summary, ",".join(refs[:4])
+
+
+def _semantic_result_gate(payload: dict[str, Any]) -> tuple[bool, str]:
+    summary = str(payload.get("summary", "") or "").strip()
+    artifact = str(payload.get("artifact", "") or "").strip().lower()
+    verify = str(payload.get("verify", "") or "").strip().lower()
+    blocking_issue = str(payload.get("blocking_issue", "") or "").strip().lower()
+    result_kind = str(payload.get("result_kind", "") or "").strip().lower()
+    summary_lower = summary.lower()
+    if summary:
+        for marker in STARTUP_ONLY_MARKERS:
+            if marker.lower() in summary_lower:
+                return False, "invalid_worker_result:start_banner_only"
+    if not summary and artifact in {"", "none"} and verify in {"", "none"} and not blocking_issue:
+        return False, "invalid_worker_result:empty_payload"
+    if artifact not in {"", "none"} or verify not in {"", "none"}:
+        return True, ""
+    if blocking_issue and blocking_issue not in {"", "none"}:
+        return True, ""
+    if result_kind in {"runtime_diag_result", "investigation_result"} and summary:
+        return True, ""
+    return False, "invalid_worker_result:insufficient_signal"
 
 
 def plan_worker(config: WorkerManagerConfig, role: str, worker_type: str, owner_task_id: str, task_kind: str) -> dict[str, Any]:
@@ -680,15 +756,46 @@ def collect_worker(config: WorkerManagerConfig, role: str, worker_id: str, owner
     payload = _read_json(result_path, {})
     if not isinstance(payload, dict):
         payload = {}
+    if not payload:
+        payload = {
+            "worker_id": target.worker_id,
+            "owner_task_id": target.owner_task_id,
+            "parent_role": target.parent_role,
+            "worker_type": target.worker_type,
+            "status": "failed",
+            "summary": "invalid_worker_result:missing_result_payload",
+            "blocking_issue": "invalid_worker_result:missing_result_payload",
+            "result_kind": target.result_kind,
+            "artifact": target.artifact,
+            "verify": target.verify,
+        }
+    mergeable, invalid_reason = _semantic_result_gate(payload)
     if mark_merged:
         for record in records:
-            if record.worker_id == target.worker_id:
+            if record.worker_id != target.worker_id:
+                continue
+            if mergeable:
                 record.status = "merged"
                 record.merged_at = _iso()
                 _emit_event(config, "worker_merge", record, {"merged_by": canonical_role(role)})
-                break
+            else:
+                record.status = "failed"
+                record.last_update_at = _iso()
+                record.summary = str(payload.get("summary") or invalid_reason).strip() or invalid_reason
+                record.verify = str(payload.get("verify") or "proof=semantic_gate:failed").strip() or "proof=semantic_gate:failed"
+                record.artifact = str(payload.get("artifact") or record.artifact or "").strip()
+                record.metadata = dict(record.metadata or {})
+                record.metadata["blocking_issue"] = invalid_reason
+                _emit_event(config, "worker_result_invalid", record, {"blocking_issue": invalid_reason, "merged_by": canonical_role(role)})
+            break
         _save_registry(config.registry_path, records)
-    payload["ok"] = True
+    payload["ok"] = mergeable
+    payload["mergeable"] = mergeable
+    if not mergeable:
+        payload["status"] = "failed"
+        payload["blocking_issue"] = invalid_reason
+        payload["summary"] = str(payload.get("summary") or invalid_reason).strip() or invalid_reason
+        return 6, payload
     return 0, payload
 
 
