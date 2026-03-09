@@ -3098,6 +3098,79 @@ function prevStoryPoint() {
 }
 
 // Drill-Down
+function buildRobustnessGoNoGoDecision() {
+  const status = getCriticalWidgetHealthStatus();
+  const state = toString(status && status.state, '');
+  const reason = status && status.reason
+    ? toString(status.reason, '')
+    : buildCriticalWidgetHealthDetail(status || { state: 'ok' });
+  const detail = reason || 'Data quality is within tolerance.';
+
+  if (state === 'error' || state === 'degraded' || state === 'stale' || state === 'loading') {
+    return {
+      state,
+      decision: 'NO-GO',
+      detail,
+    };
+  }
+
+  return {
+    state: state || 'ok',
+    decision: 'GO',
+    detail,
+  };
+}
+
+function openRobustnessDrill() {
+  const decision = buildRobustnessGoNoGoDecision();
+  const sourceMeta = toArray(liveDataMeta.sources, [LIVE_FALLBACK_TAG]).join(', ');
+  const modelMeta = toArray(liveDataMeta.modelVersions, ['unknown']).join(', ');
+  const warningMeta = toArray(liveDataMeta.warnings, ['none']).join(' | ');
+  const freshnessMeta = formatRelativeTime(liveDataMeta.generatedAt);
+
+  const summaryClasses = decision.decision === 'GO' ? 'context-badge positive' : 'context-badge warning';
+  const summary = decision.decision === 'GO'
+    ? 'All critical signals are in tolerance. You can proceed with a standard action gate.'
+    : 'Critical quality warning detected. Consider holding and refreshing before committing.';
+  const actions = decision.decision === 'GO'
+    ? [
+      'Proceed with standard workflow.',
+      'Monitor alert panel after action.',
+    ]
+    : [
+      'Pause new entries and wait for refresh.',
+      'Review live feed warnings and retry the drill.',
+    ];
+
+  return {
+    title: 'Robustness Drill: GO / NO-GO',
+    content: `
+      <div class="drill-section">
+        <h3>Readiness Verdict</h3>
+        <div style="display:flex;align-items:center;gap:10px;margin:12px 0;">
+          <span class="${summaryClasses}">${decision.decision}</span>
+          <span>${summary}</span>
+        </div>
+        <p>${decision.detail}</p>
+        <p><strong>Sources:</strong> ${sourceMeta}</p>
+        <p><strong>Models:</strong> ${modelMeta}</p>
+        <p><strong>Warnings:</strong> ${warningMeta}</p>
+        <p><strong>Freshness:</strong> ${freshnessMeta}</p>
+      </div>
+      <div class="drill-section">
+        <h3>Next Actions</h3>
+        <div class="drill-section">
+          ${actions.map((action) => `<p>• ${action}</p>`).join('')}
+        </div>
+        ${decision.decision === 'GO'
+          ? "<p class=\"drill-actions\"><button class=\"drill-action-btn\" onclick=\"showToast('Proceeding under GO signal')\">Proceed</button></p>"
+          : '<p class="drill-actions"><button class="drill-action-btn" onclick="refreshData()">Refresh Now</button></p>'
+        }
+      </div>
+    `
+  };
+}
+
 function openDrillDown(metric) {
   const modal = document.getElementById('drillDownModal');
   const title = document.getElementById('drillDownTitle');
@@ -3106,6 +3179,7 @@ function openDrillDown(metric) {
   if (!modal || !title || !body) return;
 
   const drillData = {
+    readiness: openRobustnessDrill(),
     portfolio: {
       title: 'Portfolio Change: +1.88%',
       content: `
@@ -6339,6 +6413,7 @@ window.toggleStoryMode = toggleStoryMode;
 window.nextStoryPoint = nextStoryPoint;
 window.prevStoryPoint = prevStoryPoint;
 window.openDrillDown = openDrillDown;
+window.openRobustnessDrill = openRobustnessDrill;
 window.closeDrillDown = closeDrillDown;
 window.toggleSplitView = toggleSplitView;
 window.updateComparison = updateComparison;

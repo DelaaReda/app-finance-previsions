@@ -369,6 +369,38 @@ function loadRenderHeroCopilotBriefWithHeroIds(resolvedState) {
   return { sandbox, elements, promptCalls, openCalls };
 }
 
+function loadRobustnessGoNoGoDecision(statusOverride = null) {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractFunction(source, 'buildRobustnessGoNoGoDecision', '\n\nfunction openDrillDown(');
+  const sandbox = {
+    console,
+    LIVE_FALLBACK_TAG: 'live-fallback',
+    liveDataMeta: {
+      generatedAt: '2026-03-09T08:00:00Z',
+      sources: ['test-feed'],
+      modelVersions: ['v-test'],
+      warnings: [],
+    },
+    getCriticalWidgetHealthStatus() {
+      return statusOverride;
+    },
+    buildCriticalWidgetHealthDetail() {
+      return 'Generated fallback detail';
+    },
+    toString(value, fallback = '') {
+      return value === null || value === undefined ? fallback : String(value);
+    },
+  };
+
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.buildRobustnessGoNoGoDecision = buildRobustnessGoNoGoDecision;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return { sandbox };
+}
+
 function createActionsRootStub() {
   const root = {
     children: [],
@@ -847,6 +879,27 @@ function loadRenderPortfolioHealthFullDetails(portfolioHealth) {
 
   return { sandbox, elements };
 }
+
+test('buildRobustnessGoNoGoDecision returns GO for healthy state', () => {
+  const { sandbox } = loadRobustnessGoNoGoDecision(null);
+  const result = sandbox.buildRobustnessGoNoGoDecision();
+
+  assert.equal(result.decision, 'GO');
+  assert.equal(result.state, 'ok');
+  assert.equal(result.detail, 'Generated fallback detail');
+});
+
+test('buildRobustnessGoNoGoDecision returns NO-GO for unhealthy states', () => {
+  const { sandbox } = loadRobustnessGoNoGoDecision({
+    state: 'degraded',
+    reason: 'partial signals',
+  });
+  const result = sandbox.buildRobustnessGoNoGoDecision();
+
+  assert.equal(result.decision, 'NO-GO');
+  assert.equal(result.state, 'degraded');
+  assert.equal(result.detail, 'partial signals');
+});
 
 test('applyLiveDashboardData derives portfolio health from raw risk profile payloads', () => {
   const { sandbox, transformCalls } = loadApplyLiveDashboardData();
