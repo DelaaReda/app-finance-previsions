@@ -3625,9 +3625,11 @@ async function hydrateCopilotOverlayStart() {
   }
 
   copilotContextRequest = Promise.resolve(
-    typeof window.FinanceAPI?.getCopilotContext === 'function'
-      ? window.FinanceAPI.getCopilotContext()
-      : null
+    typeof window.FinanceAPI?.getCopilotStart === 'function'
+      ? window.FinanceAPI.getCopilotStart()
+      : (typeof window.FinanceAPI?.getCopilotContext === 'function'
+        ? window.FinanceAPI.getCopilotContext()
+        : null)
   )
     .then((raw) => {
       const state = buildCopilotStartState(raw);
