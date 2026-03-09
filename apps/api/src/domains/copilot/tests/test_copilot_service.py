@@ -2,9 +2,11 @@
 
 import asyncio
 import json
+import urllib.request
 from typing import Any, Dict, List, Optional
 
 from domains.copilot.application import copilot_service
+from storage import io as storage_io
 
 
 class _FakeContextService:
@@ -234,3 +236,122 @@ def test_ask_payload_caps_structured_confidence_when_sources_are_insufficient():
     assert response["sources_count"] == 1
     assert response["confidence"] == 0.45
     assert "Sources insuffisantes" in response["risk_caveat"]
+
+
+def test_build_context_payload_includes_daily_brief_and_entry_points(monkeypatch):
+    brief_snapshot = {
+        "data": {
+            "daily": {
+                "summary": "Ouverture calme sur les mega caps avec un biais favorable aux semi-conducteurs.",
+                "market_sentiment": "BULLISH",
+                "macro_signals": [
+                    {"name": "CPI", "value": "2.1%", "signal": "stable"},
+                ],
+                "sector_rotation": {
+                    "top": ["Semiconductors"],
+                    "bottom": ["Utilities"],
+                },
+                "generated_at": "2026-03-02T08:30:00Z",
+                "source": ["test_brief"],
+            }
+        }
+    }
+
+    monkeypatch.setattr(
+        storage_io,
+        "load_json",
+        lambda key: brief_snapshot if key == "brief_daily" else None,
+    )
+
+    response = asyncio.run(
+        copilot_service.build_context_payload(
+            context_service_cls=_FakeContextService,
+            scope={"tickers": ["nvda"]},
+        )
+    )
+
+    brief = response.get("daily_brief") or {}
+    assert brief.get("summary", "").startswith("Ouverture calme")
+    assert brief.get("market_sentiment") == "BULLISH"
+    assert brief.get("source") == ["test_brief"]
+    assert response.get("scope_tickers") == ["NVDA"]
+
+    entry_points = response.get("entry_points") or []
+    assert [item.get("id") for item in entry_points] == ["brief_of_day", "ask_copilot"]
+    assert entry_points[0].get("target") == "/brief/daily"
+    assert entry_points[1].get("target") == "/copilot/ask"
+    assert entry_points[1].get("prefill", {}).get("tickers") == ["NVDA"]
+
+
+def test_build_context_payload_fallback_keeps_daily_brief_contract(monkeypatch):
+    class _FailingContextService:
+        async def get_current_market_context(self) -> Dict[str, Any]:
+            raise RuntimeError("context unavailable")
+
+    monkeypatch.setattr(storage_io, "load_json", lambda _key: None)
+
+    response = asyncio.run(
+        copilot_service.build_context_payload(
+            context_service_cls=_FailingContextService,
+        )
+    )
+
+    brief = response.get("daily_brief") or {}
+    assert brief.get("summary") == "No daily brief available yet."
+    assert brief.get("market_sentiment") == "UNKNOWN"
+    assert brief.get("source") == ["copilot_daily_brief_fallback"]
+
+    entry_points = response.get("entry_points") or []
+    assert [item.get("id") for item in entry_points] == ["brief_of_day", "ask_copilot"]
+
+
+def test_ask_payload_includes_local_daily_brief_when_brief_route_is_unavailable(monkeypatch):
+    class _EmptyRAGStore(_FakeRAGStore):
+        def search(self, scope: Optional[Dict[str, Any]] = None, top_k: int = 10):
+            return []
+
+    brief_snapshot = {
+        "data": {
+            "daily": {
+                "summary": "Les semi-conducteurs restent leaders avant l'ouverture.",
+                "market_sentiment": "BULLISH",
+                "macro_signals": [
+                    {"name": "Rates", "value": "stable", "signal": "neutral"},
+                ],
+                "sector_rotation": {
+                    "top": ["Semiconductors"],
+                    "bottom": ["Utilities"],
+                },
+            }
+        }
+    }
+
+    monkeypatch.setattr(
+        storage_io,
+        "load_json",
+        lambda key: brief_snapshot if key == "brief_daily" else None,
+    )
+
+    def _raise_backend_unavailable(*args, **kwargs):
+        raise RuntimeError("backend unavailable")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _raise_backend_unavailable)
+
+    def fake_ask_llm(*, question: str, context_chunks: List[Dict[str, Any]], max_tokens: int = 1000):
+        assert "Les semi-conducteurs restent leaders avant l'ouverture." in question
+        assert "Sentiment: BULLISH" in question
+        return {"model": "test-llm", "answer": "Je recommande HOLD sur NVDA.", "citations": []}
+
+    response = asyncio.run(
+        copilot_service.build_ask_payload(
+            question="Que faire sur NVDA aujourd'hui ?",
+            tickers=["NVDA"],
+            max_sources=2,
+            rag_store_cls=_EmptyRAGStore,
+            ask_llm_fn=fake_ask_llm,
+            context_service_cls=_FakeContextService,
+        )
+    )
+
+    assert response.get("action") == "hold"
+    assert response.get("sources_count") == 1

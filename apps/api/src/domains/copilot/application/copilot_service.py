@@ -220,6 +220,125 @@ def _collect_fallback_context(scope: Optional[Dict[str, Any]]) -> Dict[str, Any]
     return payload
 
 
+def _trim_words(text: Any, *, limit: int = 200) -> str:
+    words = _safe_text(text).split()
+    if not words:
+        return ""
+    return " ".join(words[:limit])
+
+
+def _normalize_source_list(value: Any, fallback: str) -> List[str]:
+    if isinstance(value, list):
+        items = [_safe_text(item) for item in value if _safe_text(item)]
+        if items:
+            return items
+    item = _safe_text(value)
+    if item:
+        return [item]
+    return [fallback]
+
+
+def _brief_signal_label(item: Any, fallback: str) -> str:
+    if not isinstance(item, dict):
+        return _safe_text(item, fallback)
+    topic = _safe_text(item.get("name") or item.get("topic"), fallback)
+    value = _safe_text(item.get("value") or item.get("state"), "n/a")
+    signal = _safe_text(item.get("signal") or item.get("direction"), "")
+    if signal:
+        return f"{topic}={value} ({signal})"
+    return f"{topic}={value}"
+
+
+def _brief_list_values(value: Any) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    values: List[str] = []
+    for item in value:
+        label = _safe_text(item.get("sector") if isinstance(item, dict) else item)
+        if label:
+            values.append(label)
+    return values
+
+
+def _load_daily_brief_payload() -> Dict[str, Any]:
+    generated_at = utc_now_iso()
+    fallback_payload = {
+        "summary": "No daily brief available yet.",
+        "market_sentiment": "UNKNOWN",
+        "top_signals": [],
+        "top_risks": [],
+        "macro_signals": [],
+        "sector_rotation": {"top": [], "bottom": []},
+        "generated_at": generated_at,
+        "freshness": generated_at,
+        "source": ["copilot_daily_brief_fallback"],
+    }
+
+    try:
+        from storage.io import load_json
+    except Exception:
+        return fallback_payload
+
+    snapshot = load_json("brief_daily") or load_json("brief_weekly")
+    if not isinstance(snapshot, dict) or not snapshot:
+        return fallback_payload
+
+    raw_payload = snapshot.get("data") if isinstance(snapshot.get("data"), dict) else snapshot
+    brief = raw_payload.get("daily") if isinstance(raw_payload, dict) and isinstance(raw_payload.get("daily"), dict) else raw_payload
+    if not isinstance(brief, dict) or not brief:
+        return fallback_payload
+
+    normalized = dict(brief)
+    normalized["summary"] = _trim_words(normalized.get("summary"), limit=200) or fallback_payload["summary"]
+    normalized["market_sentiment"] = _safe_text(
+        normalized.get("market_sentiment") or normalized.get("sentiment"),
+        fallback_payload["market_sentiment"],
+    )
+
+    macro_signals = normalized.get("macro_signals", normalized.get("macro", []))
+    normalized["macro_signals"] = macro_signals if isinstance(macro_signals, list) else []
+
+    sector_rotation = normalized.get("sector_rotation")
+    if not isinstance(sector_rotation, dict):
+        sector_rotation = {"top": [], "bottom": []}
+    sector_rotation.setdefault("top", [])
+    sector_rotation.setdefault("bottom", [])
+    normalized["sector_rotation"] = sector_rotation
+
+    normalized["generated_at"] = _safe_text(normalized.get("generated_at"), generated_at)
+    normalized["freshness"] = _safe_text(
+        normalized.get("freshness") or normalized.get("generated_at"),
+        normalized["generated_at"],
+    )
+    normalized["source"] = _normalize_source_list(
+        normalized.get("source") or normalized.get("sources"),
+        "copilot_daily_brief_snapshot",
+    )
+    return normalized
+
+
+def _build_copilot_entry_points(scope: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    scope_tickers = _normalize_tickers(scope.get("tickers") if isinstance(scope, dict) else [])
+    return [
+        {
+            "id": "brief_of_day",
+            "kind": "open",
+            "label": "Brief du jour",
+            "target": "/brief/daily",
+        },
+        {
+            "id": "ask_copilot",
+            "kind": "ask",
+            "label": "Poser une question",
+            "target": "/copilot/ask",
+            "prefill": {
+                "question": "Que dois-je surveiller aujourd'hui ?",
+                "tickers": scope_tickers,
+            },
+        },
+    ]
+
+
 def _extract_bullets(text: str) -> List[str]:
     cleaned = []
     for line in _safe_text(text).splitlines():
@@ -413,21 +532,24 @@ def _fetch_live_market_context() -> str:
 
         # 1. Brief du jour
         try:
-            with _ur.urlopen("http://localhost:8050/api/brief/daily", timeout=3) as r:
-                brief = _json.load(r).get("data", {})
-            summary = brief.get("summary", "")
-            sentiment = brief.get("sentiment", "")
+            brief = _load_daily_brief_payload()
+            summary = _safe_text(brief.get("summary"))
+            sentiment = _safe_text(brief.get("market_sentiment") or brief.get("sentiment"), "UNKNOWN")
             if summary:
                 parts.append(f"=== MARCHE AUJOURD'HUI ===\nSentiment: {sentiment}\n{summary[:300]}")
             macro = brief.get("macro_signals", [])
             if macro:
-                macro_str = " | ".join(f"{m['name']}={m['value']} ({m['signal']})" for m in macro[:4] if isinstance(m, dict))
+                macro_str = " | ".join(_brief_signal_label(m, "macro") for m in macro[:4])
                 parts.append(f"Macro: {macro_str}")
             sectors = brief.get("sector_rotation", {})
             top = sectors.get("top", [])
             bot = sectors.get("bottom", [])
             if top or bot:
-                parts.append(f"Secteurs forts: {', '.join(top[:3])} | Faibles: {', '.join(bot[:3])}")
+                top_labels = _brief_list_values(top)[:3]
+                bottom_labels = _brief_list_values(bot)[:3]
+                parts.append(
+                    f"Secteurs forts: {', '.join(top_labels)} | Faibles: {', '.join(bottom_labels)}"
+                )
         except Exception:
             pass
 
@@ -691,17 +813,25 @@ def build_history_payload(*, limit: int) -> Dict[str, Any]:
 
 async def build_context_payload(context_service_cls: Optional[Any] = None, scope: Optional[Dict[str, Any]] = None) -> Any:
     """Returns current context when available, or a never-empty fallback."""
+    payload: Dict[str, Any]
     try:
         cls = _resolve_context_service_class(context_service_cls)
         if cls is not None:
-            payload = await cls().get_current_market_context()
-            if isinstance(payload, dict) and payload:
-                if isinstance(scope, dict) and scope.get("tickers"):
-                    payload["scope_tickers"] = _normalize_tickers(scope.get("tickers"))
-                return payload
+            candidate = await cls().get_current_market_context()
+            if isinstance(candidate, dict) and candidate:
+                payload = dict(candidate)
+            else:
+                payload = _collect_fallback_context(scope)
+        else:
+            payload = _collect_fallback_context(scope)
     except Exception:
-        pass
-    return _collect_fallback_context(scope)
+        payload = _collect_fallback_context(scope)
+
+    if isinstance(scope, dict) and scope.get("tickers"):
+        payload["scope_tickers"] = _normalize_tickers(scope.get("tickers"))
+    payload["daily_brief"] = _load_daily_brief_payload()
+    payload["entry_points"] = _build_copilot_entry_points(scope)
+    return payload
 
 
 def build_report_payload(*, prompt: str, filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
