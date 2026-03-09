@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import datetime, timezone
 from importlib import import_module
@@ -258,6 +259,112 @@ def _brief_list_values(value: Any) -> List[str]:
         if label:
             values.append(label)
     return values
+
+
+def _build_copilot_llm_messages(question: str, context_chunks: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    context_text = "\n\n".join(
+        [
+            f"[{index + 1}] {chunk['text']}\n"
+            f"Source: {chunk['meta'].get('url', 'N/A')} | Date: {chunk['meta'].get('date', 'N/A')}"
+            for index, chunk in enumerate(context_chunks[:10])
+        ]
+    )
+    system_prompt = (
+        "Tu es un copilot financier personnel. Ton role: aider l'utilisateur "
+        "a prendre des decisions d'investissement rapides et claires.\n\n"
+        "Regles:\n"
+        "- Reponds en 3-5 phrases maximum, orientees action\n"
+        "- Commence toujours par: HOLD / BUY / SELL / REDUIRE / AUGMENTER selon le contexte\n"
+        "- Cite tes sources avec [numero] quand pertinent\n"
+        "- Si les donnees manquent, dis-le en 1 phrase et donne quand meme une direction probable\n"
+        "- Pas de disclaimers juridiques, l'utilisateur sait que c'est une aide et non un conseil officiel\n"
+        "- Utilise les chiffres disponibles (%, prix, tendances)"
+    )
+    user_prompt = (
+        "Contexte (sources de données):\n"
+        f"{context_text}\n\n"
+        f"Question: {question}\n\n"
+        "Réponse (avec citations [1], [2], etc.):"
+    )
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+
+
+def _extract_llm_citations(answer: str, context_chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    cited_indices = {
+        int(match.group(1)) - 1
+        for match in re.finditer(r"\[(\d+)\]", answer or "")
+    }
+    citations: List[Dict[str, Any]] = []
+    for index in cited_indices:
+        if index < 0 or index >= len(context_chunks):
+            continue
+        chunk = context_chunks[index]
+        meta = chunk.get("meta") if isinstance(chunk.get("meta"), dict) else {}
+        citations.append(
+            {
+                "index": index + 1,
+                "type": meta.get("type", "context"),
+                "url": meta.get("url", ""),
+                "date": meta.get("date", ""),
+                "excerpt": (chunk.get("text") or "")[:200] + "...",
+            }
+        )
+    return citations
+
+
+def _default_ask_llm(
+    *,
+    question: str,
+    context_chunks: List[Dict[str, Any]],
+    max_tokens: int = 1000,
+) -> Dict[str, Any]:
+    messages = _build_copilot_llm_messages(question, context_chunks)
+    primary_error = ""
+
+    try:
+        judge_g4f_client = import_module("domains.judge.application.g4f_client")
+        llm_res = judge_g4f_client.call_llm(
+            messages=messages,
+            mode=os.getenv("LLM_RAG_MODE") or os.getenv("LLM_MODEL_MODE"),
+            timeout=max(20, int(os.getenv("G4F_TIMEOUT_SECONDS", "60") or "60")),
+            category_preference="forecast",
+        )
+        if isinstance(llm_res, dict) and llm_res.get("ok"):
+            answer = str(llm_res.get("answer") or "").strip()
+            return {
+                "answer": answer,
+                "citations": _extract_llm_citations(answer, context_chunks),
+                "model": llm_res.get("model") or "judge_g4f_client",
+                "tokens": 0,
+            }
+        primary_error = str((llm_res or {}).get("error") or "judge_stack_llm_failed")
+    except Exception as exc:
+        primary_error = str(exc)
+
+    try:
+        legacy_ask_llm = import_module("research.llm_client").ask_llm
+        fallback = legacy_ask_llm(
+            question=question,
+            context_chunks=context_chunks,
+            max_tokens=max_tokens,
+        )
+        if isinstance(fallback, dict):
+            if primary_error and not fallback.get("error"):
+                fallback["error"] = primary_error
+            return fallback
+    except Exception as fallback_exc:
+        primary_error = f"{primary_error}; {fallback_exc}" if primary_error else str(fallback_exc)
+
+    return {
+        "answer": "",
+        "citations": [],
+        "model": "unconfigured",
+        "tokens": 0,
+        "error": primary_error or "copilot_llm_unavailable",
+    }
 
 
 def _load_daily_brief_payload() -> Dict[str, Any]:
@@ -638,7 +745,7 @@ async def build_ask_payload(
         if rag_store_cls is None:
             rag_store_cls = import_module("research.rag_store").RAGStore
         if ask_llm_fn is None:
-            ask_llm_fn = import_module("research.llm_client").ask_llm
+            ask_llm_fn = _default_ask_llm
         if context_service_cls is None:
             context_service_cls = _resolve_context_service_class()
     except Exception as import_exc:

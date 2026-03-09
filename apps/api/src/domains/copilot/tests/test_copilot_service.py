@@ -238,6 +238,71 @@ def test_ask_payload_caps_structured_confidence_when_sources_are_insufficient():
     assert "Sources insuffisantes" in response["risk_caveat"]
 
 
+def test_ask_payload_defaults_to_judge_stack_llm(monkeypatch):
+    class _EmptyRAGStore(_FakeRAGStore):
+        def search(self, scope: Optional[Dict[str, Any]] = None, top_k: int = 10):
+            return []
+
+    judge_calls: List[Dict[str, Any]] = []
+
+    class _JudgeModule:
+        @staticmethod
+        def call_llm(*, messages, mode=None, timeout=None, category_preference=None, **_kwargs):
+            judge_calls.append(
+                {
+                    "messages": messages,
+                    "mode": mode,
+                    "timeout": timeout,
+                    "category_preference": category_preference,
+                }
+            )
+            return {
+                "ok": True,
+                "model": "judge-stack-test",
+                "answer": json.dumps(
+                    {
+                        "action": "buy",
+                        "confidence": 0.62,
+                        "reasoning": [
+                            "Le brief du jour reste constructif",
+                            "Le contexte marché conserve un biais favorable",
+                        ],
+                    }
+                ),
+            }
+
+    class _RagModule:
+        RAGStore = _EmptyRAGStore
+
+    def fake_import_module(path: str):
+        if path == "research.rag_store":
+            return _RagModule
+        if path == "domains.judge.application.g4f_client":
+            return _JudgeModule
+        if path == "research.llm_client":
+            raise AssertionError("legacy ask_llm fallback should not be used")
+        raise ImportError(path)
+
+    monkeypatch.setattr(copilot_service, "import_module", fake_import_module)
+
+    response = asyncio.run(
+        copilot_service.build_ask_payload(
+            question="Que faire sur NVDA aujourd'hui ?",
+            tickers=["NVDA"],
+            max_sources=2,
+            context_service_cls=_FakeContextService,
+        )
+    )
+
+    assert judge_calls
+    assert judge_calls[0]["category_preference"] == "forecast"
+    assert judge_calls[0]["messages"][0]["role"] == "system"
+    assert "Que faire sur NVDA aujourd'hui ?" in judge_calls[0]["messages"][1]["content"]
+    assert response["model"] == "judge-stack-test"
+    assert response["action"] == "buy"
+    assert response["verdict"] == "buy"
+
+
 def test_build_context_payload_includes_daily_brief_and_entry_points(monkeypatch):
     brief_snapshot = {
         "data": {
