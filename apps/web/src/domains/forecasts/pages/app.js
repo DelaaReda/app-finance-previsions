@@ -2469,6 +2469,7 @@ function renderLiveDashboardWidgets() {
   renderMarketCalendar();
   renderNewsFeed();
   renderMarketDrivers();
+  renderHeroCopilotBrief(appData.copilotStart);
   renderAlertTimeline();
   syncDashboardCards();
   updateLiveProvenance(liveDataMeta);
@@ -3438,6 +3439,31 @@ function runCopilotStartOpen(target) {
   }, 30);
 }
 
+function resolveCopilotStartState(state) {
+  const fallback = buildDefaultCopilotStartState();
+  if (!isObject(state)) {
+    return fallback;
+  }
+  if (isObject(state.brief)) {
+    return {
+      brief: {
+        ...fallback.brief,
+        ...state.brief,
+        topSignals: normalizeCopilotStartList(state.brief.topSignals),
+        topRisks: normalizeCopilotStartList(state.brief.topRisks)
+      },
+      ask: Array.isArray(state.ask) && state.ask.length ? state.ask : fallback.ask,
+      open: Array.isArray(state.open) && state.open.length ? state.open : fallback.open
+    };
+  }
+  return buildCopilotStartState({
+    data: {
+      copilot_start: state,
+      scope_tickers: state.scope_tickers
+    }
+  });
+}
+
 function renderHeroCopilotBrief(state) {
   const summaryEl = document.querySelector('.hero-daily-brief .ai-summary-content');
   const timestampEl = document.querySelector('.hero-daily-brief .ai-timestamp');
@@ -3445,7 +3471,7 @@ function renderHeroCopilotBrief(state) {
   if (!summaryEl && !timestampEl && !actionsRoot) return;
 
   const fallbackState = buildDefaultCopilotStartState();
-  const resolvedState = state && isObject(state) ? state : fallbackState;
+  const resolvedState = resolveCopilotStartState(state);
   const brief = isObject(resolvedState.brief) ? resolvedState.brief : fallbackState.brief;
   const askItems = Array.isArray(resolvedState.ask) && resolvedState.ask.length
     ? resolvedState.ask
