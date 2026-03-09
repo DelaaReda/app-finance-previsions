@@ -96,6 +96,58 @@ def _probe_http_ok(url: str, timeout_s: float = 1.2) -> bool:
         return False
 
 
+def _normalize_url_root(value: str) -> str:
+    token = str(value or "").strip()
+    if not token:
+        return ""
+    if not re.match(r"^https?://", token, re.IGNORECASE):
+        token = f"http://{token}"
+    return token.rstrip("/") + "/"
+
+
+def _default_lan_url() -> str:
+    host = ""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            host = str(sock.getsockname()[0] or "").strip()
+    except Exception:
+        host = ""
+    if host and host not in {"0.0.0.0", "127.0.0.1"}:
+        return f"http://{host}:7780/"
+    return ""
+
+
+def _status_url_from_root(url_root: str) -> str:
+    base = _normalize_url_root(url_root)
+    return f"{base}api/status?lite=1" if base else ""
+
+
+def _monitor_access_snapshot(root: Path) -> dict:
+    state_file = root / "logs-codex-runs" / "monitor-lan-url.txt"
+    lan_ui_url = ""
+    try:
+        lan_ui_url = _normalize_url_root(state_file.read_text(encoding="utf-8", errors="ignore").strip())
+    except Exception:
+        lan_ui_url = ""
+    if not lan_ui_url:
+        lan_ui_url = _normalize_url_root(_default_lan_url())
+    vm_local_ui_url = "http://127.0.0.1:7779/"
+    canonical_ui_url = lan_ui_url or vm_local_ui_url
+    public_tunnels_enabled = _bool_token(os.environ.get("FC_MONITOR_MANAGE_TUNNEL"), False)
+    return {
+        "mode": "lan_only" if not public_tunnels_enabled else "public_tunnel_managed",
+        "canonical_ui_url": canonical_ui_url,
+        "canonical_status_url": _status_url_from_root(canonical_ui_url),
+        "lan_ui_url": lan_ui_url,
+        "lan_status_url": _status_url_from_root(lan_ui_url),
+        "vm_local_ui_url": vm_local_ui_url,
+        "vm_local_status_url": _status_url_from_root(vm_local_ui_url),
+        "public_tunnels_enabled": public_tunnels_enabled,
+        "state_file": str(state_file),
+    }
+
+
 def one_line(value: str, limit: int = 320) -> str:
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     if len(text) > limit:
@@ -1315,6 +1367,9 @@ def _role_has_monitor_artifacts(role: str) -> bool:
 def monitor_roles() -> tuple[str, ...]:
     roles = list(active_roles())
     if _execution_mode(ROOT) == "planner_experimental":
+        for capability_role in ("dev", "admin", "scrum_master"):
+            if capability_role not in roles:
+                roles.append(capability_role)
         for role in _active_planner_subagent_roles():
             if role not in roles:
                 roles.append(role)
@@ -2362,6 +2417,25 @@ def admin_autonomy_snapshot(now_ts: float | None = None) -> dict:
                 "needs_human_review_by_role": {"planner": False, "dev": False},
             }
         )
+    if (
+        _execution_mode(ROOT) == "planner_experimental"
+        and payload["active"]
+        and payload.get("age_min", -1) >= 180
+    ):
+        payload.update(
+            {
+                "active": False,
+                "trigger": "stale_suppressed",
+                "target_role": "",
+                "target_task": "none",
+                "reason_blocker": "STALE_SUPPRESSED",
+                "last_action": "stale_suppressed",
+                "last_outcome": "resolved",
+                "last_action_seq": "",
+                "streak_by_role": {"planner": 0, "dev": 0},
+                "needs_human_review_by_role": {"planner": False, "dev": False},
+            }
+        )
     return payload
 
 
@@ -2978,8 +3052,16 @@ def status(lite: int = 0):
     latest_snapshot = monitor_latest_snapshot()
     latest_roles_raw = latest_snapshot.get("roles", {})
     latest_roles = latest_roles_raw if isinstance(latest_roles_raw, dict) else {}
-    # Canonical UI scope: active topology roles + advisory lanes with monitor evidence.
+    # Canonical UI scope: core roles remain canonical in planner-only mode, but
+    # the monitor must still expose planner-owned capability truth for
+    # dev/admin/scrum_master when Atlas or operators inspect live execution.
     roles = monitor_roles()
+    planner_only_runtime = str(runtime_state.get("execution_mode", "") or "").strip() == "planner_experimental"
+    agent_roles = list(roles)
+    if planner_only_runtime:
+        for capability_role in ("dev", "admin", "scrum_master"):
+            if capability_role not in agent_roles:
+                agent_roles.append(capability_role)
     pq=jload(orchestrator_file("priority-queue.json"))
     qi=pq.get("items",[])
     wb=jload(orchestrator_file("parallel-workstreams.json"))
@@ -3011,7 +3093,10 @@ def status(lite: int = 0):
     admin_dispatch = admin_dispatch_snapshot()
     agent_messages = _message_bus_snapshot(now_iso)
     po_scrum_master = _po_scrum_master_snapshot(agent_messages)
-    doctor = doctor_snapshot(force_refresh=False, allow_refresh=not lite_mode)
+    try:
+        doctor = doctor_snapshot(force_refresh=False, allow_refresh=not lite_mode)
+    except TypeError:
+        doctor = doctor_snapshot(force_refresh=False)
     planner_contract_health = parse_contract_fields("planner")
     planner_evidence_quality_score = _int_or_default(planner_contract_health.get("quality_score"), 0)
 
@@ -3151,7 +3236,7 @@ def status(lite: int = 0):
     planner_autonomy_last_outcome = str(planner_autonomy.get("last_outcome", "none") or "none").strip() or "none"
 
     agents={}
-    for role in roles:
+    for role in agent_roles:
         c=contract(role)
         ev = parse_evidence_kv(c.get("EVIDENCE", ""))
         snap = latest_roles.get(role, {}) if isinstance(latest_roles, dict) else {}
@@ -3317,6 +3402,70 @@ def status(lite: int = 0):
                     "RUNTIME_RECOVERED_SOFT",
                 }:
                     delta_value = "RUNTIME_VERIFIED_OK"
+        if planner_only_runtime and role != "planner":
+            role_tasks = [
+                t for t in tasks
+                if isinstance(t, dict)
+                and canonical_role(t.get("assignee") or t.get("role", "")) == role
+                and str(t.get("state", "")).strip().upper() not in {"DONE", "CLOSED"}
+            ]
+            active_role_tasks = [
+                t for t in role_tasks
+                if str(t.get("state", "")).strip().upper() in {"IN_PROGRESS", "REVIEW"}
+            ]
+            ready_role_tasks = [
+                t for t in role_tasks
+                if str(t.get("state", "")).strip().upper() in {"READY", "READY_DEV", "READY_PLANNER"}
+            ]
+            waiting_dep_role_tasks = [
+                t for t in role_tasks
+                if str(t.get("state", "")).strip().upper() == "WAITING_DEP"
+            ]
+            if active_role_tasks:
+                current = sorted(
+                    active_role_tasks,
+                    key=lambda item: str(item.get("updated_at", "")),
+                    reverse=True,
+                )[0]
+                status_value = "IN_PROGRESS"
+                verdict = "GO_WITH_CAUTION"
+                delta_value = "CAPABILITY_ACTIVE"
+                blocker_value = "NONE"
+                source = "planner_capability"
+                next_value = f"owner={role}; action=continue {str(current.get('id', '')).strip() or 'active_task'}"
+            elif ready_role_tasks:
+                current = sorted(
+                    ready_role_tasks,
+                    key=lambda item: str(item.get("updated_at", "")),
+                    reverse=True,
+                )[0]
+                status_value = "READY"
+                verdict = "GO_WITH_CAUTION"
+                delta_value = "CAPABILITY_READY"
+                blocker_value = "NONE"
+                source = "planner_capability"
+                next_value = f"owner={role}; action=claim {str(current.get('id', '')).strip() or 'ready_task'}"
+            elif waiting_dep_role_tasks:
+                current = sorted(
+                    waiting_dep_role_tasks,
+                    key=lambda item: str(item.get("updated_at", "")),
+                    reverse=True,
+                )[0]
+                status_value = "WAITING_DEP"
+                verdict = "WAIT"
+                delta_value = "DEPENDENCY_WAIT"
+                blocker_value = "NONE"
+                source = "planner_capability"
+                next_value = f"owner={role}; action=wait dependency for {str(current.get('id', '')).strip() or 'dependent_task'}"
+            else:
+                status_value = "IDLE"
+                verdict = "IDLE"
+                delta_value = "NO_ACTIVE_CAPABILITY"
+                blocker_value = "NONE"
+                source = "planner_capability"
+                next_value = f"owner=planner; action=dispatch {role} when task exists"
+        else:
+            next_value = c.get("NEXT") or snap.get("next", "")
         if is_rate_limit_marker(verdict, status_value, delta_value, blocker_value):
             if (verdict or "").upper() == "BLOCKED":
                 verdict = "WAIT"
@@ -3342,7 +3491,7 @@ def status(lite: int = 0):
         if last_message_action_status not in {"none", "done", "deferred", "blocked"}:
             last_message_action_status = "none"
         agents[role]={"verdict":verdict,"status":status_value,"delta":delta_value,
-                      "blocker":blocker_value,"next":c.get("NEXT") or snap.get("next", ""),
+                      "blocker":blocker_value,"next":next_value,
                       "schedule":(f":{','.join(str(x) for x in mins)}" if mins else "manual"),
                       "tick_age_min":age,"next_tick_min":wait,
                       "next_tick_at":(f":{nm:02d}" if nm is not None else "--"),
@@ -3442,7 +3591,7 @@ def status(lite: int = 0):
         }
 
     issue_reporting = {
-        "roles_total": len(roles),
+        "roles_total": len(agent_roles),
         "roles_missing_report": sorted(issue_publication_gap_roles),
         "reports_with_issues": reports_with_issues,
         "critical_count": critical_count,
@@ -3454,7 +3603,7 @@ def status(lite: int = 0):
     runtime_paths = [
         queue_path,
         workboard_path,
-        *[ROOT / f"logs-codex-runs/fc-ticks/{role}.tick.log" for role in roles],
+        *[ROOT / f"logs-codex-runs/fc-ticks/{role}.tick.log" for role in agent_roles],
     ]
     data_source, data_freshness_s = monitor_detect_data_source(runtime_paths, kpi_path)
 
@@ -3606,7 +3755,7 @@ def status(lite: int = 0):
     dynamic_workers = _dynamic_workers_snapshot()
     planner_subagents = _planner_subagents_snapshot()
     agent_activity = _agent_activity_snapshot(
-        roles=tuple(roles),
+        roles=tuple(agent_roles),
         agents=agents,
         tasks=tasks,
         planner_subagents=planner_subagents,
@@ -3627,15 +3776,17 @@ def status(lite: int = 0):
     delivery_control = _delivery_control_snapshot()
     product_value_metrics = _product_value_metrics_snapshot()
     execution_mode = _execution_mode(ROOT)
+    monitor_access = _monitor_access_snapshot(ROOT)
 
     payload = {"ts_utc":now.isoformat(),"health":health,
             "instance":INSTANCE_ID,
             "root":str(ROOT),
             "state_dir":str(STATE),
+            "monitor_access": monitor_access,
             "runtime_state": runtime_state,
             "execution_mode": execution_mode,
             "core_roles": list(CORE_ROLES),
-            "roles":list(roles),
+            "roles":list(CORE_ROLES),
             "done": workboard_done,
             "ready": workboard_ready,
             "batches": batches_payload,
@@ -3681,6 +3832,7 @@ def status(lite: int = 0):
             "po_scrum_master": po_scrum_master,
             "agent_messages": agent_messages,
             "doctor": doctor,
+            "doctor_status": str(doctor.get("status", "unknown")) if isinstance(doctor, dict) else "unknown",
             "health_snapshot": hs if isinstance(hs, dict) else {},
             "critical_widget_health": critical_widget_health,
             "issues_recent_by_role": issues_recent_by_role,
@@ -3708,6 +3860,11 @@ def status(lite: int = 0):
     except Exception:
         pass
     return payload
+
+
+@app.get("/api/monitor/access")
+def monitor_access():
+    return _monitor_access_snapshot(ROOT)
 
 @app.get("/api/ticks/{role}")
 def ticks(role:str, n:int=25):
@@ -4004,7 +4161,10 @@ def iteration_issues(role: str = "", severity: str = "", recent_minutes: int = 1
 @app.get("/api/runtime-diagnostics")
 def runtime_diagnostics(lite: int = 0):
     try:
-        status_snapshot = status(lite=lite)
+        try:
+            status_snapshot = status(lite=lite)
+        except TypeError:
+            status_snapshot = status()
     except Exception:
         status_snapshot = {
             "health": "DEGRADED",
@@ -4098,9 +4258,14 @@ def runtime_diagnostics(lite: int = 0):
     status_agents = status_snapshot.get("agents", {}) if isinstance(status_snapshot, dict) else {}
     if not isinstance(status_agents, dict):
         status_agents = {role: _unknown_agent_payload(role) for role in CORE_ROLES}
-    for core_role in CORE_ROLES:
+    expected_runtime_roles = list(CORE_ROLES)
+    if _execution_mode(ROOT) == "planner_experimental":
+        for capability_role in ("dev", "admin", "scrum_master"):
+            if capability_role not in expected_runtime_roles:
+                expected_runtime_roles.append(capability_role)
+    for core_role in expected_runtime_roles:
         if core_role not in status_agents:
-            status_agents[core_role] = _unknown_agent_payload(core_role)
+            status_agents[core_role] = _unknown_agent_payload(core_role, "planner_capability")
     dev_parent_data = status_snapshot.get("dev_parent", {}) if isinstance(status_snapshot, dict) else {}
     if not isinstance(dev_parent_data, dict) or not dev_parent_data:
         dev_parent_data = dev_parent_snapshot()
@@ -4451,6 +4616,12 @@ def runtime_diagnostics(lite: int = 0):
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "health": status_snapshot.get("health", "unknown"),
+        "doctor_status": (
+            str(status_snapshot.get("doctor", {}).get("status", "unknown"))
+            if isinstance(status_snapshot.get("doctor"), dict)
+            else str(status_snapshot.get("doctor_status", "unknown"))
+        ),
         "data_freshness_s": status_snapshot.get("data_freshness_s", -1),
         "data_source": status_snapshot.get("data_source", "unknown"),
         "agents": status_agents,
@@ -4871,9 +5042,30 @@ header{position:sticky;top:0;z-index:100;height:52px;background:rgba(5,8,13,.92)
 .insight-issue-report{font-size:10px;line-height:1.45;margin-top:4px}
 .insight-issue-report.bad{color:var(--coral)}
 .insight-issue-report.good{color:var(--emerald)}
+.live-truth-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,.9fr);gap:10px}
+.live-truth-hero{background:linear-gradient(160deg,rgba(23,141,189,.18),rgba(7,16,28,.92));border:1px solid rgba(63,188,231,.18);border-radius:var(--r);padding:12px}
+.live-truth-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+.live-truth-kpi{background:rgba(255,255,255,.03);border:1px solid var(--edge);border-radius:12px;padding:9px 10px}
+.live-truth-kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ghost)}
+.live-truth-kpi-value{margin-top:4px;font-size:13px;font-weight:700;color:var(--ink-text);line-height:1.35}
+.live-truth-title{font:700 18px/1.1 "Space Grotesk",sans-serif;color:var(--ink-bright);letter-spacing:-.02em}
+.live-truth-sub{margin-top:6px;font-size:11px;color:var(--ghost);line-height:1.5}
+.live-truth-stream{display:flex;flex-direction:column;gap:8px}
+.live-truth-task{background:rgba(255,255,255,.03);border:1px solid var(--edge);border-radius:12px;padding:9px 10px}
+.live-truth-task-head{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.live-truth-task-id{font-size:12px;font-weight:700;color:var(--ink-bright)}
+.live-truth-task-meta{font-size:10px;color:var(--ghost)}
+.live-truth-role-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.live-role-card{background:rgba(255,255,255,.02);border:1px solid var(--edge);border-radius:12px;padding:9px 10px}
+.live-role-name{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ghost)}
+.live-role-task{margin-top:6px;font-size:12px;font-weight:700;color:var(--ink-bright);word-break:break-word}
+.live-role-action{margin-top:5px;font-size:10px;line-height:1.45;color:var(--ink-text);word-break:break-word}
+.live-role-meta{margin-top:6px;font-size:10px;line-height:1.45;color:var(--ghost)}
+.live-truth-links{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 @media(max-width:1000px){.insight-grid{grid-template-columns:1fr}}
 @media(max-width:1280px){.exec-logs{grid-template-columns:1fr 1fr}}
 @media(max-width:980px){.exec-logs{grid-template-columns:1fr}}
+@media(max-width:1180px){.live-truth-grid,.live-truth-role-grid,.live-truth-kpis{grid-template-columns:1fr}}
 .spin-sm{display:inline-block;width:10px;height:10px;border:2px solid rgba(255,255,255,.1);border-top-color:var(--aqua);border-radius:50%;animation:sp .5s linear infinite;vertical-align:middle}
 @keyframes sp{to{transform:rotate(360deg)}}
 .fade{animation:fadeUp .25s ease}
@@ -5236,6 +5428,116 @@ function logViewerHtml(){
       <span class="ext-link" style="pointer-events:none;opacity:.75">📄 ${esc(path)}</span>
     </div>
   `;
+}
+function fmtTs(v){
+  const raw=String(v||'').trim();
+  if(!raw)return'—';
+  const d=new Date(raw);
+  if(Number.isNaN(d.getTime()))return esc(raw);
+  return `${d.toLocaleTimeString('fr-FR')} · ${d.toLocaleDateString('fr-FR')}`;
+}
+function monitorAccessInfo(){
+  const access=(D&&D.monitor_access)||{};
+  const canonical=String(access.canonical_ui_url||access.lan_ui_url||'').trim()||'http://192.168.64.9:7780/';
+  const canonicalStatus=String(access.canonical_status_url||'').trim()||`${canonical.replace(/\/$/,'')}/api/status?lite=1`;
+  const vmLocal=String(access.vm_local_ui_url||'').trim()||'http://127.0.0.1:7779/';
+  const mode=String(access.mode||'lan_only').trim()||'lan_only';
+  return {canonical, canonicalStatus, vmLocal, mode, stateFile:String(access.state_file||'').trim(), publicEnabled:Boolean(access.public_tunnels_enabled)};
+}
+function liveTruthActiveItems(){
+  const items=[];
+  const dispatchActive=(D&&D.planner_dispatch&&Array.isArray(D.planner_dispatch.active))?D.planner_dispatch.active:[];
+  for(const row of dispatchActive){
+    if(items.length>=4)break;
+    const taskId=String(row.owner_task_id||row.task_id||row.subagent_id||'?');
+    const role=String(row.target_role||row.role||'?');
+    const status=String(row.status||'unknown');
+    const backend=String(row.backend||'unknown');
+    const issue=String(row.blocking_issue||row.last_error||'').trim();
+    items.push({
+      id:taskId,
+      head:`${role} · ${status}`,
+      meta:`backend=${backend}${issue?` · issue=${issue}`:''}`
+    });
+  }
+  if(items.length)return items;
+  const wb=(D&&D.workboard&&Array.isArray(D.workboard.in_progress_tasks))?D.workboard.in_progress_tasks:[];
+  for(const row of wb.slice(0,4)){
+    items.push({
+      id:String(row.id||'?'),
+      head:`${String(row.role||'?')} · IN_PROGRESS`,
+      meta:String(row.title||'').trim()||'workboard active task'
+    });
+  }
+  return items;
+}
+function liveTruthRolesHtml(){
+  const activityRoles=((((D&&D.agent_activity)||{}).roles)||{});
+  const agents=(D&&D.agents)||{};
+  return ['planner','dev','admin'].map(role=>{
+    const info=activityRoles[role]||{};
+    const agent=agents[role]||{};
+    const status=String(agent.status||'UNKNOWN');
+    const verdict=String(agent.verdict||'UNKNOWN');
+    const task=String(info.current_task_id||agent.current_task_id||'—');
+    const action=String(info.action_summary||info.task_update||agent.next||'no action summary').trim();
+    const helpers=Array.isArray(info.active_helpers)?info.active_helpers.length:0;
+    const issues=Number(agent.issue_count||0);
+    return `<div class="live-role-card">
+      <div class="live-role-name">${esc(role)} · ${esc(status)} · ${esc(verdict)}</div>
+      <div class="live-role-task">${esc(task)}</div>
+      <div class="live-role-action">${esc(action||'—')}</div>
+      <div class="live-role-meta">helpers=${helpers} · issues=${issues} · blocker=${esc(agent.blocker||'NONE')}</div>
+    </div>`;
+  }).join('');
+}
+function liveTruthHtml(){
+  const access=monitorAccessInfo();
+  const rf=(D&&D.runtime_freshness)||{};
+  const pd=(D&&D.planner_dispatch)||{};
+  const q=(D&&D.queue)||{};
+  const wb=(D&&D.workboard)||{};
+  const summary=(D&&D.activity_summary)||{};
+  const doctor=(D&&D.doctor)||{};
+  const activeItems=liveTruthActiveItems();
+  const activeHtml=activeItems.length
+    ? activeItems.map(item=>`<div class="live-truth-task"><div class="live-truth-task-head"><span class="live-truth-task-id">${esc(item.id)}</span><span class="live-truth-task-meta">${esc(item.head)}</span></div><div class="live-truth-task-meta" style="margin-top:6px">${esc(item.meta)}</div></div>`).join('')
+    : '<div class="live-truth-task"><div class="live-truth-task-id">Aucun subagent actif</div><div class="live-truth-task-meta" style="margin-top:6px">Le status live ne remonte pas de lane active en ce moment.</div></div>';
+  const refreshLabel = Number.isFinite(rf.seconds) && Number(rf.seconds) >= 0 ? `${rf.seconds}s` : 'unknown';
+  const partialDetails=(API_ERRORS||[]).slice(0,4);
+  const partialHtml=partialDetails.length
+    ? `<div class="queue-sync warn" style="margin-top:10px"><strong>Détails partiels</strong> · la vérité courante vient de <code>/api/status?lite=1</code>; panneaux lourds encore en erreur: ${esc(partialDetails.join(' | '))}</div>`
+    : `<div class="queue-sync ok" style="margin-top:10px"><strong>Source live</strong> · rendu immédiat depuis <code>/api/status?lite=1</code> · détails enrichis chargés ensuite.</div>`;
+  return `<div class="panel fade span2"><div class="panel-head"><span class="panel-label">Vue Live Canonique</span><span style="font-size:10px;color:var(--ghost)">LAN-only · status-lite first · Atlas/operator</span></div><div class="panel-body">
+    <div class="live-truth-grid">
+      <div class="live-truth-hero">
+        <div class="live-truth-title">Source de vérité live du monitor</div>
+        <div class="live-truth-sub">URL canonique: <a class="ext-link" href="${esc(access.canonical)}" target="_blank">${esc(access.canonical)}</a> · mise à jour status=${esc(fmtTs((D&&D.ts_utc)||''))} · fraîcheur runtime=${esc(String(rf.state||'unknown'))} (${esc(refreshLabel)})</div>
+        <div class="live-truth-kpis">
+          <div class="live-truth-kpi"><div class="live-truth-kpi-label">Health</div><div class="live-truth-kpi-value">${esc((D&&D.health)||'UNKNOWN')}</div></div>
+          <div class="live-truth-kpi"><div class="live-truth-kpi-label">Doctor</div><div class="live-truth-kpi-value">${esc(String(doctor.status||'unknown').toUpperCase())}</div></div>
+          <div class="live-truth-kpi"><div class="live-truth-kpi-label">Planner</div><div class="live-truth-kpi-value">${esc(String(pd.status||'unknown'))}</div></div>
+          <div class="live-truth-kpi"><div class="live-truth-kpi-label">Next</div><div class="live-truth-kpi-value">${esc(String(pd.recommended_next_action||'monitor'))}</div></div>
+        </div>
+        <div class="live-truth-role-grid">${liveTruthRolesHtml()}</div>
+        ${partialHtml}
+        <div class="live-truth-links">
+          <a class="ext-link" href="${esc(access.canonicalStatus)}" target="_blank">⬡ Status lite</a>
+          <a class="ext-link" href="/api/runtime-diagnostics?lite=1" target="_blank">⬡ Runtime diagnostics lite</a>
+          <a class="ext-link" href="/api/monitor/access" target="_blank">⬡ Monitor access JSON</a>
+          <a class="ext-link" href="/planner-debug" target="_blank">⬡ Planner debug</a>
+        </div>
+      </div>
+      <div class="live-truth-stream">
+        <div class="queue-sync ok"><strong>Accès</strong> · canonical=${esc(access.canonical)} · vm=${esc(access.vmLocal)} · mode=${esc(access.mode)} · public=${access.publicEnabled?'enabled':'disabled'}</div>
+        <div class="queue-sync ${Number(q.ready||0)>0?'ok':'warn'}"><strong>Runway</strong> · READY=${q.ready??0} · READY_DEV=${q.ready_dev_count??0} · IN_PROGRESS=${q.in_progress??0} · WAITING_DEP=${q.waiting_dep??0}</div>
+        <div class="queue-sync ${Number(summary.tasks_progressed_last_1h||0)>0?'ok':'warn'}"><strong>Flux</strong> · progressed_1h=${summary.tasks_progressed_last_1h||0} · events_1h=${summary.events_last_1h||0} · bottleneck=${esc(summary.current_bottleneck||'none')}</div>
+        <div class="queue-sync"><strong>Workboard</strong> · done=${wb.done??0} · ready=${wb.ready??0} · in_progress=${wb.in_progress??0}</div>
+        ${activeHtml}
+        <div style="font-size:10px;color:var(--ghost);line-height:1.5"><strong>LAN state file:</strong> ${esc(shortPath(access.stateFile||'—'))}</div>
+      </div>
+    </div>
+  </div></div>`;
 }
 function insightsHtml(){
   const agents=(I&&I.agents)||{};
@@ -5895,6 +6197,9 @@ function render(){
   const apiErrHtml = statusUnavailable
     ? `<div class="alert-banner span2 fade"><span style="font-size:16px">⚠</span><div><strong>Data source indisponible</strong> — affichage partiel (errors: ${esc((API_ERRORS||[]).slice(0,4).join(' | ')||'status fetch failed')})</div></div>`
     : '';
+  const detailWarnHtml = (!statusUnavailable && (API_ERRORS||[]).length)
+    ? `<div class="alert-banner span2 fade"><span style="font-size:16px">◎</span><div><strong>Vue live OK</strong> — la vérité courante vient de <code>/api/status?lite=1</code>; certains panneaux détaillés restent partiels (${esc((API_ERRORS||[]).slice(0,4).join(' | '))})</div></div>`
+    : '';
   const qsc=(queue.state_counts)||{};
   const readyPlannerDisplay = Number.isFinite(Number(queue.ready_planner_count)) ? Number(queue.ready_planner_count) : ((qsc.READY||0)+(qsc.READY_PLANNER||0));
   const readyDevDisplay = Number.isFinite(Number(queue.ready_dev_count)) ? Number(queue.ready_dev_count) : (qsc.READY_DEV||0);
@@ -6022,7 +6327,9 @@ function render(){
     : '';
   document.getElementById('page').innerHTML=`
     ${apiErrHtml}
+    ${detailWarnHtml}
     ${alertsHtml}
+    ${liveTruthHtml()}
     <div class="col-left">
       <div class="panel fade"><div class="panel-head"><span class="panel-label">Santé</span><div class="status-capsule ${hcls}" style="padding:3px 9px;font-size:10px"><span class="status-dot${health==='OK'?' live':''}"></span>${health}</div></div>
         <div class="health-hero"><div class="health-ring-wrap"><div class="health-ring ${hcls}"><div class="health-ring-inner"><div class="health-pct">${pct}</div><div class="health-pct-label">%</div></div></div></div><div class="health-status-word ${hcls}">${health}</div><div class="health-ts">${new Date().toLocaleTimeString('fr-FR')}</div></div>

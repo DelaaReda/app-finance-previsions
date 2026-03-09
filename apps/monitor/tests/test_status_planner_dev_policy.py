@@ -343,7 +343,10 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
             payload = module.status()
 
         self.assertEqual(payload.get("roles"), ["planner"])
-        self.assertNotIn("admin", payload.get("agents", {}))
+        admin_agent = payload.get("agents", {}).get("admin", {})
+        self.assertEqual(admin_agent.get("source"), "planner_capability")
+        self.assertEqual(admin_agent.get("status"), "IDLE")
+        self.assertEqual(admin_agent.get("delta"), "NO_ACTIVE_CAPABILITY")
 
     def test_status_reports_paused_runtime_state_explicitly(self) -> None:
         cfg_dir = self.root / "platform" / "config" / "runner"
