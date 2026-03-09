@@ -4,8 +4,14 @@ set -euo pipefail
 
 BASE_URL="${FC_MONITOR_BASE_URL:-http://127.0.0.1:7779}"
 TIMEOUT_S="${FC_STATUS_BRIEF_TIMEOUT_S:-4}"
+STATUS_FILE="$(mktemp)"
 
-status_json="$(curl -fsS --max-time "$TIMEOUT_S" "${BASE_URL%/}/api/status")" || {
+cleanup() {
+  rm -f "$STATUS_FILE"
+}
+trap cleanup EXIT
+
+curl -fsS --max-time "$TIMEOUT_S" "${BASE_URL%/}/api/status" -o "$STATUS_FILE" || {
   echo "Santé: monitor_unreachable (${BASE_URL%/}/api/status)"
   echo "Batches: unknown"
   echo "Agents: unknown"
@@ -15,11 +21,12 @@ status_json="$(curl -fsS --max-time "$TIMEOUT_S" "${BASE_URL%/}/api/status")" ||
   exit 1
 }
 
-python3 - "$status_json" <<'PY'
+python3 - "$STATUS_FILE" <<'PY'
 import json
 import sys
+from pathlib import Path
 
-payload = json.loads(sys.argv[1])
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 health = str(payload.get("health", "UNKNOWN"))
 fresh = payload.get("runtime_freshness", {}) if isinstance(payload.get("runtime_freshness"), dict) else {}
 fresh_s = int(fresh.get("seconds", -1) or -1)

@@ -1,0 +1,54 @@
+{
+  "task_id": "BATCH-59-ADMIN-01",
+  "generated_at": "2026-03-09T05:42:00Z",
+  "scope": "runtime_truth_and_observability",
+  "root_cause": "scripts/fc_status_brief.sh passed the full /api/status payload as a Python argv value, which now overflows the process argument limit after the canonical status payload expansion.",
+  "fix_applied": {
+    "path": "scripts/fc_status_brief.sh",
+    "change": "Write /api/status to a temp file and have Python read the file instead of argv."
+  },
+  "runtime_validation": {
+    "fc_status_brief_before_fix": {
+      "rc": 126,
+      "summary": "scripts/fc_status_brief.sh: line 18: /usr/bin/python3: Argument list too long"
+    },
+    "fc_status_brief_after_fix": {
+      "rc": 0,
+      "summary": "health=OK mode=planner_experimental freshness=fresh/104s ready=1 in_progress=1 waiting_dep=13 closed=23 blockers=none mismatch_count=0 planner_quality=89"
+    },
+    "monitor_contract_smoke": {
+      "rc": 0,
+      "summary": "PASS health=OK roles=2 agents=2 queue_states=5 workboard_ready=1 admin_timeouts_recent=0 issues_records=11"
+    },
+    "fc_doctor": {
+      "rc": 1,
+      "overall": "degraded",
+      "scheduler_authority": "ok",
+      "sessions": "ok",
+      "missing_core": [],
+      "locks": {
+        "status": "ok",
+        "stale_total": 0
+      },
+      "providers": {
+        "status": "ok",
+        "api_status": 200,
+        "monitor_status_code": 200
+      },
+      "queue_workboard": {
+        "status": "ok",
+        "mismatch_count": 0
+      },
+      "planner_dispatch": {
+        "status": "ok",
+        "active_count": 1
+      },
+      "out_of_scope_degradation": {
+        "check": "qa_review_pipeline",
+        "status": "degraded",
+        "pending_count": 2
+      }
+    }
+  },
+  "conclusion": "Planner-only cron/runtime truth is healthy. No stale locks, scheduler gaps, provider outages, or queue/workboard mismatches were found. The only in-scope defect was the broken operator brief path, which is now fixed."
+}
