@@ -358,6 +358,40 @@ def _resolve_saved_portfolio_context(scope: Optional[Dict[str, Any]] = None) -> 
     return portfolio_context
 
 
+def _resolve_scope_with_saved_portfolio(
+    scope: Optional[Dict[str, Any]] = None,
+    *,
+    tickers: Optional[List[str]] = None,
+) -> tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+    resolved_scope = dict(scope or {}) if isinstance(scope, dict) else {}
+    normalized_tickers = _normalize_tickers(
+        tickers if tickers is not None else resolved_scope.get("tickers")
+    )
+    requested_portfolio_id = _safe_text(
+        resolved_scope.get("portfolio_id") or resolved_scope.get("portfolioId"),
+        "",
+    )
+
+    saved_portfolio_context = (
+        _resolve_saved_portfolio_context(resolved_scope)
+        if (requested_portfolio_id or not normalized_tickers)
+        else None
+    )
+
+    effective_tickers = list(normalized_tickers)
+    if not effective_tickers and saved_portfolio_context:
+        effective_tickers = _normalize_tickers(
+            (saved_portfolio_context.get("portfolio") or {}).get("tickers")
+        )
+
+    if effective_tickers:
+        resolved_scope["tickers"] = effective_tickers
+    else:
+        resolved_scope.pop("tickers", None)
+
+    return resolved_scope, saved_portfolio_context
+
+
 def _format_saved_portfolio_prompt(portfolio_context: Optional[Dict[str, Any]]) -> str:
     if not isinstance(portfolio_context, dict):
         return ""
@@ -1033,25 +1067,10 @@ async def build_ask_payload(
 
     try:
         rag_store = rag_store_cls()
-        resolved_scope = dict(scope or {})
-        normalized_tickers = _normalize_tickers(tickers)
-        requested_portfolio_id = _safe_text(
-            resolved_scope.get("portfolio_id") or resolved_scope.get("portfolioId"),
-            "",
+        resolved_scope, saved_portfolio_context = _resolve_scope_with_saved_portfolio(
+            scope,
+            tickers=tickers,
         )
-        saved_portfolio_context = (
-            _resolve_saved_portfolio_context(resolved_scope)
-            if (requested_portfolio_id or not normalized_tickers)
-            else None
-        )
-        if not normalized_tickers and saved_portfolio_context:
-            saved_portfolio_tickers = _normalize_tickers(
-                (saved_portfolio_context.get("portfolio") or {}).get("tickers")
-            )
-            if saved_portfolio_tickers:
-                resolved_scope["tickers"] = saved_portfolio_tickers
-        if normalized_tickers:
-            resolved_scope["tickers"] = normalized_tickers
         if context_years is not None:
             resolved_scope.setdefault("context_years", int(context_years))
 
@@ -1203,6 +1222,9 @@ def build_history_payload(*, limit: int) -> Dict[str, Any]:
 
 async def build_context_payload(context_service_cls: Optional[Any] = None, scope: Optional[Dict[str, Any]] = None) -> Any:
     """Returns current context when available, or a never-empty fallback."""
+    resolved_scope, saved_portfolio_context = _resolve_scope_with_saved_portfolio(
+        scope
+    )
     payload: Dict[str, Any]
     try:
         cls = _resolve_context_service_class(context_service_cls)
@@ -1211,20 +1233,22 @@ async def build_context_payload(context_service_cls: Optional[Any] = None, scope
             if isinstance(candidate, dict) and candidate:
                 payload = dict(candidate)
             else:
-                payload = _collect_fallback_context(scope)
+                payload = _collect_fallback_context(resolved_scope)
         else:
-            payload = _collect_fallback_context(scope)
+            payload = _collect_fallback_context(resolved_scope)
     except Exception:
-        payload = _collect_fallback_context(scope)
+        payload = _collect_fallback_context(resolved_scope)
 
-    if isinstance(scope, dict) and scope.get("tickers"):
-        payload["scope_tickers"] = _normalize_tickers(scope.get("tickers"))
+    if isinstance(resolved_scope, dict) and resolved_scope.get("tickers"):
+        payload["scope_tickers"] = _normalize_tickers(resolved_scope.get("tickers"))
+    if saved_portfolio_context:
+        payload["portfolio_context"] = saved_portfolio_context
     payload["daily_brief"] = _load_daily_brief_payload()
-    payload["entry_points"] = _build_copilot_entry_points(scope)
+    payload["entry_points"] = _build_copilot_entry_points(resolved_scope)
     payload["copilot_start"] = _build_copilot_start_payload(
         daily_brief=payload.get("daily_brief"),
         entry_points=payload.get("entry_points"),
-        scope=scope,
+        scope=resolved_scope,
     )
     return payload
 

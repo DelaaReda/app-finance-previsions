@@ -472,6 +472,54 @@ def test_build_context_payload_includes_daily_brief_and_entry_points(monkeypatch
     assert copilot_start.get("ask", [])[0].get("prefill", {}).get("tickers") == ["NVDA"]
 
 
+def test_build_context_payload_uses_saved_portfolio_scope_when_tickers_are_missing(monkeypatch):
+    monkeypatch.setattr(storage_io, "load_json", lambda _key: None)
+    monkeypatch.setattr(
+        copilot_service,
+        "_resolve_saved_portfolio_context",
+        lambda _scope=None: {
+            "portfolio": {
+                "id": "portfolio-123",
+                "name": "Core",
+                "tickers": ["AAPL", "MSFT"],
+                "tickers_count": 2,
+                "state": {
+                    "horizon": "1y",
+                    "conviction": "high",
+                    "risk_tolerance": "moderate",
+                },
+            },
+            "risk_profile": "balanced",
+            "risk_level": "medium",
+            "why": ["Saved weights stay close to target."],
+            "warnings": [],
+            "source": ["portfolio_service", "copilot_saved_portfolio"],
+        },
+    )
+
+    response = asyncio.run(
+        copilot_service.build_context_payload(
+            context_service_cls=_FakeContextService,
+        )
+    )
+
+    assert response.get("scope_tickers") == ["AAPL", "MSFT"]
+    assert response.get("portfolio_context", {}).get("portfolio", {}).get("id") == "portfolio-123"
+    assert response.get("portfolio_context", {}).get("portfolio", {}).get("state") == {
+        "horizon": "1y",
+        "conviction": "high",
+        "risk_tolerance": "moderate",
+    }
+    assert response.get("entry_points", [])[1].get("prefill", {}).get("tickers") == [
+        "AAPL",
+        "MSFT",
+    ]
+    assert response.get("copilot_start", {}).get("ask", [])[0].get("prefill", {}).get("tickers") == [
+        "AAPL",
+        "MSFT",
+    ]
+
+
 def test_build_context_payload_fallback_keeps_daily_brief_contract(monkeypatch):
     class _FailingContextService:
         async def get_current_market_context(self) -> Dict[str, Any]:
