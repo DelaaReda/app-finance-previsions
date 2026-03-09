@@ -1852,10 +1852,16 @@ function sanitizeCopilotStart(payload) {
     .slice(0, fallback.ask.length)
     .map((item, index) => {
       const base = fallback.ask[index] || fallback.ask[0];
+      const prefill = isObject(item && item.prefill) ? item.prefill : {};
       return {
         id: toString(item && item.id, base.id),
         label: toString(item && item.label, base.label),
-        prompt: toString(item && item.prompt, base.prompt)
+        prompt: toString(item && item.prompt, base.prompt),
+        tickers: normalizeCopilotStarterTickers(
+          Array.isArray(item && item.tickers)
+            ? item.tickers
+            : (Array.isArray(prefill.tickers) ? prefill.tickers : [])
+        )
       };
     });
   const openItems = toArray(source.open, fallback.open)
@@ -1865,7 +1871,7 @@ function sanitizeCopilotStart(payload) {
       return {
         id: toString(item && item.id, base.id),
         label: toString(item && item.label, base.label),
-        target: toString(item && item.target, base.target)
+        target: normalizeCopilotStartOpenTarget(item && item.target, item && item.id ? item.id : base.id)
       };
     });
 
@@ -3268,9 +3274,11 @@ function normalizeCopilotStartAsk(value, fallbackTickers = []) {
     .map((item, index) => {
       const prefill = isObject(item.prefill) ? item.prefill : {};
       const prompt = toString(item.prompt || item.question || prefill.question, '');
-      const prefillTickers = Array.isArray(prefill.tickers) && prefill.tickers.length
-        ? prefill.tickers
-        : scopeTickers;
+      const prefillTickers = Array.isArray(item.tickers) && item.tickers.length
+        ? item.tickers
+        : (Array.isArray(prefill.tickers) && prefill.tickers.length
+          ? prefill.tickers
+          : scopeTickers);
       return {
         id: toString(item.id, `copilot_ask_${index}`),
         label: toString(item.label, prompt || 'Ask copilot'),
@@ -3465,10 +3473,15 @@ function resolveCopilotStartState(state) {
 }
 
 function renderHeroCopilotBrief(state) {
-  const summaryEl = document.querySelector('.hero-daily-brief .ai-summary-content');
-  const timestampEl = document.querySelector('.hero-daily-brief .ai-timestamp');
-  const actionsRoot = document.querySelector('.hero-daily-brief .hero-brief-actions');
-  if (!summaryEl && !timestampEl && !actionsRoot) return;
+  const titleEl = document.getElementById('heroBriefTitle') || document.querySelector('.hero-daily-brief h3');
+  const leadEl = document.getElementById('heroBriefLead');
+  const summaryEl = document.getElementById('heroBriefSummary') || document.querySelector('.hero-daily-brief .ai-summary-content');
+  const timestampEl = document.getElementById('heroBriefTimestamp') || document.querySelector('.hero-daily-brief .ai-timestamp');
+  const signalsEl = document.getElementById('heroBriefSignals');
+  const risksEl = document.getElementById('heroBriefRisks');
+  const actionsRoot = document.getElementById('heroBriefActions') || document.querySelector('.hero-daily-brief .hero-brief-actions');
+  const suggestionRoot = document.getElementById('heroSuggestionChips');
+  if (!titleEl && !leadEl && !summaryEl && !timestampEl && !actionsRoot && !suggestionRoot) return;
 
   const fallbackState = buildDefaultCopilotStartState();
   const resolvedState = resolveCopilotStartState(state);
@@ -3484,34 +3497,88 @@ function renderHeroCopilotBrief(state) {
     || openItems[0]
     || fallbackState.open[0];
 
+  if (titleEl) {
+    titleEl.textContent = toString(brief.title, fallbackState.brief.title);
+  }
+
+  if (leadEl) {
+    const sentiment = toString(brief.marketSentiment, fallbackState.brief.marketSentiment).replace(/_/g, ' ');
+    leadEl.textContent = sentiment === 'UNKNOWN'
+      ? 'A 30-second portfolio memo before you dive deeper.'
+      : `A 30-second portfolio memo before you dive deeper. Tone: ${sentiment.toLowerCase()}.`;
+  }
+
   if (summaryEl) {
     summaryEl.textContent = toString(brief.summary, fallbackState.brief.summary);
   }
 
   if (timestampEl) {
     const freshness = toString(brief.freshness || brief.generated_at || brief.generatedAt, '');
-    timestampEl.textContent = `Generated ${freshness ? formatRelativeTime(freshness) : 'just now'}`;
+    timestampEl.textContent = `Updated ${freshness ? formatRelativeTime(freshness) : 'just now'}`;
   }
 
-  if (!actionsRoot) return;
-  actionsRoot.innerHTML = '';
-
-  if (askItem && toString(askItem.prompt, '')) {
-    const askButton = document.createElement('button');
-    askButton.type = 'button';
-    askButton.className = 'ai-action-btn';
-    askButton.textContent = toString(askItem.label, 'Ask About Today');
-    askButton.addEventListener('click', () => runCopilotStartPrompt(askItem.prompt, askItem.tickers));
-    actionsRoot.appendChild(askButton);
+  if (signalsEl) {
+    const text = brief.topSignals.length ? `Signals: ${brief.topSignals.join(' • ')}` : '';
+    signalsEl.textContent = text;
+    signalsEl.style.display = text ? 'block' : 'none';
   }
 
-  if (openItem && toString(openItem.target, '')) {
-    const openButton = document.createElement('button');
-    openButton.type = 'button';
-    openButton.className = 'ai-action-btn secondary';
-    openButton.textContent = toString(openItem.label, 'Open Live Brief');
-    openButton.addEventListener('click', () => runCopilotStartOpen(openItem.target));
-    actionsRoot.appendChild(openButton);
+  if (risksEl) {
+    const text = brief.topRisks.length ? `Risks: ${brief.topRisks.join(' • ')}` : '';
+    risksEl.textContent = text;
+    risksEl.style.display = text ? 'block' : 'none';
+  }
+
+  if (actionsRoot) {
+    actionsRoot.innerHTML = '';
+
+    if (askItem && toString(askItem.prompt, '')) {
+      const askButton = document.createElement('button');
+      askButton.type = 'button';
+      askButton.className = 'ai-action-btn';
+      askButton.textContent = toString(askItem.label, 'Ask About Today');
+      askButton.addEventListener('click', () => runCopilotStartPrompt(askItem.prompt, askItem.tickers));
+      actionsRoot.appendChild(askButton);
+    }
+
+    if (openItem && toString(openItem.target, '')) {
+      const openButton = document.createElement('button');
+      openButton.type = 'button';
+      openButton.className = 'ai-action-btn secondary';
+      openButton.textContent = toString(openItem.label, 'Open Live Brief');
+      openButton.addEventListener('click', () => runCopilotStartOpen(openItem.target));
+      actionsRoot.appendChild(openButton);
+    }
+  }
+
+  if (suggestionRoot) {
+    suggestionRoot.innerHTML = '';
+    const primaryOpenId = toString(openItem && openItem.id, '');
+    const suggestionItems = [
+      ...askItems.slice(1).map((item) => ({
+        label: toString(item.label, 'Ask copilot'),
+        run() {
+          runCopilotStartPrompt(item.prompt, item.tickers);
+        }
+      })),
+      ...openItems
+        .filter((item) => toString(item.id, '') !== primaryOpenId)
+        .map((item) => ({
+          label: toString(item.label, 'Open'),
+          run() {
+            runCopilotStartOpen(item.target);
+          }
+        }))
+    ].slice(0, 3);
+
+    suggestionItems.forEach((item) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'suggestion-chip';
+      chip.textContent = item.label;
+      chip.addEventListener('click', item.run);
+      suggestionRoot.appendChild(chip);
+    });
   }
 }
 
@@ -3558,11 +3625,9 @@ async function hydrateCopilotOverlayStart() {
   }
 
   copilotContextRequest = Promise.resolve(
-    typeof window.FinanceAPI?.getCopilotStart === 'function'
-      ? window.FinanceAPI.getCopilotStart()
-      : (typeof window.FinanceAPI?.getCopilotContext === 'function'
-        ? window.FinanceAPI.getCopilotContext()
-        : null)
+    typeof window.FinanceAPI?.getCopilotContext === 'function'
+      ? window.FinanceAPI.getCopilotContext()
+      : null
   )
     .then((raw) => {
       const state = buildCopilotStartState(raw);
@@ -3578,6 +3643,7 @@ async function hydrateCopilotOverlayStart() {
       updateCopilotContextLabel(state);
       renderCopilotStartMessage(state);
       renderCopilotStartActions(state);
+      renderHeroCopilotBrief(state);
       return state;
     })
     .finally(() => {

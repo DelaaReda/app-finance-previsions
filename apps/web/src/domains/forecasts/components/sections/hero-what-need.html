@@ -19,8 +19,10 @@
         <div class="ai-summary-footer">
             <span id="heroBriefTimestamp" class="ai-timestamp">Generated 2 minutes ago</span>
             <div id="heroBriefActions" class="hero-brief-actions">
-                <button class="ai-action-btn">Ask About Today</button>
-                <button class="ai-action-btn secondary">Open Live Brief</button>
+                <button class="ai-action-btn"
+                    onclick="toggleAICopilot(); setTimeout(function() { var input = document.getElementById('aiOverlayInput'); if (input) { input.value = 'Give me today\\'s portfolio brief as a short memo with verdict, main drivers, risks, confidence, freshness, and sources.'; sendOverlayMessage(); } }, 120);">Ask About Today</button>
+                <button class="ai-action-btn secondary"
+                    onclick="safeSwitchTab(document.querySelector('[data-tab=&quot;overview&quot;]'), 'overview'); setTimeout(function() { var target = document.getElementById('market-pulse-widget-container'); if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 120);">Open Live Brief</button>
             </div>
         </div>
     </section>
@@ -54,9 +56,12 @@
     <div class="ai-suggestions-hero">
         <h3>🤖 AI Suggestions for you:</h3>
         <div id="heroSuggestionChips" class="suggestions-chips">
-            <button class="suggestion-chip">Ask copilot about today's brief</button>
-            <button class="suggestion-chip">Open this week's earnings calendar</button>
-            <button class="suggestion-chip">Open today's portfolio actions</button>
+            <button class="suggestion-chip"
+                onclick="toggleAICopilot(); setTimeout(function() { var input = document.getElementById('aiOverlayInput'); if (input) { input.value = 'Explain what matters in today\\'s portfolio brief and what I should watch next.'; sendOverlayMessage(); } }, 120);">Ask copilot about today's brief</button>
+            <button class="suggestion-chip"
+                onclick="safeSwitchTab(document.querySelector('[data-tab=&quot;overview&quot;]'), 'overview'); setTimeout(function() { var target = document.getElementById('market-calendar-widget-container'); if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 120);">Open this week's earnings calendar</button>
+            <button class="suggestion-chip"
+                onclick="safeSwitchTab(document.querySelector('[data-tab=&quot;overview&quot;]'), 'overview'); setTimeout(function() { var target = document.getElementById('quick-actions-widget-container'); if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 120);">Open today's portfolio actions</button>
         </div>
     </div>
 </div>
