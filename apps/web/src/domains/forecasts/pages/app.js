@@ -2653,7 +2653,8 @@ function applyLiveDashboardData(payload = {}) {
 
   const payloadTopStocks = toArray(data.topStocks, []);
   const fallbackTopStocks = inferTopStocksFromMovers(liveTopMovers, payloadTopStocks);
-  const copilotStart = sanitizeCopilotStart(data.copilotStart || data.copilot_start || window.copilotStart || null);
+  const rawCopilotStart = data.copilotStart || data.copilot_start || window.copilotStart || null;
+  const copilotStart = sanitizeCopilotStart(rawCopilotStart);
   
   // Map story data from API (window.storyData set by apiConnector.js)
   const storyData = data.story || window.storyData || null;
@@ -2684,6 +2685,9 @@ function applyLiveDashboardData(payload = {}) {
   }
 
   renderLiveDashboardWidgets();
+  if (rawCopilotStart) {
+    renderHeroCopilotBrief(buildCopilotStartState({ copilot_start: rawCopilotStart }));
+  }
 }
 
 window.addEventListener(LIVE_DATA_EVENT, (event) => {
@@ -3378,6 +3382,7 @@ function renderCopilotStartMessage(state) {
 }
 
 function runCopilotStartPrompt(prompt, tickers = []) {
+  const overlay = document.getElementById('aiCopilotOverlay');
   const input = document.getElementById('aiOverlayInput');
   if (!input) return;
 
@@ -3391,9 +3396,20 @@ function runCopilotStartPrompt(prompt, tickers = []) {
     delete input.dataset.copilotTickers;
   }
 
-  input.value = normalizedPrompt;
-  focusCopilotInput();
-  sendOverlayMessage();
+  const submitPrompt = () => {
+    input.value = normalizedPrompt;
+    focusCopilotInput();
+    sendOverlayMessage();
+  };
+
+  const overlayClosed = !!overlay && (overlay.style.display === 'none' || !overlay.style.display);
+  if (overlayClosed) {
+    toggleAICopilot();
+    setTimeout(submitPrompt, 30);
+    return;
+  }
+
+  submitPrompt();
 }
 
 function runCopilotStartOpen(target) {
@@ -3420,6 +3436,57 @@ function runCopilotStartOpen(target) {
   setTimeout(() => {
     safeSwitchTab(document.querySelector(`.tab-btn[data-tab="${normalizedTarget}"]`), normalizedTarget);
   }, 30);
+}
+
+function renderHeroCopilotBrief(state) {
+  const summaryEl = document.querySelector('.hero-daily-brief .ai-summary-content');
+  const timestampEl = document.querySelector('.hero-daily-brief .ai-timestamp');
+  const actionsRoot = document.querySelector('.hero-daily-brief .hero-brief-actions');
+  if (!summaryEl && !timestampEl && !actionsRoot) return;
+
+  const fallbackState = buildDefaultCopilotStartState();
+  const resolvedState = state && isObject(state) ? state : fallbackState;
+  const brief = isObject(resolvedState.brief) ? resolvedState.brief : fallbackState.brief;
+  const askItems = Array.isArray(resolvedState.ask) && resolvedState.ask.length
+    ? resolvedState.ask
+    : fallbackState.ask;
+  const openItems = Array.isArray(resolvedState.open) && resolvedState.open.length
+    ? resolvedState.open
+    : fallbackState.open;
+  const askItem = askItems[0] || fallbackState.ask[0];
+  const openItem = openItems.find((item) => isObject(item) && toString(item.target, '').toLowerCase() !== 'copilot')
+    || openItems[0]
+    || fallbackState.open[0];
+
+  if (summaryEl) {
+    summaryEl.textContent = toString(brief.summary, fallbackState.brief.summary);
+  }
+
+  if (timestampEl) {
+    const freshness = toString(brief.freshness || brief.generated_at || brief.generatedAt, '');
+    timestampEl.textContent = `Generated ${freshness ? formatRelativeTime(freshness) : 'just now'}`;
+  }
+
+  if (!actionsRoot) return;
+  actionsRoot.innerHTML = '';
+
+  if (askItem && toString(askItem.prompt, '')) {
+    const askButton = document.createElement('button');
+    askButton.type = 'button';
+    askButton.className = 'ai-action-btn';
+    askButton.textContent = toString(askItem.label, 'Ask About Today');
+    askButton.addEventListener('click', () => runCopilotStartPrompt(askItem.prompt, askItem.tickers));
+    actionsRoot.appendChild(askButton);
+  }
+
+  if (openItem && toString(openItem.target, '')) {
+    const openButton = document.createElement('button');
+    openButton.type = 'button';
+    openButton.className = 'ai-action-btn secondary';
+    openButton.textContent = toString(openItem.label, 'Open Live Brief');
+    openButton.addEventListener('click', () => runCopilotStartOpen(openItem.target));
+    actionsRoot.appendChild(openButton);
+  }
 }
 
 function renderCopilotStartActions(state) {
@@ -3474,6 +3541,7 @@ async function hydrateCopilotOverlayStart() {
       updateCopilotContextLabel(state);
       renderCopilotStartMessage(state);
       renderCopilotStartActions(state);
+      renderHeroCopilotBrief(state);
       return state;
     })
     .catch((error) => {
