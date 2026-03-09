@@ -624,7 +624,7 @@ def _to_utc_iso(value: Any) -> Optional[str]:
 def _extract_payload_timestamp(payload: Any) -> Optional[str]:
     if not isinstance(payload, dict):
         return None
-    for key in ("freshness", "generated_at", "saved_at", "last_update", "timestamp"):
+    for key in ("updated_at", "freshness", "generated_at", "saved_at", "last_update", "timestamp"):
         value = payload.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
@@ -4390,17 +4390,47 @@ def register_routes(app: FastAPI):
 
     # Dedicated copilot bootstrap endpoint: brief of day + ask/open entry points.
     @app.get("/api/copilot/context")
-    async def copilot_context_alias():
+    async def copilot_context_alias(
+        tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+    ):
+        scope_tickers = []
+        for item in tickers or []:
+            normalized = str(item or "").strip().upper()
+            if normalized and normalized not in scope_tickers:
+                scope_tickers.append(normalized)
+        scope = {"tickers": scope_tickers} if scope_tickers else None
+
         try:
             from domains.copilot.application.copilot_service import build_context_payload
 
-            payload = await build_context_payload()
+            payload = await build_context_payload(scope=scope)
             if payload.get("regime") == "fallback":
                 payload.setdefault("note", "Market context service temporarily unavailable.")
             return _ok(payload)
         except Exception as exc:  # noqa: BLE001
             logger.exception("copilot_context.bootstrap_failed", exc_info=exc)
             fallback = _fallback_market_context("Market context service temporarily unavailable.")
+            try:
+                from domains.copilot.application import copilot_service as copilot_service_module
+
+                daily_brief = copilot_service_module._load_daily_brief_payload()
+                entry_points = copilot_service_module._build_copilot_entry_points(scope)
+                fallback["daily_brief"] = daily_brief
+                fallback["entry_points"] = entry_points
+                if scope_tickers:
+                    fallback["scope_tickers"] = scope_tickers
+                build_start_payload = getattr(
+                    copilot_service_module,
+                    "_legacy_copilot_start_payload",
+                    None,
+                ) or getattr(copilot_service_module, "_build_copilot_start_payload", None)
+                if callable(build_start_payload):
+                    fallback["copilot_start"] = build_start_payload(
+                        daily_brief=daily_brief,
+                        entry_points=entry_points,
+                    )
+            except Exception:
+                pass
             return _ok(fallback)
 
     @app.get("/api/dashboard/kpis")

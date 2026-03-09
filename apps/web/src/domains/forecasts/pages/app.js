@@ -4685,6 +4685,102 @@ function toggleCollapse(button) {
   button.textContent = isHidden ? '−' : '+';
 }
 
+function renderPortfolioHealthFullDetails() {
+  const health = isObject(appData.portfolioHealth) ? appData.portfolioHealth : {};
+  const allocationProgress = Math.max(0, Math.min(100, Math.round(toFiniteNumber(
+    health.allocationProgress,
+    FALLBACK_APP_DATA.portfolioHealth.allocationProgress,
+  ))));
+  const confidence = Math.max(0, Math.min(100, Math.round(toFiniteNumber(
+    health.confidence,
+    FALLBACK_APP_DATA.portfolioHealth.confidence,
+  ))));
+  const riskLabel = toString(health.riskLabel, FALLBACK_APP_DATA.portfolioHealth.riskLabel);
+  const riskTone = mapPortfolioHealthTone(health.riskTone || FALLBACK_APP_DATA.portfolioHealth.riskTone);
+  const profileLabel = formatPortfolioHealthProfile(health.riskProfile);
+  const benchmark = toString(health.benchmark, FALLBACK_APP_DATA.portfolioHealth.benchmark);
+  const stateSummary = toString(health.stateSummary, FALLBACK_APP_DATA.portfolioHealth.stateSummary);
+  const suggestion = toString(health.suggestion, FALLBACK_APP_DATA.portfolioHealth.suggestion);
+  const allocationLabel = toString(health.allocationLabel, FALLBACK_APP_DATA.portfolioHealth.allocationLabel);
+  const status = toString(health.status, '').toLowerCase();
+  let riskFillWidth = 60;
+
+  if (riskLabel.toLowerCase() === 'low') {
+    riskFillWidth = 35;
+  } else if (riskLabel.toLowerCase() === 'high') {
+    riskFillWidth = 85;
+  }
+
+  const allocationFill = document.getElementById('portfolioHealthFullAllocationFill');
+  if (allocationFill) {
+    allocationFill.style.width = `${allocationProgress}%`;
+    allocationFill.textContent = `${allocationProgress}%`;
+  }
+
+  const allocationLabelEl = document.getElementById('portfolioHealthFullAllocationLabel');
+  if (allocationLabelEl) {
+    allocationLabelEl.textContent = allocationLabel;
+  }
+
+  const riskFill = document.getElementById('portfolioHealthFullRiskFill');
+  if (riskFill) {
+    riskFill.style.width = `${riskFillWidth}%`;
+    riskFill.textContent = riskLabel;
+  }
+
+  const profileBadge = document.getElementById('portfolioHealthFullProfileBadge');
+  if (profileBadge) {
+    profileBadge.className = `context-badge ${riskTone}`;
+    profileBadge.textContent = profileLabel;
+  }
+
+  const riskSummary = document.getElementById('portfolioHealthFullRiskSummary');
+  if (riskSummary) {
+    riskSummary.textContent = `Risk concentration: ${riskLabel} | Benchmark ${benchmark}`;
+  }
+
+  const confidenceFill = document.getElementById('portfolioHealthFullConfidenceFill');
+  if (confidenceFill) {
+    confidenceFill.style.width = `${confidence}%`;
+    confidenceFill.textContent = `${confidence}%`;
+  }
+
+  const stateSummaryEl = document.getElementById('portfolioHealthFullStateSummary');
+  if (stateSummaryEl) {
+    stateSummaryEl.textContent = stateSummary;
+  }
+
+  const primarySuggestion = document.getElementById('portfolioHealthSuggestionPrimary');
+  if (primarySuggestion) {
+    primarySuggestion.className = `suggestion-item ${riskTone === 'warning' || status === 'degraded' ? 'high' : 'medium'}`;
+  }
+
+  const primarySuggestionText = document.getElementById('portfolioHealthSuggestionPrimaryText');
+  if (primarySuggestionText) {
+    primarySuggestionText.textContent = suggestion;
+  }
+
+  const secondarySuggestion = document.getElementById('portfolioHealthSuggestionSecondary');
+  if (secondarySuggestion) {
+    secondarySuggestion.className = 'suggestion-item medium';
+  }
+
+  const secondarySuggestionText = document.getElementById('portfolioHealthSuggestionSecondaryText');
+  if (secondarySuggestionText) {
+    secondarySuggestionText.textContent = stateSummary;
+  }
+
+  const tertiarySuggestion = document.getElementById('portfolioHealthSuggestionTertiary');
+  if (tertiarySuggestion) {
+    tertiarySuggestion.className = `suggestion-item ${allocationProgress >= 60 ? 'high' : 'low'}`;
+  }
+
+  const tertiarySuggestionText = document.getElementById('portfolioHealthSuggestionTertiaryText');
+  if (tertiarySuggestionText) {
+    tertiarySuggestionText.textContent = allocationLabel;
+  }
+}
+
 function drawHealthGauge() {
   const health = isObject(appData.portfolioHealth) ? appData.portfolioHealth : {};
   const overall = Math.max(0, Math.min(100, Math.round(toFiniteNumber(health.overall, FALLBACK_APP_DATA.portfolioHealth.overall))));
@@ -4717,6 +4813,8 @@ function drawHealthGauge() {
   if (valueEl) {
     valueEl.textContent = `${overall}%`;
   }
+
+  renderPortfolioHealthFullDetails();
 
   const footerEl = document.querySelector('.portfolio-health-full .widget-footer .widget-timestamp');
   if (footerEl) {

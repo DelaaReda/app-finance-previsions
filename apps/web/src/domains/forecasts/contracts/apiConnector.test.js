@@ -129,6 +129,12 @@ test('getCopilotContext normalizes brief-first entry points into ask/open starte
                   tickers: ['NVDA'],
                 },
               },
+              {
+                id: 'open_copilot',
+                kind: 'open',
+                label: 'Open copilot',
+                target: '/copilot',
+              },
             ],
           },
         };
@@ -155,7 +161,10 @@ test('getCopilotContext normalizes brief-first entry points into ask/open starte
   assert.deepEqual(copilotStart.ask[0].prefill.tickers, ['NVDA']);
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
-    [{ id: 'brief_of_day', target: 'market' }]
+    [
+      { id: 'brief_of_day', target: 'market' },
+      { id: 'open_copilot', target: 'copilot' },
+    ]
   );
 });
 
@@ -210,6 +219,48 @@ test('getCopilotContext normalizes direct copilot_start open targets for the exi
       { id: 'copilot', target: 'copilot' },
     ]
   );
+});
+
+test('getCopilotContext forwards scoped tickers to the backend starter endpoint', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            scope_tickers: ['NVDA', 'MSFT'],
+            copilot_start: {
+              brief_of_day: {
+                title: 'Brief of the day',
+                summary: 'Leadership stays concentrated in AI-linked names.',
+                sentiment: 'mixed',
+                generated_at: '2026-03-09T05:30:00.000Z',
+              },
+              ask: [
+                {
+                  id: 'ask_copilot',
+                  label: 'Ask about your list',
+                  prefill: {
+                    question: 'What should I monitor on NVDA and MSFT today?',
+                    tickers: ['NVDA', 'MSFT'],
+                  },
+                },
+              ],
+              open: [],
+            },
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotContext(['nvda', 'MSFT', 'nvda']);
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/copilot/context?tickers=NVDA&tickers=MSFT']);
+  assert.deepEqual(payload.scope_tickers, ['NVDA', 'MSFT']);
+  assert.deepEqual(payload.copilot_start.ask[0].prefill.tickers, ['NVDA', 'MSFT']);
 });
 
 test('getPortfolioRiskProfile resolves the default saved portfolio and unwraps the risk profile envelope', async () => {

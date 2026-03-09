@@ -1,0 +1,102 @@
+import sys
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+SRC_PATH = Path(__file__).resolve().parents[3]
+if str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
+
+from api.main import create_app
+from domains.copilot.application import copilot_service
+from storage import io as storage_io
+
+
+def _client() -> TestClient:
+    return TestClient(create_app())
+
+
+def test_copilot_context_route_fallback_keeps_brief_and_entry_points(monkeypatch):
+    async def _raise_context_error(*_args, **_kwargs):
+        raise RuntimeError("copilot context unavailable")
+
+    fallback_brief = {
+        "summary": "No daily brief available yet.",
+        "market_sentiment": "UNKNOWN",
+        "top_signals": [],
+        "top_risks": [],
+        "macro_signals": [],
+        "sector_rotation": {"top": [], "bottom": []},
+        "generated_at": "2026-03-09T06:00:00Z",
+        "freshness": "2026-03-09T06:00:00Z",
+        "source": ["copilot_daily_brief_fallback"],
+    }
+    fallback_entry_points = [
+        {
+            "id": "brief_of_day",
+            "kind": "open",
+            "label": "Brief du jour",
+            "target": "/brief/daily",
+        },
+        {
+            "id": "ask_copilot",
+            "kind": "ask",
+            "label": "Poser une question",
+            "target": "/copilot/ask",
+        },
+    ]
+
+    monkeypatch.setattr(copilot_service, "build_context_payload", _raise_context_error)
+    monkeypatch.setattr(copilot_service, "_load_daily_brief_payload", lambda: dict(fallback_brief))
+    monkeypatch.setattr(copilot_service, "_build_copilot_entry_points", lambda scope=None: [dict(item) for item in fallback_entry_points])
+    monkeypatch.setattr(storage_io, "load_json", lambda _key: None)
+
+    client = _client()
+    response = client.get("/api/copilot/context")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("ok") is True
+
+    data = payload.get("data") or {}
+    assert data.get("note") == "Market context service temporarily unavailable."
+
+    daily_brief = data.get("daily_brief") or {}
+    assert daily_brief.get("summary") == "No daily brief available yet."
+    assert daily_brief.get("source") == ["copilot_daily_brief_fallback"]
+
+    entry_points = data.get("entry_points") or []
+    assert [item.get("id") for item in entry_points[:2]] == ["brief_of_day", "ask_copilot"]
+    assert [item.get("kind") for item in entry_points[:2]] == ["open", "ask"]
+
+    copilot_start = data.get("copilot_start") or {}
+    assert copilot_start.get("brief_of_day", {}).get("summary") == "No daily brief available yet."
+    assert [item.get("id") for item in copilot_start.get("open", [])] == ["brief_of_day"]
+    assert [item.get("id") for item in copilot_start.get("ask", [])] == ["ask_copilot"]
+
+
+def test_copilot_context_route_passes_scope_tickers_to_service(monkeypatch):
+    captured = {}
+
+    async def _fake_build_context_payload(*_args, **kwargs):
+        captured["scope"] = kwargs.get("scope")
+        return {
+            "daily_brief": {
+                "summary": "Scoped brief ready.",
+                "source": ["copilot_context_test"],
+            },
+            "entry_points": [],
+            "copilot_start": {},
+            "scope_tickers": kwargs.get("scope", {}).get("tickers", []),
+        }
+
+    monkeypatch.setattr(copilot_service, "build_context_payload", _fake_build_context_payload)
+
+    client = _client()
+    response = client.get("/api/copilot/context?tickers=nvda&tickers=msft")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("ok") is True
+    assert captured.get("scope") == {"tickers": ["NVDA", "MSFT"]}
+    assert payload.get("data", {}).get("scope_tickers") == ["NVDA", "MSFT"]

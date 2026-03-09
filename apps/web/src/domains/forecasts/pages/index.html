@@ -501,41 +501,47 @@
             </div>
             <div class="health-breakdown">
               <div class="health-metric-item">
-                <span class="metric-label">Diversification</span>
+                <span class="metric-label">Largest Saved Weight</span>
                 <div class="metric-bar">
-                  <div class="metric-fill" style="width: 70%">7/10</div>
+                  <div class="metric-fill" id="portfolioHealthFullAllocationFill" style="width: 75%">75%</div>
                 </div>
+                <span class="context-label" id="portfolioHealthFullAllocationLabel">Largest saved weight: NVDA 45%</span>
               </div>
               <div class="health-metric-item">
-                <span class="metric-label">Risk Level</span>
-                <div class="metric-bar">
-                  <div class="metric-fill" style="width: 60%">6/10</div>
+                <div class="health-metric">
+                  <span class="metric-label">Risk Profile</span>
+                  <span class="context-badge neutral" id="portfolioHealthFullProfileBadge">Balanced</span>
                 </div>
+                <div class="metric-bar">
+                  <div class="metric-fill" id="portfolioHealthFullRiskFill" style="width: 60%">Medium</div>
+                </div>
+                <span class="context-label" id="portfolioHealthFullRiskSummary">Risk concentration: Medium | Benchmark SPY</span>
               </div>
               <div class="health-metric-item">
-                <span class="metric-label">Growth Potential</span>
+                <span class="metric-label">Confidence vs Benchmark</span>
                 <div class="metric-bar">
-                  <div class="metric-fill" style="width: 90%">9/10</div>
+                  <div class="metric-fill" id="portfolioHealthFullConfidenceFill" style="width: 82%">82%</div>
                 </div>
+                <span class="context-label" id="portfolioHealthFullStateSummary">1Y horizon | High conviction | Moderate risk</span>
               </div>
             </div>
           </div>
           <div class="health-suggestions">
-            <h4>Prioritized Suggestions</h4>
-            <div class="suggestion-item high">
-              <span class="suggestion-priority">High Priority</span>
-              <span class="suggestion-text">Reduce Tech concentration</span>
-              <button class="suggestion-action-btn" onclick="showToast('Viewing tech allocation...')">Act</button>
+            <h4>Risk Profile Notes</h4>
+            <div class="suggestion-item medium" id="portfolioHealthSuggestionPrimary">
+              <span class="suggestion-priority">Risk</span>
+              <span class="suggestion-text" id="portfolioHealthSuggestionPrimaryText">Diversify Tech → Healthcare</span>
+              <button class="suggestion-action-btn" onclick="riskAnalysis()">Review</button>
             </div>
-            <div class="suggestion-item medium">
-              <span class="suggestion-priority">Medium Priority</span>
-              <span class="suggestion-text">Add defensive positions</span>
-              <button class="suggestion-action-btn" onclick="showToast('Exploring defensive stocks...')">Act</button>
+            <div class="suggestion-item medium" id="portfolioHealthSuggestionSecondary">
+              <span class="suggestion-priority">State</span>
+              <span class="suggestion-text" id="portfolioHealthSuggestionSecondaryText">1Y horizon | High conviction | Moderate risk</span>
+              <button class="suggestion-action-btn" onclick="showToast('Reviewing saved state...')">View</button>
             </div>
-            <div class="suggestion-item low">
-              <span class="suggestion-priority">Low Priority</span>
-              <span class="suggestion-text">Review cash allocation</span>
-              <button class="suggestion-action-btn" onclick="showToast('Reviewing cash position...')">Act</button>
+            <div class="suggestion-item low" id="portfolioHealthSuggestionTertiary">
+              <span class="suggestion-priority">Weights</span>
+              <span class="suggestion-text" id="portfolioHealthSuggestionTertiaryText">Largest saved weight: NVDA 45%</span>
+              <button class="suggestion-action-btn" onclick="showToast('Reviewing saved weights...')">Inspect</button>
             </div>
           </div>
         </div>

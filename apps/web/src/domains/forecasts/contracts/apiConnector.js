@@ -114,8 +114,27 @@ async function getDashboardPerformance() {
   return payload || {};
 }
 
-async function getCopilotContext() {
-  const payload = getResponseData(await fetchWithCache('/copilot/context', 'copilot_context'));
+function normalizeCopilotContextTickers(value) {
+  const values = Array.isArray(value)
+    ? value
+    : (typeof value === 'string' ? value.split(',') : []);
+  const normalized = [];
+  values.forEach((item) => {
+    const ticker = String(item || '').trim().toUpperCase();
+    if (ticker && !normalized.includes(ticker)) {
+      normalized.push(ticker);
+    }
+  });
+  return normalized;
+}
+
+async function getCopilotContext(tickers) {
+  const params = new URLSearchParams();
+  normalizeCopilotContextTickers(tickers).forEach((ticker) => params.append('tickers', ticker));
+  const endpoint = params.toString()
+    ? `/copilot/context?${params.toString()}`
+    : '/copilot/context';
+  const payload = getResponseData(await fetchWithCache(endpoint, `copilot_context:${params.toString() || 'default'}`));
   const normalized = payload && typeof payload === 'object' ? { ...payload } : {};
   const copilotStart = transformCopilotStart(normalized.copilot_start || normalized.copilotStart, normalized);
   if (Object.keys(copilotStart.brief_of_day).length || copilotStart.ask.length || copilotStart.open.length) {
