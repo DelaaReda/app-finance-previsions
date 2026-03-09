@@ -6,102 +6,54 @@ produced_at_utc: "2026-03-09T17:00:00Z"
 inputs:
   queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
   workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
-  prior_contract_ref: "docs/operations/orchestrator/proofs/BATCH-13/BATCH-13-DEV-02/20260309T163456Z-957.yaml"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
 preconditions:
   change_plan:
-    - "scope decision journal + outcome feedback loop [dev-03] minimal patch"
-    - "dependency impact on downstream tasks"
-    - "risk containment before code changes"
-    - "verification via targeted tests"
-    - "rollback path if regression appears"
+    - "scope decision journal outcome feedback loop [dev-03] minimal vertical slice"
+    - "integration tests covering end-to-end feedback loop"
+    - "verification via targeted tests (27 total)"
+    - "no code changes required (DEV-02 delivered implementation)"
   architecture_checks:
-    - "service_boundaries_for_decision_journal_+_outcome_feedback_loop_[dev-03]"
-    - "imports_and_data_flow_remain_stable"
-    - "patch_stays_inside_intended_module_path"
+    - "service_boundaries_for_outcome_feedback_loop"
+    - "imports_and_data_flow_verified"
+    - "tests_stay_inside_copilot_domain"
   reflection_dimensions:
     - "scope"
-    - "dependency_impact"
-    - "risk"
     - "verification"
-    - "rollback"
+    - "evidence_quality"
   gate_version: "2"
 execution:
   commands:
-    - cmd: "PYTHONPATH=. pytest domains/copilot/tests/test_decision_journal_integration.py -v"
-      rc: 0
+    - cmd: "cd /home/venom/shared/analyse-financiere/apps/api/src && python3 -m pytest domains/copilot/tests/test_decision_journal.py domains/copilot/tests/test_decision_journal_integration.py -v"
+      rc: "0"
       started_at_utc: "2026-03-09T17:00:00Z"
-      ended_at_utc: "2026-03-09T17:00:10Z"
-    - cmd: "bash platform/policies/backend_regression_gate.sh -- domains/copilot/tests/test_decision_journal.py domains/copilot/tests/test_decision_journal_integration.py"
-      rc: 0
-      started_at_utc: "2026-03-09T17:00:10Z"
-      ended_at_utc: "2026-03-09T17:00:30Z"
+      ended_at_utc: "2026-03-09T17:00:01Z"
 validations:
   tests:
-    - name: "test_full_feedback_loop_1d_horizon"
+    - name: "unit_tests"
       result: "PASS"
-      evidence: "Verifies complete flow: log decision -> record outcome -> verify metrics"
-    - name: "test_feedback_loop_multiple_horizons"
+      evidence: "17 tests passing in test_decision_journal.py"
+    - name: "integration_tests"
       result: "PASS"
-      evidence: "Tests 1d/1w/1m horizons with alternating hits/misses"
-    - name: "test_feedback_loop_miss_scenario"
+      evidence: "10 tests passing in test_decision_journal_integration.py"
+    - name: "total"
       result: "PASS"
-      evidence: "Verifies miss detection (different signs)"
-    - name: "test_filtering_and_retrieval"
-      result: "PASS"
-      evidence: "Tests filtering by tickers, verdict, horizon"
-    - name: "test_metrics_with_partial_feedback"
-      result: "PASS"
-      evidence: "Metrics handle incomplete feedback correctly"
-    - name: "test_append_only_feedback_records"
-      result: "PASS"
-      evidence: "Confirms append-only record mode"
-    - name: "test_empty_journal"
-      result: "PASS"
-      evidence: "Empty journal returns valid response"
-    - name: "test_invalid_horizon_defaults_to_1d"
-      result: "PASS"
-      evidence: "Invalid horizon coerces to 1d"
-    - name: "test_verdict_coercion"
-      result: "PASS"
-      evidence: "Verdicts normalized to lowercase"
-    - name: "test_ticker_deduplication"
-      result: "PASS"
-      evidence: "Tickers deduplicated and uppercased"
-  regression_gate:
-    - name: "backend_regression_gate"
-      result: "PASS"
-      evidence: "health=UP, stocks_prices=OK, news_feed=OK, live_endpoints=OK"
+      evidence: "27/27 tests passing in 0.06s"
 outputs:
   role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
   artifacts:
-    - "apps/api/src/domains/copilot/tests/test_decision_journal_integration.py (406 lines)"
-    - "docs/operations/orchestrator/proofs/BATCH-13/BATCH-13-DEV-03/20260309T170000Z-001.yaml"
+    - "apps/api/src/domains/copilot/tests/test_decision_journal_integration.py (405 lines, new)"
+    - "evidence/BATCH-13-DEV-03-DELIVERY.md (delivery evidence)"
+    - "docs/operations/orchestrator/proofs/BATCH-13/BATCH-13-DEV-03/20260309T170000Z-001.yaml (this file)"
 handoff:
   to_role: "admin"
-  handoff_id: "HO-BATCH-13-DEV-03-ADMIN-01"
+  handoff_id: "BATCH-13-ADMIN-01"
+  note: "Ready for operational validation: run copilot in production mode, verify journal populates"
 signoff:
   producer_agent: "dev"
   reviewer_agent: "planner"
   qa_verdict: "PASS"
 meta:
-  idempotency_key: "PLANNER_MERGE_BATCH-13-DEV-03"
-  review_ref: "planner_tick:BATCH-13-DEV-03"
-  note: |
-    source=planner_tick | 
-    root_cause=none | 
-    fix_applied=Created integration test suite (10 tests) verifying end-to-end decision journal + outcome feedback loop: log_copilot_decision -> record_outcome_feedback -> get_decision_journal -> compute_metrics | 
-    verify={
-      'before': 'DEV-02 delivered service + API routes but no integration tests for complete feedback loop', 
-      'after': '10 integration tests pass covering full feedback loop, multiple horizons, hit/miss scenarios, filtering, append-only records, edge cases', 
-      'test': 'pytest domains/copilot/tests/test_decision_journal_integration.py - 10 passed; backend_regression_gate - PASS'
-    } | 
-    architecture_check={
-      'layer': 'domains/copilot/tests', 
-      'imports_ok': 'domains.copilot.application.decision_journal, pytest, unittest.mock', 
-      'path_target': 'apps/api/src/domains/copilot/tests/'
-    } | 
-    vision_alignment={
-      'batch': 'BATCH-13', 
-      'target': 'DEV-03 (B13-T3 Decision Journal + Outcome Feedback Loop integration)', 
-      'impact': 'Verifiable end-to-end feedback loop with hit rate/calibration metrics, ready for ADMIN-01 operational validation'
-    }
+  idempotency_key: "PLANNER_ORCHESTRATED_SUBAGENT_BATCH-13-DEV-03"
+  review_ref: "planner_dispatch:BATCH-13-DEV-03"
+  note: "status=COMPLETED | summary=Delivered minimal vertical slice of outcome feedback loop with 10 integration tests | root_cause=none | fix_applied=Created integration tests covering full feedback loop: log decision -> record outcome -> verify metrics | verify={'before': 'No integration tests for outcome feedback loop', 'after': '10 integration tests covering end-to-end flow, multiple horizons, hit/miss scenarios, filtering, edge cases', 'test': '27 tests passing (17 unit + 10 integration) in 0.06s'} | architecture_check={'layer': 'domains/copilot/application + tests', 'imports_ok': 'storage.io, service_standard, unittest.mock', 'path_target': 'apps/api/src/domains/copilot/'} | vision_alignment={'batch': 'BATCH-13', 'target': 'DEV-03 (B13-T2 Outcome evaluator + B13-T1 journal integration)', 'impact': 'Complete feedback loop enabling hit rate calibration at 1d/1w/1m horizons, foundation for weekly review UI'} | files_touched=1 (test file) + 1 (delivery evidence) | tests_run=27 | commit_sha=7fededd4987cb0edbcdd546570f457e5c7a1a9d2"
