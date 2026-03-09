@@ -2611,7 +2611,8 @@ function applyLiveDashboardData(payload = {}) {
     && typeof window.FinanceAPI.transformPortfolioRiskProfileToHealth === 'function'
     ? window.FinanceAPI.transformPortfolioRiskProfileToHealth({
       data: data.portfolioRiskProfile,
-      freshness: data.portfolioRiskProfileFreshness || null
+      freshness: data.portfolioRiskProfileFreshness || null,
+      status: data.portfolioRiskProfileStatus || null
     })
     : null;
   const payloadMeta = payload.meta || {};

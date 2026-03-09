@@ -976,11 +976,16 @@ async function populateWindowGlobals() {
 
     window.livePortfolioRiskProfile = null;
     window.livePortfolioRiskProfileFreshness = null;
+    window.livePortfolioRiskProfileStatus = null;
     window.livePortfolioHealth = null;
     const portfolioRiskProfile = await getPortfolioRiskProfile();
     if (portfolioRiskProfile && portfolioRiskProfile.data) {
       window.livePortfolioRiskProfile = portfolioRiskProfile.data;
       window.livePortfolioRiskProfileFreshness = portfolioRiskProfile.freshness;
+      window.livePortfolioRiskProfileStatus = toString(
+        portfolioRiskProfile.status || portfolioRiskProfile.data.status,
+        '',
+      ).trim() || null;
       window.livePortfolioHealth = transformPortfolioHealth(portfolioRiskProfile);
       if (portfolioRiskProfile.status === 'degraded') {
         contractWarnings.push('portfolio-risk-profile-degraded');
@@ -1049,6 +1054,7 @@ async function populateWindowGlobals() {
           kpis: window.liveKpis || null,
           portfolioSummary: window.livePortfolioSummary || null,
           portfolioRiskProfile: window.livePortfolioRiskProfile || null,
+          portfolioRiskProfileStatus: window.livePortfolioRiskProfileStatus || null,
           portfolioHealth: window.livePortfolioHealth || null,
           stockSummaryFreshness: window.livePortfolioSummaryFreshness || null,
           portfolioRiskProfileFreshness: window.livePortfolioRiskProfileFreshness || null,
@@ -1140,6 +1146,7 @@ window.getLiveDashboardData = () => ({
     kpis: window.liveKpis || null,
     portfolioSummary: window.livePortfolioSummary || null,
     portfolioRiskProfile: window.livePortfolioRiskProfile || null,
+    portfolioRiskProfileStatus: window.livePortfolioRiskProfileStatus || null,
     portfolioRiskProfileFreshness: window.livePortfolioRiskProfileFreshness || null,
     portfolioHealth: window.livePortfolioHealth || null,
     llmJudgeData: window.llmJudgeData || null

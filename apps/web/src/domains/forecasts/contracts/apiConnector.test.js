@@ -374,7 +374,7 @@ test('transformPortfolioRiskProfileToHealth maps raw risk profile payloads for U
   assert.equal(health.updatedAt, '2026-03-09T06:30:00Z');
 });
 
-test('getLiveDashboardData preserves portfolio risk profile freshness for downstream UI mapping', async () => {
+test('getLiveDashboardData preserves portfolio risk profile freshness and status for downstream UI mapping', async () => {
   const sandbox = loadConnector(async () => ({
     async json() {
       return {};
@@ -385,6 +385,7 @@ test('getLiveDashboardData preserves portfolio risk profile freshness for downst
     portfolio: { id: 'portfolio-123', name: 'Core' },
     risk: { level: 'medium' },
   };
+  sandbox.window.livePortfolioRiskProfileStatus = 'degraded';
   sandbox.window.livePortfolioRiskProfileFreshness = '2026-03-09T06:30:00Z';
 
   const payload = sandbox.window.getLiveDashboardData();
@@ -393,5 +394,6 @@ test('getLiveDashboardData preserves portfolio risk profile freshness for downst
     portfolio: { id: 'portfolio-123', name: 'Core' },
     risk: { level: 'medium' },
   });
+  assert.equal(payload.data.portfolioRiskProfileStatus, 'degraded');
   assert.equal(payload.data.portfolioRiskProfileFreshness, '2026-03-09T06:30:00Z');
 });

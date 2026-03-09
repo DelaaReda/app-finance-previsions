@@ -27,6 +27,7 @@ function loadApplyLiveDashboardData() {
           return {
             portfolioId: input.data?.portfolio?.id || null,
             updatedAt: input.freshness || null,
+            status: input.status || null,
             suggestion: 'Derived from raw risk profile',
           };
         },
@@ -120,6 +121,7 @@ test('applyLiveDashboardData derives portfolio health from raw risk profile payl
     generatedAt: '2026-03-09T07:00:00Z',
     data: {
       portfolioRiskProfile: rawRiskProfile,
+      portfolioRiskProfileStatus: 'degraded',
       portfolioRiskProfileFreshness: '2026-03-09T06:30:00Z',
     },
   });
@@ -128,12 +130,14 @@ test('applyLiveDashboardData derives portfolio health from raw risk profile payl
     {
       data: rawRiskProfile,
       freshness: '2026-03-09T06:30:00Z',
+      status: 'degraded',
     },
   ]);
   assert.equal(sandbox.appData.portfolioRiskProfile, rawRiskProfile);
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.appData.portfolioHealth)), {
     portfolioId: 'portfolio-123',
     updatedAt: '2026-03-09T06:30:00Z',
+    status: 'degraded',
     suggestion: 'Derived from raw risk profile',
   });
   assert.equal(sandbox.appData.portfolioRiskProfileFreshness, '2026-03-09T06:30:00Z');
