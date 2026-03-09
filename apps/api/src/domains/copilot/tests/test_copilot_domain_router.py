@@ -10,6 +10,7 @@ if str(SRC_PATH) not in sys.path:
 
 from domains.copilot.api.copilot import router
 from domains.copilot.application import copilot_service
+from storage import io as storage_io
 
 
 def _client() -> TestClient:
@@ -43,6 +44,83 @@ def test_copilot_context_route_passes_scope_tickers_to_service(monkeypatch):
     assert payload.get("ok") is True
     assert captured.get("scope") == {"tickers": ["NVDA", "MSFT"]}
     assert payload.get("data", {}).get("scope_tickers") == ["NVDA", "MSFT"]
+
+
+def test_copilot_context_route_success_keeps_brief_first_starter_contract(monkeypatch):
+    class _FakeContextService:
+        async def get_current_market_context(self):
+            return {
+                "regime": "BULL_MARKET",
+                "confidence": 0.72,
+                "key_drivers": ["AI leadership remains concentrated."],
+                "metadata": {
+                    "generated_at": "2026-03-09T10:15:00Z",
+                    "sources": ["forecasts", "news"],
+                },
+            }
+
+    brief_snapshot = {
+        "data": {
+            "daily": {
+                "summary": "Semiconductors continue to lead while rates stay range-bound.",
+                "market_sentiment": "BULLISH",
+                "top_signals": ["Semiconductors leading"],
+                "top_risks": ["Rates repricing"],
+                "generated_at": "2026-03-09T10:20:00Z",
+                "source": ["copilot_domain_router_test"],
+            }
+        }
+    }
+
+    monkeypatch.setattr(
+        storage_io,
+        "load_json",
+        lambda key: brief_snapshot if key == "brief_daily" else None,
+    )
+    monkeypatch.setattr(
+        copilot_service,
+        "_resolve_context_service_class",
+        lambda _context_service_cls=None: _FakeContextService,
+    )
+
+    client = _client()
+    response = client.get("/api/copilot/context?tickers=nvda")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("ok") is True
+
+    data = payload.get("data") or {}
+    assert data.get("scope_tickers") == ["NVDA"]
+
+    daily_brief = data.get("daily_brief") or {}
+    assert daily_brief.get("summary") == "Semiconductors continue to lead while rates stay range-bound."
+    assert daily_brief.get("market_sentiment") == "BULLISH"
+    assert daily_brief.get("source") == ["copilot_domain_router_test"]
+
+    entry_points = data.get("entry_points") or []
+    assert [item.get("id") for item in entry_points] == [
+        "brief_of_day",
+        "ask_copilot",
+        "open_copilot",
+    ]
+    assert entry_points[0].get("target") == "/brief/daily"
+    assert entry_points[1].get("prefill", {}).get("tickers") == ["NVDA"]
+    assert entry_points[2].get("target") == "/copilot"
+
+    copilot_start = data.get("copilot_start") or {}
+    assert copilot_start.get("brief_of_day", {}).get("summary") == daily_brief.get("summary")
+    assert [item.get("id") for item in copilot_start.get("ask", [])] == [
+        "portfolio_today",
+        "market_theme",
+        "nvda_memo",
+    ]
+    assert copilot_start.get("ask", [])[0].get("prefill", {}).get("tickers") == ["NVDA"]
+    assert [item.get("target") for item in copilot_start.get("open", [])] == [
+        "market",
+        "opportunities",
+        "copilot",
+    ]
 
 
 def test_copilot_context_route_fallback_keeps_brief_and_entry_points(monkeypatch):
