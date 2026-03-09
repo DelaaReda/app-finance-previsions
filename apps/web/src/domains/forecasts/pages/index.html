@@ -1126,6 +1126,9 @@
           if (typeof window.syncForecastProfileUI === 'function') {
             window.syncForecastProfileUI();
           }
+          if (typeof window.syncMountedDashboardUI === 'function') {
+            window.syncMountedDashboardUI();
+          }
 
           // Initialize charts after components are loaded
           setTimeout(() => {
@@ -1162,6 +1165,7 @@
 
   <script src="../platform/js/sentry-init.js"></script>
   <script src="../contracts/apiConnector.js"></script>
+  <script src="js/utils/mountedDashboardSync.js"></script>
   <script src="app.js"></script>
 </body>
 
