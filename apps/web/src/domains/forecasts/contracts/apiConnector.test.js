@@ -157,3 +157,56 @@ test('getCopilotContext normalizes brief-first entry points into ask/open starte
     [{ id: 'brief_of_day', target: 'market' }]
   );
 });
+
+test('getCopilotContext normalizes direct copilot_start open targets for the existing tabs', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          copilot_start: {
+            brief_of_day: {
+              title: 'Brief of the day',
+              summary: 'Markets are holding a narrow leadership profile.',
+              sentiment: 'mixed',
+              generated_at: '2026-03-09T05:30:00.000Z',
+            },
+            ask: [
+              {
+                id: 'ask_copilot',
+                label: 'Ask about NVDA',
+                prefill: {
+                  question: 'Give me a 1-week investment memo on NVDA.',
+                  tickers: ['NVDA'],
+                },
+              },
+            ],
+            open: [
+              {
+                id: 'brief_of_day',
+                label: 'Open the live brief',
+                target: '/brief/daily',
+              },
+              {
+                id: 'copilot',
+                label: 'Open copilot',
+                target: '/copilot',
+              },
+            ],
+          },
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotContext();
+  const copilotStart = payload.copilot_start || {};
+
+  assert.deepEqual(
+    copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
+    [
+      { id: 'brief_of_day', target: 'market' },
+      { id: 'copilot', target: 'copilot' },
+    ]
+  );
+});

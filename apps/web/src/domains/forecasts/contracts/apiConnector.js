@@ -462,7 +462,15 @@ function transformCopilotStart(payload, fallbackPayload = null) {
   const briefOfDay = extractObject(source, ['brief_of_day', 'briefOfDay']);
   const fallbackBrief = extractObject(fallbackSource, ['daily_brief', 'dailyBrief']);
   const askItems = extractArray(source, ['ask']);
-  const openItems = extractArray(source, ['open']);
+  const openItems = extractArray(source, ['open'])
+    .map((item) => {
+      if (!item || typeof item !== 'object') return item;
+      return {
+        ...item,
+        target: normalizeCopilotOpenTarget(item.target, item.id)
+      };
+    })
+    .filter((item) => item && item.target);
   const normalizedAsk = askItems.length
     ? askItems
     : entryPoints.filter((item) => {
