@@ -1246,6 +1246,29 @@ async def build_context_payload(context_service_cls: Optional[Any] = None, scope
         payload["scope_tickers"] = _normalize_tickers(resolved_scope.get("tickers"))
     if saved_portfolio_context:
         payload["portfolio_context"] = saved_portfolio_context
+    
+    # Enrich with strategy playbook (BATCH-15-DEV-02)
+    # Extract regime and risk profile from context for playbook resolution
+    regime = payload.get("regime", "NORMAL").lower()
+    risk_profile = "moderate"  # Default; could be extended to support user profiles
+    
+    try:
+        from ..application.playbook_resolver import get_playbook_resolver
+        resolver = get_playbook_resolver()
+        playbook = resolver.resolve(regime=regime, risk_profile=risk_profile)
+        payload["playbook_id"] = playbook.id
+        payload["playbook_context"] = {
+            "name": playbook.name,
+            "description": playbook.description,
+            "regime": playbook.regime.value,
+            "risk_profile": playbook.risk_profile.value,
+            "guardrails": playbook.guardrails[:2],
+        }
+    except Exception as e:
+        # Non-blocking: playbook enrichment is optional
+        payload["playbook_id"] = None
+        payload["playbook_warning"] = f"Playbook resolution unavailable: {str(e)}"
+    
     payload["daily_brief"] = _load_daily_brief_payload()
     payload["entry_points"] = _build_copilot_entry_points(resolved_scope)
     payload["copilot_start"] = _build_copilot_start_payload(

@@ -334,3 +334,35 @@ def test_copilot_start_route_fallback_keeps_brief_and_actions(monkeypatch):
     assert [item.get("id") for item in data.get("ask", [])] == ["ask_copilot"]
     assert data.get("filters_applied") == {"tickers": ["SPY"]}
     assert data.get("scope_tickers") == ["SPY"]
+
+
+def test_copilot_context_includes_playbook_enrichment(monkeypatch):
+    """Test that context includes playbook_id and playbook_context (BATCH-15-DEV-02)."""
+    async def _fake_build_context_payload(*_args, **_kwargs):
+        return {
+            "regime": "BULL_MARKET",
+            "confidence": 0.75,
+            "key_drivers": ["Strong momentum"],
+            "playbook_id": "bull_moderate_001",
+            "playbook_context": {
+                "name": "Bull Market Growth Strategy",
+                "description": "Participate in upside while maintaining diversification",
+                "regime": "bull_market",
+                "risk_profile": "moderate",
+                "guardrails": [
+                    "Avoid concentration >20% in single sector",
+                    "Rebalance if equity allocation drifts >5% from target",
+                ],
+            },
+        }
+
+    monkeypatch.setattr(copilot_service, "build_context_payload", _fake_build_context_payload)
+
+    client = _client()
+    resp = client.get("/api/copilot/context")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["ok"] is True
+    assert data["data"]["playbook_id"] == "bull_moderate_001"
+    assert "playbook_context" in data["data"]
+    assert data["data"]["playbook_context"]["name"] == "Bull Market Growth Strategy"
