@@ -668,7 +668,7 @@ Output ONLY valid JSON with this structure:
         # Generate basic recommendations based on default tickers
         recommendations = []
         for ticker in default_tickers[:3]:
-            recommendations.append({
+            rec = {
                 'ticker': ticker,
                 'action': 'HOLD',
                 'score': 0.5,
@@ -682,7 +682,16 @@ Output ONLY valid JSON with this structure:
                     'news_sentiment': 0.0,
                     'macro_alignment': 0.5
                 }
-            })
+            }
+            if self.playbook_resolver:
+                rec['direction'] = 'neutral'
+                rec['asset_class'] = 'equities'
+                rec = self.playbook_resolver.enrich_recommendation(
+                    recommendation=rec,
+                    regime=regime,
+                    risk_profile='moderate',
+                )
+            recommendations.append(rec)
         
         return {
             'recommendations': recommendations,

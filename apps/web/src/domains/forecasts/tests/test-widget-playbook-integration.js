@@ -10,12 +10,16 @@ const fs = require('fs');
 const path = require('path');
 
 const playbookIntegrationPath = path.join(__dirname, '../contracts/playbookIntegration.js');
+const topMoversPath = path.join(__dirname, '../components/widgets/top-movers.html');
 const stockRelationshipsPath = path.join(__dirname, '../components/widgets/stock-relationships.html');
 const newsImpactPath = path.join(__dirname, '../components/widgets/news-impact.html');
+const appJsPath = path.join(__dirname, '../pages/app.js');
 
 const playbookIntegrationContent = fs.readFileSync(playbookIntegrationPath, 'utf8');
+const topMoversContent = fs.readFileSync(topMoversPath, 'utf8');
 const stockRelationshipsContent = fs.readFileSync(stockRelationshipsPath, 'utf8');
 const newsImpactContent = fs.readFileSync(newsImpactPath, 'utf8');
+const appJsContent = fs.readFileSync(appJsPath, 'utf8');
 
 // Test results
 let passed = 0;
@@ -87,9 +91,35 @@ test('getDecisionBadge keeps hold decisions neutral', () => {
 test('Top Movers widget has playbook container for each ticker', () => {
   const tickers = ['NVDA', 'META', 'AAPL', 'MSFT', 'GOOGL'];
   tickers.forEach(ticker => {
-    const containerId = `playbook-${ticker}`;
-    assert(containerId, 'Should have container ID for each ticker');
+    assert(
+      topMoversContent.includes(`data-ticker="${ticker}"`),
+      `Should render mover row data-ticker for ${ticker}`
+    );
+    assert(
+      topMoversContent.includes(`id="playbook-${ticker}"`),
+      `Should render playbook container for ${ticker}`
+    );
   });
+  assert(
+    topMoversContent.includes('loadTopMoversPlaybooks'),
+    'Should load playbooks in top movers widget'
+  );
+  assert(
+    topMoversContent.includes('window.PlaybookIntegration.getDecisionBadge'),
+    'Should reuse the shared PlaybookIntegration helper in top movers'
+  );
+  assert(
+    appJsContent.includes('class="mover-playbook" id="playbook-${symbolId}"'),
+    'Live app renderer should keep playbook containers when rows rerender'
+  );
+  assert(
+    appJsContent.includes('hydrateTopMoversPlaybooks(rows);'),
+    'Live app renderer should hydrate top mover playbooks after rerender'
+  );
+  assert(
+    appJsContent.includes('playbookIntegration.getDecisionBadge(symbol)'),
+    'Live app renderer should reuse the shared playbook helper'
+  );
 });
 
 // Test 7: News Impact widget structure
@@ -154,7 +184,12 @@ test('Widget styles include playbook badge CSS classes', () => {
     '.playbook-badge.badge-neutral'
   ];
   requiredClasses.forEach(cls => {
-    assert(cls, `Should have CSS class ${cls}`);
+    assert(
+      topMoversContent.includes(cls) ||
+      newsImpactContent.includes(cls) ||
+      stockRelationshipsContent.includes(cls),
+      `Should have CSS class ${cls}`
+    );
   });
 });
 
@@ -167,7 +202,10 @@ test('Widget styles include risk indicator classes', () => {
     '.playbook-risk.risk-critical'
   ];
   riskClasses.forEach(cls => {
-    assert(cls, `Should have risk CSS class ${cls}`);
+    assert(
+      topMoversContent.includes(cls),
+      `Should have risk CSS class ${cls} in top movers`
+    );
   });
 });
 

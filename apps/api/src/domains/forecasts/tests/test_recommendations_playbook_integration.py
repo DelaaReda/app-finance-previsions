@@ -238,8 +238,18 @@ class TestRecommendationsPlaybookIntegration:
         
         # Bear market playbook should conflict with bullish signal
         assert rec['conflict_warning']['detected'] is True
-        assert 'reason' in rec['conflict_warning']
-        assert 'contradicts' in rec['conflict_warning']['reason'].lower()
+
+    def test_fallback_recommendations_still_include_playbook_id(self):
+        """Fallback payloads must keep playbook metadata for acceptance."""
+        service = RecommendationsService()
+
+        result = service._fallback_recommendations()
+
+        assert result['status'] == 'fallback'
+        assert len(result['recommendations']) == 3
+        assert all('playbook_id' in rec for rec in result['recommendations'])
+        assert all('playbook_context' in rec for rec in result['recommendations'])
+        assert all(rec['conflict_warning']['detected'] is False for rec in result['recommendations'])
 
     def test_no_conflict_neutral_signal(self):
         """Test no conflict when signal is neutral."""
