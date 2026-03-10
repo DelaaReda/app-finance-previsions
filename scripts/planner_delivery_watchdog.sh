@@ -56,7 +56,11 @@ cleanup_orphan_capabilities() {
 import json, pathlib, subprocess
 
 root = pathlib.Path("/home/venom/analyse-financiere")
-registry_path = root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+registry_path = root / "logs-codex-runs" / "orchestrator-state" / "planner-subagents-registry.json"
+if not registry_path.exists():
+    legacy_path = root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+    if legacy_path.exists():
+        registry_path = legacy_path
 try:
     obj = json.loads(registry_path.read_text())
 except Exception:

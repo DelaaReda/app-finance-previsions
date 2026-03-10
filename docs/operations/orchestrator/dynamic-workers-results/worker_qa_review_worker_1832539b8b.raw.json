@@ -1,0 +1,48 @@
+Perfect! The implementation is correct. Now let me create a concise QA review summary:
+
+---
+
+## QA Review Summary - BATCH-14-DEV-01
+
+**Task:** Finalisation Core v2: Robustness Drills + GO/NO-GO [DEV-01]  
+**Verdict:** ✅ **PASS**
+
+### Evidence
+
+**Test File:** `apps/api/src/domains/judge/tests/test_judge_pipeline_parse_llm_answer.py`
+
+**3 Tests Executed:**
+1. ✅ `test_parse_llm_answer_reads_markdown_fenced_json` - Verifies fenced JSON (```json...```) is correctly parsed
+2. ✅ `test_parse_llm_answer_reads_embedded_json_with_trailing_text` - Verifies embedded JSON with trailing text is parsed
+3. ✅ `test_parse_llm_answer_fallback_when_missing_required_json_keys` - Verifies partial/invalid JSON falls back gracefully
+
+**Test Output:**
+```
+3 passed in 4.81s
+```
+
+### Architecture Alignment
+
+- **Layer:** `judge_application`
+- **Target:** `apps/api/src/domains/judge/application/judge_pipeline.py` (function: `parse_llm_answer`)
+- **Imports:** ✅ Valid (no external dependencies beyond stdlib + json)
+- **Pattern:** Follows API_ENDPOINT_BEST_PRACTICES.md - strict JSON parsing with tolerant fallback
+
+### Impact
+
+- **Before:** No focused tests covering `parse_llm_answer` under noisy LLM outputs
+- **After:** 3 regression assertions ensure parser stability under:
+  - Markdown-fenced JSON blocks
+  - Embedded JSON with surrounding text
+  - Malformed/partial JSON → graceful fallback with `error: "json_parse_failed"`
+
+### Proof Manifest
+`/home/venom/shared/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-14/BATCH-14-DEV-01/20260309T215912Z-423.yaml`
+
+---
+
+**Execution Trace**
+- Actions: Ran pytest on test_judge_pipeline_parse_llm_answer.py; verified 3/3 tests pass
+- Files changed: 0 (test file already exists from prior work)
+- Files read: test_judge_pipeline_parse_llm_answer.py, judge_pipeline.py, API_ENDPOINT_BEST_PRACTICES.md, proof manifest
+- Network/API calls: none

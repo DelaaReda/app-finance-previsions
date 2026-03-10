@@ -1,0 +1,24 @@
+artifact:
+  task_id: BATCH-13-DEV-03
+  task_title: "Decision Journal + Outcome Feedback Loop [DEV-03]"
+  timestamp_utc: 2026-03-09T18:40:00Z
+  verdict: PASS_WITH_UNRELATED_REGRESSION_FAILS
+  notes:
+    - "Decision-journal slice is green in current workspace state."
+    - "Backend regression gate still reports pre-existing cross-domain failures unrelated to DEV-03 scope (11 total)."
+checks:
+  - name: "apps/api/src/domains/copilot/tests/test_decision_journal.py"
+    command: "python3 -m pytest apps/api/src/domains/copilot/tests/test_decision_journal.py apps/api/src/domains/copilot/tests/test_decision_journal_integration.py -q"
+    result: "passed"
+    details:
+      - "28 passed"
+      - "duration not collected (fast)"
+  - name: "scripts/backend_regression_gate.sh"
+    command: "scripts/backend_regression_gate.sh"
+    result: "failed"
+    details:
+      - "11 failures / 2x copilot + 2x forecast + g4f fallback + 4x runtime contract + 1x endpoint cache contract"
+      - "Failures are external to DEV-03 decision-journal scope (copilot context fallback/forecast/g4f/runtime/endpoint cache regressions)"
+raw_output_ref:
+  - /tmp/BATCH-13-DEV-03_decision_journal.log
+  - /tmp/BATCH-13-DEV-03_backend_regression_gate.log

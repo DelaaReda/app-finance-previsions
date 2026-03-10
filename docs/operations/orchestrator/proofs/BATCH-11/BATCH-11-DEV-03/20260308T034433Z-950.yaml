@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-11-BATCH-11-DEV-03-20260308T034433Z-950"
+stream_id: "BATCH-11"
+task_id: "BATCH-11-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-08T03:44:33Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope data ingestion core + freshness slo [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_data_ingestion_core_+_freshness_slo_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-08T03:44:33Z"
+      ended_at_utc: "2026-03-08T03:44:33Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['PASS node --check apps/web/src/domains/forecasts/contracts/apiConnector.js', 'PASS node --check apps/web/src/domains/forecasts/pages/app.js', 'PASS node tests/smoke/batch_11_dev_02_freshness_contract_check.mjs', 'PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "head=5020b13de5683813c9ae82cbeade67d355c90e48; task_patch=c6e9c8064a7c3642298bb283b82efe39a88dc56b; smoke=tests/smoke/batch_11_dev_02_freshness_contract_check.mjs; gate=bash platform/policies/backend_regression_gate.sh -"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-11-DEV-03"
+  review_ref: "primary_structured:BATCH-11-DEV-03"
+  note: "source=primary_structured | root_cause=The remaining DEV-03 blocker was no longer a product-code regression; it was missing merge-grade verification. A prior minimal task patch had already landed, but the earlier run stayed partial because the shared `backend | fix_applied=No new code edits were required in this turn. I verified the existing task patch `c6e9c8064a7c3642298bb283b82efe39a88dc56b` together with the current HEAD gate support `5020b13de5683813c9ae82cbeade67d355c90e48` by runnin | verify=before=DEV-03 had an already-committed degraded-vs-stale freshness fix but planner evidence was incomplete because the shared regression gate did not finish within the bounded run; after=HEAD now has a completed bounded  | architecture_check=layer=apps/web/src + apps/api/src/platform/tests + platform/policies; imports_ok=yes (verification-only turn, no new imports; existing connector->API health contract boundary remains intact); path_target=apps/web/src/dom | vision_alignment=batch=BATCH-11; target=close the ingestion freshness SLO slice with bounded proof that degraded/stale backend health is surfaced correctly and backed by a passing shared gate; impact=planner can merge DEV-03 without wide"

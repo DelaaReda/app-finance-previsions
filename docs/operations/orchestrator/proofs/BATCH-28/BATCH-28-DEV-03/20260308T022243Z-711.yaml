@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-28-BATCH-28-DEV-03-20260308T022243Z-711"
+stream_id: "BATCH-28"
+task_id: "BATCH-28-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-08T02:22:43Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope mvp v3 release gate + adoption analytics [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_mvp_v3_release_gate_+_adoption_analytics_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-08T02:22:43Z"
+      ended_at_utc: "2026-03-08T02:22:43Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['timeout 20s env PYTHONPATH=. pytest -q domains/market_data/tests/test_endpoint_cache_contracts.py => PASS (2 passed)', 'timeout 30s env PYTHONPATH=. pytest -q platform/tests/test_service_standard_metadata.py domains/ma"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-28/BATCH-28-DEV-03/20260307T230731Z-runbook.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-28-DEV-03"
+  review_ref: "primary_structured:BATCH-28-DEV-03"
+  note: "source=primary_structured | root_cause=The existing DEV-03 runbook had stale closure evidence: it still recorded the stale-cache path as unresolved from an earlier bounded run. Current targeted checks pass, but `platform/policies/backend_regression_gate.sh -- | fix_applied=Updated `docs/operations/orchestrator/proofs/BATCH-28/BATCH-28-DEV-03/20260307T230731Z-runbook.md` with a 2026-03-08 follow-up that records the current PASS results for stale-cache, metadata, and desktop/mobile smoke che | verify={'before': 'Runbook still said the stale-cache legacy check was unresolved/TIMEOUT and counted it as a separate NO-GO blocker.', 'after': 'Runbook now records the stale-cache contract as PASS (`2 passed`) and states that | architecture_check={'layer': 'documentation/evidence', 'imports_ok': 'SKIP(docs-only change; no runtime imports changed)', 'path_target': 'docs/operations/orchestrator/proofs/BATCH-28/BATCH-28-DEV-03/20260307T230731Z-runbook.md'} | vision_alignment={'batch': 'BATCH-28', 'target': 'MVP v3 release-gate closure evidence for nominal/timeout/incomplete/stale-cache plus desktop/mobile proof', 'impact': 'Clears the stale-cache evidence blocker in the runbook and leaves a"

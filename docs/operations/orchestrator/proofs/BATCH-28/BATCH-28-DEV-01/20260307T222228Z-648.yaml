@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-28-BATCH-28-DEV-01-20260307T222228Z-648"
+stream_id: "BATCH-28"
+task_id: "BATCH-28-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-07T22:22:28Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope mvp v3 release gate + adoption analytics [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_mvp_v3_release_gate_+_adoption_analytics_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-07T22:22:28Z"
+      ended_at_utc: "2026-03-07T22:22:28Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['python3 -m py_compile /home/venom/analyse-financiere/apps/api/src/platform/legacy/services/service_standard.py /home/venom/analyse-financiere/apps/api/src/domains/judge/application/judge_endpoint_service.py /home/venom"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit 7efc07b16871bcd15c17f24dbafa6c3ef5ae4884 (`fix(api): normalize ui endpoint metadata`) with shared metadata normalizer wired into judge/dashboard/search response paths."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-28-DEV-01"
+  review_ref: "primary_structured:BATCH-28-DEV-01"
+  note: "source=primary_structured | root_cause=Response metadata had drifted across endpoint families because judge, dashboard, and search each built their own envelopes. Some nominal paths omitted status/error, and some degraded paths used non-stable freshness value | fix_applied=Added shared helpers `ensure_endpoint_metadata` and `service_response_with_metadata` in `apps/api/src/platform/legacy/services/service_standard.py`, then reused them in `apps/api/src/domains/judge/application/judge_endpo | verify=before=judge/dashboard/search returned inconsistent metadata shape across nominal and degraded paths (missing status/error on some nominal responses, fallback freshness sometimes set to `error` instead of a stable defaul | architecture_check=layer=shared service helper + API/application orchestrators only; imports_ok=yes(reused existing `services.service_standard` and existing domain modules, no new cross-layer module introduced); path_target=apps/api/src/pl | vision_alignment=batch=BATCH-28; target=MVP v3 Release Gate + Adoption Analytics metadata stability for UI-consumed backend endpoints; impact=dashboard/judge/search now expose a stable metadata contract in nominal and degraded modes, red"

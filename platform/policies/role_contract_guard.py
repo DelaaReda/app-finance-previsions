@@ -947,7 +947,7 @@ def main() -> int:
         planner_quality_task_updates = {"analysis_only", "claim", "complete", "handoff"}
         planner_passive_autofix = str(ev.get("planner_passive_autofix", "")).strip() == "1"
         if task_update in planner_quality_task_updates and not planner_passive_autofix:
-            required_quality_fields = ("root_cause", "fix_applied", "verify", "reuse_check")
+            required_quality_fields = ("root_cause", "fix_applied", "verify", "reuse_check", "architecture_check", "vision_alignment")
             missing_quality_fields = [
                 field for field in required_quality_fields if _is_weak_evidence(ev.get(field, ""))
             ]
@@ -966,8 +966,15 @@ def main() -> int:
                     values["BLOCKER_ID"] = "NONE"
                     values["RISKS"] = "evidence qualite planner incomplete (soft autofix non bloquant)"
                     planner_action_required = str(ev.get("planner_action_required", "")).strip().lower()
-                    if planner_action_required not in {"create_or_claim", "repair_dispatch_ids"}:
-                        values["NEXT"] = "owner=planner; action=complete missing quality fields now"
+                    if task_update == "complete":
+                        values["DELTA"] = "PLANNER_QUALITY_BACKFILL_REQUIRED"
+                        values["RISKS"] = "evidence qualite planner incomplete; complete converti en backfill"
+                        values["NEXT"] = "owner=planner; action=backfill missing quality fields before complete"
+                        values["NEXT_ACTION_UNIQUE"] = f"PLANNER_QUALITY_BACKFILL_{_now()}"
+                        ev = _upsert_evidence(values, ev, "task_update", "analysis_only")
+                        task_update = "analysis_only"
+                    elif planner_action_required not in {"create_or_claim", "repair_dispatch_ids"}:
+                        values["NEXT"] = "owner=planner; action=backfill missing quality fields before complete"
                         values["NEXT_ACTION_UNIQUE"] = f"PLANNER_QUALITY_BACKFILL_{_now()}"
                 ev = _upsert_evidence(values, ev, "planner_quality_missing", missing_csv)
                 ev = _upsert_evidence(values, ev, "planner_quality_score", str(planner_quality_score))
@@ -1271,6 +1278,7 @@ def main() -> int:
             "fix_applied",
             "verify",
             "reuse_check",
+            "architecture_check",
             "vision_alignment",
         )
         weak_or_missing_planner: list[str] = []
@@ -1300,11 +1308,33 @@ def main() -> int:
                 weak_or_missing_planner.append(field)
                 continue
         if weak_or_missing_planner:
-            planner_quality_soft_enforce = (
-                str(os.environ.get("PLANNER_QUALITY_SOFT_ENFORCE", "1")).strip() == "1"
-            )
-            if planner_quality_soft_enforce:
-                missing_csv = ",".join(sorted(set(weak_or_missing_planner)))
+            missing_csv = ",".join(sorted(set(weak_or_missing_planner)))
+            if task_update == "complete":
+                values["STATUS"] = "IN_PROGRESS"
+                values["DELTA"] = "PLANNER_QUALITY_BACKFILL_REQUIRED"
+                values["VERDICT"] = "GO_WITH_CAUTION"
+                values["BLOCKER_ID"] = "NONE"
+                values["RISKS"] = "planner evidence incomplete; complete converti en quality backfill"
+                values["NEXT"] = "owner=planner; action=backfill missing quality fields before complete"
+                values["NEXT_ACTION_UNIQUE"] = f"PLANNER_QUALITY_BACKFILL_{_now()}"
+                ev = _upsert_evidence(values, ev, "task_update", "analysis_only")
+                ev = _upsert_evidence(values, ev, "planner_quality_missing", missing_csv or "none")
+                ev = _upsert_evidence(values, ev, "planner_quality_autofix", "1")
+                ev = _upsert_evidence(values, ev, "planner_action_required", "quality_backfill")
+                ev = _append_issue(
+                    ev=ev,
+                    values=values,
+                    code="planner_evidence_incomplete_soft",
+                    severity="low",
+                )
+                values["EVIDENCE"] = "; ".join(
+                    f"{k}={v}" for k, v in ev.items() if str(k).strip()
+                )
+                task_update = "analysis_only"
+            elif planner_quality_soft_enforce:
+                planner_quality_soft_enforce = (
+                    str(os.environ.get("PLANNER_QUALITY_SOFT_ENFORCE", "1")).strip() == "1"
+                )
                 planner_quality_score = max(0, 100 - (len(set(weak_or_missing_planner)) * 20))
                 values["STATUS"] = "IN_PROGRESS"
                 if values.get("DELTA", "").strip().upper() not in {
@@ -1318,7 +1348,7 @@ def main() -> int:
                 values["RISKS"] = "evidence qualite planner incomplete (soft autofix non bloquant)"
                 planner_action_required = str(ev.get("planner_action_required", "")).strip().lower()
                 if planner_action_required not in {"create_or_claim", "repair_dispatch_ids"}:
-                    values["NEXT"] = "owner=planner; action=complete missing quality fields now"
+                    values["NEXT"] = "owner=planner; action=backfill missing quality fields before complete"
                     values["NEXT_ACTION_UNIQUE"] = f"PLANNER_QUALITY_BACKFILL_{_now()}"
                 ev = _upsert_evidence(values, ev, "planner_quality_missing", missing_csv)
                 ev = _upsert_evidence(values, ev, "planner_quality_score", str(planner_quality_score))
@@ -1369,7 +1399,7 @@ def main() -> int:
                     values["BLOCKER_ID"] = "NONE"
                     values["DELTA"] = "PLANNER_EVIDENCE_AUTOFILLED"
                     values["RISKS"] = "planner evidence incomplete soft-autofill with runtime markers"
-                    values["NEXT"] = "owner=planner; action=backfill root_cause/fix_applied/verify in next tick"
+                    values["NEXT"] = "owner=planner; action=backfill missing quality fields before complete"
                     values["NEXT_ACTION_UNIQUE"] = f"PLANNER_EVIDENCE_AUTOFILL_{_now()}"
                     ev = _upsert_evidence(values, ev, "planner_evidence_missing", missing_csv)
                     ev = _upsert_evidence(values, ev, "planner_evidence_autofill", "1")

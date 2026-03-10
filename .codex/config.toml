@@ -1,5 +1,5 @@
-model = "gpt-5.4"
-model_reasoning_effort = "high"
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "medium"
 
 [features]
 multi_agent = true
@@ -12,19 +12,19 @@ max_threads = 4
 max_depth = 1
 
 [agents.repo_scan_worker]
-model = "gpt-5.4"
-model_reasoning_effort = "high"
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "medium"
 
 [agents.test_worker]
-model = "gpt-5.4"
-model_reasoning_effort = "high"
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "medium"
 
 [agents.patch_proposal_worker]
-model = "gpt-5.4"
-model_reasoning_effort = "high"
+model = "gpt-5.3-codex-spark"
+model_reasoning_effort = "medium"
 
 [agents.runtime_diag_worker]
-model = "gpt-5.4"
+model = "gpt-5.3-codex-spark"
 model_reasoning_effort = "medium"
 
 [agents.quick_worker]

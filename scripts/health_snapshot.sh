@@ -38,6 +38,7 @@ if HEALTH_HTTP_TIMEOUT <= 0:
 
 canonical_orch = ROOT / 'docs' / 'operations' / 'orchestrator'
 legacy_orch = ROOT / 'docs' / 'orchestrator-ops'
+runtime_state_orch = ROOT / 'logs-codex-runs' / 'orchestrator-state'
 
 def _json_dict(path: Path) -> dict:
     try:
@@ -57,7 +58,7 @@ def _http_json(url: str) -> dict:
 
 def resolve_primary_orchestrator_root() -> Path:
     candidates = []
-    for d in (canonical_orch, legacy_orch):
+    for d in (runtime_state_orch, canonical_orch, legacy_orch):
         if d.exists():
             score = 0.0
             queue_path = d / 'priority-queue.json'
@@ -75,14 +76,33 @@ def resolve_primary_orchestrator_root() -> Path:
     if candidates:
         candidates.sort(key=lambda x: x[0], reverse=True)
         return candidates[0][1]
-    return canonical_orch
+    return runtime_state_orch
+
+def resolve_orchestrator_json_path(name: str) -> Path:
+    candidates = []
+    if str(name).startswith('planner-subagents-'):
+        candidates.append(runtime_state_orch / name)
+    candidates.extend([
+        PRIMARY_ORCH / name,
+        canonical_orch / name,
+        legacy_orch / name,
+    ])
+    seen = set()
+    for path in candidates:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        if path.exists():
+            return path
+    return candidates[0]
 
 PRIMARY_ORCH = resolve_primary_orchestrator_root()
 RUNTIME_STATE = _json_dict(ROOT / 'logs-codex-runs' / 'orchestrator-state' / 'runtime-state.json')
 
 WRITE_ORCH_ROOTS = []
 seen = set()
-for d in (canonical_orch, legacy_orch, PRIMARY_ORCH):
+for d in (runtime_state_orch, canonical_orch, legacy_orch, PRIMARY_ORCH):
     try:
         key = str(d.resolve())
     except Exception:
@@ -99,7 +119,7 @@ for d in WRITE_ORCH_ROOTS:
         pass
 
 def load_json(p):
-    return _json_dict(PRIMARY_ORCH / p)
+    return _json_dict(resolve_orchestrator_json_path(str(p)))
 
 def active_planner_subagent_roles() -> list[str]:
     registry = load_json('planner-subagents-registry.json')

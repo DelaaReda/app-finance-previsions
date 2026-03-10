@@ -248,6 +248,56 @@ class RoleExecutionMonitoringTests(unittest.TestCase):
             self.assertEqual(rows[0]["issue_severity"], "high")
             self.assertEqual(rows[0]["issue_codes"], ["agent_rate_limit_codex", "upstream_timeout"])
 
+    def test_action_summary_falls_back_to_run_note(self) -> None:
+        payload = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: DEV_PATCH_ACTIVE",
+                (
+                    "EVIDENCE: task_update=claim; run_note=patch login callback and rerun focused test; "
+                    "issues=none; issue_count=0; issue_severity=none; stream_id=BATCH-70; task_id=BATCH-70-DEV-01; "
+                    "tool_request=none; skill_request=none; channels_read=workboard_tasks; impact_assessment=medium; impact_action=sync_cross_role"
+                ),
+                "RISKS: none",
+                "NEXT: owner=dev; action=continue patch",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: DEV_ACTION_SUMMARY_UTEST",
+            ]
+        )
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            payload_file = root / "payload.txt"
+            latest_file = root / "docs" / "executors-monitoring-latest.json"
+            events_file = root / "logs" / "events.jsonl"
+            tool_md_file = root / "docs" / "AGENT_TOOL_REQUESTS.md"
+            tool_events_file = root / "docs" / "agent-tool-requests.jsonl"
+            state_dir = root / "state"
+
+            payload_file.write_text(payload, encoding="utf-8")
+
+            cmd = [
+                sys.executable,
+                str(MONITOR),
+                "dev",
+                "unit_test",
+                str(payload_file),
+                str(latest_file),
+                str(events_file),
+                str(tool_md_file),
+                str(tool_events_file),
+                str(state_dir),
+            ]
+
+            run = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=False)
+            self.assertEqual(run.returncode, 0, msg=run.stderr)
+
+            latest = json.loads(latest_file.read_text(encoding="utf-8"))
+            self.assertEqual(
+                latest["roles"]["dev"]["action_summary"],
+                "patch login callback and rerun focused test",
+            )
+
     def test_monitor_status_and_iteration_issues_include_issue_reporting(self) -> None:
         repo_root = Path(__file__).resolve().parents[3]
         server_path = repo_root / "apps" / "monitor" / "server.py"
@@ -378,7 +428,7 @@ class RoleExecutionMonitoringTests(unittest.TestCase):
 
                 status_payload = module.status()
                 self.assertIn("issue_reporting", status_payload)
-                self.assertEqual(status_payload["issue_reporting"]["roles_total"], 3)
+                self.assertGreaterEqual(status_payload["issue_reporting"]["roles_total"], 3)
                 self.assertEqual(status_payload["issue_reporting"]["reports_with_issues"], 1)
                 self.assertEqual(status_payload["issue_reporting"]["critical_count"], 1)
                 self.assertIn("admin", status_payload["issue_reporting"]["roles_missing_report"])

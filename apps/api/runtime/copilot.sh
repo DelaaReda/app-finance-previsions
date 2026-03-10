@@ -33,6 +33,7 @@ FRONTEND_DIST="$FRONTEND_DIR"
 MONITOR_GUARD_SCRIPT="$WORKSPACE_ROOT/scripts/monitor_stack_guard.sh"
 MONITOR_WRAPPER_SCRIPT="$WORKSPACE_ROOT/scripts/monitor_server.py"
 MONITOR_URL="${FC_MONITOR_LOCAL_URL:-http://localhost:7779}"
+BACKEND_START_TIMEOUT_SECONDS="${FC_BACKEND_START_TIMEOUT_SECONDS:-90}"
 MONITOR_START_TIMEOUT_SECONDS="${FC_MONITOR_START_TIMEOUT_SECONDS:-25}"
 MONITOR_REQUIRED="${FC_MONITOR_REQUIRED:-1}"
 SYSTEMD_BACKEND_UNIT="finance-backend.service"
@@ -182,7 +183,9 @@ service_running() {
             frontend_ready && return 0
             ;;
         monitor)
+            # Monitor status should reflect API truth, not a stale pid file or a bound port.
             monitor_ready && return 0
+            return 1
             ;;
     esac
     is_port_in_use "$port" && return 0
@@ -395,9 +398,24 @@ run_g4f_tests() {
     log "G4F tests lancés en arrière-plan (voir /tmp/g4f_test.log)"
 }
 
+launch_post_start_refresh() {
+    log "Lancement du rafraîchissement live en arrière-plan..."
+    (
+        set +e
+        refresh_live_data
+    ) > /tmp/finance_copilot_refresh.log 2>&1 &
+    REFRESH_PID=$!
+    echo "$REFRESH_PID" > /tmp/finance_copilot_refresh.pid
+    log "Refresh live en arrière-plan (PID: $REFRESH_PID, log: /tmp/finance_copilot_refresh.log)"
+}
+
 # Démarrer le backend
 start_backend() {
     log "Démarrage du backend..."
+    local backend_timeout="$BACKEND_START_TIMEOUT_SECONDS"
+    if ! [[ "$backend_timeout" =~ ^[0-9]+$ ]] || [ "$backend_timeout" -lt 15 ]; then
+        backend_timeout=90
+    fi
 
     cd "$BACKEND_DIR"
     # Charger l'environnement (.env backend et racine) pour propager les API keys (OpenRouter, DeepInfra, etc.)
@@ -447,18 +465,20 @@ start_backend() {
     fi
     
     # Attendre que le backend réponde
-    log "Attente du démarrage du backend..."
-    for i in {1..15}; do
+    log "Attente du démarrage du backend (timeout=${backend_timeout}s)..."
+    local waited=0
+    while [ "$waited" -lt "$backend_timeout" ]; do
         if curl -fsS "http://localhost:8050/api/health" >/dev/null 2>&1; then
             log_success "✅ Backend opérationnel (PID: $BACKEND_PID)"
             log_success "   URL: http://localhost:8050"
             log_success "   Docs: http://localhost:8050/docs"
             return 0
         fi
-        sleep 2
+        sleep 1
+        waited=$((waited + 1))
     done
     
-    log_error "Le backend n'a pas démarré"
+    log_error "Le backend n'a pas démarré dans ${backend_timeout}s"
     if has_systemd_backend_unit; then
         journalctl --user -u "$SYSTEMD_BACKEND_UNIT" -n 40 --no-pager || true
     else
@@ -609,17 +629,18 @@ start() {
 
     # Générer les données en arrière-plan
     generate_initial_data
-
-    # Rafraîchir les données live critiques (synchrones, pas de mock)
-    refresh_live_data
-
-    # Tester les modèles G4F (écrit la shortlist pour le runtime)
-    run_g4f_tests
     
     # Démarrer les services
     start_backend
     start_frontend
     start_monitor
+
+    # Les jobs lourds restent hors chemin critique pour rendre la stack
+    # disponible rapidement après un restart runtime.
+    launch_post_start_refresh
+
+    # Tester les modèles G4F (écrit la shortlist pour le runtime)
+    run_g4f_tests
     
     echo ""
     log_success "🎉 Finance Copilot est opérationnel!"

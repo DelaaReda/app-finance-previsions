@@ -1,0 +1,16 @@
+{
+  "worker_id": "worker_qa_review_worker_21231353cf",
+  "worker_type": "qa_review_worker",
+  "owner_task_id": "BATCH-14-DEV-01",
+  "parent_role": "planner",
+  "result_kind": "qa_fix_result",
+  "status": "completed",
+  "summary": "## QA Review Summary - BATCH-14-DEV-01 **Verdict: \u2705 PASS** ### Evidence | Check | Status | Details | |-------|--------|---------| | **Test file created** | \u2705 | `apps/api/src/domain",
+  "artifact": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_21231353cf.raw.json",
+  "verify": "proof=worker_backend:qwen; rc=0",
+  "raw_output_ref": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_21231353cf.raw.json",
+  "backend": "qwen",
+  "backend_ref": "qwen:worker_qa_review_worker_21231353cf",
+  "started_at": "2026-03-09T22:01:47Z",
+  "finished_at": "2026-03-09T22:04:13Z"
+}

@@ -305,6 +305,66 @@ class ProductPriorityGuardTests(unittest.TestCase):
             self.assertEqual(metrics["recent_completions"], 0)
             self.assertEqual(metrics["suspicious_completion_count"], 0)
 
+    def test_delivery_integrity_ignores_planner_workboard_only_completions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            proofs = orch / "proofs" / "BATCH-60" / "BATCH-60-PLAN"
+            proofs.mkdir(parents=True, exist_ok=True)
+            now = datetime(2026, 3, 8, 21, 45, tzinfo=timezone.utc)
+
+            proof_doc = proofs / "proof-workboard.yaml"
+            proof_doc.write_text(
+                '\n'.join(
+                    [
+                        'execution:',
+                        '  commands:',
+                        '    - cmd: "SKIP(planner_workboard_only)"',
+                        'validations:',
+                        '  tests:',
+                        '    - result: "SKIP"',
+                        '      evidence: "SKIP(planner_workboard_only)"',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "docs/operations/orchestrator/parallel-workstreams.json"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-60-PLAN",
+                                "role": "planner",
+                                "title": "Build a personal finance copilot [PLAN]",
+                                "artifact": "docs/operations/orchestrator/parallel-workstreams.json",
+                            }
+                        ],
+                        "events": [
+                            {
+                                "kind": "complete",
+                                "at": _iso(now - timedelta(minutes=5)),
+                                "details": {
+                                    "task_id": "BATCH-60-PLAN",
+                                    "artifact": "docs/operations/orchestrator/parallel-workstreams.json",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/BATCH-60/BATCH-60-PLAN/proof-workboard.yaml",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = product_priority_guard.build_delivery_integrity_metrics(root, now=now)
+            self.assertEqual(metrics["status"], "ok")
+            self.assertEqual(metrics["recent_completions"], 0)
+            self.assertEqual(metrics["browser_proof_required_count"], 0)
+            self.assertEqual(metrics["suspicious_completion_count"], 0)
+
     def test_delivery_integrity_accepts_task_commit_sha_without_manifest_hash(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -421,6 +481,63 @@ class ProductPriorityGuardTests(unittest.TestCase):
             self.assertEqual(metrics["browser_proof_required_count"], 1)
             self.assertEqual(metrics["browser_proof_present_count"], 0)
             self.assertIn("BATCH-90-DEV-01", metrics["browser_proof_missing_task_ids"])
+
+    def test_delivery_integrity_does_not_treat_build_as_ui_keyword(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "docs" / "operations" / "orchestrator"
+            proofs = orch / "proofs" / "BATCH-92" / "BATCH-92-PLAN"
+            proofs.mkdir(parents=True, exist_ok=True)
+            now = datetime(2026, 3, 7, 6, 10, tzinfo=timezone.utc)
+
+            proof_file = proofs / "proof-plan.yaml"
+            proof_file.write_text(
+                '\n'.join(
+                    [
+                        'validations:',
+                        '  tests:',
+                        '    - result: "PASS"',
+                        '      evidence: "planner audit"',
+                        'outputs:',
+                        '  artifacts:',
+                        '    - "docs/product/PRODUCT_VISION.md"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-92-PLAN",
+                                "role": "planner",
+                                "state": "DONE",
+                                "title": "Build the next planner brief",
+                                "artifact": "docs/product/PRODUCT_VISION.md",
+                                "commit_sha": "NONE(doc_only)",
+                                "tests_run": "SKIP(planner_doc_only)",
+                            }
+                        ],
+                        "events": [
+                            {
+                                "kind": "complete",
+                                "at": _iso(now - timedelta(minutes=5)),
+                                "details": {
+                                    "task_id": "BATCH-92-PLAN",
+                                    "artifact": "docs/product/PRODUCT_VISION.md",
+                                    "proof_manifest": "docs/operations/orchestrator/proofs/BATCH-92/BATCH-92-PLAN/proof-plan.yaml",
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            metrics = product_priority_guard.build_delivery_integrity_metrics(root, now=now)
+            self.assertEqual(metrics["browser_proof_required_count"], 0)
 
     def test_delivery_integrity_accepts_browser_proof_for_web_completion(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

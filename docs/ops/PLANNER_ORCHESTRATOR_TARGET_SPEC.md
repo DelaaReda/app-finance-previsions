@@ -34,6 +34,9 @@ The target is:
 - delivery gating already exists
 - planner-owned delegation already exists and must remain thin
 - live planner delegation transport is `openclaw`
+- the authoritative scheduler is the crontab installed by `scripts/fc_setup_crons.sh`
+- `platform/automation/set_orchestration_mode.sh` is a control-plane guard for quarantine and pause, not a tool to resurrect legacy lanes under `planner_experimental`
+- `dev`, `admin`, and `scrum_master` are planner-owned capabilities delegated through `platform/automation/planner_subagent_manager.py`
 
 Canonical implementation anchors:
 - `platform/config/runner/runner.v1.yaml`
@@ -72,6 +75,8 @@ Codex multi-agent execution
 - `planner` is the only scheduled orchestrator lane
 - `planner_architect_orchestrator` may remain as compatibility alias only
 - `dev`, `admin`, and `scrum_master` are capabilities under planner authority, not target cron lanes
+- when `execution_mode=planner_experimental`, OpenClaw role/governance inventories are quarantine/control state only
+- `paused` is a global runtime lifecycle stored in `logs-codex-runs/orchestrator-state/runtime-state.json`; cron ticks may fire, but `scripts/fc_agent_tick.sh` must inert immediately
 
 ### Runtime / Compute Split
 - application code is authoritative for:

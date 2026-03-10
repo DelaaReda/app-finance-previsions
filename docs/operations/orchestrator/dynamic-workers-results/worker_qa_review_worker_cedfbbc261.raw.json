@@ -1,0 +1,21 @@
+{
+  "payloads": [
+    {
+      "text": "Starting by validating the BATCH-61-DEV-03 slice with the two targeted checks already called out in the task notes, then I’ll inspect the specific smoke contract test for the /api/copilot/start assertions and report pass/fail with exact command evidence and any locally fixable defects.\nInitial targeted checks both passed. I’ll quickly inspect the updated smoke test file to confirm the contract assertions are present exactly as expected and then return a concise review artifact with command evidence.\nI confirmed both checks ran cleanly; I’ll also verify the referenced proof manifest file exists in this workspace so I can return a concrete `raw_output_ref`.\n- summary: PASS. BATCH-61-DEV-03 contract validation is now covered and currently passes; no blocking defects found in the targeted slice.\n- artifact:\n  - [tests/smoke/batch_61_dev_03_brief_daily_contract_check.mjs](/home/venom/.openclaw/workspace/capabilities/worker-planner-qa_review_worker/repo/tests/smoke/batch_61_dev_03_brief_daily_contract_check.mjs) includes the added `/api/copilot/start` contract checks for `brief_of_day` + `ask` + `open` + prefill validation.\n  - Existing proof manifest: `/home/venom/shared/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-61/BATCH-61-DEV-03/20260309T172517Z-500.yaml`\n- verify:\n  - `node --test tests/smoke/batch_61_dev_03_brief_daily_contract_check.mjs`  \n    - Result: PASS, 4/4 tests passed.\n    - Included assertions: `ok === true`, non-empty `brief_of_day.summary`, `open` array present, `ask` array present/non-empty, open targets includes `market` or `copilot`, valid ask prefill question when applicable.\n  - `bash scripts/backend_regression_gate.sh --no-live domains/copilot/tests/test_copilot_domain_router.py`  \n    - Result: `VERDICT: PASS`\n- raw_output_ref: `/home/venom/shared/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-61/BATCH-61-DEV-03/20260309T172517Z-500.yaml`",
+      "mediaUrl": null
+    }
+  ],
+  "meta": {
+    "durationMs": 14999,
+    "agentMeta": {
+      "sessionId": "019cd3a4-8884-7521-b126-e4fd0cf5f88c",
+      "provider": "codex-full",
+      "model": "gpt-5.3-codex-spark",
+      "usage": {
+        "input": 52007,
+        "output": 3359,
+        "cacheRead": 45056
+      }
+    }
+  }
+}

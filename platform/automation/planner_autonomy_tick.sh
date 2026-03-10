@@ -374,8 +374,62 @@ sanitize_rc="$(printf '%s' "$sanitize_payload" | head -n1)"
 sync_payload="$(run_safe_capture "sync_priority" "python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json")"
 sync_rc="$(printf '%s' "$sync_payload" | head -n1)"
 
-collect_payload="$(run_safe_capture "collect_pending_results" "python3 platform/automation/planner_orchestrator_bridge.py --root \"$ROOT\" --source planner_autonomy_tick --collect-only")"
-collect_rc="$(printf '%s' "$collect_payload" | head -n1)"
+planner_children_active="$(
+  ROOT_PATH="$ROOT" python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+root = Path(os.environ["ROOT_PATH"])
+active_statuses = {"spawned", "running"}
+
+def load_rows(path: Path, key: str) -> list[dict]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    except Exception:
+        return []
+    if isinstance(payload, dict):
+        rows = payload.get(key, [])
+    else:
+        rows = payload
+    if not isinstance(rows, list):
+        return []
+    return [row for row in rows if isinstance(row, dict)]
+
+subagent_rows = []
+for path in (
+    root / "logs-codex-runs" / "orchestrator-state" / "planner-subagents-registry.json",
+    root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json",
+):
+    if path.exists():
+        subagent_rows = load_rows(path, "subagents")
+        break
+
+worker_rows = []
+for path in (
+    root / "logs-codex-runs" / "orchestrator-state" / "dynamic-workers-registry.json",
+    root / "docs" / "operations" / "orchestrator" / "dynamic-workers-registry.json",
+):
+    if path.exists():
+        worker_rows = load_rows(path, "workers")
+        break
+
+subagents_active = any(str(row.get("status", "")).strip().lower() in active_statuses for row in subagent_rows)
+workers_active = any(
+    str(row.get("parent_role", "")).strip().lower() == "planner"
+    and str(row.get("status", "")).strip().lower() in active_statuses
+    for row in worker_rows
+)
+print("1" if (subagents_active or workers_active) else "0")
+PY
+)"
+if [[ "$planner_children_active" == "1" ]]; then
+  collect_payload="$(run_safe_capture "collect_pending_results" "python3 platform/automation/planner_orchestrator_bridge.py --root \"$ROOT\" --source planner_autonomy_tick --collect-only")"
+  collect_rc="$(printf '%s' "$collect_payload" | head -n1)"
+else
+  collect_payload=$'0\nSKIP(no_active_planner_children)'
+  collect_rc="0"
+fi
 
 reconcile_payload="$(run_safe_capture "reconcile_state" "python3 platform/automation/parallel_workstream.py reconcile-state --queue docs/operations/orchestrator/priority-queue.json")"
 reconcile_rc="$(printf '%s' "$reconcile_payload" | head -n1)"

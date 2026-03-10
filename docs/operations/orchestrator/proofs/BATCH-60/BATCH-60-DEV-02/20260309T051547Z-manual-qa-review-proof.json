@@ -1,0 +1,10 @@
+{
+  "task_id": "BATCH-60-DEV-02",
+  "source": "manual_delivery_cleanup",
+  "status": "completed",
+  "summary": "Manual QA backfill after planner delivery stabilization.",
+  "verify": "before=the hero brief existed, but the main CTA only toggled a blank Copilot composer and the suggestion chip pointed to a generic 1-week market brief. after=the hero now starts from the brief of the day and gives a dire",
+  "artifact": "commit=99d0a027fc0ca7d83774db713a91f9a1eaae756b; file=apps/web/src/domains/forecasts/components/sections/hero-what-need.html; evidence=hero subtitle + Ask About Today CTA + today's-brief suggestion chip",
+  "browser_proof_artifact": "/home/venom/analyse-financiere/logs-codex-runs/browser-smoke/20260309T051547Z-batch-60-dev-02-future-delivery.json",
+  "generated_at": "2026-03-09T05:16:12Z"
+}

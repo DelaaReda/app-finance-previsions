@@ -79,7 +79,18 @@ def run(args: argparse.Namespace) -> int:
                 continue
             matched += 1
 
-            ref = parse_utc(str(task.get("updated_at", ""))) or parse_utc(str(task.get("started_at", "")))
+            ref = (
+                parse_utc(str(task.get("last_delivery_delta_at", "")))
+                or parse_utc(str(task.get("last_delivery_at", "")))
+                or parse_utc(str(task.get("last_artifact_at", "")))
+                or parse_utc(str(task.get("last_code_delta_at", "")))
+                or parse_utc(str(task.get("last_test_delta_at", "")))
+                or parse_utc(str(task.get("last_verify_delta_at", "")))
+                or parse_utc(str(task.get("started_at", "")))
+                or parse_utc(str(task.get("claimed_at", "")))
+                or parse_utc(str(task.get("created_at", "")))
+                or parse_utc(str(task.get("updated_at", "")))
+            )
             if ref is None:
                 skipped_missing_time += 1
                 print(f"STALE_TASK task={task.get('id')} role={role} age_s=unknown stale=0 action=skip_missing_time")
@@ -113,9 +124,13 @@ def run(args: argparse.Namespace) -> int:
             task["assignee"] = ""
             if action == "reclaim":
                 task["blocked_reason"] = ""
+                task["stalled_reason"] = "stalled_delivery"
+                task["delivery_stalled_at"] = pw.now_iso()
                 task["started_at"] = ""
             else:
-                task["blocked_reason"] = f"stale_in_progress_age_exceeded:{age_s}s"
+                task["blocked_reason"] = f"stalled_delivery_age_exceeded:{age_s}s"
+                task["stalled_reason"] = "stalled_delivery"
+                task["delivery_stalled_at"] = pw.now_iso()
             task.setdefault("notes", []).append(remediation_line(task, age_s, action, target_state))
 
             pw.append_event(

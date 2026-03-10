@@ -15,6 +15,10 @@ docs/operations/orchestrator/parallel-workstreams.json
 docs/operations/orchestrator/planner-audit-events.jsonl
 docs/operations/orchestrator/planner-guardian-events.jsonl
 docs/operations/orchestrator/planner-guardian-latest.json
+logs-codex-runs/orchestrator-state/planner-subagents-events.jsonl
+logs-codex-runs/orchestrator-state/planner-subagents-registry.json
+logs-codex-runs/orchestrator-state/planner-subagents-results/*.raw.txt
+logs-codex-runs/orchestrator-state/planner-subagents-results/*.result.json
 docs/operations/orchestrator/planner-subagents-events.jsonl
 docs/operations/orchestrator/planner-subagents-registry.json
 docs/operations/orchestrator/planner-subagents-results/*.raw.txt

@@ -1,0 +1,16 @@
+{
+  "worker_id": "worker_qa_review_worker_35cbe29a1f",
+  "worker_type": "qa_review_worker",
+  "owner_task_id": "BATCH-61-DEV-01",
+  "parent_role": "planner",
+  "result_kind": "qa_fix_result",
+  "status": "completed",
+  "summary": "Reviewing the delivered `BATCH-61-DEV-01` slice in the real repo with targeted checks. I\u2019ll inspect the copilot route and test coverage first, then run the narrow backend verification noted in the task and fix anything l",
+  "artifact": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_35cbe29a1f.raw.json",
+  "verify": "proof=worker_backend:openclaw; rc=0",
+  "raw_output_ref": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_35cbe29a1f.raw.json",
+  "backend": "openclaw",
+  "backend_ref": "worker_qa_review_worker_35cbe29a1f",
+  "started_at": "2026-03-09T11:44:45Z",
+  "finished_at": "2026-03-09T11:49:34Z"
+}

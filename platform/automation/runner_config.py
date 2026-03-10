@@ -193,6 +193,10 @@ def _flatten(cfg: dict[str, Any], role: str) -> tuple[dict[str, str], list[str]]
     if _as_text(role_cfg.get("thinking")):
         out["TMUX_ROLE_CODEX_THINKING"] = _as_text(role_cfg.get("thinking"))
     out["TMUX_ROLE_CODEX_EXEC_RESUME"] = str(_as_int01(role_cfg.get("resume", 1), 1))
+    out["TMUX_ROLE_RATE_LIMIT_PRECHECK"] = str(_as_int01(role_cfg.get("rate_limit_precheck", 1), 1))
+    out["TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK"] = str(
+        _as_int01(role_cfg.get("rate_limit_qwen_fallback", 1), 1)
+    )
     out["TMUX_ROLE_CODEX_REQUIRE_FRESH_TICK"] = str(
         _as_int01(role_cfg.get("codex_require_fresh_tick", 1), 1)
     )
@@ -334,6 +338,16 @@ def _flatten(cfg: dict[str, Any], role: str) -> tuple[dict[str, str], list[str]]
     )
     out["FC_PLANNER_ORCHESTRATOR_BACKEND"] = _as_text(
         planner_orchestrator.get("backend"), "openclaw"
+    )
+    backend_by_role = (
+        planner_orchestrator.get("backend_by_role", {})
+        if isinstance(planner_orchestrator.get("backend_by_role"), dict)
+        else {}
+    )
+    out["FC_PLANNER_ORCHESTRATOR_BACKEND_BY_ROLE"] = ",".join(
+        f"{str(key).strip()}={str(value).strip()}"
+        for key, value in backend_by_role.items()
+        if str(key).strip() and str(value).strip()
     )
     out["FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES"] = ",".join(
         str(tok).strip() for tok in raw_managed_roles if str(tok).strip()

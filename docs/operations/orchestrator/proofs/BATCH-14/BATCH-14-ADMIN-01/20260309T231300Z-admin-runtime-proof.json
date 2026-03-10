@@ -1,0 +1,59 @@
+{
+  "task_id": "BATCH-14-ADMIN-01",
+  "source": "admin_runtime_validation",
+  "status": "PASS_WITH_WARNING",
+  "produced_at_utc": "2026-03-09T23:13:00Z",
+  "scope": "Finalisation Core v2: Robustness Drills + GO/NO-GO runtime truth and observability",
+  "runtime_truth": {
+    "host_mode": "vm_runtime",
+    "backend_health": "UP (http://127.0.0.1:8050/api/health)",
+    "frontend_health": "UP (http://127.0.0.1:5173/)",
+    "monitor_contract": "PASS (http://127.0.0.1:7779/api/status?lite=1)",
+    "monitor_full_status": {
+      "rc": 0,
+      "health": "OK",
+      "size_bytes": 12025000,
+      "typical_latency_ms": 1400
+    },
+    "runtime_gate_ref": "evidence/runtime-gates/runtime-gate-20260309T230236Z.json"
+  },
+  "observability": {
+    "monitor_contract_probe": {
+      "command": "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 --timeout 16",
+      "result": "PASS"
+    },
+    "full_health_probe": {
+      "command": "bash scripts/fc_health_check.sh",
+      "result": "PASS with warnings",
+      "warnings": [
+        "rate_limit_hits_today=153",
+        "planner model token flagged as gpt-5.4"
+      ]
+    },
+    "status_latency_warning": "Initial runtime_gate probe used /api/status with default 4s timeout and briefly timed out; subsequent /api/status checks complete under 4.3s with endpoint healthy"
+  },
+  "scheduler_truth": {
+    "planner_only_mode": true,
+    "cron_entries_present": "yes (15 total)",
+    "openclaw_cron_jobs": 0,
+    "cron_status_probe": {
+      "command": "bash scripts/watch_codex_runtime.sh --once",
+      "result": "planner session active; role tmux loop jobs show disabled in cron state but orchestration runtime remains planner-controlled"
+    },
+    "stale_lock_check": {
+      "command": "bash scripts/stale_cron_sweep.sh --dry-run",
+      "result": "OK (matched=0, stale=0)"
+    },
+    "issue_publication_gap": "ok (planner only)"
+  },
+  "dependencies": {
+    "required": "BATCH-14-DEV-03",
+    "evidence_from_dependency": "dependency chain dependency resolved in prior checks"
+  },
+  "decision": {
+    "task_runtime_unblock": true,
+    "planner_mergeable": true,
+    "admin_fix_needed": false,
+    "remaining_blocker": "none"
+  }
+}

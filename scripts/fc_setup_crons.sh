@@ -304,8 +304,8 @@ ${CRON_CONTENT}
 # [finance-copilot] Planner delivery watchdog (self-heal capability dispatch between planner ticks)
 */5 * * * * ${BASH_BIN} -lc 'cd ${ROOT} && bash scripts/planner_delivery_watchdog.sh --duration 900 --interval 60' >> ${ROOT}/logs-codex-runs/ops/planner-delivery-watchdog.cron.log 2>&1
 
-# [finance-copilot] Monitor guard (api 7779 + tunnel fc-monitor.loca.lt)
-*/1 * * * * ${BASH_BIN} -lc 'cd ${ROOT} && FC_MONITOR_AUTO_START_STACK=${MONITOR_AUTO_START_STACK} FC_MONITOR_AUTO_START_COOLDOWN_SECONDS=${MONITOR_AUTO_START_COOLDOWN_SECONDS} bash scripts/monitor_stack_guard.sh' >> ${ROOT}/logs-codex-runs/monitor-guard.cron.log 2>&1
+# [finance-copilot] Monitor guard (api 7779 + LAN proxy 7780, tunnels disabled)
+*/1 * * * * ${BASH_BIN} -lc 'cd ${ROOT} && FC_MONITOR_AUTO_START_STACK=${MONITOR_AUTO_START_STACK} FC_MONITOR_AUTO_START_COOLDOWN_SECONDS=${MONITOR_AUTO_START_COOLDOWN_SECONDS} FC_MONITOR_MANAGE_TUNNEL=0 FC_MONITOR_ENABLE_LAN_PROXY=1 bash scripts/monitor_stack_guard.sh' >> ${ROOT}/logs-codex-runs/monitor-guard.cron.log 2>&1
 
 # [finance-copilot] Runtime logs cleanup (bruit historique + archives)
 17 */4 * * * ${BASH_BIN} -lc 'cd ${ROOT} && bash scripts/cleanup_monitoring_noise.sh' >> ${ROOT}/logs-codex-runs/log-cleanup.log 2>&1

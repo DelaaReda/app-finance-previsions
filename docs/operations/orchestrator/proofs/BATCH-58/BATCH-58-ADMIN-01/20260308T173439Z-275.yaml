@@ -1,0 +1,76 @@
+proof_id: "PRF-BATCH-58-BATCH-58-ADMIN-01-20260308T173439Z-275"
+stream_id: "BATCH-58"
+task_id: "BATCH-58-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-08T17:34:39Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+preconditions:
+  change_plan:
+    - "scope: validate runtime, monitor, and cron truth for the Reda profile task after the BATCH-58 dev chain"
+    - "dependency impact: confirm planner-only scheduling, live listeners, and BATCH-58 visibility in runtime status surfaces"
+    - "risk: runtime gate restarts services and can false-red when doctor is degraded by unrelated cross-batch evidence debt"
+    - "verification: runtime gate plus steady-state doctor, monitor status, and runtime diagnostics extracts"
+    - "rollback: no repo code/config mutation; only existing finance-copilot restart path used"
+  architecture_checks:
+    - "planner_only_scheduler_truth_matches_doctor_and_monitor"
+    - "batch58_runtime_visibility_present_in_queue_and_workboard_views"
+    - "only_task_scope_runtime_faults_should_block_handoff"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "timeout 120s bash scripts/runtime_e2e_gate.sh"
+      rc: "1"
+      started_at_utc: "2026-03-08T17:32:02Z"
+      ended_at_utc: "2026-03-08T17:33:27Z"
+    - cmd: "bash scripts/fc_doctor.sh --json"
+      rc: "1"
+      started_at_utc: "2026-03-08T17:34:13Z"
+      ended_at_utc: "2026-03-08T17:34:13Z"
+    - cmd: "curl -sS --max-time 20 http://127.0.0.1:7779/api/status"
+      rc: "0"
+      started_at_utc: "2026-03-08T17:34:13Z"
+      ended_at_utc: "2026-03-08T17:34:13Z"
+    - cmd: "curl -sS --max-time 20 http://127.0.0.1:7779/api/runtime-diagnostics"
+      rc: "0"
+      started_at_utc: "2026-03-08T17:34:13Z"
+      ended_at_utc: "2026-03-08T17:34:13Z"
+validations:
+  tests:
+    - name: "runtime_gate_post_restart"
+      result: "DEGRADED"
+      evidence: "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T173202Z.json => result=DEGRADED, endpoint_failures=0, quiet_period=PASS, frontend/monitor/backend all HTTP 200, listeners 5173/7779/8050 up; gate log shows stale port 7779 wrapper cleaned before monitor restart"
+    - name: "doctor_steady_state_runtime"
+      result: "PASS"
+      evidence: "bash scripts/fc_doctor.sh --json @ 2026-03-08T17:34:13Z => runtime_state.status=ok, scheduler_authority.status=ok, sessions.expected_core=['planner'], missing_core=[], locks.stale_total=0, providers.status=ok; only remaining degraded check is delivery_integrity due browser-proof debt and non-runtime suspicious completion debt"
+    - name: "monitor_status_batch58_scope"
+      result: "PASS"
+      evidence: "/api/status => health=DEGRADED globally but execution_mode=planner_experimental, core_roles=['planner'], queue.batch58_state=IN_PROGRESS, workboard.in_progress contains BATCH-58-ADMIN-01, queue/workboard mismatch_count=0"
+    - name: "runtime_diagnostics_scope"
+      result: "PASS"
+      evidence: "/api/runtime-diagnostics => data_freshness_s=11, planner_policy_enforced=true, admin_autonomy_active=false; top findings are VM_RESUME_LONG_GAP, DEV_STALL_LOOP, and historical permission noise; planner_blocker_id=PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW is unrelated to Reda runtime"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-58/BATCH-58-ADMIN-01/20260308T173439Z-275.yaml"
+    - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T173202Z.json"
+    - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T173202Z.log"
+handoff:
+  to_role: "planner"
+  handoff_id: "none"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-58-ADMIN-01"
+  review_ref: "primary_structured:BATCH-58-ADMIN-01"
+  note: "source=admin_runtime_validation | root_cause=Task-scope runtime is healthy after the BATCH-58 dev chain; the global DEGRADED signal comes from non-runtime delivery_integrity debt (missing browser proof coverage for recent DEV tasks including BATCH-58-DEV-01/02/03) plus an unrelated planner GOV_REVIEW blocker, not from API, monitor, cron, locks, or the Reda profile runtime path. | fix_applied=SKIP(no repo code/config change). Reused the existing runtime gate restart path, which auto-cleaned a stale monitor listener on port 7779 and revalidated the steady-state surfaces. | architecture_check=runtime/monitor/cron surfaces only; no imports or config changed; planner-only scheduling truth matches doctor and monitor. | vision_alignment=batch=BATCH-58; target=Reda non-expert personal-investing profile runtime and observability after DEV-03; impact=planner has explicit unblock evidence for ADMIN-01 while unrelated proof-governance debt can be routed separately."

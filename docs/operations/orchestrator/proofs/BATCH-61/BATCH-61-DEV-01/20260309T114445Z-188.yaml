@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-61-BATCH-61-DEV-01-20260309T114445Z-188"
+stream_id: "BATCH-61"
+task_id: "BATCH-61-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-09T11:44:45Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T11:44:45Z"
+      ended_at_utc: "2026-03-09T11:44:45Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest -q apps/api/src/domains/copilot/tests/test_copilot_domain_router.py"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "endpoint=/api/copilot/start; code=apps/api/src/domains/copilot/api/copilot.py; tests=apps/api/src/domains/copilot/tests/test_copilot_domain_router.py; commit=07714334c90d814daa5f0be44a18edaec2ea6f22"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-61-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-61-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The copilot starter experience only existed as nested data inside `/api/copilot/context`, so the app had no thin, dedicated endpoint for the brief-first entry screen to consume directly. | fix_applied=Added `GET /copilot/start` in `apps/api/src/domains/copilot/api/copilot.py`, reusing `build_context_payload`, `_build_copilot_start_payload`, and existing daily-brief/entry-point helpers. The route normalizes scope ticke | verify=before=no dedicated `/api/copilot/start` contract for the brief-first launcher; after=`GET /api/copilot/start` returns `brief_of_day` + `ask` + `open` + metadata and fallback note/scope handling; test=`pytest -q apps/api | architecture_check=layer=api route orchestrator reusing existing copilot application services; imports_ok=yes (ContextService + domains.copilot.application.copilot_service reuse, no new cross-domain provider wiring); path_target=apps/api/s | vision_alignment=batch=BATCH-61; target=personal finance copilot entry point that starts with the brief of the day and immediately offers ask/open actions; impact=frontend now has a single starter endpoint to wire the day-brief launcher"

@@ -1,0 +1,89 @@
+proof_id: "PRF-BATCH-15-DEV-02-20260310T001500Z-941"
+stream_id: "BATCH-15"
+task_id: "BATCH-15-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-10T00:15:00Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  dev_01_proof_ref: "docs/operations/orchestrator/proofs/BATCH-15/BATCH-15-DEV-01/20260310T000423Z-940.yaml"
+preconditions:
+  change_plan:
+    - "scope strategy playbooks engine [dev-02] frontend integration minimal patch"
+    - "reuse existing widgets (apps/web/src/domains/forecasts/components/widgets/*)"
+    - "reuse shared UI wiring (apps/web/src/platform)"
+    - "dependency impact on downstream tasks (DEV-03)"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+  architecture_checks:
+    - "service_boundaries_for_strategy_playbooks_engine_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "node --check apps/web/src/domains/forecasts/contracts/apiConnector.js"
+      rc: "0"
+      started_at_utc: "2026-03-10T00:10:00Z"
+      ended_at_utc: "2026-03-10T00:10:01Z"
+    - cmd: "node --check apps/web/src/domains/forecasts/pages/app.js"
+      rc: "0"
+      started_at_utc: "2026-03-10T00:10:02Z"
+      ended_at_utc: "2026-03-10T00:10:03Z"
+    - cmd: "node --test apps/web/src/domains/forecasts/tests/test-strategy-playbooks-widget.js"
+      rc: "0"
+      started_at_utc: "2026-03-10T00:11:00Z"
+      ended_at_utc: "2026-03-10T00:11:02Z"
+    - cmd: "PYTHONPATH=. pytest -q domains/copilot/tests/test_playbook_resolver.py"
+      rc: "0"
+      started_at_utc: "2026-03-10T00:12:00Z"
+      ended_at_utc: "2026-03-10T00:12:15Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: |
+        PASS: `node --check apps/web/src/domains/forecasts/contracts/apiConnector.js`
+        PASS: `node --check apps/web/src/domains/forecasts/pages/app.js`
+        PASS: `node --test apps/web/src/domains/forecasts/tests/test-strategy-playbooks-widget.js` (6/6 tests)
+        PASS: `PYTHONPATH=. pytest -q domains/copilot/tests/test_playbook_resolver.py` (16 tests)
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/web/src/domains/forecasts/components/widgets/strategy-playbooks.html"
+    - "apps/web/src/domains/forecasts/contracts/apiConnector.js"
+    - "apps/web/src/domains/forecasts/pages/app.js"
+    - "apps/web/src/domains/forecasts/tests/test-strategy-playbooks-widget.js"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-15-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-15-DEV-02"
+  note: |
+    source=planner_subagent_manager | 
+    root_cause=BATCH-15-DEV-01 implemented backend /api/judge/strategy-playbooks endpoint but frontend had no widget or copilot integration to display playbook_id recommendations. Task E15.2 (Playbook aware recommendation generation) and B15-T2 (frontend: playbook selector in copilot UI) required delivery.
+    
+    fix_applied=
+    1. Added getStrategyPlaybooks to window.FinanceAPI in apiConnector.js for fetching playbooks from backend
+    2. Created strategy-playbooks.html widget reusing existing widget patterns (kpi-cards-pro.html, quick-actions.html design tokens)
+    3. Wired playbook_id into buildCopilotJudgePayload and buildCopilotChatResponseHtml in app.js to display playbook traceability in copilot chat
+    4. Widget auto-loads playbooks on DOM ready and refreshes every 2 minutes
+    5. Widget displays decision (go/no_go/hold), confidence, expected return, risk level, and conflict warnings
+    
+    verify=
+    before=Frontend had no strategy playbooks widget; copilot responses showed no playbook_id; acceptance criteria E15.2 not met
+    after=Widget displays 5 playbooks with full metrics; copilot chat shows playbook_id when available; all 16 backend tests + 6 widget tests pass
+    architecture_check=layer=frontend widget + api connector; imports_ok=yes (reuses existing FinanceAPI pattern, design tokens from platform/style.css, no new dependencies); path_target=apps/web/src/domains/forecasts/components/widgets/strategy-playbooks.html,apps/web/src/domains/forecasts/contracts/apiConnector.js,apps/web/src/domains/forecasts/pages/app.js
+    vision_alignment=batch=BATCH-15; target=Strategy Playbooks Engine frontend integration; impact=Recommendations now include visible playbook_id for traceability, conflict warnings displayed when signal diverges from playbook guidance, widget ready for DEV-03 integration

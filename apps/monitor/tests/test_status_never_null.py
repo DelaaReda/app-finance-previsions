@@ -102,6 +102,14 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
             self.assertIn(field, payload["agent_messages"])
         self.assertIn("open_by_role", payload["agent_messages"])
         self.assertIn("latest_action_status_by_role", payload["agent_messages"])
+        self.assertIn("agent_activity", payload)
+        self.assertIsInstance(payload["agent_activity"], dict)
+        self.assertIn("roles", payload["agent_activity"])
+        self.assertIn("active_helper_count", payload["agent_activity"])
+        self.assertIn("monitor_access", payload)
+        self.assertIsInstance(payload["monitor_access"], dict)
+        for field in ("mode", "canonical_ui_url", "canonical_status_url", "vm_local_ui_url", "vm_local_status_url", "state_file"):
+            self.assertIn(field, payload["monitor_access"])
         self.assertIn("delivery_control", payload)
         self.assertIsInstance(payload["delivery_control"], dict)
         for field in ("status", "integrity_status", "future_status", "needs_proof_backfill", "suspicious_completions", "pipeline_counts"):
@@ -113,6 +121,10 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
             self.assertIsInstance(agents[role], dict)
             for field in ("status", "verdict", "blocker", "tick_age_min", "source"):
                 self.assertIn(field, agents[role])
+            self.assertIn(role, payload["agent_activity"]["roles"])
+            self.assertIsInstance(payload["agent_activity"]["roles"][role], dict)
+            for field in ("action_summary", "current_task_id", "recent_events", "active_helpers"):
+                self.assertIn(field, payload["agent_activity"]["roles"][role])
             self.assertIn("pending_messages_count", agents[role])
             self.assertIn("last_message_id", agents[role])
             self.assertIn("last_message_action_status", agents[role])
@@ -127,6 +139,14 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
 
         # With no runtime snapshots/ticks available, monitor must not claim OK.
         self.assertEqual(payload.get("health"), "DEGRADED")
+
+        lite_payload = self.module.status(lite=1)
+        self.assertIsInstance(lite_payload, dict)
+        self.assertIn("layers", lite_payload)
+        self.assertEqual(lite_payload["layers"].get("service"), "status_service.v1")
+        self.assertTrue(lite_payload["layers"].get("collectors_omitted"))
+        self.assertEqual(lite_payload["layers"].get("mode"), "lite")
+        self.assertNotIn("collectors", lite_payload["layers"])
 
     def test_runtime_diagnostics_keeps_agents_non_null(self) -> None:
         payload = self.module.runtime_diagnostics()

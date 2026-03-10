@@ -1,0 +1,16 @@
+{
+  "worker_id": "worker_qa_review_worker_0594364dcc",
+  "worker_type": "qa_review_worker",
+  "owner_task_id": "BATCH-13-DEV-01",
+  "parent_role": "planner",
+  "result_kind": "qa_fix_result",
+  "status": "completed",
+  "summary": "I\u2019ll validate the delivered slice by reviewing only the judgment-domain endpoint/service files tied to the feedback-loop change, then run the narrowest tests already specified for this scope to confirm behavior and produ",
+  "artifact": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_0594364dcc.raw.json",
+  "verify": "proof=worker_backend:openclaw; rc=0",
+  "raw_output_ref": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_0594364dcc.raw.json",
+  "backend": "openclaw",
+  "backend_ref": "worker_qa_review_worker_0594364dcc",
+  "started_at": "2026-03-09T12:27:20Z",
+  "finished_at": "2026-03-09T12:27:50Z"
+}

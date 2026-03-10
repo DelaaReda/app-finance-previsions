@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-58-BATCH-58-DEV-01-20260308T052234Z-960"
+stream_id: "BATCH-58"
+task_id: "BATCH-58-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-08T05:22:34Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope **profil:** reda (venom) — professionnel non-expert en finance qui gère ses investissements pers [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_**profil:**_reda_(venom)_—_professionnel_non-expert_en_finance_qui_gère_ses_investissements_pers_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-08T05:22:34Z"
+      ended_at_utc: "2026-03-08T05:22:34Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['pytest repo/apps/api/src/domains/judge/tests/test_judge_profile_loading.py -> PASS (1 passed in 0.47s)']"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Committed persona slice for `profile=reda_personal_investing` (1m, balanced, non-expert/personal-investing prompt, core diversified tickers: SPY/QQQ/DIA/IWM/AAPL/MSFT/JNJ/WMT/GLD) backed by canonical runtime-data path re"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-58-DEV-01"
+  review_ref: "primary_structured:BATCH-58-DEV-01"
+  note: "source=primary_structured | root_cause=`load_profile()` resolved profiles through cwd-relative `data/judge_profiles/{name}.yaml`, which is brittle outside the repo root; there was also no existing Judge profile tailored to the Reda personal-investing persona. | fix_applied=Introduced `_resolve_profile_path()` in `apps/api/src/domains/judge/application/judge_pipeline.py` to prefer canonical `apps/api/runtime/data/judge_profiles` with cwd fallback, added `apps/api/runtime/data/judge_profiles | verify=before=`load_profile()` depended on the caller cwd and the Reda persona profile did not exist; after=`load_profile(\"reda_personal_investing\")` resolves from canonical runtime data even when cwd is a temp directory; test= | architecture_check=layer=domain application + runtime data only; imports_ok=yes (no new cross-layer dependency, reused existing Judge pipeline/YAML loading); path_target=apps/api/src/domains/judge/application/judge_pipeline.py -> apps/api/ | vision_alignment=batch=BATCH-58; target=Reda (venom) persona for a non-expert personal-investing workflow using the existing Judge endpoint stack; impact=adds a concrete reusable profile slice without widening the API surface or refactor"

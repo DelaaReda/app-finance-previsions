@@ -1,0 +1,45 @@
+proof_id: "PRF-BATCH-14-BATCH-14-ADMIN-01-20260309T231300Z-901"
+stream_id: "BATCH-14"
+task_id: "BATCH-14-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-09T23:13:00Z"
+stream_intent: "Finalisation Core v2: Robustness Drills + GO/NO-GO runtime truth"
+status: "PASS_WITH_WARNING"
+summary:
+  runtime_truth: "monitor stack reachable, backend/frontend healthy, planner-only orchestration active"
+  observability: "contract checks pass, health snapshots and issue publication continuity OK"
+  cron_runtime: "planner-only mode validated; no stale role locks"
+executions:
+  - cmd: "bash scripts/runtime_host_check.sh"
+    rc: 0
+    result: "vm runtime detected"
+  - cmd: "bash scripts/watch_codex_runtime.sh --once"
+    rc: 0
+    result: "planner session active; loop cron states disabled under planner-only architecture"
+  - cmd: "bash scripts/stale_cron_sweep.sh --dry-run"
+    rc: 0
+    result: "matched=0 stale=0"
+  - cmd: "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 --timeout 16"
+    rc: 0
+    result: "PASS health=OK roles=1 agents=4 queue_states=4 workboard_ready=0 admin_timeouts_recent=0 issues_records=2"
+  - cmd: "bash scripts/fc_health_check.sh"
+    rc: 0
+    result: "monitor contract, issue reporting, stale lock, and issue publication checks passed"
+  - cmd: "bash scripts/runtime_gate.sh"
+    rc: 1
+    result: "DEGRADED due /api/status 4s timeout threshold; full status endpoint still returns HTTP 200"
+artifacts:
+  - evidence/runtime-gates/runtime-gate-20260309T230236Z.json
+  - docs/operations/orchestrator/proofs/BATCH-14/BATCH-14-ADMIN-01/20260309T231300Z-admin-runtime-proof.json
+notes:
+  warnings:
+    - "fc_health_check raised advisory warnings: rate limit hits today=153 and unknown role model token (gpt-5.4) in effective config"
+    - "/api/status payload is large (~12MB); short timeout paths should prefer /api/status?lite=1"
+decision:
+  task_runtime_unblock: true
+  planner_mergeable: true
+  admin_fix_needed: false
+  remaining_blocker: "none"
+architecture_check: "PASS"
+vision_alignment: "PASS"
+commit_sha: "none"

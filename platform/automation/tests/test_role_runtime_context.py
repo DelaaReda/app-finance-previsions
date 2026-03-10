@@ -266,6 +266,10 @@ class RoleRuntimeContextTests(unittest.TestCase):
             'python3 platform/automation/parallel_workstream.py planner-autobatch --queue docs/operations/orchestrator/priority-queue.json --reason idle_no_ready',
             text,
         )
+        self.assertIn(
+            'python3 platform/automation/parallel_workstream.py complete --role planner --task <task_id>',
+            text,
+        )
         self.assertIn("PLANNER_AUTOBATCH_ATTEMPTED", text)
         self.assertIn("PLANNER_AUTOBATCH_RC", text)
         self.assertIn("PLANNER_AUTOBATCH_BATCH_ID", text)
@@ -276,6 +280,10 @@ class RoleRuntimeContextTests(unittest.TestCase):
         self.assertIn("PLANNER_SYNC_PRIORITY_ATTEMPTED", text)
         self.assertIn("PLANNER_SYNC_PRIORITY_STREAMS_CREATED", text)
         self.assertIn("PLANNER_SYNC_PRIORITY_TASKS_CREATED", text)
+        self.assertIn(
+            "priority-queue.json reste utilisé uniquement pour sync-priority et planner-autobatch",
+            text,
+        )
 
     def test_runner_contains_planner_anti_passivity_reconcile_logic(self) -> None:
         text = RUNNER_SCRIPT.read_text(encoding="utf-8", errors="ignore")

@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-12-BATCH-12-DEV-01-20260309T101102Z-633"
+stream_id: "BATCH-12"
+task_id: "BATCH-12-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-09T10:11:02Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope portfolio state + risk profile core [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_portfolio_state_+_risk_profile_core_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T10:11:02Z"
+      ended_at_utc: "2026-03-09T10:11:02Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "FAIL"
+      evidence: "['before: pytest -q repo/apps/api/src/domains/market_data/tests/test_portfolio_risk_profile_contract.py -k \"validate_profile_metadata or returns_stable_contract\" -> FAIL (2 failed)', 'after: pytest -q repo/apps/api/src/d"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "{'commit': '26a3cd0e3a6eb26569eb2212bc738f38f7c96c5e', 'evidence': 'Validated metadata fields: `weights|position_weights`, `horizon`, `conviction`, `risk_tolerance`. Existing risk-profile contract now returns `portfolio."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-12-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-12-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=Portfolio metadata was persisted as an untyped `Dict[str, Any]`, so create/update accepted arbitrary profile payloads and the risk-profile response dropped saved horizon/conviction/risk_tolerance context. | fix_applied=Added typed `PortfolioMetadata`/`PortfolioMetadataInput` handling in the existing portfolio service, enforced strict API validation for metadata on create/update, sanitized stored metadata on load/save, and added `portfo | verify=before=pytest -q repo/apps/api/src/domains/market_data/tests/test_portfolio_risk_profile_contract.py -k \"validate_profile_metadata or returns_stable_contract\" failed with 2 assertions (metadata normalization absent; port | architecture_check=layer=apps/api/src/domains/market_data route/request validation -> portfolio service metadata coercion -> existing endpoint service response; imports_ok=yes (reused existing market_data and endpoint-service boundaries, n | vision_alignment=batch=BATCH-12; target=portfolio_state_risk_profile_core; impact=portfolio profile state is now validated at the persistence boundary and available to downstream decision consumers through the existing risk-profile contr"

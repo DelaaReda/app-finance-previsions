@@ -88,6 +88,11 @@ Primary checks:
 - `bash scripts/fc_doctor.sh --json`
 - planner contracts and planner subagent registry/events
 
+Access policy:
+- VM-local monitor: `http://127.0.0.1:7779/`
+- host-facing monitor: `http://192.168.64.9:7780/`
+- public tunnels are disabled by default and are not reliability primitives
+
 Canonical orchestrator sources:
 - `docs/operations/orchestrator/priority-queue.json`
 - `docs/operations/orchestrator/parallel-workstreams.json`
@@ -107,7 +112,9 @@ Canonical orchestrator sources:
 ```bash
 bash scripts/fc_setup_crons.sh --profile planner-experimental
 bash scripts/fc_doctor.sh --json
-curl -s http://127.0.0.1:7779/api/status | jq '{health,execution_mode,core_roles}'
+cat logs-codex-runs/monitor-lan-url.txt
+curl -s http://127.0.0.1:7779/api/status?lite=1 | jq '{health,execution_mode,core_roles}'
+curl -s http://192.168.64.9:7780/api/status?lite=1 | jq '{health,execution_mode,core_roles}'
 python3 -m pytest -q \
   platform/automation/tests/test_state_reconciler.py \
   platform/automation/tests/test_delivery_value_gate.py \

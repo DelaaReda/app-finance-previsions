@@ -95,11 +95,114 @@ def _planner_orchestrator_flags(root: Path) -> tuple[bool, bool]:
     return enabled, cron_planner_only
 
 
-def _expected_core_roles(root: Path) -> tuple[str, ...]:
+ROLE_MAP_FILE = Path("docs/orchestrator-ops/parallel-role-cron-map.json")
+BASELINE_ADMIN_JOBS = (
+    "adminapp-codex-sync-10m",
+    "admin-agents-supervisor-15m",
+)
+BASELINE_UTILITY_JOBS = (
+    "stale-sweep-autoheal-7m",
+    "dg-alert-15m",
+)
+BASELINE_ADVISORY_JOBS = (
+    "po-scrum-master-advisory-5m",
+    "po_scrum_master-advisory-5m",
+    "scrum-master-operational-5m",
+    "scrum_master-operational-5m",
+)
+
+
+def _planner_only_mode(root: Path) -> bool:
+    state = load_runtime_state(root)
+    execution_mode = str(state.get("execution_mode", "") or "").strip()
+    operator_mode = str(state.get("operator_mode", "") or "").strip()
+    if execution_mode == "planner_experimental":
+        return True
+    if operator_mode == "planner-only":
+        return True
     enabled, cron_planner_only = _planner_orchestrator_flags(root)
-    if enabled and cron_planner_only:
+    return enabled and cron_planner_only
+
+
+def _expected_core_roles(root: Path) -> tuple[str, ...]:
+    if _planner_only_mode(root):
         return ("planner",)
     return ("planner", "dev", "admin")
+
+
+def _expected_tmux_sessions(root: Path) -> list[str]:
+    return [f"codex_{role}_cron" for role in _expected_core_roles(root)]
+
+
+def _quarantine_job_names(root: Path) -> list[str]:
+    names: list[str] = []
+    role_map = _read_json(root / ROLE_MAP_FILE)
+    if isinstance(role_map, dict):
+        for row in role_map.get("roles", []):
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("name") or row.get("role") or "").strip()
+            if name:
+                names.append(name)
+    if not names:
+        names.extend(
+            [
+                "planner-tmux-loop",
+                "analyst-tmux-loop",
+                "architect-tmux-loop",
+                "backend-engineer-tmux-loop",
+                "frontend-engineer-tmux-loop",
+                "data-analyst-tmux-loop",
+                "infra-engineer-tmux-loop",
+                "integrator-tmux-loop",
+                "dev-tmux-loop",
+                "tester-tmux-loop",
+                "qa-tmux-loop",
+                "clawsentinel",
+            ]
+        )
+    names.extend(BASELINE_ADMIN_JOBS)
+    names.extend(BASELINE_UTILITY_JOBS)
+    names.extend(BASELINE_ADVISORY_JOBS)
+    return list(dict.fromkeys(name for name in names if name))
+
+
+def _openclaw_cron_jobs() -> list[dict[str, Any]]:
+    for cmd in (
+        ["openclaw", "cron", "list", "--all", "--json"],
+        ["openclaw", "cron", "list", "--json"],
+    ):
+        try:
+            cp = subprocess.run(cmd, text=True, capture_output=True, check=False, timeout=5)
+        except Exception:
+            continue
+        if cp.returncode != 0:
+            continue
+        try:
+            payload = json.loads(cp.stdout or "{}")
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            jobs = payload.get("jobs", [])
+            if isinstance(jobs, list):
+                return [job for job in jobs if isinstance(job, dict)]
+        if isinstance(payload, list):
+            return [job for job in payload if isinstance(job, dict)]
+    return []
+
+
+def _quarantined_jobs(root: Path) -> list[str]:
+    if not _planner_only_mode(root):
+        return []
+    expected_names = set(_quarantine_job_names(root))
+    out: list[str] = []
+    for job in _openclaw_cron_jobs():
+        name = str(job.get("name", "") or "").strip()
+        if not name or name not in expected_names:
+            continue
+        if not bool(job.get("enabled", False)):
+            out.append(name)
+    return sorted(set(out))
 
 
 def _runtime_state_detail(root: Path) -> dict[str, Any]:
@@ -344,6 +447,10 @@ def check_sessions(root: Path) -> CheckResult:
         rc = 2
         err = str(exc)
     expected = _expected_core_roles(root)
+    expected_sessions = _expected_tmux_sessions(root)
+    expected_session_set = set(expected_sessions)
+    orphans = [name for name in sessions if name.startswith("codex_") and name not in expected_session_set]
+    quarantined_jobs = _quarantined_jobs(root)
     probe_blocked = _probe_blocked_message(err)
     if probe_blocked and not runtime_paused:
         tick_fallback = {role: _read_recent_tick(root, role) for role in expected}
@@ -364,10 +471,15 @@ def check_sessions(root: Path) -> CheckResult:
             detail={
                 "rc": rc,
                 "sessions": sessions[:60],
+                "expected": expected_sessions,
+                "expected_sessions": expected_sessions,
                 "expected_core": list(expected),
                 "missing_core": missing,
                 "missing_core_raw": list(expected),
                 "found_core": found_by_role,
+                "orphans": orphans[:60],
+                "quarantined_jobs": quarantined_jobs[:60],
+                "scheduler_inventory_mode": "quarantine" if _planner_only_mode(root) else "legacy_compatible",
                 "execution_mode": "planner_experimental" if expected == ("planner",) else "parallel_roles",
                 "runtime_lifecycle": runtime_state.get("lifecycle", "running"),
                 "advisory_optional": "scrum_master",
@@ -389,16 +501,23 @@ def check_sessions(root: Path) -> CheckResult:
     raw_missing = list(missing)
     if runtime_paused:
         missing = []
+    matched_sessions = set(found_by_role.values())
+    orphans = [name for name in sessions if name not in matched_sessions and name not in expected_session_set]
     status = "ok" if (runtime_paused or (rc == 0 and not missing)) else "degraded"
     return CheckResult(
         status=status,
         detail={
             "rc": rc,
             "sessions": sessions[:60],
+            "expected": expected_sessions,
+            "expected_sessions": expected_sessions,
             "expected_core": list(expected),
             "missing_core": missing,
             "missing_core_raw": raw_missing,
             "found_core": found_by_role,
+            "orphans": orphans[:60],
+            "quarantined_jobs": quarantined_jobs[:60],
+            "scheduler_inventory_mode": "quarantine" if _planner_only_mode(root) else "legacy_compatible",
             "execution_mode": "planner_experimental" if expected == ("planner",) else "parallel_roles",
             "runtime_lifecycle": runtime_state.get("lifecycle", "running"),
             "advisory_optional": "scrum_master",

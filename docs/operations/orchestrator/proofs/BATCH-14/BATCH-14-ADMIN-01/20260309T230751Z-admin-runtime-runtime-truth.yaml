@@ -1,0 +1,7 @@
+proof_id: "PRF-BATCH-14-20260309T230751Z-admin-runtime-runtime-truth"
+stream_id: "BATCH-14"
+task_id: "BATCH-14-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-09T23:08:58Z"
+status: "CHECK_COMPLETED"
+evidence_file: "docs/operations/orchestrator/proofs/BATCH-14/BATCH-14-ADMIN-01/20260309T230751Z-admin-runtime-runtime-truth.jsonl"

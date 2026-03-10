@@ -16,28 +16,30 @@ LOG_DIR="${FC_MONITOR_LOG_DIR:-$ROOT/logs-codex-runs}"
 GUARD_LOG="${LOG_DIR}/monitor-guard.log"
 LOCK_FILE="${FC_MONITOR_GUARD_LOCK_FILE:-/tmp/fc-monitor-guard.v2.lock}"
 LOCK_DIR_FALLBACK=""
-LOCAL_URL="${FC_MONITOR_LOCAL_URL:-http://127.0.0.1:7779/api/status}"
+MONITOR_APP_SCRIPT="${FC_MONITOR_APP_SCRIPT:-$ROOT/scripts/monitor_server.py}"
+MONITOR_LAN_PROXY_SCRIPT="${FC_MONITOR_LAN_PROXY_SCRIPT:-$ROOT/scripts/monitor_lan_proxy.py}"
+LOCAL_URL="${FC_MONITOR_LOCAL_URL:-http://127.0.0.1:7779/api/monitor/access}"
 LOCAL_DIAG_URL="${FC_MONITOR_LOCAL_DIAG_URL:-http://127.0.0.1:7779/api/runtime-diagnostics}"
-PUBLIC_URL="${FC_MONITOR_PUBLIC_URL:-https://fc-monitor.loca.lt/api/status}"
+LAN_PROXY_HOST="${FC_MONITOR_LAN_HOST:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
+LAN_PROXY_PORT="${FC_MONITOR_LAN_PORT:-7780}"
+LAN_PROXY_TARGET_HOST="${FC_MONITOR_LAN_TARGET_HOST:-127.0.0.1}"
+LAN_PROXY_TARGET_PORT="${FC_MONITOR_LAN_TARGET_PORT:-7779}"
+LAN_URL_STATE_FILE="${FC_MONITOR_LAN_URL_STATE_FILE:-${LOG_DIR}/monitor-lan-url.txt}"
+PUBLIC_URL="${FC_MONITOR_PUBLIC_URL:-https://fc-monitor.loca.lt/api/status?lite=1}"
 PUBLIC_HEADER_KEY="${FC_MONITOR_PUBLIC_HEADER_KEY:-bypass-tunnel-reminder}"
 PUBLIC_HEADER_VALUE="${FC_MONITOR_PUBLIC_HEADER_VALUE:-1}"
 PUBLIC_URL_STATE_FILE="${FC_MONITOR_PUBLIC_URL_STATE_FILE:-${LOG_DIR}/monitor-public-url.txt}"
+TUNNEL_PROVIDER_STATE_FILE="${FC_MONITOR_TUNNEL_PROVIDER_STATE_FILE:-${LOG_DIR}/monitor-public-provider.txt}"
 PUBLIC_FAILURE_STATE_FILE="${FC_MONITOR_PUBLIC_FAILURE_STATE_FILE:-${LOG_DIR}/monitor-public-fail-streak.txt}"
 PUBLIC_FAILURE_THRESHOLD="${FC_MONITOR_PUBLIC_FAILURE_THRESHOLD:-2}"
 LT_SUBDOMAIN="${FC_MONITOR_LT_SUBDOMAIN:-fc-monitor}"
 LT_HOST="${FC_MONITOR_LT_HOST:-https://loca.lt}"
 LT_PORT="${FC_MONITOR_LT_PORT:-7779}"
-if [[ "$ROOT" == /Users/* ]]; then
-  MANAGE_TUNNEL="${FC_MONITOR_MANAGE_TUNNEL:-0}"
-else
-  MANAGE_TUNNEL="${FC_MONITOR_MANAGE_TUNNEL:-1}"
-fi
-if [[ "$ROOT" == /Users/* ]]; then
-  # Host-side troubleshooting runs should not re-own the VM public tunnel.
-  ENFORCE_PUBLIC_ROOT_MATCH="${FC_MONITOR_ENFORCE_PUBLIC_ROOT_MATCH:-0}"
-else
-  ENFORCE_PUBLIC_ROOT_MATCH="${FC_MONITOR_ENFORCE_PUBLIC_ROOT_MATCH:-1}"
-fi
+LOCALHOST_RUN_DEST="${FC_MONITOR_LOCALHOST_RUN_DEST:-nokey@localhost.run}"
+TUNNEL_PROVIDERS="${FC_MONITOR_TUNNEL_PROVIDERS:-localtunnel,localhost_run}"
+MANAGE_TUNNEL="${FC_MONITOR_MANAGE_TUNNEL:-0}"
+ENFORCE_PUBLIC_ROOT_MATCH="${FC_MONITOR_ENFORCE_PUBLIC_ROOT_MATCH:-0}"
+ENABLE_LAN_PROXY="${FC_MONITOR_ENABLE_LAN_PROXY:-1}"
 if [[ "$ROOT" == /Users/* ]]; then
   FC_MONITOR_AUTO_START_STACK="${FC_MONITOR_AUTO_START_STACK:-0}"
 else
@@ -58,6 +60,26 @@ log() {
   printf '%s [monitor-guard] %s\n' "$(ts)" "$*" >> "$GUARD_LOG"
 }
 
+current_lan_url() {
+  if [[ -n "${LAN_PROXY_HOST:-}" ]]; then
+    printf 'http://%s:%s/\n' "$LAN_PROXY_HOST" "$LAN_PROXY_PORT"
+    return 0
+  fi
+  printf 'http://127.0.0.1:%s/\n' "$LAN_PROXY_PORT"
+}
+
+current_lan_status_url() {
+  if [[ -n "${LAN_PROXY_HOST:-}" ]]; then
+    printf 'http://%s:%s/api/monitor/access\n' "$LAN_PROXY_HOST" "$LAN_PROXY_PORT"
+    return 0
+  fi
+  printf 'http://127.0.0.1:%s/api/monitor/access\n' "$LAN_PROXY_PORT"
+}
+
+write_lan_url_state() {
+  printf '%s\n' "$(current_lan_url)" > "$LAN_URL_STATE_FILE"
+}
+
 current_public_url() {
   local from_state=""
   if [[ -f "$PUBLIC_URL_STATE_FILE" ]]; then
@@ -74,6 +96,24 @@ write_public_url_state() {
   local url="${1:-}"
   [[ -n "$url" ]] || return 0
   printf '%s\n' "$url" > "$PUBLIC_URL_STATE_FILE"
+}
+
+current_tunnel_provider() {
+  local provider=""
+  if [[ -f "$TUNNEL_PROVIDER_STATE_FILE" ]]; then
+    provider="$(head -n 1 "$TUNNEL_PROVIDER_STATE_FILE" 2>/dev/null | tr -d '\r' | sed 's/^ *//; s/ *$//')"
+  fi
+  if [[ -n "$provider" ]]; then
+    printf '%s\n' "$provider"
+    return 0
+  fi
+  printf 'localtunnel\n'
+}
+
+write_tunnel_provider_state() {
+  local provider="${1:-}"
+  [[ -n "$provider" ]] || return 0
+  printf '%s\n' "$provider" > "$TUNNEL_PROVIDER_STATE_FILE"
 }
 
 read_public_fail_streak() {
@@ -180,22 +220,76 @@ public_queue_source() {
 
 public_matches_root() {
   local src=""
+  local src_real=""
+  local root_real=""
   src="$(public_queue_source)"
-  [[ -n "$src" ]] && [[ "$src" == "$ROOT"* ]]
+  [[ -n "$src" ]] || return 1
+  src_real="$(readlink -f "$src" 2>/dev/null || printf '%s\n' "$src")"
+  root_real="$(readlink -f "$ROOT" 2>/dev/null || printf '%s\n' "$ROOT")"
+  [[ "$src" == "$ROOT"* ]] || [[ "$src_real" == "$root_real"* ]]
 }
 
 start_monitor_server() {
   (
     exec 9>&-
-    nohup env FC_MONITOR_ROOT="$ROOT" python3 scripts/monitor_server.py >> "${LOG_DIR}/monitor-server.log" 2>&1 < /dev/null &
+    nohup env FC_MONITOR_ROOT="$ROOT" python3 "$MONITOR_APP_SCRIPT" >> "${LOG_DIR}/monitor-server.log" 2>&1 < /dev/null &
   )
-  sleep 2
+  local _i=0
+  while [[ "$_i" -lt 12 ]]; do
+    if is_local_up; then
+      return 0
+    fi
+    sleep 1
+    _i=$((_i + 1))
+  done
+  return 1
 }
 
 restart_monitor_server() {
   pkill -f 'scripts/monitor_server.py|apps/monitor/server.py' >/dev/null 2>&1 || true
-  sleep 1
+  sleep 2
   start_monitor_server
+}
+
+lan_proxy_running() {
+  ss -ltn 2>/dev/null | awk -v host="${LAN_PROXY_HOST}" -v port="${LAN_PROXY_PORT}" '
+    $4 == (host ":" port) { found=1 }
+    END { exit(found ? 0 : 1) }
+  '
+}
+
+is_lan_up() {
+  curl -fsS -m 5 -o /dev/null "$(current_lan_status_url)" >/dev/null 2>&1
+}
+
+start_lan_proxy() {
+  if [[ "$ENABLE_LAN_PROXY" != "1" ]]; then
+    return 0
+  fi
+  if [[ -z "${LAN_PROXY_HOST:-}" ]] || [[ ! -f "$MONITOR_LAN_PROXY_SCRIPT" ]]; then
+    log "lan proxy skipped host=${LAN_PROXY_HOST:-none} script_present=$( [[ -f "$MONITOR_LAN_PROXY_SCRIPT" ]] && echo 1 || echo 0 )"
+    return 0
+  fi
+  (
+    exec 9>&-
+    setsid python3 "$MONITOR_LAN_PROXY_SCRIPT" \
+      --listen-host "$LAN_PROXY_HOST" \
+      --listen-port "$LAN_PROXY_PORT" \
+      --target-host "$LAN_PROXY_TARGET_HOST" \
+      --target-port "$LAN_PROXY_TARGET_PORT" >> "${LOG_DIR}/monitor-lan-proxy.log" 2>&1 < /dev/null &
+  )
+  sleep 1
+  write_lan_url_state
+}
+
+stop_lan_proxy() {
+  pkill -f 'monitor_lan_proxy.py' >/dev/null 2>&1 || true
+}
+
+restart_lan_proxy() {
+  stop_lan_proxy
+  sleep 1
+  start_lan_proxy
 }
 
 auto_start_stack_if_needed() {
@@ -242,13 +336,13 @@ auto_start_stack_if_needed() {
   fi
 }
 
-start_tunnel() {
+start_localtunnel() {
   local mode="${1:-host}"
   local -a cmd=(npx --yes localtunnel --port "${LT_PORT}" --local-host 127.0.0.1)
   if [[ "$mode" == "host" ]]; then
     cmd+=(--subdomain "${LT_SUBDOMAIN}")
   fi
-  if [[ "$mode" == "host" && -n "$LT_HOST" ]]; then
+  if [[ -n "$LT_HOST" ]]; then
     cmd+=(--host "$LT_HOST")
   fi
 
@@ -271,7 +365,7 @@ start_tunnel() {
   from_new="$(tail -n +"$((before_lines + 1))" "${LOG_DIR}/monitor-tunnel.log" 2>/dev/null | rg -o 'https://[a-z0-9-]+\.loca\.lt' | tail -n 1 || true)"
   if [[ -n "$from_new" ]]; then
     discovered_url="$from_new"
-  else
+  elif [[ "$mode" == "host" ]]; then
     discovered_url="$(tail -n 40 "${LOG_DIR}/monitor-tunnel.log" 2>/dev/null | rg -o 'https://[a-z0-9-]+\.loca\.lt' | tail -n 1 || true)"
   fi
 
@@ -280,13 +374,64 @@ start_tunnel() {
   fi
   if [[ -n "$discovered_url" ]]; then
     if [[ "$mode" != "host" || "$discovered_url" == *"${LT_SUBDOMAIN}.loca.lt" ]]; then
-      write_public_url_state "${discovered_url}/api/status"
+      write_public_url_state "${discovered_url}/api/status?lite=1"
     fi
     log "tunnel url discovered mode=${mode} url=${discovered_url}"
+  else
+    log "tunnel url discovery pending provider=localtunnel mode=${mode}"
   fi
 }
 
-tunnel_pid_list() {
+start_localhost_run() {
+  local before_lines=0
+  if [[ -f "${LOG_DIR}/monitor-tunnel.log" ]]; then
+    before_lines="$(wc -l < "${LOG_DIR}/monitor-tunnel.log" 2>/dev/null || echo 0)"
+    if ! [[ "$before_lines" =~ ^[0-9]+$ ]]; then
+      before_lines=0
+    fi
+  fi
+
+  (
+    exec 9>&-
+    nohup ssh \
+      -o StrictHostKeyChecking=no \
+      -o ServerAliveInterval=30 \
+      -o TCPKeepAlive=yes \
+      -o ExitOnForwardFailure=yes \
+      -R "80:127.0.0.1:${LT_PORT}" \
+      "${LOCALHOST_RUN_DEST}" >> "${LOG_DIR}/monitor-tunnel.log" 2>&1 < /dev/null &
+  )
+  sleep 6
+
+  local discovered_url=""
+  discovered_url="$(tail -n +"$((before_lines + 1))" "${LOG_DIR}/monitor-tunnel.log" 2>/dev/null | rg -o 'https://[a-z0-9.-]+' | tail -n 1 || true)"
+  if [[ -n "$discovered_url" ]]; then
+    write_public_url_state "${discovered_url}/api/status?lite=1"
+    log "tunnel url discovered provider=localhost_run url=${discovered_url}"
+  else
+    log "tunnel url discovery pending provider=localhost_run"
+  fi
+}
+
+start_tunnel() {
+  local provider="${1:-localtunnel}"
+  local mode="${2:-host}"
+  write_tunnel_provider_state "$provider"
+  case "$provider" in
+    localtunnel)
+      start_localtunnel "$mode"
+      ;;
+    localhost_run)
+      start_localhost_run
+      ;;
+    *)
+      log "unknown tunnel provider provider=${provider}"
+      return 1
+      ;;
+  esac
+}
+
+localtunnel_pid_list() {
   local leaf=""
   leaf="$(ps -eo pid=,args= 2>/dev/null | awk -v port="$LT_PORT" '
     {
@@ -316,6 +461,28 @@ tunnel_pid_list() {
   '
 }
 
+localhost_run_pid_list() {
+  ps -eo pid=,args= 2>/dev/null | awk -v port="$LT_PORT" '
+    {
+      pid=$1
+      $1=""
+      line=substr($0,2)
+      if (line ~ /monitor_stack_guard\.sh/) next
+      if (line !~ /ssh/) next
+      if (line !~ /localhost\.run/) next
+      if (line !~ ("-R 80:127\\.0\\.0\\.1:" port)) next
+      print pid
+    }
+  '
+}
+
+tunnel_pid_list() {
+  {
+    localtunnel_pid_list
+    localhost_run_pid_list
+  } | awk '!seen[$0]++'
+}
+
 tunnel_process_count() {
   local count=0
   while IFS= read -r _pid; do
@@ -343,18 +510,45 @@ stop_tunnel() {
   done < <(tunnel_pid_list)
 }
 
+clear_tunnel_state() {
+  rm -f "$PUBLIC_URL_STATE_FILE" "$TUNNEL_PROVIDER_STATE_FILE" "$PUBLIC_FAILURE_STATE_FILE"
+}
+
 restart_tunnel() {
   stop_tunnel
+  local provider=""
   local mode=""
-  for mode in host plain; do
-    log "restart tunnel mode=${mode}"
-    start_tunnel "$mode"
-    if tunnel_process_running && is_public_up; then
-      log "tunnel healthy mode=${mode} url=$(current_public_url)"
-      write_public_fail_streak 0
-      return 0
-    fi
-    stop_tunnel
+  IFS=',' read -r -a providers <<< "$TUNNEL_PROVIDERS"
+  for provider in "${providers[@]}"; do
+    provider="$(printf '%s' "$provider" | sed 's/^ *//; s/ *$//')"
+    [[ -n "$provider" ]] || continue
+    case "$provider" in
+      localtunnel)
+        for mode in host plain; do
+          log "restart tunnel provider=${provider} mode=${mode}"
+          start_tunnel "$provider" "$mode"
+          if tunnel_process_running && is_public_up; then
+            log "tunnel healthy provider=${provider} mode=${mode} url=$(current_public_url)"
+            write_public_fail_streak 0
+            return 0
+          fi
+          stop_tunnel
+        done
+        ;;
+      localhost_run)
+        log "restart tunnel provider=${provider}"
+        start_tunnel "$provider"
+        if tunnel_process_running && is_public_up; then
+          log "tunnel healthy provider=${provider} url=$(current_public_url)"
+          write_public_fail_streak 0
+          return 0
+        fi
+        stop_tunnel
+        ;;
+      *)
+        log "skip unknown tunnel provider=${provider}"
+        ;;
+    esac
   done
   return 1
 }
@@ -389,6 +583,18 @@ if ! is_local_up; then
   exit 1
 fi
 
+if [[ "$ENABLE_LAN_PROXY" == "1" ]]; then
+  write_lan_url_state
+  if ! lan_proxy_running; then
+    log "lan proxy missing; starting"
+    start_lan_proxy
+  fi
+  if ! is_lan_up; then
+    log "lan proxy down; restarting"
+    restart_lan_proxy
+  fi
+fi
+
 if [[ "$MANAGE_TUNNEL" == "1" ]]; then
   if ! [[ "$PUBLIC_FAILURE_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$PUBLIC_FAILURE_THRESHOLD" -lt 1 ]]; then
     PUBLIC_FAILURE_THRESHOLD=2
@@ -400,8 +606,8 @@ if [[ "$MANAGE_TUNNEL" == "1" ]]; then
   fi
 
   if ! tunnel_process_running; then
-    log "tunnel process missing; starting"
-    start_tunnel host
+    log "tunnel process missing; restarting across providers"
+    restart_tunnel || true
   fi
 
   if is_public_up; then
@@ -439,5 +645,14 @@ if [[ "$MANAGE_TUNNEL" == "1" ]]; then
     exit 0
   fi
 else
-  log "ok local=up public=skip"
+  if tunnel_process_running; then
+    log "public tunnels disabled; stopping active tunnel processes"
+    stop_tunnel
+  fi
+  clear_tunnel_state
+  if [[ "$ENABLE_LAN_PROXY" == "1" ]]; then
+    log "ok local=up lan=$(is_lan_up && echo up || echo down) lan_url=$(current_lan_url) public=disabled"
+  else
+    log "ok local=up lan=disabled public=disabled"
+  fi
 fi

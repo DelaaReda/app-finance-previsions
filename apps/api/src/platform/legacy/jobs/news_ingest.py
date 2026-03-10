@@ -663,11 +663,14 @@ def run_news_ingest():
             article.pop("_uid", None)
             article.pop("_published_ts", None)
 
+        generated_at = datetime.utcnow().isoformat() + "Z"
         result = {
             "articles": all_articles,
             "count": len(all_articles),
             "sources": sources_processed,
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "generated_at": generated_at,
+            "updated_at": generated_at,
+            "last_update": generated_at,
             "lookback_days": LOOKBACK_DAYS,
             "min_articles_per_ticker_target": MIN_ARTICLES_PER_TICKER,
             "ticker_coverage": ticker_coverage,
@@ -702,8 +705,10 @@ def run_news_ingest():
             logger.warning(f"Failed to persist provider fallback news stats: {stats_exc}")
         
         # Return summary
+        summary_timestamp = datetime.utcnow().isoformat() + "Z"
         summary = {
             "processed_count": len(all_articles),
+            "article_count": len(all_articles),
             "sources": sources_processed,
             "ticker_coverage": ticker_coverage,
             "target_tickers": target_tickers,
@@ -713,7 +718,8 @@ def run_news_ingest():
                     "yahoo_empty_by_ticker": dict(sorted(yahoo_empty_by_ticker.items())),
                 }
             },
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": summary_timestamp,
+            "updated_at": summary_timestamp,
             "status": "completed"
         }
         
@@ -751,3 +757,14 @@ if __name__ == "__main__":
     install_global_excepthook("news_ingest")
     result = run_news_ingest()
     print(f"\n✅ Job completed: {result}")
+
+    status = str(result.get("status", "")).strip().lower() if isinstance(result, dict) else ""
+    processed_raw = result.get("processed_count", 0) if isinstance(result, dict) else 0
+    try:
+        processed_count = int(processed_raw)
+    except Exception:
+        processed_count = 0
+
+    if status == "completed" and processed_count > 0:
+        sys.exit(0)
+    sys.exit(1)

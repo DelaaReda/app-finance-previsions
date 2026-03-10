@@ -25,7 +25,7 @@ fi
 
 STALE_SWEEP_ENABLED="${FC_DEP_RECOMPUTE_STALE_SWEEP_ENABLED:-1}"
 STALE_SWEEP_THRESHOLD_SECONDS="${FC_DEP_RECOMPUTE_STALE_SWEEP_THRESHOLD_SECONDS:-3600}"
-STALE_SWEEP_ROLE="${FC_DEP_RECOMPUTE_STALE_SWEEP_ROLE:-planner}"
+STALE_SWEEP_ROLE="${FC_DEP_RECOMPUTE_STALE_SWEEP_ROLE:-all}"
 DEP_REBUILD_ENABLED="${FC_DEP_REBUILD_FROM_VISION_ENABLED:-0}"
 DEP_REBUILD_WAITING_DEP_THRESHOLD="${FC_DEP_REBUILD_WAITING_DEP_THRESHOLD:-10}"
 DEP_REBUILD_READY_THRESHOLD="${FC_DEP_REBUILD_READY_THRESHOLD:-1}"
@@ -95,6 +95,95 @@ python3 platform/automation/parallel_workstream.py sync-priority --queue "$QUEUE
   rm -f /tmp/fc-dependency-recompute.out
   exit 1
 }
+
+python3 - <<'PY'
+import json
+import re
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+root = Path(".").resolve()
+wb_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+if not wb_path.exists():
+    wb_path = root / "docs" / "orchestrator-ops" / "parallel-workstreams.json"
+
+if not wb_path.exists():
+    raise SystemExit(0)
+
+board = json.loads(wb_path.read_text(encoding="utf-8", errors="ignore"))
+tasks = [task for task in board.get("tasks", []) if isinstance(task, dict)]
+now_text = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+def stream_id(task: dict) -> str:
+    value = str(task.get("stream_id", "")).strip()
+    if value:
+        return value
+    task_id = str(task.get("id", "")).strip()
+    match = re.match(r"^(BATCH-\d+)", task_id)
+    return match.group(1) if match else task_id
+
+def delivery_delta(task: dict) -> str:
+    value = str(task.get("last_delivery_delta", "")).strip().lower()
+    return value if value and value not in {"none", "null"} else ""
+
+changed = []
+for source in tasks:
+    if str(source.get("state", "")).strip().upper() != "IN_PROGRESS":
+        continue
+    delta = delivery_delta(source)
+    if not delta:
+        continue
+    src_id = str(source.get("id", "")).strip()
+    src_stream = stream_id(source)
+    candidates = []
+    for task in tasks:
+        if str(task.get("state", "")).strip().upper() != "WAITING_DEP":
+            continue
+        if stream_id(task) != src_stream:
+            continue
+        deps = [str(dep).strip() for dep in task.get("depends_on", []) if str(dep).strip()]
+        if src_id not in deps:
+            continue
+        other_ready = True
+        for dep in deps:
+            if dep == src_id:
+                continue
+            dep_task = next((item for item in tasks if str(item.get("id", "")).strip() == dep), None)
+            dep_state = str((dep_task or {}).get("state", "")).strip().upper()
+            if dep_state not in {"DONE", "CLOSED", "PASS"}:
+                other_ready = False
+                break
+        if not other_ready:
+            continue
+        candidates.append(task)
+    if not candidates:
+        continue
+    candidates.sort(key=lambda item: str(item.get("id", "")))
+    target = candidates[0]
+    target["state"] = "READY_DEV" if str(target.get("role", "")).strip().lower() == "dev" else "READY"
+    target["blocked_reason"] = ""
+    target["stalled_reason"] = ""
+    target["updated_at"] = now_text
+    target.setdefault("notes", []).append(
+        f"delivery_unblocked:upstream={src_id};delta={delta};at={now_text}"
+    )
+    changed.append((src_id, str(target.get("id", "")).strip(), delta))
+
+if changed:
+    board["updated_at"] = now_text
+    wb_path.write_text(json.dumps(board, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    subprocess.run(
+        ["python3", "platform/automation/parallel_workstream.py", "sync-priority", "--queue", str((root / "docs" / "operations" / "orchestrator" / "priority-queue.json") if (root / "docs" / "operations" / "orchestrator" / "priority-queue.json").exists() else (root / "docs" / "orchestrator-ops" / "priority-queue.json"))],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    for src_id, target_id, delta in changed:
+        print(f"DELIVERY_CHAIN_UNBLOCK source={src_id} target={target_id} delta={delta}")
+else:
+    print("DELIVERY_CHAIN_UNBLOCK source=none target=none delta=none")
+PY
 
 read -r QUEUE_READY QUEUE_IN_PROGRESS QUEUE_WAITING_DEP WORKBOARD_READY WORKBOARD_IN_PROGRESS WORKBOARD_WAITING_DEP < <(python3 - <<'PY'
 import json

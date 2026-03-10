@@ -27,6 +27,7 @@ source "$RUNTIME_HOST_GUARD"
 fc_runtime_assert_vm_or_exit "fc_tick"
 
 ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+RUNTIME_STATE_PY="${SCRIPT_DIR}/../platform/automation/runtime_state.py"
 RUNNER_MODULE_MAIN="${ROOT}/platform/automation/runner/main.sh"
 if [[ -f "$RUNNER_MODULE_MAIN" ]]; then
   # shellcheck source=/dev/null
@@ -34,8 +35,8 @@ if [[ -f "$RUNNER_MODULE_MAIN" ]]; then
   runner_modules_init || true
 fi
 ROLE="${1:-}"
-LOG_DIR="$ROOT/logs-codex-runs/fc-ticks"
-LOCK_DIR="/tmp/fc-agent-locks"
+: "${LOG_DIR:=$ROOT/logs-codex-runs/fc-ticks}"
+: "${LOCK_DIR:=${FC_AGENT_LOCK_DIR:-/tmp/fc-agent-locks}}"
 if declare -F runner_config_default_file >/dev/null 2>&1; then
   RUNNER_CONFIG_FILE="${RUNNER_CONFIG_FILE:-$(runner_config_default_file "$ROOT")}"
 else
@@ -54,6 +55,9 @@ QWEN_BIN="$QWEN_BIN_CANDIDATE"
 CODEX_RL_CACHE_DIR="${FC_ROLE_STATE_DIR:-${TMUX_ROLE_STATE_DIR:-${HOME}/.openclaw/cron/role-state}}"
 CODEX_RL_CACHE_FILE="${CODEX_RL_CACHE_DIR}/codex.rate_limit_gate_cache"
 QWEN_RL_CACHE_FILE="${CODEX_RL_CACHE_DIR}/qwen.rate_limit_gate_cache"
+QWEN_AUTH_CACHE_FILE="${CODEX_RL_CACHE_DIR}/qwen.auth_required_cache"
+QWEN_READY_PROBE_TIMEOUT_SECONDS="${FC_QWEN_READY_PROBE_TIMEOUT_SECONDS:-20}"
+QWEN_AUTH_CACHE_TTL_SECONDS="${FC_QWEN_AUTH_CACHE_TTL_SECONDS:-900}"
 # Backoffs réduits: schedules anti-collision évitent la saturation en rafale.
 # On borne explicitement pour éviter les valeurs legacy trop longues (ex: 780/900).
 ROLE_RATE_LIMIT_BACKOFF_SECONDS="${FC_ROLE_RATE_LIMIT_BACKOFF_SECONDS:-240}"
@@ -149,12 +153,41 @@ esac
 
 LOCK="$LOCK_DIR/$ROLE.lock"
 LOCK_META="${LOCK}.meta"
-LOG="$LOG_DIR/$ROLE.tick.log"
+: "${LOG:=$LOG_DIR/$ROLE.tick.log}"
 TRILOCK_ORDER="tick>run>memory"
 LOCK_ACQUIRED=0
 LOCK_MODE="none"
 LOCK_ACQUIRED_AT=0
 LOCK_DIR_FALLBACK=""
+
+RUNTIME_EXECUTION_MODE=""
+RUNTIME_LIFECYCLE="running"
+RUNTIME_OPERATOR_MODE=""
+RUNTIME_REASON="inferred"
+
+load_runtime_state_snapshot() {
+  local raw=""
+  raw="$(python3 "$RUNTIME_STATE_PY" read --root "$ROOT" 2>/dev/null || echo '{}')"
+  RUNTIME_EXECUTION_MODE="$(printf '%s' "$raw" | jq -r '.execution_mode // ""' 2>/dev/null || true)"
+  RUNTIME_LIFECYCLE="$(printf '%s' "$raw" | jq -r '.lifecycle // "running"' 2>/dev/null || true)"
+  RUNTIME_OPERATOR_MODE="$(printf '%s' "$raw" | jq -r '.operator_mode // ""' 2>/dev/null || true)"
+  RUNTIME_REASON="$(printf '%s' "$raw" | jq -r '.reason // "inferred"' 2>/dev/null || true)"
+  [[ -n "$RUNTIME_EXECUTION_MODE" && "$RUNTIME_EXECUTION_MODE" != "null" ]] || RUNTIME_EXECUTION_MODE=""
+  [[ -n "$RUNTIME_LIFECYCLE" && "$RUNTIME_LIFECYCLE" != "null" ]] || RUNTIME_LIFECYCLE="running"
+  [[ -n "$RUNTIME_OPERATOR_MODE" && "$RUNTIME_OPERATOR_MODE" != "null" ]] || RUNTIME_OPERATOR_MODE=""
+  [[ -n "$RUNTIME_REASON" && "$RUNTIME_REASON" != "null" ]] || RUNTIME_REASON="inferred"
+}
+
+load_runtime_state_snapshot
+if [[ "$RUNTIME_EXECUTION_MODE" == "planner_experimental" ]]; then
+  FC_EXPERIMENTAL_PLANNER_ONLY="1"
+fi
+echo "$(date '+%Y-%m-%dT%H:%M:%S') [RUNTIME_STATE] role=${ROLE} lifecycle=${RUNTIME_LIFECYCLE} execution_mode=${RUNTIME_EXECUTION_MODE:-none} operator_mode=${RUNTIME_OPERATOR_MODE:-none} reason=${RUNTIME_REASON}" >> "$LOG"
+if [[ "$RUNTIME_LIFECYCLE" == "paused" || "$RUNTIME_LIFECYCLE" == "maintenance" ]]; then
+  echo "$(date '+%Y-%m-%dT%H:%M:%S') [RUNTIME_SKIP] role=${ROLE_INPUT} canonical=${ROLE} lifecycle=${RUNTIME_LIFECYCLE} execution_mode=${RUNTIME_EXECUTION_MODE:-none} operator_mode=${RUNTIME_OPERATOR_MODE:-none} reason=${RUNTIME_REASON} action=skip_before_lock" >> "$LOG"
+  echo "[fc_tick] RUNTIME_INERT role='${ROLE_INPUT}' canonical='${ROLE}' lifecycle='${RUNTIME_LIFECYCLE}' execution_mode='${RUNTIME_EXECUTION_MODE:-none}' reason='${RUNTIME_REASON}'" >&2
+  exit 0
+fi
 
 if [[ "$FC_EXPERIMENTAL_PLANNER_ONLY" == "1" ]]; then
   case "$ROLE" in
@@ -384,6 +417,61 @@ PY
   "$@"
 }
 
+looks_like_qwen_auth_prompt() {
+  local haystack
+  haystack="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  [[ "$haystack" == *"qwen oauth authentication"* ]] && return 0
+  [[ "$haystack" == *"please visit this url to authorize"* ]] && return 0
+  [[ "$haystack" == *"waiting for authorization"* ]] && return 0
+  [[ "$haystack" == *"authorize?user_code="* ]] && return 0
+  [[ "$haystack" == *"scan the qr code below"* ]] && return 0
+  [[ "$haystack" == *"no auth type is selected"* ]] && return 0
+  [[ "$haystack" == *"please configure an auth type"* ]] && return 0
+  return 1
+}
+
+probe_qwen_ready() {
+  local probe_timeout="${QWEN_READY_PROBE_TIMEOUT_SECONDS:-12}"
+  local auth_ttl="${QWEN_AUTH_CACHE_TTL_SECONDS:-900}"
+  local out_file err_file combined rc preview
+
+  if is_rl_cache_active "$QWEN_AUTH_CACHE_FILE"; then
+    echo "$(ts) [QWEN_AUTH] auth cache active reason=$(cache_reason "$QWEN_AUTH_CACHE_FILE")" >> "$LOG"
+    return 1
+  fi
+
+  out_file="$(mktemp)"
+  err_file="$(mktemp)"
+  set +e
+  run_with_timeout_portable "$probe_timeout" \
+    "$QWEN_BIN" \
+    --channel CI \
+    --approval-mode yolo \
+    --chat-recording false \
+    -o text \
+    --max-session-turns 1 \
+    'Reply with OK only.' >"$out_file" 2>"$err_file"
+  rc=$?
+  set -e
+  combined="$(cat "$out_file" "$err_file" 2>/dev/null || true)"
+  preview="$(printf '%s' "$combined" | tr '\n' ' ' | tr -s ' ' | cut -c1-220)"
+  rm -f "$out_file" "$err_file"
+
+  if looks_like_qwen_auth_prompt "$combined"; then
+    set_rl_cache "$QWEN_AUTH_CACHE_FILE" "$auth_ttl" "qwen_auth_required"
+    echo "$(ts) [QWEN_AUTH] qwen requires interactive auth; caching skip ttl=${auth_ttl}s detail=${preview:-none}" >> "$LOG"
+    return 1
+  fi
+
+  if [[ "$rc" -ne 0 ]]; then
+    echo "$(ts) [QWEN_PROBE] qwen readiness probe failed rc=$rc detail=${preview:-none}" >> "$LOG"
+    return 1
+  fi
+
+  echo "$(ts) [QWEN_PROBE] qwen readiness probe ok" >> "$LOG"
+  return 0
+}
+
 refresh_memory_symlinks() {
   local memory_dir="$ROOT/memory"
   local today_utc yesterday_utc
@@ -465,9 +553,9 @@ AGENT_BIN_EFFECTIVE="codex"
 CODEX_COOLDOWN_ACTIVE=0
 # Default conservative: keep qwen fallback opt-in until qwen tmux transport is hardened.
 if [[ "$ROLE" == "planner" || "$ROLE" == "dev" || "$ROLE" == "admin" ]]; then
-  FC_ENABLE_QWEN_FALLBACK="${FC_ENABLE_QWEN_FALLBACK:-0}"
+  FC_ENABLE_QWEN_FALLBACK="${FC_ENABLE_QWEN_FALLBACK:-${TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK:-1}}"
 fi
-ENABLE_QWEN_FALLBACK="${FC_ENABLE_QWEN_FALLBACK:-0}"
+ENABLE_QWEN_FALLBACK="${FC_ENABLE_QWEN_FALLBACK:-${TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK:-1}}"
 
 if ! [[ "$ENABLE_QWEN_FALLBACK" =~ ^[01]$ ]]; then
   ENABLE_QWEN_FALLBACK=0
@@ -500,6 +588,10 @@ if [[ "$CODEX_COOLDOWN_ACTIVE" -eq 1 ]]; then
       exit 0
     fi
     QWEN_BIN="$RESOLVED_QWEN_BIN"
+    if ! probe_qwen_ready; then
+      echo "$(ts) [SKIP] qwen fallback unavailable, skipping tick for $ROLE" >> "$LOG"
+      exit 0
+    fi
 
     AGENT_MODE="qwen"
     AGENT_BIN_EFFECTIVE="$QWEN_BIN"
@@ -665,7 +757,7 @@ case "$ROLE" in
     TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_PLANNER_TICK_TIMEOUT_SECONDS:-420}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
     # Planner: keep resume enabled by default for faster/stabler ticks.
     export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_PLANNER_CODEX_EXEC_RESUME:-0}"
-    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_PLANNER_RATE_LIMIT_PRECHECK:-0}"
+    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_PLANNER_RATE_LIMIT_PRECHECK:-${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}}"
     export TMUX_ROLE_CODEX_THINKING="${FC_PLANNER_THINKING:-${RESOLVED_ROLE_THINKING}}"
     export TMUX_ROLE_MIN_REFLECTION_PASSES="${FC_PLANNER_MIN_REFLECTION_PASSES:-1}"
     export FC_PLANNER_AUTONOMY_ENABLED="${FC_PLANNER_AUTONOMY_ENABLED:-1}"
@@ -678,7 +770,7 @@ case "$ROLE" in
     export TMUX_ROLE_PLANNER_PREFLIGHT_SYNC="${FC_PLANNER_PREFLIGHT_SYNC:-1}"
     ;;
   dev)
-    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_DEV_RATE_LIMIT_PRECHECK:-0}"
+    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_DEV_RATE_LIMIT_PRECHECK:-${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}}"
     export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_DEV_CODEX_EXEC_RESUME:-1}"
     export PROMPT_TIMEOUT_SECONDS="${FC_DEV_PROMPT_TIMEOUT_SECONDS:-300}"
     export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_DEV_RETRY_TIMEOUT_SECONDS:-120}"
@@ -701,7 +793,7 @@ case "$ROLE" in
     export TMUX_ROLE_STALL_ABORT_SECONDS="${FC_ADMIN_STALL_ABORT_SECONDS:-85}"
     TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_ADMIN_TICK_TIMEOUT_SECONDS:-540}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
     export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_ADMIN_CODEX_EXEC_RESUME:-0}"
-    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_ADMIN_RATE_LIMIT_PRECHECK:-0}"
+    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_ADMIN_RATE_LIMIT_PRECHECK:-${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}}"
     export TMUX_ROLE_CODEX_THINKING="${FC_ADMIN_THINKING:-${RESOLVED_ROLE_THINKING}}"
     export TMUX_ROLE_MEMORY_PROFILE="${FC_ADMIN_MEMORY_PROFILE:-analysis}"
     export TMUX_ROLE_MEMORY_DAILY_LINES="${FC_ADMIN_MEMORY_DAILY_LINES:-4}"
@@ -750,7 +842,7 @@ case "$ROLE" in
     export TMUX_ROLE_ENABLE_PO_SCRUM_MASTER="${TMUX_ROLE_ENABLE_PO_SCRUM_MASTER:-${TMUX_ROLE_ENABLE_SCRUM_MASTER}}"
     export TMUX_ROLE_CODEX_MODEL="${FC_SCRUM_MASTER_MODEL:-${FC_PO_SCRUM_MASTER_MODEL:-gpt-5.3-codex-spark}}"
     export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_SCRUM_MASTER_CODEX_EXEC_RESUME:-${FC_PO_SCRUM_MASTER_CODEX_EXEC_RESUME:-1}}"
-    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-${FC_PO_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-0}}"
+    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-${FC_PO_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}}}"
     export TMUX_ROLE_CODEX_THINKING="${FC_SCRUM_MASTER_THINKING:-${FC_PO_SCRUM_MASTER_THINKING:-low}}"
     export PROMPT_TIMEOUT_SECONDS="${FC_SCRUM_MASTER_PROMPT_TIMEOUT_SECONDS:-${FC_PO_SCRUM_MASTER_PROMPT_TIMEOUT_SECONDS:-300}}"
     export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_SCRUM_MASTER_RETRY_TIMEOUT_SECONDS:-${FC_PO_SCRUM_MASTER_RETRY_TIMEOUT_SECONDS:-120}}"

@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-15-BATCH-15-DEV-01-20260310T000423Z-940"
+stream_id: "BATCH-15"
+task_id: "BATCH-15-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-10T00:04:23Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope strategy playbooks engine [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_strategy_playbooks_engine_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-10T00:04:23Z"
+      ended_at_utc: "2026-03-10T00:04:23Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS: `cd /home/venom/analyse-financiere/apps/api/src && PYTHONPATH=/home/venom/analyse-financiere:/home/venom/analyse-financiere/apps/api/src pytest -q domains/judge/tests/test_judge_route_orchestration.py`; PASS: `cd /"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "`apps/api/src/domains/judge/api/judge.py`; `apps/api/src/domains/judge/application/judge_endpoint_service.py`"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-15-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-15-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The `/api/judge/strategy-playbooks` endpoint was doing playbook construction inline, which violated the requested Judge stack reuse pattern and made orchestration/service separation inconsistent with prior route design. | fix_applied=Added `get_judge_strategy_playbooks_payload()` and `_build_strategy_playbook()` to `apps/api/src/domains/judge/application/judge_endpoint_service.py` (reusing judge helpers, stable filters/stats wiring, source tagging, a | verify=before=`/api/judge/strategy-playbooks` contained inline projection/remapping in the route; after=route now delegates to judge service and service returns the final playbook payload with preserved upstream contract fields | architecture_check=layer=API route -> application service decomposition; imports_ok=yes (reuse of `services.service_standard` plus existing judge compute contracts, fallback import compatibility kept); path_target=apps/api/src/domains/judg | vision_alignment=batch=BATCH-15; target=Strategy Playbooks Engine via Judge reuse stack; impact=reuses Judge verdict pipeline for a thinner route, stable contract behavior preserved, and creates a reusable service path for future playboo"

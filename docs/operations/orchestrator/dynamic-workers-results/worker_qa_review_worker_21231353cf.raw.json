@@ -1,0 +1,36 @@
+## QA Review Summary - BATCH-14-DEV-01
+
+**Verdict: ✅ PASS**
+
+### Evidence
+
+| Check | Status | Details |
+|-------|--------|---------|
+| **Test file created** | ✅ | `apps/api/src/domains/judge/tests/test_judge_pipeline_parse_llm_answer.py` |
+| **Tests pass** | ✅ | 3/3 passed (6.22s) |
+| **Architecture alignment** | ✅ | Tests target `judge_pipeline.py` parse logic |
+| **Proof manifest** | ✅ | `/home/venom/shared/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-14/BATCH-14-DEV-01/20260309T215912Z-423.yaml` |
+
+### Test Coverage
+
+The 3 tests validate `parse_llm_answer()` robustness against noisy LLM outputs:
+
+1. **`test_parse_llm_answer_reads_markdown_fenced_json`** - Parses JSON inside ```json blocks
+2. **`test_parse_llm_answer_reads_embedded_json_with_trailing_text`** - Extracts embedded JSON with surrounding text
+3. **`test_parse_llm_answer_fallback_when_missing_required_json_keys`** - Falls back gracefully on partial/invalid JSON
+
+### Implementation Verification
+
+The `parse_llm_answer()` function (lines 551-607 in `judge_pipeline.py`) implements:
+- Last-line JSON extraction (reversed line iteration)
+- JSON block extraction via brace-matching (`_extract_json_blocks`)
+- Required key validation (`summary`, `scenarios`, `risks`, `impacts`, `actions`, `confidence`)
+- Graceful fallback with `error: "json_parse_failed"` + original answer preserved
+
+---
+
+**Execution Trace**
+- Actions: Ran pytest on test_judge_pipeline_parse_llm_answer.py; verified 3 tests pass
+- Files changed: 0 (review only - test file already exists from prior dev work)
+- Files read: test_judge_pipeline_parse_llm_answer.py, judge_pipeline.py (parse_llm_answer fn), proof manifest YAML, API_ENDPOINT_BEST_PRACTICES.md
+- Network/API calls: none

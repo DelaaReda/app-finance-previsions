@@ -145,8 +145,13 @@ def _fetch_local_json(url: str, timeout_seconds: int = 15) -> tuple[bool, dict[s
 
 
 def _subagent_result_paths(root: Path, subagent_id: str) -> tuple[Path, Path]:
-    results_dir = root / "docs" / "operations" / "orchestrator" / "planner-subagents-results"
-    return results_dir / f"{subagent_id}.result.json", results_dir / f"{subagent_id}.raw.txt"
+    runtime_results_dir = root / "logs-codex-runs" / "orchestrator-state" / "planner-subagents-results"
+    result_path = runtime_results_dir / f"{subagent_id}.result.json"
+    raw_path = runtime_results_dir / f"{subagent_id}.raw.txt"
+    if result_path.exists() or raw_path.exists():
+        return result_path, raw_path
+    legacy_results_dir = root / "docs" / "operations" / "orchestrator" / "planner-subagents-results"
+    return legacy_results_dir / f"{subagent_id}.result.json", legacy_results_dir / f"{subagent_id}.raw.txt"
 
 
 def _subagent_has_collectible_result(root: Path, row: dict[str, Any]) -> bool:
@@ -324,14 +329,25 @@ def _delivery_delta_from_payload(payload: dict[str, Any]) -> str:
     if verify and verify not in {"none", "n/a", "na"}:
         return "verify_delta"
     summary = str(payload.get("summary", "")).strip().lower()
-    if "contract_snapshot" in summary:
-        return "contract_snapshot"
+    if "contract_snapshot" in summary or "bridge_result" in summary or summary.startswith("noop:"):
+        return "none"
+    for label, markers in (
+        ("artifact_delta", ("artifact_delta", "artifact delta", "artifact:", "artifact/", "evidence/", "proof published")),
+        ("code_delta", ("code_delta", "code delta", "patch", "diff", "changed file", "files changed", "wrote ")),
+        ("test_delta", ("test_delta", "test delta", "pytest", "unit test", "integration test", "tests passed", "test pass")),
+        ("verify_delta", ("verify_delta", "verify delta", "verified", "verification", "validated", "verdict: pass", "gate pass")),
+    ):
+        if any(marker in summary for marker in markers):
+            return label
     return "none"
 
 
 def _delivery_delta_from_task(task: dict[str, Any] | None) -> str:
     if not isinstance(task, dict):
         return "none"
+    explicit = str(task.get("last_delivery_delta", "")).strip().lower()
+    if explicit and explicit not in {"none", "null"}:
+        return explicit
     for key, label in (
         ("artifact", "artifact_delta"),
         ("commit_sha", "code_delta"),
@@ -341,9 +357,23 @@ def _delivery_delta_from_task(task: dict[str, Any] | None) -> str:
         token = str(task.get(key, "")).strip().lower()
         if token and token not in {"none", "n/a", "na", "skip(no_tests)", "skip(no_code_runtime_fix)"}:
             return label
-    current_step = str(task.get("current_step", "")).strip().lower()
-    if current_step:
-        return current_step
+    lowered = " ".join(
+        str(task.get(key, ""))
+        for key in ("artifact_delta", "code_delta", "test_delta", "verify_delta", "current_step", "summary", "result_payload", "status", "raw_output")
+        if str(task.get(key, "")).strip()
+    ).strip().lower()
+    if not lowered:
+        return "none"
+    if "contract_snapshot" in lowered or "bridge_result" in lowered or lowered.startswith("noop:"):
+        return "none"
+    for label, markers in (
+        ("artifact_delta", ("artifact_delta", "artifact delta", "artifact:", "artifact/", "evidence/", "proof published")),
+        ("code_delta", ("code_delta", "code delta", "patch", "diff", "changed file", "files changed", "wrote ")),
+        ("test_delta", ("test_delta", "test delta", "pytest", "unit test", "integration test", "tests passed", "test pass")),
+        ("verify_delta", ("verify_delta", "verify delta", "verified", "verification", "validated", "verdict: pass", "gate pass")),
+    ):
+        if any(marker in lowered for marker in markers):
+            return label
     return "none"
 
 
@@ -950,8 +980,17 @@ def _meaningful_subagent_text(text: str) -> bool:
 def _task_progress_baseline(task: dict[str, Any], row: dict[str, Any], progress_at: datetime | None) -> datetime | None:
     return (
         progress_at
-        or _parse_iso_utc(str(task.get("last_meaningful_progress_at", "")).strip())
-        or _parse_iso_utc(str(task.get("last_progress_at", "")).strip())
+        or _parse_iso_utc(str(task.get("last_delivery_delta_at", "")).strip())
+        or _parse_iso_utc(str(task.get("last_delivery_at", "")).strip())
+        or _parse_iso_utc(str(task.get("last_artifact_at", "")).strip())
+        or _parse_iso_utc(str(task.get("last_code_delta_at", "")).strip())
+        or _parse_iso_utc(str(task.get("last_test_delta_at", "")).strip())
+        or _parse_iso_utc(str(task.get("last_verify_delta_at", "")).strip())
+        or (
+            _parse_iso_utc(str(task.get("last_meaningful_progress_at", "")).strip())
+            if str(task.get("last_progress_kind", "")).strip().lower() in {"artifact_delta", "code_delta", "test_delta", "verify_delta", "completed", "done"}
+            else None
+        )
         or _parse_iso_utc(str(task.get("updated_at", "")).strip())
         or _parse_iso_utc(str(row.get("last_update_at", "")).strip())
         or _parse_iso_utc(str(row.get("created_at", "")).strip())
@@ -967,12 +1006,20 @@ def _clear_dev_progress_flags(task: dict[str, Any]) -> None:
 
 def _record_dev_progress(task: dict[str, Any], progress_at: datetime | None, progress_kind: str, *, execution_state: str) -> None:
     timestamp = _iso(progress_at) if isinstance(progress_at, datetime) else now_iso()
-    task["last_meaningful_progress_at"] = timestamp
-    task["last_progress_kind"] = str(progress_kind or "runtime_activity").strip() or "runtime_activity"
+    normalized_kind = str(progress_kind or "runtime_activity").strip().lower() or "runtime_activity"
+    if normalized_kind in {"artifact_delta", "code_delta", "test_delta", "verify_delta", "completed", "done"}:
+        task["last_meaningful_progress_at"] = timestamp
+        task["last_progress_kind"] = normalized_kind
+        task["last_progress_at"] = timestamp
+        if normalized_kind.endswith("_delta"):
+            task["last_delivery_delta"] = normalized_kind
+            task["last_delivery_delta_at"] = timestamp
+        _clear_dev_progress_flags(task)
+    else:
+        task["last_runtime_activity_at"] = timestamp
+        task["last_activity_kind"] = normalized_kind
     task["dev_execution_state"] = execution_state
     task["updated_at"] = now_iso()
-    task["last_progress_at"] = timestamp
-    _clear_dev_progress_flags(task)
     _clear_role_recovery(task, "dev")
 
 
@@ -2223,7 +2270,7 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
                         continue
 
                     streak = _task_failure_streak(task, "dev", "no_progress") + 1
-                    reason = f"dev_no_progress_streak:{streak}"
+                    reason = f"stalled_delivery_streak:{streak}"
                     task["dev_execution_state"] = "no_progress"
                     task["updated_at"] = now_text
                     _set_failure_streak(task, "dev", "no_progress", streak, reason)
@@ -2249,15 +2296,15 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
                         actions.append(f"dev_recovery_required:{task_id_value}")
                         row["status"] = "failed"
                         row["failed_at"] = now_text
-                        row["summary"] = "planner dev capability made no meaningful progress and was requeued"
-                        row["blocking_issue"] = "dev_no_progress"
+                        row["summary"] = "planner dev capability produced no delivery delta and was requeued"
+                        row["blocking_issue"] = "stalled_delivery"
                         row["last_update_at"] = now_text
                         changed = True
                     else:
                         task["stalled_reason"] = reason
                         append_event(
                             board,
-                            "planner_orchestrator_dev_no_progress",
+                            "planner_orchestrator_stalled_delivery",
                             {
                                 "task_id": task_id_value,
                                 "source": source,
@@ -2267,7 +2314,7 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
                                 "no_progress_streak": streak,
                             },
                         )
-                        actions.append(f"dev_no_progress:{task_id_value}")
+                        actions.append(f"stalled_delivery:{task_id_value}")
                     reconcile_state(board, board_path.parent / "priority-queue.json")
                     save_board(board_path, board)
     if changed:
@@ -2799,8 +2846,29 @@ def apply_bridge(root: Path, role: str, contract_text: str, source: str, backend
 
     dispatch: dict[str, Any] = {
         "dispatched": False,
-        "reason": "active_subagent_present" if _has_active_subagent(root, "dev") else "not_needed",
+        "reason": "not_needed",
     }
+    if _has_active_subagent(root, "dev"):
+        dispatch = {
+            "dispatched": True,
+            "reason": "active_capability_delivery",
+            "status": "running",
+            "task_id": str(evidence.get("task_id", "")).strip() or "",
+            "backend": "openclaw",
+            "last_delivery_delta": "none",
+        }
+        if dispatch["task_id"]:
+            board = load_board(board_path)
+            for task in board.get("tasks", []):
+                if str(task.get("id", "")).strip() == dispatch["task_id"]:
+                    capability_id = str(task.get("capability_id") or task.get("subagent_id") or "").strip()
+                    if capability_id:
+                        dispatch["capability_id"] = capability_id
+                    heartbeat = str(task.get("last_heartbeat") or task.get("last_heartbeat_at") or task.get("last_runtime_activity_at") or "").strip()
+                    if heartbeat:
+                        dispatch["last_heartbeat"] = heartbeat
+                    dispatch["last_delivery_delta"] = _delivery_delta_from_task(task) or "none"
+                    break
     if priority_admin_takeover and not _has_active_subagent(root, "admin"):
         dispatch = _dispatch_admin_capability(root, source=source, backend=backend)
         if dispatch.get("dispatched"):

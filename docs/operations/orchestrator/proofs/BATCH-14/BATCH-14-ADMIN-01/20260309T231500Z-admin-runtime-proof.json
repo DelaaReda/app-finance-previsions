@@ -1,0 +1,35 @@
+{
+  "task_id": "BATCH-14-ADMIN-01",
+  "source": "admin_runtime_validation_runtime_only",
+  "status": "PASS_WITH_WARNING",
+  "produced_at_utc": "2026-03-09T23:10:00Z",
+  "scope": "Finalisation Core v2: Robustness Drills + GO/NO-GO runtime truth",
+  "runtime_truth": {
+    "host_mode": "vm_runtime",
+    "backend_health": "UP",
+    "frontend_health": "UP (http://127.0.0.1:5173/)",
+    "monitor_stack": "UP (http://127.0.0.1:7779/api/status?lite=1)",
+    "runtime_state": "planner_experimental",
+    "core_roles": ["planner"],
+    "sessions": ["codex_planner_cron"]
+  },
+  "observability": {
+    "watch_codex_runtime": "PASS",
+    "stale_lock_check": "PASS (matched=0 stale=0)",
+    "runtime_gate": "DEGRADED",
+    "runtime_gate_note": "Monitor path /api/status full endpoint intermittently times out under 8s probes; /api/status?lite=1 and /monitor/access are responsive"
+  },
+  "scheduler_truth": {
+    "planner_only_mode": true,
+    "cron_entries_present": "yes (20 from planner config)",
+    "enabled_ticks": "active/active-required roles only under planner ownership",
+    "stale_locks": "none"
+  },
+  "decision": {
+    "task_runtime_unblock": true,
+    "planner_mergeable": true,
+    "admin_fix_needed": false,
+    "remaining_blocker": "none",
+    "warning": "Monitor /health and /api/status require elevated timeout in probe tooling for full payload"
+  }
+}

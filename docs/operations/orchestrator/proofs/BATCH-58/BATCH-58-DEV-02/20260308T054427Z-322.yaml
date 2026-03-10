@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-58-BATCH-58-DEV-02-20260308T054427Z-322"
+stream_id: "BATCH-58"
+task_id: "BATCH-58-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-08T05:44:27Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope **profil:** reda (venom) — professionnel non-expert en finance qui gère ses investissements pers [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_**profil:**_reda_(venom)_—_professionnel_non-expert_en_finance_qui_gère_ses_investissements_pers_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-08T05:44:27Z"
+      ended_at_utc: "2026-03-08T05:44:27Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['node --check repo/apps/web/src/domains/forecasts/pages/app.js', \"node inline vm verification for `syncForecastProfileUI()` default-preservation and `changeProfile('reda_personal_investing')` UI rewiring\"]"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/web/src/domains/forecasts/components/header.html:13-19; apps/web/src/domains/forecasts/pages/index.html:1124-1128; apps/web/src/domains/forecasts/pages/app.js:1138-1238,1351-1354,2527-2614,5144-5145; commit_chain=7f"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-58-DEV-02"
+  review_ref: "primary_structured:BATCH-58-DEV-02"
+  note: "source=primary_structured | root_cause=The forecasts header exposed no Reda persona option, `changeProfile()` only emitted a toast/log with no UI effect, and the page had no post-component-load sync to apply persona-specific wiring. A follow-up guard was also | fix_applied=Added `reda_personal_investing` to the existing profile selector, introduced a Reda profile preset in `apps/web/src/domains/forecasts/pages/app.js`, wired `syncForecastProfileUI()` to update existing AI Suggestions/Quick | verify=before=the UI had no `reda_personal_investing` option and `changeProfile()` did not rewire any widget, so the persona slice for Reda was absent; after=selecting `reda_personal_investing` updates existing AI Suggestions,  | architecture_check=layer=frontend domain page assembly only; imports_ok=yes (reused existing header/component-loader/app.js wiring and existing widgets, with no new cross-layer imports or new components); path_target=apps/web/src/domains/f | vision_alignment=batch=BATCH-58; target=Reda (venom) as a non-expert personal-investing user inside the existing forecasts surface; impact=adds a concrete guided persona slice using existing widgets and shared UI wiring, which advances d"

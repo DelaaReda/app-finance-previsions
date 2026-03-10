@@ -58,9 +58,11 @@ bash scripts/fc_health_check.sh --strict
 bash scripts/monitor_agents.sh
 bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779
 bash scripts/dependency_recompute.sh
+cat logs-codex-runs/monitor-lan-url.txt
 ```
 Expected:
 - explicit health + lane + source diagnostics.
+- host-side monitor URL available via LAN proxy.
 
 ### Contract diagnostics
 ```bash
@@ -80,11 +82,16 @@ Expected:
 
 ## 6) Observability and Troubleshooting
 ### Fast triage order
-1. Confirm core lane status (`planner/dev/admin`) from `/api/status`.
+1. Confirm core lane status (`planner/dev/admin`) from `/api/status?lite=1`.
 2. Check recent hard blockers in `/api/runtime-diagnostics`.
 3. Correlate with per-role tick and runner event logs.
 4. Validate queue/workboard consistency.
 5. Validate message bus activity if coordination is involved.
+
+Access note:
+- VM-local UI/API: `http://127.0.0.1:7779/`
+- Mac host UI/API: `http://192.168.64.9:7780/`
+- public tunnels: disabled by default
 
 ### Deep method (for complex incidents)
 - Isolate root cause vs noise.

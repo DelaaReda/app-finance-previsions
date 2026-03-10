@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-13-BATCH-13-DEV-02-20260309T163456Z-957"
+stream_id: "BATCH-13"
+task_id: "BATCH-13-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-09T16:34:56Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope decision journal + outcome feedback loop [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_decision_journal_+_outcome_feedback_loop_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T16:34:56Z"
+      ended_at_utc: "2026-03-09T16:34:56Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest domains/copilot/tests/test_decision_journal.py - 17 passed"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/api/src/domains/copilot/application/decision_journal.py (467 lines), apps/api/src/domains/copilot/api/copilot.py (+106 lines routes), apps/api/src/domains/copilot/tests/test_decision_journal.py (285 lines)"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_ORPHAN_MERGE_BATCH-13-DEV-02"
+  review_ref: "planner_autonomy_tick:BATCH-13-DEV-02"
+  note: "source=planner_autonomy_tick | root_cause=none | fix_applied=Created decision_journal service with log_copilot_decision(), record_outcome_feedback(), get_decision_journal(), get_outcome_feedback(), compute_metrics() functions | verify={'before': 'No decision journal for copilot recommendations', 'after': 'Full decision journal with 5 API endpoints, immutable storage, outcome tracking at 1d/1w/1m, hit rate/calibration metrics', 'test': '17 tests passin | architecture_check={'layer': 'domains/copilot/application + api', 'imports_ok': 'storage.io, service_standard, collections.defaultdict', 'path_target': 'apps/api/src/domains/copilot/'} | vision_alignment={'batch': 'BATCH-13', 'target': 'DEV-02 (B13-T1 Decision journal store)', 'impact': '>= 95% des réponses copilot peuvent être journalisées avec verdict, confidence, horizon + outcome tracking'}"

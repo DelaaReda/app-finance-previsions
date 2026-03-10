@@ -16,12 +16,15 @@ The current target is defined in:
 ## Minimal Validation
 ```bash
 bash scripts/fc_doctor.sh --json | jq '.checks.sessions'
-curl -s http://127.0.0.1:7779/api/status | jq '{execution_mode,core_roles,planner_subagents}'
+cat logs-codex-runs/monitor-lan-url.txt
+curl -s http://127.0.0.1:7779/api/status?lite=1 | jq '{execution_mode,core_roles,planner_subagents}'
+curl -s http://192.168.64.9:7780/api/status?lite=1 | jq '{execution_mode,core_roles,planner_subagents}'
 ```
 
 Expected:
 - `execution_mode="planner_experimental"`
 - `core_roles=["planner"]`
+- LAN proxy `7780` available for host-side inspection
 
 ## Historical Note
 If you are reading older docs that assume specialist cron lanes or wide canonical lane normalization, treat them as historical snapshots, not current source of truth.

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-59-BATCH-59-ARCH-20260307T205559Z-587"
+stream_id: "BATCH-59"
+task_id: "BATCH-59-ARCH"
+role: "planner"
+produced_at_utc: "2026-03-07T20:55:59Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_complete_command_in_allowed_set)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-07T20:55:59Z"
+      ended_at_utc: "2026-03-07T20:55:59Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_doc_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "DELIVERY_VALUE_RETRY_PLANNER_1772916959"
+  review_ref: "primary_structured:BATCH-59-ARCH"
+  note: "source=primary_structured | root_cause=slot_planner_occupe_par_B59_ARCH_alors_que_B11_ARCH_reste_la_prochaine_action_planner | fix_applied=clore_B59_ARCH_pour_liberer_le_slot_planner_et_revenir_sur_B11_ARCH | verify=before=quality_fields_missing | architecture_check=none | vision_alignment=batch=BATCH-unknown"

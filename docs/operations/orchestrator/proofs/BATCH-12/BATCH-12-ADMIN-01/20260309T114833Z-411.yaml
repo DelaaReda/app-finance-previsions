@@ -1,0 +1,50 @@
+proof_id: "PRF-BATCH-12-BATCH-12-ADMIN-01-20260309T114833Z-411"
+stream_id: "BATCH-12"
+task_id: "BATCH-12-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-09T11:48:33Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+preconditions:
+  change_plan:
+    - "validate runtime truth and observability for portfolio state + risk profile core"
+    - "prefer evidence capture over runtime mutation"
+    - "confirm downstream dev chain is serving through monitor and API"
+  architecture_checks:
+    - "planner_only_runtime_truth_preserved"
+    - "portfolio_risk_profile_served_from_existing_domain_boundary"
+    - "monitor_observability_contract_remains_intact"
+execution:
+  commands:
+    - cmd: "SKIP(runtime_mutation_not_required)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T11:48:33Z"
+      ended_at_utc: "2026-03-09T11:48:33Z"
+validations:
+  tests:
+    - name: "portfolio_risk_profile_contract"
+      result: "PASS"
+      evidence: "PYTHONPATH=/home/venom/analyse-financiere/apps/api/src:/home/venom/analyse-financiere pytest apps/api/src/domains/market_data/tests/test_portfolio_risk_profile_contract.py -q -rA => 10 passed"
+    - name: "monitor_contracts"
+      result: "PASS"
+      evidence: "python3 -m pytest apps/monitor/tests/test_status_never_null.py apps/monitor/tests/test_activity_endpoints.py -q -rA => 4 passed"
+    - name: "live_runtime_probes"
+      result: "PASS"
+      evidence: "GET /api/status?lite=1 => health=OK; GET /api/runtime-diagnostics?lite=1 => blocker limited to global dev lane; GET /api/portfolios/{id}/risk-profile => ok/status=ok"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-12/BATCH-12-ADMIN-01/20260309T114833Z-admin-runtime-proof.json"
+handoff:
+  to_role: "planner"
+  handoff_id: "none"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-12-ADMIN-01"
+  review_ref: "admin_runtime_validation:BATCH-12-ADMIN-01"
+  note: "source=admin_runtime_validation | root_cause=Task required runtime truth after DEV-03, not another code/config change. | fix_applied=SKIP(no runtime mutation); captured live monitor + API evidence and confirmed monitor contracts still pass. | verify=monitor health OK; portfolio risk-profile endpoint returns saved-state-backed contract; monitor diagnostics show only unrelated global dev-lane blocker DEV_ARCH_CHECK_FORMAT_INVALID. | architecture_check=planner-only scheduling preserved, portfolio service and monitor service boundaries intact. | vision_alignment=Unblocks planner merge for Portfolio State + Risk Profile Core admin gate while isolating unrelated dev-runtime debt."

@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-11-BATCH-11-DEV-02-20260308T024434Z-553"
+stream_id: "BATCH-11"
+task_id: "BATCH-11-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-08T02:44:34Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope data ingestion core + freshness slo [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_data_ingestion_core_+_freshness_slo_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-08T02:44:34Z"
+      ended_at_utc: "2026-03-08T02:44:34Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['PASS node --check apps/web/src/domains/forecasts/contracts/apiConnector.js', 'PASS node --check apps/web/src/domains/forecasts/pages/app.js', 'PASS node tests/smoke/batch_11_dev_02_freshness_contract_check.mjs', 'PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=8af94a25fd14cad91c1c51e90e338f65934e805f; smoke=tests/smoke/batch_11_dev_02_freshness_contract_check.mjs; paths=apps/web/src/domains/forecasts/contracts/apiConnector.js,apps/web/src/domains/forecasts/pages/app.js"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-11-DEV-02"
+  review_ref: "primary_structured:BATCH-11-DEV-02"
+  note: "source=primary_structured | root_cause=The web live-data path only propagated local timestamps and warning heuristics; it did not consume the new ingestion health contract from DEV-01, so the UI could not reflect backend freshness state for the ingestion SLO. | fix_applied=Added ingestion health fetch + freshness contract derivation in `apps/web/src/domains/forecasts/contracts/apiConnector.js`, emitted `contractState`/`freshness`/`ingestionHealth` on the existing live dashboard payload, up | verify=before=live dashboard updates did not include `/api/ingestion/health` contract data, so freshness UI relied on local timestamp inference only; after=live payloads now carry `contractState`, normalized freshness metadata, | architecture_check=layer=apps/web/src; imports_ok=yes (reused existing forecasts connector/page wiring, added no new cross-layer import surface); path_target=apps/web/src/domains/forecasts/contracts/apiConnector.js,apps/web/src/domains/for | vision_alignment=batch=BATCH-11; target=frontend visibility of ingestion freshness contract and SLO state; impact=users now see backend-driven stale freshness signals in the existing dashboard flow before acting on aged data"

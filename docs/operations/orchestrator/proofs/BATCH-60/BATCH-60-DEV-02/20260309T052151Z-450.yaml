@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-60-BATCH-60-DEV-02-20260309T052151Z-450"
+stream_id: "BATCH-60"
+task_id: "BATCH-60-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-09T05:21:51Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T05:21:51Z"
+      ended_at_utc: "2026-03-09T05:21:51Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['git -C repo diff --check -- apps/web/src/domains/forecasts/components/sections/hero-what-need.html', 'pre-commit local quality guards triggered by git commit', 'rg -n \"hero-subtitle|Ask About Today|Ask copilot about to"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=99d0a027fc0ca7d83774db713a91f9a1eaae756b; file=apps/web/src/domains/forecasts/components/sections/hero-what-need.html; evidence=hero subtitle + Ask About Today CTA + today's-brief suggestion chip"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_ORPHAN_MERGE_BATCH-60-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-60-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The brief-of-the-day UI already existed, but its primary CTA only opened a blank Copilot overlay, so the 'ask' flow was not explicitly anchored to today's memo and felt generic rather than personal-finance-first. | fix_applied=Updated the existing forecasts hero fragment to: 1) clarify the subtitle around brief/ask/open, 2) change the primary CTA to 'Ask About Today' and prefill+submit a today-focused portfolio brief request through the existi | verify=before=the hero brief existed, but the main CTA only toggled a blank Copilot composer and the suggestion chip pointed to a generic 1-week market brief. after=the hero now starts from the brief of the day and gives a dire | architecture_check=layer=apps/web forecasts component fragment; imports_ok=yes (no new imports, reused existing global UI wiring via toggleAICopilot/sendOverlayMessage/safeSwitchTab); path_target=apps/web/src/domains/forecasts/components/s | vision_alignment=batch=BATCH-60; target=personal finance copilot entry that starts with a day brief and immediately lets the user ask or open; impact=users can move from the brief card straight into a grounded today memo without adding n"

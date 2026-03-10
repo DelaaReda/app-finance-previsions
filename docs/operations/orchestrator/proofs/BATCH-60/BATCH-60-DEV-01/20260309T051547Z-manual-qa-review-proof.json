@@ -1,0 +1,10 @@
+{
+  "task_id": "BATCH-60-DEV-01",
+  "source": "manual_delivery_cleanup",
+  "status": "completed",
+  "summary": "Manual QA backfill after planner delivery stabilization.",
+  "verify": "{'before': 'Manual TestClient GET `/api/copilot/context` returned only regime/context metadata and had no `data.copilot_start` block.', 'after': 'Manual TestClient GET `/api/copilot/context` returned `data.copilot_start`",
+  "artifact": "{'endpoint': '/api/copilot/context', 'payload_added': ['data.copilot_start.brief_of_day', 'data.copilot_start.ask', 'data.copilot_start.open'], 'implementation': ['apps/api/src/domains/judge/application/intelligence_serv",
+  "browser_proof_artifact": "/home/venom/analyse-financiere/logs-codex-runs/browser-smoke/20260309T020110Z-batch-60-dev-01-future-delivery.json",
+  "generated_at": "2026-03-09T05:16:12Z"
+}

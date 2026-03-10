@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-28-BATCH-28-DEV-02-20260307T230018Z-848"
+stream_id: "BATCH-28"
+task_id: "BATCH-28-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-07T23:00:18Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope mvp v3 release gate + adoption analytics [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_mvp_v3_release_gate_+_adoption_analytics_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-07T23:00:18Z"
+      ended_at_utc: "2026-03-07T23:00:18Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['node --check /home/venom/analyse-financiere/apps/web/src/domains/forecasts/pages/app.js', 'node inline verification script extracting `isCriticalWidgetHealthHostVisible` and `resolveCriticalWidgetHealthHost` from `apps"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/web/src/domains/forecasts/pages/app.js:1238-1252, 1928-1958, 2057-2067; commit `293535e2dc0a3c6033299be005cc40677896f154`"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-28-DEV-02"
+  review_ref: "primary_structured:BATCH-28-DEV-02"
+  note: "source=primary_structured | root_cause=Critical widget health mounting used first-match selector resolution, so duplicate or hidden hero variants could capture the banner; the mount observer also skipped the glassmorphic hero container and facette container,  | fix_applied=Updated `apps/web/src/domains/forecasts/pages/app.js` to: prefer visible hosts in `resolveCriticalWidgetHealthHost`, add `isCriticalWidgetHealthHostVisible`, extend hero selectors to include `#hero-glassmorphic-container | verify=before=the shared health banner could mount on a hidden legacy hero node or miss later-mounted hero/deep-dive containers, so the severity palette and actionable copy were not reliably shown on the active critical widget; | architecture_check=layer=frontend domain page assembly only, imports_ok=yes (no new cross-layer imports or components introduced), path_target=apps/web/src/domains/forecasts/pages/app.js | vision_alignment=batch=BATCH-28, target=MVP v3 release-gate severity-state conventions on critical widgets, impact=the shared loading/stale/degraded/error wiring now follows the active hero/deep-dive surface instead of hidden duplicates,"

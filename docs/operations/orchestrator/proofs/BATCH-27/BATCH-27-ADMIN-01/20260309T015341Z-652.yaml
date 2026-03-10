@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-27-BATCH-27-ADMIN-01-20260309T015341Z-652"
+stream_id: "BATCH-27"
+task_id: "BATCH-27-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-09T01:53:41Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+preconditions:
+  change_plan:
+    - "scope reliability sre pack + chaos drills [admin-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_reliability_sre_pack_+_chaos_drills_[admin-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T01:53:41Z"
+      ended_at_utc: "2026-03-09T01:53:41Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`bash scripts/fc_health_check.sh`; `bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779`; `bash scripts/critical_endpoints_smoke.sh --base-url http://127.0.0.1:8050`; `node tests/smoke/batch_27_dev_03"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-27/BATCH-27-ADMIN-01/20260309T015117Z-admin-runtime-proof.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-27-ADMIN-01"
+  review_ref: "primary_structured:BATCH-27-ADMIN-01"
+  note: "source=primary_structured | root_cause=Runtime listener gap: port 5173 was not listening while 8050 and 7779 were healthy. This was a runtime/process issue, not a code-path failure in the current scope. | fix_applied=Ran `bash scripts/runtime_e2e_gate.sh`, which restarted the Finance Copilot runtime stack. Post-fix quiet period passed with frontend/backend/monitor all returning HTTP 200 and listeners up. Added a proof artifact only;  | verify=PASS: `bash scripts/fc_health_check.sh`; PASS: `bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779`; PASS: `bash scripts/critical_endpoints_smoke.sh --base-url http://127.0.0.1:8050`; PASS: `node tes | architecture_check=Aligned with planner-only scheduling reality. Verified planner-only cron/session health and did not touch queue/workboard/contracts or parallel_workstream claim/complete paths. | vision_alignment=Matches ADMIN-01 scope: runtime/monitor truth validated after dev chain, frontend smoke captured, and critical widgets now have proof of live data or explicit degraded/loading states instead of silent failure."

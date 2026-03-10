@@ -1,13 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+SOURCE_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
+WORKSPACE_HELPER="${SCRIPT_DIR}/lib/workspace_paths.sh"
+if [[ -f "$WORKSPACE_HELPER" ]]; then
+  # shellcheck source=/dev/null
+  source "$WORKSPACE_HELPER"
+fi
+if declare -F fc_resolve_workspace_root >/dev/null 2>&1; then
+  ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+else
+  ROOT="${FC_WORKSPACE_ROOT:-$SOURCE_ROOT}"
+fi
+
 MODE="admins-only"
 ROLE="planner"
 DRY_RUN=0
 STATUS_ONLY=0
 STOP_SESSIONS=0
+REQUESTED_MODE=""
+EFFECTIVE_MODE=""
+RUNTIME_EXECUTION_MODE=""
+RUNTIME_LIFECYCLE=""
 
-ROLE_MAP_FILE="${ORCHESTRATION_ROLE_MAP_FILE:-docs/orchestrator-ops/parallel-role-cron-map.json}"
+ROLE_MAP_FILE="${ORCHESTRATION_ROLE_MAP_FILE:-${ROOT}/docs/orchestrator-ops/parallel-role-cron-map.json}"
 
 BASELINE_ADMIN_JOBS=(
   "adminapp-codex-sync-10m"
@@ -34,13 +52,22 @@ usage() {
 Usage: set_orchestration_mode.sh [options]
 
 Options:
-  --mode <admins-only|sequential|parallel|paused>  Target mode (default: admins-only)
+  --mode <admins-only|sequential|parallel|planner-only|paused>  Target mode (default: admins-only)
   --role <role>                                    Role used for sequential mode (default: planner)
   --stop-sessions                                  Kill mapped tmux sessions after mode apply
   --status                                         Print cron status only (no changes)
   --dry-run                                        Print planned actions without applying
   -h, --help                                       Show help
 EOF
+}
+
+load_runtime_state() {
+  local raw=""
+  raw="$(python3 "$SOURCE_ROOT/platform/automation/runtime_state.py" read --root "$ROOT" 2>/dev/null || echo '{}')"
+  RUNTIME_EXECUTION_MODE="$(printf '%s' "$raw" | jq -r '.execution_mode // ""' 2>/dev/null || true)"
+  RUNTIME_LIFECYCLE="$(printf '%s' "$raw" | jq -r '.lifecycle // ""' 2>/dev/null || true)"
+  [[ -n "$RUNTIME_EXECUTION_MODE" && "$RUNTIME_EXECUTION_MODE" != "null" ]] || RUNTIME_EXECUTION_MODE=""
+  [[ -n "$RUNTIME_LIFECYCLE" && "$RUNTIME_LIFECYCLE" != "null" ]] || RUNTIME_LIFECYCLE="running"
 }
 
 refresh_current_cron_json() {
@@ -331,6 +358,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+REQUESTED_MODE="$MODE"
+EFFECTIVE_MODE="$MODE"
+load_runtime_state
+if [[ "$EFFECTIVE_MODE" != "paused" && "$EFFECTIVE_MODE" != "planner-only" && "$RUNTIME_EXECUTION_MODE" == "planner_experimental" ]]; then
+  EFFECTIVE_MODE="planner-only"
+fi
+if [[ "$REQUESTED_MODE" != "$EFFECTIVE_MODE" ]]; then
+  echo "planner_experimental compatibility: requested_mode=${REQUESTED_MODE} resolved to effective_mode=${EFFECTIVE_MODE}; OpenClaw jobs remain quarantined and crontab stays authoritative"
+fi
+MODE="$EFFECTIVE_MODE"
+
 refresh_current_cron_json
 load_dynamic_role_map
 
@@ -366,6 +404,14 @@ case "$MODE" in
     enable_governance_jobs
     disable_unexpected_jobs
     ;;
+  planner-only)
+    disable_roles
+    disable_governance_jobs
+    disable_unexpected_jobs
+    if [[ "$STOP_SESSIONS" -eq 1 ]]; then
+      stop_disabled_sessions "planner"
+    fi
+    ;;
   paused)
     disable_roles
     disable_governance_jobs
@@ -389,13 +435,21 @@ else
   if [[ "$MODE" == "paused" ]]; then
     runtime_lifecycle="paused"
     runtime_reason="operator_paused_runtime"
+  elif [[ "$MODE" == "planner-only" ]]; then
+    runtime_reason="operator_planner_only_quarantine"
   fi
-  python3 "$ROOT/platform/automation/runtime_state.py" write \
-    --root "$ROOT" \
-    --lifecycle "$runtime_lifecycle" \
-    --reason "$runtime_reason" \
-    --operator-mode "$MODE" \
-    --source "set_orchestration_mode" >/dev/null 2>&1 || true
-  echo "ORCHESTRATION_MODE_APPLIED mode=${MODE} role=${ROLE} dry_run=${DRY_RUN} stop_sessions=${STOP_SESSIONS}"
+  runtime_write_args=(
+    write
+    --root "$ROOT"
+    --lifecycle "$runtime_lifecycle"
+    --reason "$runtime_reason"
+    --operator-mode "$MODE"
+    --source "set_orchestration_mode"
+  )
+  if [[ -n "$RUNTIME_EXECUTION_MODE" ]]; then
+    runtime_write_args+=(--execution-mode "$RUNTIME_EXECUTION_MODE")
+  fi
+  python3 "$SOURCE_ROOT/platform/automation/runtime_state.py" "${runtime_write_args[@]}" >/dev/null 2>&1 || true
+  echo "ORCHESTRATION_MODE_APPLIED requested_mode=${REQUESTED_MODE} effective_mode=${MODE} role=${ROLE} dry_run=${DRY_RUN} stop_sessions=${STOP_SESSIONS} execution_mode=${RUNTIME_EXECUTION_MODE:-none}"
 fi
 openclaw cron list

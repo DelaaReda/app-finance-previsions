@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 import yaml
 
+from orchestrator_paths import resolve_orchestrator_write_path, runtime_state_root
 from worker_manager import _ensure_agent as _ensure_openclaw_agent
 from worker_manager import _openclaw_env
 from worker_manager import shutil_which
@@ -743,12 +744,13 @@ def _load_config(root: Path) -> PlannerSubagentConfig:
         if not isinstance(cfg_roles, list):
             cfg_roles = list(DEFAULT_MANAGED_ROLES)
         managed_roles = {canonical_role(tok) for tok in cfg_roles if str(tok).strip()}
-    orch_dir = root / "docs" / "operations" / "orchestrator"
+    planner_state_dir = runtime_state_root(root)
+    planner_state_dir.mkdir(parents=True, exist_ok=True)
     return PlannerSubagentConfig(
         root=root,
-        registry_path=orch_dir / "planner-subagents-registry.json",
-        events_path=orch_dir / "planner-subagents-events.jsonl",
-        results_dir=orch_dir / "planner-subagents-results",
+        registry_path=resolve_orchestrator_write_path(root, "planner-subagents-registry.json"),
+        events_path=resolve_orchestrator_write_path(root, "planner-subagents-events.jsonl"),
+        results_dir=planner_state_dir / "planner-subagents-results",
         enabled=enabled,
         cron_planner_only=cron_planner_only,
         max_active=max(1, max_active),
@@ -1062,7 +1064,7 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         "- Do not call parallel_workstream.py claim/complete/handoff.\n"
         "- Do not update queue/workboard/contracts directly.\n"
         "- You may read the repo, edit files only if your role allows it, run bounded targeted commands, and return structured evidence.\n"
-        "- Use Codex native multi-agent helpers in worker-first mode: prefer `worker` for bounded implementation and `monitor` for waiting/polling.\n"
+        "- Use planner-owned capability dispatch only: never run raw shell commands named `worker`, `explorer`, `monitor`, or `SYSTEM_PROMPT`; use the configured planner wrappers only.\n"
         "- `explorer` is exception-only: use it only for one narrow read-only question when the implementation path is already known. Do not chain explorers or replace delivery work with repo analysis.\n"
         "- Any exploratory finding must end with a concrete implementation next step for the planner.\n"
         "- Keep scope narrow to the owner task and the planner instruction.\n"

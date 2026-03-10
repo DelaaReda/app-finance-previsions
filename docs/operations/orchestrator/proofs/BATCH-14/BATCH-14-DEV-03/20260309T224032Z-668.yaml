@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-14-BATCH-14-DEV-03-20260309T224032Z-668"
+stream_id: "BATCH-14"
+task_id: "BATCH-14-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-09T22:40:32Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope finalisation core v2: robustness drills + go/no-go [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_finalisation_core_v2:_robustness_drills_+_go/no-go_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T22:40:32Z"
+      ended_at_utc: "2026-03-09T22:40:32Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['python3 -m pytest repo/apps/api/src/domains/judge/tests/test_judge_go_no_go_decision.py -q', 'bash scripts/backend_regression_gate.sh --no-live domains/judge/tests/test_judge_go_no_go_decision.py']"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/api/src/domains/judge/tests/test_judge_go_no_go_decision.py"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-14-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-14-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=No dedicated automated coverage existed for `_judge_go_no_go` under GO/NO-GO edge cases (confidence, data quality, news coverage, parser/LLM health failures, and gap thresholds), leaving robustness criteria unverified. | fix_applied=Created `apps/api/src/domains/judge/tests/test_judge_go_no_go_decision.py` with targeted tests covering: GO path, each NO-GO red flag, multi-failure accumulation, threshold boundaries (inclusive), confidence/data-quality | verify=before=No dedicated GO/NO-GO regression tests for Judge robustness criteria in CI-targeted form; after=Added explicit regression assertions on `_judge_go_no_go` decision/rules and emitted values; test=python3 -m pytest r | architecture_check={'layer': 'judge_application', 'imports_ok': 'true', 'path_target': 'apps/api/src/domains/judge/api/judge.py (indirectly validated through tests in apps/api/src/domains/judge/tests/test_judge_go_no_go_decision.py)'} | vision_alignment={'batch': 'BATCH-14', 'target': 'Finalisation Core v2: Robustness Drills + GO/NO-GO', 'impact': 'adds concrete, minimal regression guardrails for go/no-go decision logic, directly supporting release readiness confidence"

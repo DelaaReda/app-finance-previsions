@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-59-BATCH-59-DEV-01-20260308T063025Z-776"
+stream_id: "BATCH-59"
+task_id: "BATCH-59-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-08T06:30:25Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope status: canonical [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_status:_canonical_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-08T06:30:25Z"
+      ended_at_utc: "2026-03-08T06:30:25Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['PYTHONPATH=repo/apps/api/src pytest repo/apps/api/src/platform/tests/test_health_router.py -q']"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit 8246aad2c6427a5981ed431a481b7f4ecc45f3ac adds the canonical backend status route and shared payload builder in `apps/api/src/platform/routers/health.py`, with proof coverage in `apps/api/src/platform/tests/test_he"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-59-DEV-01"
+  review_ref: "primary_structured:BATCH-59-DEV-01"
+  note: "source=primary_structured | root_cause=The backend platform router exposed `/api/health` but not a canonical `/api/status`, and the health payload lacked the canonical metadata expected by the endpoint guidance (`freshness`, `last_update`, `filters_applied`,  | fix_applied=Extracted shared status payload assembly into `apps/api/src/platform/routers/health.py::_build_status_payload`, reused it for both `/api/health` and new `/api/status`, added canonical metadata fields, preserved compatibi | verify=before=backend only exposed `/api/health`, with no canonical `/api/status` alias, no `freshness/last_update/filters_applied` metadata, and no explicit never-empty fallback on snapshot read errors; after=`/api/status` now | architecture_check=layer=platform router; imports_ok=yes (no new cross-domain imports, reused existing injected `ok_response`/freshness wiring and kept the change inside `apps/api/src/platform/routers/health.py`); path_target=apps/api/src/ | vision_alignment=batch=BATCH-59; target=status canonical [DEV-01]; impact=smallest vertical slice that makes backend status canonical by reusing the existing health router instead of creating a parallel endpoint stack."

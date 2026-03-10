@@ -31,6 +31,16 @@ class RunnerConfigTests(unittest.TestCase):
         self.assertTrue(payload.get("ok"))
         self.assertEqual(payload.get("version"), "v1")
 
+    def test_emit_env_includes_backend_by_role_mapping(self) -> None:
+        cp = run_cfg("--config", str(DEFAULT_CONFIG), "emit-env", "--role", "planner", "--fallback-env", "0")
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("FC_PLANNER_ORCHESTRATOR_BACKEND='auto'", cp.stdout)
+        self.assertIn("FC_PLANNER_ORCHESTRATOR_BACKEND_BY_ROLE='", cp.stdout)
+        self.assertIn("admin=codex_exec", cp.stdout)
+        self.assertIn("dev=openclaw", cp.stdout)
+        self.assertIn("TMUX_ROLE_RATE_LIMIT_PRECHECK='1'", cp.stdout)
+        self.assertIn("TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK='1'", cp.stdout)
+
     def test_validate_rejects_missing_top_keys(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             cfg = Path(td) / "runner.v1.yaml"

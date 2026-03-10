@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-13-BATCH-13-ARCH-20260309T120752Z-516"
+stream_id: "BATCH-13"
+task_id: "BATCH-13-ARCH"
+role: "planner"
+produced_at_utc: "2026-03-09T12:07:52Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_workboard_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T12:07:52Z"
+      ended_at_utc: "2026-03-09T12:07:52Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_workboard_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/.tmp/role-runner/planner/BATCH-13-ARCH-proof.txt"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "BATCH13ARCHP1773058042"
+  review_ref: "docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md"
+  note: "dependance canonique verifiee puis arch cloturee"

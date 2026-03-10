@@ -42,6 +42,22 @@ STARTUP_ONLY_MARKERS = (
     "worker quit with fatal",
     "reconnecting...",
 )
+RATE_LIMIT_MARKERS = (
+    "api-rate-limit-reached",
+    "api rate limit reached",
+    "insufficient_quota",
+    "usage limit",
+    "quota exceeded",
+    "quota exhausted",
+    "quota reached",
+    "rate limit exceeded",
+    "rate limit exhausted",
+    "rate limit reached",
+    "too many requests",
+    "status 429",
+    "http 429",
+    " 429",
+)
 
 
 @dataclass
@@ -254,10 +270,65 @@ def _openclaw_delete_agent(agent_id: str) -> None:
 def _openclaw_cli_model(model: str) -> str:
     token = str(model or "").strip()
     if not token:
-        return "codex-cli/gpt-5.4"
+        return "codex-cli/gpt-5.3-codex-spark"
     if "/" in token:
         return token
     return f"codex-cli/{token}"
+
+
+def _looks_like_rate_limited(text: str) -> bool:
+    lowered = str(text or "").lower()
+    return any(marker in lowered for marker in RATE_LIMIT_MARKERS)
+
+
+def _qwen_bin() -> str:
+    candidate = str(
+        os.environ.get("FC_DYNAMIC_WORKERS_QWEN_BIN")
+        or os.environ.get("TMUX_ROLE_QWEN_BIN")
+        or os.environ.get("LM_USED_QWEN_BIN")
+        or "/home/venom/.npm-global/bin/qwen"
+    ).strip()
+    if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
+        return candidate
+    located = shutil_which(candidate) if candidate else ""
+    if located:
+        return located
+    return shutil_which("qwen")
+
+
+def _run_qwen_worker(config: WorkerManagerConfig, worker_type: str, owner_task_id: str, task_kind: str, message: str, timeout_seconds: int) -> tuple[int, str, str, str]:
+    qwen_bin = _qwen_bin()
+    if not qwen_bin:
+        return 5, "", "qwen_missing", "qwen"
+    timeout_value = max(30, int(timeout_seconds or 180))
+    model = str(os.environ.get("FC_DYNAMIC_WORKERS_QWEN_MODEL", "qwen")).strip() or "qwen"
+    cmd = [
+        qwen_bin,
+        "--output-format",
+        "text",
+        "--approval-mode",
+        "yolo",
+        "--sandbox",
+        "false",
+        "--include-directories",
+        str(config.root),
+        "-m",
+        model,
+        "-p",
+        _worker_prompt(worker_type, owner_task_id, task_kind, message),
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            text=True,
+            capture_output=True,
+            check=False,
+            cwd=str(config.root),
+            timeout=timeout_value,
+        )
+        return proc.returncode, proc.stdout or "", proc.stderr or "", "qwen"
+    except subprocess.TimeoutExpired as exc:
+        return 124, str(exc.stdout or ""), str(exc.stderr or "") or f"qwen_timeout_after_{timeout_value}s", "qwen"
 
 
 def _worker_runtime_model(worker_type: str) -> str:
@@ -265,8 +336,8 @@ def _worker_runtime_model(worker_type: str) -> str:
     if env_override:
         return env_override
     if str(worker_type or "").strip() == "qa_review_worker":
-        return "codex-full/gpt-5.4"
-    return "gpt-5.4"
+        return "codex-full/gpt-5.3-codex-spark"
+    return "gpt-5.3-codex-spark"
 
 
 def _worker_prompt(worker_type: str, owner_task_id: str, task_kind: str, message: str) -> str:
@@ -681,6 +752,21 @@ def run_worker(
             rc = proc.returncode
             stdout = proc.stdout or ""
             stderr = proc.stderr or ""
+        if _looks_like_rate_limited(f"{stdout}\n{stderr}"):
+            qwen_rc, qwen_stdout, qwen_stderr, qwen_backend = _run_qwen_worker(
+                config,
+                worker_type,
+                owner_task_id,
+                task_kind,
+                message,
+                timeout_seconds,
+            )
+            if qwen_rc == 0 or str(qwen_stdout or "").strip():
+                rc = qwen_rc
+                stdout = qwen_stdout
+                stderr = qwen_stderr
+                chosen_backend = qwen_backend
+                backend_ref = f"{qwen_backend}:{worker_id}"
     elif chosen_backend == "mock":
         stdout = json.dumps(
             {

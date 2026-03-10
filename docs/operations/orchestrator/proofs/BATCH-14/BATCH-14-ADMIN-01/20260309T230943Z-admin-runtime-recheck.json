@@ -1,0 +1,31 @@
+{
+  "task_id": "BATCH-14-ADMIN-01",
+  "mode": "runtime_admin_recheck",
+  "produced_at_utc": "2026-03-09T23:09:43Z",
+  "status": "PASS_WITH_WARNING",
+  "runtime_truth": {
+    "runtime_host": "vm_runtime",
+    "services": {
+      "backend_http_200": true,
+      "frontend_http_200": true,
+      "monitor_wrapper_started": true,
+      "monitor_health_path": "Not Found",
+      "monitor_status_lite": "PASS (duration_ms=3119)",
+      "monitor_runtime_diagnostics": "PASS (duration_ms=1419)",
+      "fc_health_check_monitor_contract": "FAIL (curl timeout 8s)",
+      "monitor_contract_smoke": "PASS (timeout=24, output: PASS health=OK roles=1 agents=4 queue_states=4 workboard_ready=0 admin_timeouts_recent=0 issues_records=5)",
+      "issue_publication_gap": "OK"
+    }
+  },
+  "scheduler_truth": {
+    "planner_only_mode": true,
+    "cron_enabled": 0,
+    "stale_jobs": 0,
+    "session_state": "codex_planner_cron pane=node exists"
+  },
+  "evidence_files": [
+    "docs/operations/orchestrator/proofs/BATCH-14/BATCH-14-ADMIN-01/20260309T230751Z-admin-runtime-runtime-truth.jsonl",
+    "docs/operations/orchestrator/proofs/BATCH-14/BATCH-14-ADMIN-01/20260309T231300Z-admin-runtime-proof.json",
+    "docs/operations/orchestrator/proofs/BATCH-14/BATCH-14-ADMIN-01/20260309T230943Z-admin-runtime-recheck.json"
+  ]
+}

@@ -133,6 +133,16 @@ class MonitorActivityEndpointTests(unittest.TestCase):
         self.assertIn("intentions", payload)
         self.assertIn("dependencies", payload)
 
+        agents_activity = client.get("/api/agents/activity")
+        self.assertEqual(agents_activity.status_code, 200)
+        ap = agents_activity.json()
+        self.assertIn("roles", ap)
+        self.assertIn("active_helper_count", ap)
+        self.assertIn("planner", ap["roles"])
+        self.assertIn("dev", ap["roles"])
+        self.assertIn("action_summary", ap["roles"]["planner"])
+        self.assertIn("recent_events", ap["roles"]["dev"])
+
         tasks = client.get("/api/tasks/active?window=6h&limit=50")
         self.assertEqual(tasks.status_code, 200)
         tp = tasks.json()
@@ -147,6 +157,22 @@ class MonitorActivityEndpointTests(unittest.TestCase):
         dp = dep.json()
         self.assertIn("summary", dp)
         self.assertIn("bottlenecks", dp)
+
+        access = client.get("/api/monitor/access")
+        self.assertEqual(access.status_code, 200)
+        ax = access.json()
+        self.assertIn("canonical_ui_url", ax)
+        self.assertIn("canonical_status_url", ax)
+        self.assertIn("vm_local_ui_url", ax)
+
+        html = client.get("/")
+        self.assertEqual(html.status_code, 200)
+        body = html.text
+        self.assertIn("/api/status?lite=1", body)
+        self.assertIn("/api/runtime-diagnostics?lite=1", body)
+        self.assertIn("/api/monitor/access", body)
+        self.assertIn("Vue Live Canonique", body)
+        self.assertIn("status-lite first", body)
 
 
 if __name__ == "__main__":

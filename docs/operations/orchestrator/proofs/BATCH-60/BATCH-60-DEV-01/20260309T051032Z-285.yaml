@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-60-BATCH-60-DEV-01-20260309T051032Z-285"
+stream_id: "BATCH-60"
+task_id: "BATCH-60-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-09T05:10:32Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T05:10:32Z"
+      ended_at_utc: "2026-03-09T05:10:32Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['python3 -m pytest apps/api/src/domains/judge/tests/test_intelligence_service_cache.py -q # PASS']"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "{'endpoint': '/api/copilot/context', 'payload_added': ['data.copilot_start.brief_of_day', 'data.copilot_start.ask', 'data.copilot_start.open'], 'implementation': ['apps/api/src/domains/judge/application/intelligence_serv"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_ORPHAN_MERGE_BATCH-60-DEV-01"
+  review_ref: "primary_structured:BATCH-60-DEV-01"
+  note: "source=primary_structured | root_cause=The runtime copilot entry endpoint was serving only market-regime context. The daily brief existed separately in `brief_daily`, and brief data was only pulled lazily during ask-flow execution, so opening the copilot had  | fix_applied=Extended judge-side market-context assembly to always attach `copilot_start.brief_of_day`, `copilot_start.ask`, and `copilot_start.open`, including backfill for already-cached context payloads and a never-empty fallback  | verify={'before': 'Manual TestClient GET `/api/copilot/context` returned only regime/context metadata and had no `data.copilot_start` block.', 'after': 'Manual TestClient GET `/api/copilot/context` returned `data.copilot_start` | architecture_check={'layer': 'judge application service feeding the runtime market-context/coplanar copilot bootstrap path', 'imports_ok': 'yes; reused existing `storage.io` brief snapshot loading and existing context assembly path, with n | vision_alignment={'batch': 'BATCH-60', 'target': 'personal finance copilot opens on a brief-of-the-day and gives immediate ask/open choices', 'impact': 'frontend can now bootstrap the copilot from one stable backend payload instead of wa"

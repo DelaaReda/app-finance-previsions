@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-51-BATCH-51-DEV-02-20260308T040032Z-360"
+stream_id: "BATCH-51"
+task_id: "BATCH-51-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-08T04:00:32Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope product vision — finance copilot [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_product_vision_—_finance_copilot_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-08T04:00:32Z"
+      ended_at_utc: "2026-03-08T04:00:32Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['node --check repo/apps/web/src/domains/forecasts/pages/app.js', 'git -C repo diff --check -- apps/web/src/domains/forecasts/pages/app.js apps/web/src/domains/forecasts/pages/index.html']"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Existing ask surfaces on `apps/web/src/domains/forecasts/pages/index.html` now submit through `/api/copilot/ask` via `window.FinanceAPI.askCopilot` and display live memo output without adding new components or changing t"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-51-DEV-02"
+  review_ref: "primary_structured:BATCH-51-DEV-02"
+  note: "source=primary_structured | root_cause=The primary ask surfaces in the forecasts frontend were still returning canned mock responses even though a live `window.FinanceAPI.askCopilot` path and memo payload formatter already existed elsewhere on the page. | fix_applied=Added a shared `submitCopilotChat` path in `apps/web/src/domains/forecasts/pages/app.js`, reused the existing `buildCopilotJudgePayload` contract to render memo-style responses (verdict, reasons, risk, model, sources, fr | verify={'before': '`sendOverlayMessage` and `sendAIMessage` used hard-coded mock replies, so the main Finance Copilot ask surfaces were not backed by the live memo contract.', 'after': 'Both surfaces now route through shared li | architecture_check={'layer': 'web frontend only; forecasts page/chat surfaces', 'imports_ok': 'yes; no new cross-layer imports or components were introduced, and the patch reuses existing `window.FinanceAPI.askCopilot` plus in-file `buildC | vision_alignment={'batch': 'BATCH-51', 'target': 'Finance Copilot brief+ask entry on existing forecasts surfaces', 'impact': 'Users can now ask from the current widget/overlay and receive live memo-style answers aligned to portfolio, tic"

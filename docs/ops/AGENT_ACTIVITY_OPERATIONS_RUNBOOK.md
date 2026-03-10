@@ -8,14 +8,24 @@ FC_MONITOR_ACTIVITY_WINDOW_HOURS=6 \
 FC_MONITOR_ACTIVITY_MAX_EVENTS=300 \
 FC_MONITOR_DEP_GRAPH_ENABLED=1 \
 bash scripts/monitor_stack_guard.sh
+cat logs-codex-runs/monitor-lan-url.txt
 ```
+
+Canonical access:
+- VM: `http://127.0.0.1:7779/`
+- Mac host: `http://192.168.64.9:7780/`
+- tunnels: disabled by default
+
+Reference:
+- [MONITOR_ACCESS_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/MONITOR_ACCESS_RUNBOOK.md)
 
 ## Validate
 ```bash
-curl -sS http://127.0.0.1:7779/api/status | jq '.activity_summary'
+curl -sS http://127.0.0.1:7779/api/status?lite=1 | jq '.activity_summary'
 curl -sS 'http://127.0.0.1:7779/api/agent-activity?window=6&limit=120' | jq '.throughput,.system_summary.current_bottleneck'
 curl -sS 'http://127.0.0.1:7779/api/tasks/active?window=6&limit=40' | jq '.items[0]'
 curl -sS 'http://127.0.0.1:7779/api/dependencies/map?limit=200' | jq '.summary,.bottlenecks[0]'
+curl -sS 'http://192.168.64.9:7780/api/status?lite=1' | jq '.activity_summary'
 ```
 
 Expected:

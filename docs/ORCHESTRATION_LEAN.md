@@ -1,7 +1,20 @@
-# ORCHESTRATION LEAN — Guide Équipe 3 Rôles
-## Mis à jour: 2026-03-03 (topologie canonique planner/dev/admin)
+---
+status: historical_compatibility
+last_verified: 2026-03-10
+superseded_by:
+  - docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md
+---
+
+# ORCHESTRATION LEAN — Guide historique / compatibilité
+## Mis à jour: 2026-03-10
 
 ---
+
+> Statut: guide historique / compatibilité.
+> Depuis le basculement `planner_experimental`, la topologie canonique n’est plus `planner/dev/admin` en scheduling.
+> Le runtime cible est défini par `docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md`: `planner` est le seul rôle planifié, et `dev/admin/scrum_master` opèrent comme capabilities sous autorité du planner.
+> Le scheduler autoritaire est le crontab installé par `scripts/fc_setup_crons.sh`.
+> `platform/automation/set_orchestration_mode.sh` sert à la quarantaine des jobs OpenClaw legacy et à `paused`, pas à réactiver des lanes legacy sous `planner_experimental`.
 
 ## Mise à jour critique cron (2026-03-03)
 

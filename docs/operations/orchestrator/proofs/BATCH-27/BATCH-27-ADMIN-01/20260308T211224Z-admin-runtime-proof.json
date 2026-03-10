@@ -1,0 +1,89 @@
+{
+  "proof_id": "PRF-BATCH-27-ADMIN-01-20260308T211224Z",
+  "stream_id": "BATCH-27",
+  "task_id": "BATCH-27-ADMIN-01",
+  "role": "admin",
+  "produced_at_utc": "2026-03-08T21:12:24Z",
+  "scope": "runtime truth, monitor latency, frontend smoke fallback, live/degraded widget evidence",
+  "runtime_truth": {
+    "runtime_host": {
+      "runtime_host_kind": "vm_runtime",
+      "runtime_is_vm": 1,
+      "pwd": "/home/venom/shared/analyse-financiere/logs-codex-runs/openclaw-capabilities/planner-admin",
+      "expected_workspace": "/home/venom/analyse-financiere"
+    },
+    "stack": {
+      "frontend_root_http": 200,
+      "backend_health_http": 200,
+      "backend_health_status": "ok",
+      "monitor_status_http": 200,
+      "monitor_health": "DEGRADED",
+      "monitor_roles": [
+        "planner",
+        "admin"
+      ],
+      "monitor_core_roles": [
+        "planner"
+      ],
+      "issue_reporting_missing_roles": []
+    },
+    "monitor_contract_smoke": "PASS health=DEGRADED roles=2 agents=2 queue_states=5 workboard_ready=2 admin_timeouts_recent=0 issues_records=6",
+    "critical_endpoints_smoke": "PASS base=http://127.0.0.1:8050 endpoints=3 degraded=0",
+    "health_snapshot": "2026-03-08T21:08:26Z health=DEGRADED done=166 ready=2 blocked=planner:PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW stale=[] rl=[] critical_widgets=degraded",
+    "monitor_latency_probe": {
+      "method": "5x curl --max-time 5 http://127.0.0.1:7779/api/status",
+      "successes": 4,
+      "timeouts": 1,
+      "successful_elapsed_seconds": [
+        4.27,
+        1.98,
+        2.34,
+        1.17
+      ],
+      "note": "Observability latency is present, but the monitor contract still returns 200/DEGRADED and issue_reporting has no missing roles."
+    }
+  },
+  "frontend_smoke": {
+    "root_http": 200,
+    "connector_contract": "PASS batch_27_dev_03_connector_contract_check",
+    "refresh_behavior": "refreshLiveData completed twice and emitted the live-dashboard event.",
+    "api_error_behavior": "Fixture-only fetch misses on /ingestion/health and /status did not break refresh completion.",
+    "browser_replay": "SKIP(openclaw browser default profile is attachOnly; no attachable openclaw browser session was available during this run)",
+    "reused_browser_proof": "/home/venom/shared/analyse-financiere/logs-codex-runs/browser-smoke/20260308T204042Z-batch-27-admin-01-frontend-root.json"
+  },
+  "widgets": {
+    "forecast_scenarios_api": {
+      "state": "live",
+      "rows_count": 1,
+      "fallback_used": false,
+      "freshness_status": "fresh",
+      "updated_at": "2026-03-08T06:29:08.411664Z",
+      "evidence": "GET /api/forecasts?limit=1 returned ok status with one model-backed row."
+    },
+    "news_feed_api": {
+      "state": "data_present_stale",
+      "items_count": 1,
+      "total_items": 3,
+      "freshness_status": "stale",
+      "updated_at": "2026-03-08T21:06:49.838256Z",
+      "evidence": "GET /api/news/feed?limit=1 returned cached news items; UI must surface stale/degraded copy, not a blank widget."
+    },
+    "market_pulse_ui": {
+      "state": "degraded_explicit",
+      "evidence": "Reused browser proof shows 'Live market story unavailable. Check back after the next backend refresh.'"
+    },
+    "shell_status_ui": {
+      "state": "degraded_explicit",
+      "evidence": "Reused browser proof shows 'LOADING Cached data remains visible until live sync completes.'"
+    },
+    "news_widget_ui": {
+      "state": "degraded_explicit",
+      "evidence": "Reused browser proof shows 'Live headlines are loading. Cached cards remain available in the meantime.'"
+    }
+  },
+  "conclusion": {
+    "runtime_verdict": "RUNTIME_OK_NONRUNTIME_DEGRADED",
+    "root_cause": "The runtime stack is reachable. Degraded status comes from planner/governance blocking plus intermittent monitor /api/status latency, while critical frontend areas surface explicit loading/degraded copy instead of failing silently.",
+    "planner_action": "Merge as runtime-unblocked evidence. Route planner blocker visibility and monitor latency follow-up to planner/dev; no admin runtime repair was required."
+  }
+}

@@ -12,10 +12,10 @@ from typing import Any
 
 CANONICAL_WORKSPACE = "/home/venom/analyse-financiere"
 CANONICAL_MAIN_WORKSPACE = "/home/venom"
-CANONICAL_PRIMARY_MODEL = "codex-cli/gpt-5.4"
+CANONICAL_PRIMARY_MODEL = "codex-cli/gpt-5.3-codex-spark"
 CANONICAL_MAIN_MODEL = "codex-cli-main/gpt-5.4"
 CANONICAL_FULL_MODEL = "codex-full/gpt-5.4"
-CANONICAL_DEFAULT_THINKING = "xhigh"
+CANONICAL_DEFAULT_THINKING = "low"
 CANONICAL_OWNER_E164 = "+14389799898"
 CANONICAL_OPENCLAW_SKILLS = (
     "browser-smoke",
@@ -214,6 +214,7 @@ CANONICAL_PERSISTENT_AGENTS: dict[str, dict[str, Any]] = {
     "main": {
         "name": "Main",
         "model": CANONICAL_MAIN_MODEL,
+        "thinking": "xhigh",
         "workspace": CANONICAL_MAIN_WORKSPACE,
         "tools": {
             "exec": {"host": "gateway", "security": "full", "ask": "off"},
@@ -249,13 +250,13 @@ CANONICAL_PERSISTENT_AGENTS: dict[str, dict[str, Any]] = {
     "adminapp-codex": {
         "name": "AdminApp Codex",
         "model": CANONICAL_PRIMARY_MODEL,
-        "thinking": "high",
+        "thinking": "low",
         "identity": {"name": "AdminApp Codex", "theme": "runtime"},
     },
     "clawsentinel": {
         "name": "ClawSentinel",
         "model": CANONICAL_PRIMARY_MODEL,
-        "thinking": "high",
+        "thinking": "low",
         "identity": {"name": "ClawSentinel", "theme": "safety"},
     },
 }

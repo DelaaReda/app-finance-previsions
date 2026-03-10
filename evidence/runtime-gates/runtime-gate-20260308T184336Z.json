@@ -1,0 +1,392 @@
+{
+  "generated_at": "2026-03-08T18:44:36.120002Z",
+  "verdict": "DEGRADED",
+  "services": {
+    "launcher_start_rc": 0,
+    "api_base_url": "http://127.0.0.1:8050",
+    "monitor_base_url": "http://127.0.0.1:7779"
+  },
+  "checks": {
+    "monitor_contract": {
+      "rc": 0,
+      "summary": "PASS health=DEGRADED roles=1 agents=1 queue_states=5 workboard_ready=2 admin_timeouts_recent=0 issues_records=9"
+    },
+    "critical_endpoints": {
+      "rc": 0,
+      "summary": "PASS base=http://127.0.0.1:8050 endpoints=3 degraded=0\nPASS /api/forecasts?horizon=short&limit=24\nPASS /api/recommendations/daily?limit=3\nPASS /api/stocks/AAPL/sheet"
+    },
+    "doctor": {
+      "rc": 1,
+      "summary": {
+        "status": "degraded",
+        "generated_at": "2026-03-08T18:44:35.154303Z",
+        "checks": {
+          "workspace_root": {
+            "status": "ok",
+            "canonical": "/home/venom/shared/analyse-financiere",
+            "exists": true,
+            "writable": true
+          },
+          "runtime_state": {
+            "status": "ok",
+            "lifecycle": "running",
+            "reason": "cron_profile_planner-experimental",
+            "operator_mode": "planner-experimental",
+            "execution_mode": "planner_experimental",
+            "source": "fc_setup_crons",
+            "updated_at": "2026-03-08T15:24:09.898681Z",
+            "state_file": "/home/venom/shared/analyse-financiere/logs-codex-runs/orchestrator-state/runtime-state.json"
+          },
+          "scheduler_authority": {
+            "status": "ok",
+            "policy_target": "cron_only",
+            "cron_has_vm_resume_guard": true,
+            "cron_rc": 0,
+            "cron_stderr": "",
+            "timer_enabled": false,
+            "timer_active": false,
+            "timer_probe": "systemd_user_unavailable",
+            "scheduler_policy": "cron_only"
+          },
+          "sessions": {
+            "status": "ok",
+            "rc": 0,
+            "sessions": [
+              "admin-agents-sync-cron",
+              "adminapp_codex_sync",
+              "clawsentinel",
+              "codex_planner_cron"
+            ],
+            "expected_core": [
+              "planner"
+            ],
+            "missing_core": [],
+            "missing_core_raw": [],
+            "found_core": {
+              "planner": "codex_planner_cron"
+            },
+            "execution_mode": "planner_experimental",
+            "runtime_lifecycle": "running",
+            "advisory_optional": "scrum_master",
+            "stderr": ""
+          },
+          "locks": {
+            "status": "ok",
+            "tick_lock_dir": "/tmp/fc-agent-locks",
+            "state_dir": "/home/venom/.openclaw/cron/role-state",
+            "stale_tick_locks": [],
+            "stale_state_locks": [],
+            "stale_total": 0
+          },
+          "queue_workboard": {
+            "status": "ok",
+            "queue_file": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+            "workboard_file": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/parallel-workstreams.json",
+            "queue_exists": true,
+            "workboard_exists": true,
+            "queue_total": 59,
+            "workboard_total": 175,
+            "queue_states": {
+              "CLOSED": 17,
+              "IN_PROGRESS": 3,
+              "WAITING_DEP": 15,
+              "PLANNED": 22,
+              "READY_PLANNER": 2
+            },
+            "workboard_states": {
+              "DONE": 166,
+              "IN_PROGRESS": 3,
+              "WAITING_DEP": 3,
+              "READY_PLANNER": 2,
+              "BLOCKED": 1
+            },
+            "mismatch_count": 0,
+            "queue_only": [],
+            "workboard_only": [],
+            "state_mismatch": [],
+            "oldest_mismatch_age_s": -1,
+            "mismatch": []
+          },
+          "providers": {
+            "status": "ok",
+            "api_base": "http://127.0.0.1:8050",
+            "monitor_base": "http://127.0.0.1:7779",
+            "api_health_ok": true,
+            "api_reachable_effective": true,
+            "api_status": 200,
+            "api_probe": "{\"ok\":true,\"data\":{\"status\":\"ok\",\"backend_up\":true,\"generated_at\":\"2026-03-08T18:44:34.894029Z\",\"freshness\":\"2026-03-08T18:44:34.894029Z\",\"last_update\":\"2026-03-08T18:44:34.894029Z\",\"source\":[\"api_hea",
+            "api_probe_blocked": false,
+            "api_listener_ok": true,
+            "monitor_status_ok": true,
+            "monitor_reachable_effective": true,
+            "monitor_status_code": 200,
+            "monitor_probe": "<!DOCTYPE html>\n<html lang=\"fr\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>FC Monitor</title>\n<link href=\"https://fonts.googleapis.com/cs",
+            "monitor_probe_blocked": false,
+            "monitor_listener_ok": true,
+            "rate_limit_caches": [
+              {
+                "path": "/home/venom/.openclaw/cron/role-state/codex.rate_limit_gate_cache",
+                "exists": false
+              },
+              {
+                "path": "/home/venom/.openclaw/cron/role-state/qwen.rate_limit_gate_cache",
+                "exists": false
+              }
+            ]
+          },
+          "product_value": {
+            "status": "ok",
+            "guard_status": "ok",
+            "p0_broken": false,
+            "blocked_reasons": [],
+            "allow_orchestration_autobatch": true,
+            "copilot_status": "ok",
+            "forecasts_status": "ok",
+            "metrics": {
+              "generated_at": "2026-03-08T18:44:34.948051Z",
+              "copilot": {
+                "status": "ok",
+                "usable": true,
+                "fallback": false,
+                "source_count": 3,
+                "latency_ms": 14.989,
+                "reason": "normal"
+              },
+              "forecasts": {
+                "status": "ok",
+                "probe_source": "api",
+                "probe_error": "",
+                "rows_count": 1,
+                "fallback_used": false,
+                "freshness_status": "fresh",
+                "freshness_age_s": 44094,
+                "updated_at": "2026-03-08T06:29:08.411664Z",
+                "source_kind": "model_backed",
+                "source_markers": [
+                  "forecasts_route",
+                  "forecast_hybrid_v1",
+                  "local_momentum",
+                  "forecasts_nominal_refresh",
+                  "decision_contract_v1",
+                  "forecasts_live_compute",
+                  "forecasts_cache_hit",
+                  "None"
+                ],
+                "valid": true
+              },
+              "data_freshness": {
+                "prices": {
+                  "path": "/home/venom/shared/analyse-financiere/data/stocks/prices.json",
+                  "exists": true,
+                  "updated_at": "2026-03-08T18:20:24.779785Z",
+                  "age_s": 1450,
+                  "threshold_s": 43200,
+                  "state": "fresh"
+                },
+                "news": {
+                  "path": "/home/venom/shared/analyse-financiere/data/news_feed.json",
+                  "exists": true,
+                  "updated_at": "2026-03-08T18:44:08.288286",
+                  "age_s": 26,
+                  "threshold_s": 21600,
+                  "state": "fresh"
+                },
+                "forecasts": {
+                  "path": "/home/venom/shared/analyse-financiere/data/forecasts.json",
+                  "exists": true,
+                  "updated_at": "2026-03-08T06:29:08.411664Z",
+                  "age_s": 44126,
+                  "threshold_s": 86400,
+                  "state": "fresh"
+                },
+                "backtests": {
+                  "path": "/home/venom/shared/analyse-financiere/data/backtests.json",
+                  "exists": true,
+                  "updated_at": "2026-03-04T02:53:00.242246Z",
+                  "age_s": 402694,
+                  "threshold_s": 259200,
+                  "state": "warm"
+                },
+                "brief_daily": {
+                  "path": "/home/venom/shared/analyse-financiere/data/brief_daily.json",
+                  "exists": true,
+                  "updated_at": "2026-03-08T18:44:34.067163",
+                  "age_s": 0,
+                  "threshold_s": 86400,
+                  "state": "fresh"
+                }
+              },
+              "delivery_mix": {
+                "active_items_total": 29,
+                "classified_total": 8,
+                "product_active_count": 4,
+                "orchestration_active_count": 4,
+                "unknown_active_count": 21,
+                "product_ratio": 0.5,
+                "orchestration_ratio": 0.5,
+                "product_samples": [
+                  "BATCH-18",
+                  "BATCH-25",
+                  "BATCH-51",
+                  "BATCH-51-GOV_REVIEW"
+                ],
+                "orchestration_samples": [
+                  "BATCH-11",
+                  "BATCH-12",
+                  "BATCH-20",
+                  "BATCH-24"
+                ]
+              },
+              "priority_guard": {
+                "status": "ok",
+                "p0_broken": false,
+                "blocked_reasons": [],
+                "allow_orchestration_autobatch": true,
+                "needs_product_focus": false
+              }
+            }
+          },
+          "delivery_integrity": {
+            "status": "degraded",
+            "generated_at": "2026-03-08T18:44:35.027137Z",
+            "window_hours": 24,
+            "recent_completions": 16,
+            "proof_manifest_coverage": 1.0,
+            "tests_evidence_coverage": 1.0,
+            "commit_evidence_coverage": 0.812,
+            "browser_proof_required_count": 13,
+            "browser_proof_present_count": 0,
+            "browser_proof_coverage": 0.0,
+            "browser_proof_missing_task_ids": [
+              "BATCH-28-DEV-01",
+              "BATCH-28-DEV-02",
+              "BATCH-11-DEV-02",
+              "BATCH-11-DEV-03",
+              "BATCH-51-DEV-02",
+              "BATCH-58-DEV-01",
+              "BATCH-58-DEV-02",
+              "BATCH-58-DEV-03"
+            ],
+            "suspicious_completion_count": 3,
+            "suspicious_task_ids": [
+              "BATCH-28-ADMIN-01",
+              "BATCH-51-ADMIN-01",
+              "BATCH-58-ADMIN-01"
+            ]
+          },
+          "planner_dispatch": {
+            "status": "degraded",
+            "registry_path": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/planner-subagents-registry.json",
+            "active_count": 0,
+            "active": [],
+            "recent": [
+              {
+                "subagent_id": "planner_admin_4f45927972",
+                "target_role": "admin",
+                "parent_role": "planner",
+                "owner_task_id": "BATCH-59-ADMIN-01",
+                "status": "merged",
+                "summary": "openclaw_timeout_after_615s",
+                "artifact": "none",
+                "last_update_at": "2026-03-08T18:00:55Z",
+                "created_at": "2026-03-08T17:50:27Z",
+                "backend": "openclaw",
+                "backend_ref": "planner_admin_4f45927972"
+              },
+              {
+                "subagent_id": "planner_admin_8d3bcb816f",
+                "target_role": "admin",
+                "parent_role": "planner",
+                "owner_task_id": "BATCH-59-ADMIN-01",
+                "status": "merged",
+                "summary": "openclaw_timeout_after_615s",
+                "artifact": "none",
+                "last_update_at": "2026-03-08T18:16:21Z",
+                "created_at": "2026-03-08T18:05:59Z",
+                "backend": "openclaw",
+                "backend_ref": "planner_admin_8d3bcb816f"
+              },
+              {
+                "subagent_id": "planner_admin_5c2ee8ee78",
+                "target_role": "admin",
+                "parent_role": "planner",
+                "owner_task_id": "BATCH-59-ADMIN-01",
+                "status": "failed",
+                "summary": "openclaw_timeout_after_615s",
+                "artifact": "none",
+                "last_update_at": "2026-03-08T18:27:39Z",
+                "created_at": "2026-03-08T18:17:17Z",
+                "backend": "openclaw",
+                "backend_ref": "planner_admin_5c2ee8ee78"
+              },
+              {
+                "subagent_id": "planner_admin_4cea8df90a",
+                "target_role": "admin",
+                "parent_role": "planner",
+                "owner_task_id": "BATCH-27-ADMIN-01",
+                "status": "failed",
+                "summary": "openclaw_timeout_after_615s",
+                "artifact": "none",
+                "last_update_at": "2026-03-08T18:39:55Z",
+                "created_at": "2026-03-08T18:29:20Z",
+                "backend": "openclaw",
+                "backend_ref": "planner_admin_4cea8df90a"
+              }
+            ],
+            "recent_total": 4,
+            "recent_success_count": 2,
+            "recent_failed_count": 2,
+            "recent_blocked_count": 0,
+            "recent_fallback_like_count": 0,
+            "recent_success_rate": 0.5,
+            "recent_by_role": {
+              "admin": {
+                "total": 4,
+                "success": 2,
+                "failed": 2,
+                "blocked": 0,
+                "fallback_like": 0
+              }
+            },
+            "latest_status": "failed",
+            "latest_fallback_like": false,
+            "latest_owner_task_id": "BATCH-27-ADMIN-01",
+            "latest_update_at": "2026-03-08T18:39:55Z"
+          }
+        },
+        "meta": {
+          "schema_version": "doctor.v1",
+          "duration_ms": 420
+        }
+      }
+    },
+    "status_api": {
+      "rc": 0,
+      "summary": {
+        "status": "degraded",
+        "po_scrum_master": {
+          "name": "po_scrum_master",
+          "lane_role": "scrum_master",
+          "mode": "disabled_compat",
+          "active": false,
+          "last_run": "",
+          "last_run_age_min": -1,
+          "status": "DISABLED",
+          "verdict": "DISABLED",
+          "blocker": "NONE",
+          "next": "",
+          "last_report_path": "/home/venom/analyse-financiere/docs/ops/PO_SCRUM_MASTER_REPORTS.md",
+          "last_report_ts": "",
+          "last_report_age_min": -1,
+          "lock_skip_streak": 0,
+          "last_messages_posted": 0,
+          "recent_messages": [],
+          "tick_tail": [],
+          "runner_tail": [],
+          "events_tail": [],
+          "source": "planner_only_compat_disabled"
+        }
+      }
+    }
+  }
+}

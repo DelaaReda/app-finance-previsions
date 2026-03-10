@@ -1,0 +1,16 @@
+{
+  "worker_id": "worker_qa_review_worker_b61f16e3ba",
+  "worker_type": "qa_review_worker",
+  "owner_task_id": "BATCH-59-DEV-02",
+  "parent_role": "planner",
+  "result_kind": "qa_fix_result",
+  "status": "failed",
+  "summary": "Error: Unknown agent id \"worker_qa_review_worker_b61f16e3ba\". Use \"openclaw agents list\" to see configured agents.",
+  "artifact": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_b61f16e3ba.raw.json",
+  "verify": "proof=worker_backend:openclaw; rc=1",
+  "raw_output_ref": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_b61f16e3ba.raw.json",
+  "backend": "openclaw",
+  "backend_ref": "worker_qa_review_worker_b61f16e3ba",
+  "started_at": "2026-03-09T04:50:22Z",
+  "finished_at": "2026-03-09T05:00:56Z"
+}

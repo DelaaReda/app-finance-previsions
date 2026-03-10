@@ -89,7 +89,7 @@ class PlannerSubagentManagerTests(unittest.TestCase):
 
     def test_prompt_mentions_native_codex_multi_agent_helpers(self) -> None:
         prompt = _build_prompt("admin", "BATCH-61-ADMIN-01", "runtime", "Validate runtime truth.")
-        self.assertIn("worker-first mode", prompt)
+        self.assertIn("planner-owned capability dispatch only", prompt)
         self.assertIn("`explorer` is exception-only", prompt)
         self.assertIn("`monitor`", prompt)
 

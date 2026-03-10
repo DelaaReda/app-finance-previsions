@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-14-BATCH-14-DEV-01-20260309T215912Z-423"
+stream_id: "BATCH-14"
+task_id: "BATCH-14-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-09T21:59:12Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope finalisation core v2: robustness drills + go/no-go [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_finalisation_core_v2:_robustness_drills_+_go/no-go_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T21:59:12Z"
+      ended_at_utc: "2026-03-09T21:59:12Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`pytest apps/api/src/domains/judge/tests/test_judge_pipeline_parse_llm_answer.py`"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Commit `38676ad108f24ff3f8b888b49efdab1dd60fc3e0` adds one new test file under Judge domain tests."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-14-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-14-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=Lack of targeted coverage for real-world LLM responses (fenced/embedded JSON + malformed payloads) meant the Judge parse robustness drill had no direct verification evidence. | fix_applied=Created `apps/api/src/domains/judge/tests/test_judge_pipeline_parse_llm_answer.py` with three focused tests asserting: fenced JSON is parsed, embedded JSON with trailing text is parsed, and partial/invalid JSON falls bac | verify=before=No focused tests covering `parse_llm_answer` under mixed text/JSON LLM outputs; after=Added 3 regression assertions for parser acceptance/fallback; test= `pytest apps/api/src/domains/judge/tests/test_judge_pipelin | architecture_check=layer=judge_application; imports_ok=true; path_target=apps/api/src/domains/judge/application/judge_pipeline.py (coverage via apps/api/src/domains/judge/tests) | vision_alignment=batch=BATCH-14; target=Core v2 robustness drill / GO-NO-GO confidence for Judge endpoint stack; impact=adds executable evidence that parser remains stable under noisy LLM outputs"

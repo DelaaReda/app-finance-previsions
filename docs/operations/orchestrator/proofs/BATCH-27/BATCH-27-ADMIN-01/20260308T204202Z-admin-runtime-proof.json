@@ -1,0 +1,123 @@
+{
+  "proof_id": "PRF-BATCH-27-ADMIN-01-20260308T204202Z",
+  "stream_id": "BATCH-27",
+  "task_id": "BATCH-27-ADMIN-01",
+  "role": "admin",
+  "produced_at_utc": "2026-03-08T20:42:02Z",
+  "scope": "runtime truth, monitor contract, frontend smoke, live/degraded widget evidence",
+  "runtime_truth": {
+    "runtime_host": {
+      "runtime_host_kind": "vm_runtime",
+      "runtime_is_vm": 1,
+      "pwd": "/home/venom/shared/analyse-financiere",
+      "expected_workspace": "/home/venom/analyse-financiere"
+    },
+    "stack": {
+      "frontend_status": 200,
+      "backend_status": 200,
+      "monitor_status": 200,
+      "listeners": {
+        "5173": "up",
+        "8050": "up",
+        "7779": "up"
+      },
+      "launcher_action": "skipped",
+      "quiet_period": "PASS"
+    },
+    "monitor": {
+      "health": "DEGRADED",
+      "roles": [
+        "planner"
+      ],
+      "issue_publication_gap_roles": [],
+      "critical_open_count": 0,
+      "issues_recent_by_role": {
+        "planner": 0
+      },
+      "planner_agent": {
+        "verdict": "BLOCKED",
+        "status": "BLOCKED",
+        "delta": "RESUME_BATCH_28_GOV_REVIEW_BLOCKED",
+        "blocker": "PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW",
+        "next": "owner=planner; action=clore BATCH-28-GOV_REVIEW puis traiter BATCH-51-GOV_REVIEW et BATCH-58-GOV_REVIEW des que la commande complete est accessible",
+        "tick_age_min": 12,
+        "source": "runtime_contract"
+      },
+      "signals": {
+        "admin_timeout_events_recent": 0,
+        "planner_blocker_id": "PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW",
+        "planner_policy_enforced": true,
+        "admin_dispatch_status": "ok"
+      }
+    },
+    "doctor": {
+      "status": "degraded",
+      "runtime_status": "ok",
+      "non_runtime_degraded_checks": [
+        "delivery_integrity",
+        "suspicious_completions",
+        "planner_dispatch"
+      ]
+    }
+  },
+  "frontend_smoke": {
+    "connector_contract": "PASS batch_27_dev_03_connector_contract_check",
+    "refresh_behavior": "refreshLiveData completed twice and emitted the live-dashboard event",
+    "optional_api_error_behavior": "Fixture-only fetch misses on /ingestion/health and /status did not break refresh completion",
+    "browser_smoke": {
+      "proof_kind": "openclaw_browser_smoke",
+      "console_errors": 0,
+      "page_errors": 0
+    }
+  },
+  "widgets": {
+    "news_feed": {
+      "state": "live",
+      "items_count": 3,
+      "updated_at": "2026-03-08T19:56:30.480738",
+      "freshness_state": "fresh",
+      "evidence": "API news feed returned live items and monitor freshness reports fresh news data."
+    },
+    "forecast_scenarios": {
+      "state": "live",
+      "rows_count": 1,
+      "fallback_used": false,
+      "updated_at": "2026-03-08T06:29:08.411664Z",
+      "source_kind": "model_backed",
+      "evidence": "Forecast endpoint returned live model-backed data with ok status."
+    },
+    "market_pulse": {
+      "state": "degraded_explicit",
+      "evidence": [
+        "Browser snapshot shows 'Live Updated just now'.",
+        "Browser snapshot shows 'Live market story unavailable. Check back after the next backend refresh.'"
+      ]
+    },
+    "shell_status": {
+      "state": "degraded_explicit",
+      "evidence": [
+        "Browser snapshot status shows 'LOADING Cached data remains visible until live sync completes.'",
+        "Browser snapshot status shows 'Live sync in progress. Quick actions stay available while cached context remains visible.'"
+      ]
+    },
+    "news_widget_ui": {
+      "state": "degraded_explicit",
+      "evidence": [
+        "Browser snapshot shows 'Live headlines are loading. Cached cards remain available in the meantime.'",
+        "Browser snapshot captured no console or page errors while cached cards remained visible."
+      ]
+    }
+  },
+  "artifacts": [
+    "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-27/BATCH-27-ADMIN-01/20260308T204202Z-admin-runtime-proof.json",
+    "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T204042Z.json",
+    "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T204042Z.log",
+    "/home/venom/shared/analyse-financiere/logs-codex-runs/browser-smoke/20260308T204042Z-batch-27-admin-01-frontend-root.json",
+    "/home/venom/shared/analyse-financiere/logs-codex-runs/browser-smoke/20260308T204042Z-batch-27-admin-01-frontend-root.png"
+  ],
+  "conclusion": {
+    "runtime_verdict": "RUNTIME_OK_NONRUNTIME_DEGRADED",
+    "root_cause": "Observed degradation is planner/governance visibility, not frontend/backend/monitor reachability. Runtime stack is healthy and the UI shows either live data or explicit degraded copy.",
+    "planner_action": "Merge as runtime-unblocked evidence. Route the remaining degraded monitor state back to planner or scrum follow-up, not admin runtime repair."
+  }
+}

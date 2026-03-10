@@ -1,0 +1,3 @@
+Error: All models failed (2): codex-full/gpt-5.4: Error loading config.toml: invalid type: integer `1`, expected struct AgentRoleToml
+in `agents` (unknown) | codex-cli/gpt-5.4: Error loading config.toml: invalid type: integer `1`, expected struct AgentRoleToml
+in `agents` (unknown)

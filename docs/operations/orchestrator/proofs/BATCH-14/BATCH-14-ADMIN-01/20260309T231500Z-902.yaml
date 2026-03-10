@@ -1,0 +1,43 @@
+proof_id: "PRF-BATCH-14-BATCH-14-ADMIN-01-20260309T231500Z-902"
+stream_id: "BATCH-14"
+task_id: "BATCH-14-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-09T23:10:00Z"
+stream_intent: "Finalisation Core v2: Robustness Drills + GO/NO-GO runtime truth"
+status: "PASS_WITH_WARNING"
+summary:
+  runtime_truth: "planner-only runtime active; monitor stack reachable via /api/status?lite=1"
+  observability: "health probes passed for app/API/monitor-lite; non-lite monitor probe requires higher timeout"
+  cron_runtime: "runtime_mode planner_experimental validated; no stale locks; no missing core sessions under planner mode"
+executions:
+  - cmd: "python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact --status-core-roles planner"
+    rc: 0
+    result: "PASS"
+  - cmd: "python3 scripts/qwen_orchestrator.py --tmux-cmd health --status-format compact --status-core-roles planner,dev,tester,qa"
+    rc: 1
+    result: "BLOCKED by missing optional roles dev/tester/qa (planner-only mode expected)"
+  - cmd: "bash scripts/watch_codex_runtime.sh --once"
+    rc: 0
+    result: "planner-only mode confirmed; one agent tick in crontab"
+  - cmd: "bash scripts/stale_cron_sweep.sh --dry-run"
+    rc: 0
+    result: "matched=0 stale=0"
+  - cmd: "bash scripts/fc_health_check.sh"
+    rc: 0
+    result: "DEGRADED, monitor contact path timeout noted"
+  - cmd: "platform/policies/exec_safe.sh --force-confirm --workdir /home/venom/analyse-financiere -- \"curl -sS -m 8 http://127.0.0.1:7779/api/status?lite=1\""
+    rc: 0
+    result: "monitor-lite JSON returned health OK"
+artifacts:
+  - docs/operations/orchestrator/proofs/BATCH-14/BATCH-14-ADMIN-01/20260309T231500Z-admin-runtime-proof.json
+notes:
+  warnings:
+    - "non-lite /api/status and /health probes can exceed default timeout window"
+decision:
+  task_runtime_unblock: true
+  planner_mergeable: true
+  admin_fix_needed: false
+  remaining_blocker: "none"
+architecture_check: "PASS"
+vision_alignment: "PASS"
+commit_sha: "none"

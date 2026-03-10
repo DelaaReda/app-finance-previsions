@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-58-BATCH-58-DEV-03-20260308T060030Z-682"
+stream_id: "BATCH-58"
+task_id: "BATCH-58-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-08T06:00:30Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope **profil:** reda (venom) — professionnel non-expert en finance qui gère ses investissements pers [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_**profil:**_reda_(venom)_—_professionnel_non-expert_en_finance_qui_gère_ses_investissements_pers_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-08T06:00:30Z"
+      ended_at_utc: "2026-03-08T06:00:30Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['node --check repo/apps/web/src/domains/forecasts/pages/app.js -> PASS', 'node inline VM verification for persisted profile restore + changeProfile storage/reorg -> PASS', 'timeout 120s bash platform/policies/backend_re"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=642abe5a790e3722644d50bdcbc574c7a3d77189; file=apps/web/src/domains/forecasts/pages/app.js:1239-1277,2551,2625-2664"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-58-DEV-03"
+  review_ref: "primary_structured:BATCH-58-DEV-03"
+  note: "source=primary_structured | root_cause=The Reda slice added in DEV-02 only lived in memory: `v11State.currentProfile` was hard-coded to `trader`, and `changeProfile()` rewired widgets without persisting the selection, so the profile silently reverted after pa | fix_applied=Added a minimal localStorage-backed profile helper set in `apps/web/src/domains/forecasts/pages/app.js` to normalize allowed profile values, restore the saved profile at boot, sanitize profile sync, and persist every `ch | verify=before=the forecasts page always re-entered with `currentProfile: 'trader'`, so a Reda selection was lost on reload even though DEV-02 rewired the live UI; after=the selected forecasts profile is normalized, stored under | architecture_check=layer=frontend domain page assembly only; imports_ok=yes (no new imports or cross-layer dependency, reused existing forecasts page/profile wiring); path_target=apps/web/src/domains/forecasts/pages/app.js | vision_alignment=batch=BATCH-58; target=Reda (venom) non-expert personal-investing journey on the existing forecasts surface; impact=keeps the guided persona durable across reloads so the simplified profile path remains active without ex"

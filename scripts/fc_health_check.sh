@@ -20,6 +20,41 @@ MODEL_CONFIG_FILE="$ROOT/platform/config/lm_used_model_config.sh"
 set +e
 set +u
 
+RUNNER_CONFIG_FILE="${RUNNER_CONFIG_FILE:-$ROOT/platform/config/runner/runner.v1.yaml}"
+[[ -f "$RUNNER_CONFIG_FILE" ]] || RUNNER_CONFIG_FILE="$ROOT/platform/config/runner/runner_config.v1.yaml"
+
+scheduled_roles() {
+  python3 - "$RUNNER_CONFIG_FILE" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+roles = ["planner", "dev", "admin"]
+try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    print(" ".join(roles))
+    raise SystemExit(0)
+
+features = data.get("features", {}) if isinstance(data, dict) else {}
+planner = features.get("planner_orchestrator", {}) if isinstance(features, dict) else {}
+enabled = str(planner.get("enabled", "")).strip() not in {"", "0", "false", "False"}
+planner_only = str(planner.get("cron_planner_only", "")).strip() not in {"", "0", "false", "False"}
+if enabled and planner_only:
+    roles = ["planner"]
+print(" ".join(roles))
+PY
+}
+
+SCHEDULED_ROLES_STR="$(scheduled_roles)"
+read -r -a SCHEDULED_ROLES <<< "${SCHEDULED_ROLES_STR:-planner dev admin}"
+[[ "${#SCHEDULED_ROLES[@]}" -gt 0 ]] || SCHEDULED_ROLES=("planner" "dev" "admin")
+PLANNER_ONLY_MODE=0
+if [[ "${#SCHEDULED_ROLES[@]}" -eq 1 && "${SCHEDULED_ROLES[0]}" == "planner" ]]; then
+  PLANNER_ONLY_MODE=1
+fi
+
 GREEN='\033[0;32m' RED='\033[0;31m' YELLOW='\033[1;33m' BLUE='\033[0;34m' NC='\033[0m' BOLD='\033[1m'
 ok()   { echo -e "  ${GREEN}✅${NC} $*"; }
 warn() { echo -e "  ${YELLOW}⚠️ ${NC} $*"; }
@@ -136,8 +171,7 @@ NEWS=$(curl -s --max-time 3 "http://localhost:8050/api/news/feed?limit=1" 2>/dev
 
 # ── 5. Agent Sessions ─────────────────────────────────────
 echo -e "\n${BOLD}[ Agent Sessions ]${NC}"
-ACTIVE_ROLES=("planner" "dev" "admin")
-for role in "${ACTIVE_ROLES[@]}"; do
+for role in "${SCHEDULED_ROLES[@]}"; do
   SESSION="codex_${role}_cron"
   if tmux has-session -t "$SESSION" 2>/dev/null; then
     CMD=$(tmux display-message -p -t "$SESSION:0.0" "#{pane_current_command}" 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo "?")
@@ -146,6 +180,9 @@ for role in "${ACTIVE_ROLES[@]}"; do
     warn "Session $SESSION — NOT running"
   fi
 done
+if [[ "$PLANNER_ONLY_MODE" -eq 1 ]]; then
+  info "Planner-only mode active: dev/admin/scrum_master run as planner-owned capabilities, not standalone cron sessions"
+fi
 
 # ── 6. Cron Jobs ──────────────────────────────────────────
 echo -e "\n${BOLD}[ Cron Schedule ]${NC}"
@@ -188,7 +225,7 @@ fi
 # ── 7. Recent Agent Deliveries ────────────────────────────
 echo -e "\n${BOLD}[ Agent Activity (last 2h) ]${NC}"
 TICK_LOG_DIR="$ROOT/logs-codex-runs/fc-ticks"
-for role in "planner" "dev" "admin"; do
+for role in "${SCHEDULED_ROLES[@]}"; do
   LOG="$TICK_LOG_DIR/$role.tick.log"
   if [[ -f "$LOG" ]]; then
     LAST_START=$(grep "\[START\]" "$LOG" 2>/dev/null | tail -1 | cut -d' ' -f1)
@@ -203,6 +240,9 @@ for role in "planner" "dev" "admin"; do
     warn "$role | no tick log"
   fi
 done
+if [[ "$PLANNER_ONLY_MODE" -eq 1 ]]; then
+  info "Planner-only activity is expected; managed roles do not emit standalone tick logs in this mode"
+fi
 
 # ── 8. Git Progress ───────────────────────────────────────
 echo -e "\n${BOLD}[ Git Progress (last 24h) ]${NC}"

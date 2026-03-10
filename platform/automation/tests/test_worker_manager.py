@@ -213,7 +213,7 @@ class WorkerManagerTests(unittest.TestCase):
         self.assertIn("thin shell around the real project tree", (workspace / "WORKSPACE_MAP.md").read_text(encoding="utf-8"))
 
     def test_qa_worker_uses_full_model_and_fix_prompt(self) -> None:
-        self.assertEqual(_worker_runtime_model("qa_review_worker"), "codex-full/gpt-5.4")
+        self.assertEqual(_worker_runtime_model("qa_review_worker"), "codex-full/gpt-5.3-codex-spark")
         prompt = _worker_prompt("qa_review_worker", "BATCH-28-DEV-01", "qa_review", "Check and fix API contract drift.")
         self.assertIn("allowed to resolve the issues you discover", prompt)
         self.assertIn("Preserve the existing frontend theme", prompt)

@@ -15,6 +15,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from orchestrator_paths import resolve_orchestrator_read_path
 from parallel_workstream import append_event, board_lock, load_board, now_iso, recompute_states, reconcile_state, save_board
 
 RUNTIME_BLOCKERS = {
@@ -151,7 +152,7 @@ def _runtime_probes_ok() -> bool:
 
 
 def _active_planner_subagent_owner_tasks(root: Path) -> set[str]:
-    registry_path = root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
+    registry_path = resolve_orchestrator_read_path(root, "planner-subagents-registry.json")
     raw = _load_json(registry_path, [])
     rows: list[dict] = []
     if isinstance(raw, list):

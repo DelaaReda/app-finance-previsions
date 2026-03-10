@@ -122,6 +122,26 @@ class FCDoctorTests(unittest.TestCase):
         self.assertEqual(result.detail.get("missing_core"), [])
         self.assertEqual(result.detail.get("execution_mode"), "planner_experimental")
 
+    def test_check_sessions_reports_orphan_tmux_sessions_in_planner_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            cfg_dir = root / "platform" / "config" / "runner"
+            cfg_dir.mkdir(parents=True, exist_ok=True)
+            (cfg_dir / "runner.v1.yaml").write_text(
+                json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+                encoding="utf-8",
+            )
+            fake = SimpleNamespace(
+                returncode=0,
+                stdout="codex_planner_cron\ncodex_scrum_master_cron\n",
+                stderr="",
+            )
+            with patch.object(fc_doctor.subprocess, "run", return_value=fake):
+                result = fc_doctor.check_sessions(root)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.detail.get("expected_core"), ["planner"])
+        self.assertEqual(result.detail.get("orphans"), ["codex_scrum_master_cron"])
+
     def test_check_sessions_paused_runtime_suppresses_missing_core(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -93,6 +93,30 @@ def parse_evidence_kv(raw: str) -> dict[str, str]:
     return out
 
 
+def _derive_action_summary(values: dict[str, str], evidence_kv: dict[str, str]) -> str:
+    explicit = one_line(evidence_kv.get("action_summary", "") or "", 240)
+    if explicit and explicit.lower() not in {"none", "n/a", "na"}:
+        return explicit
+    exec_report = one_line(evidence_kv.get("exec_report", "") or "", 240)
+    if exec_report and exec_report.lower() not in {"none", "n/a", "na"}:
+        return exec_report
+    run_note = one_line(evidence_kv.get("run_note", "") or "", 240)
+    if run_note and run_note.lower() not in {"none", "n/a", "na"}:
+        return run_note
+    fix_applied = one_line(evidence_kv.get("fix_applied", "") or "", 240)
+    if fix_applied and fix_applied.lower() not in {"none", "n/a", "na"}:
+        return fix_applied
+    next_raw = str(values.get("NEXT", "") or "").strip()
+    next_match = re.search(r"\baction=([^;]+)", next_raw, re.I)
+    if next_match:
+        return one_line(next_match.group(1), 240)
+    delta = one_line(values.get("DELTA", "") or "", 120)
+    status = one_line(values.get("STATUS", "") or "", 80)
+    if delta or status:
+        return one_line(f"{status} {delta}".strip(), 240)
+    return "none"
+
+
 def _safe_int(raw: str, default: int = 0) -> int:
     try:
         return int(str(raw).strip())
@@ -196,8 +220,13 @@ def build_record(role: str, source: str, values: dict[str, str], evidence_kv: di
         "blocker_id": one_line(values.get("BLOCKER_ID", "")),
         "next_action_unique": one_line(values.get("NEXT_ACTION_UNIQUE", "")),
         "next": one_line(values.get("NEXT", ""), 420),
+        "action_summary": _derive_action_summary(values, evidence_kv),
         "task_update": task_update,
         "exec_report": one_line(evidence_kv.get("exec_report", "none") or "none"),
+        "run_note": one_line(evidence_kv.get("run_note", "none") or "none"),
+        "root_cause": one_line(evidence_kv.get("root_cause", "none") or "none", 240),
+        "fix_applied": one_line(evidence_kv.get("fix_applied", "none") or "none", 240),
+        "verify": one_line(evidence_kv.get("verify", "none") or "none", 240),
         "issues": str(issue_report.get("issues", "none")),
         "issue_count": int(issue_report.get("issue_count", 0)),
         "issue_severity": str(issue_report.get("issue_severity", "none")),

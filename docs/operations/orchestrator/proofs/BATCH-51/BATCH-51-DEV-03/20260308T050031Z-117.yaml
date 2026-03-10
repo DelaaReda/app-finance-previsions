@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-51-BATCH-51-DEV-03-20260308T050031Z-117"
+stream_id: "BATCH-51"
+task_id: "BATCH-51-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-08T05:00:31Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope product vision — finance copilot [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_product_vision_—_finance_copilot_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-08T05:00:31Z"
+      ended_at_utc: "2026-03-08T05:00:31Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['python3 -m pytest domains/copilot/tests/test_copilot_service.py -q', 'bash scripts/backend_regression_gate.sh --no-live domains/copilot/tests/test_copilot_service.py', 'python3 -m py_compile apps/api/src/domains/copilo"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=b9f87865defcc2faebf2233237672c197b38b02f; files=apps/api/src/domains/copilot/application/copilot_service.py, apps/api/src/domains/copilot/tests/test_copilot_service.py; slice=Finance Copilot ask confidence/decisio"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-51-DEV-03"
+  review_ref: "primary_structured:BATCH-51-DEV-03"
+  note: "source=primary_structured | root_cause=Before b9f8786, `build_ask_payload` in the copilot service hard-coded memo confidence to `0.8` or `0.4` and returned ask payloads without shared decision-contract finalization, so structured LLM confidence and normalized | fix_applied=No new patch was required in this run. Verified existing commit `b9f87865defcc2faebf2233237672c197b38b02f`, which reuses existing `service_standard` helpers (`coerce_confidence`, `ensure_decision_contract`), adds `_resol | verify=before=`build_ask_payload` forced confidence to `0.8` or `0.4` and bypassed shared ask-payload finalization, so structured confidence/freshness normalization could drift; after=structured confidence is preserved when pro | architecture_check=layer=apps/api copilot application service + focused domain tests; imports_ok=yes(reused existing `services.service_standard` / legacy bridge helper path, no duplicate helper or new cross-layer module introduced); path_t | vision_alignment=batch=BATCH-51; target=Finance Copilot ask/memo backend contract hardening behind the existing UI surfaces; impact=the user-facing copilot memo now reports confidence more honestly and consistently across nominal and deg"

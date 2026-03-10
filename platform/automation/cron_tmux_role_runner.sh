@@ -394,6 +394,7 @@ CODEX_SESSION_FILE="${STATE_DIR}/${ROLE}.codex_exec_session_id"
 LAST_CONTRACT_FILE="${STATE_DIR}/${ROLE}.last_contract"
 TRACE_FILE="${TRACE_DIR}/${ROLE}.live.log"
 TRACE_EVENTS_FILE="${TMUX_ROLE_TRACE_EVENTS_FILE:-${TRACE_DIR}/${ROLE}.events.log}"
+LOG="${TRACE_FILE}"
 LOCK_FILE="${STATE_DIR}/${ROLE}.run.lock"
 LOCK_META_FILE="${STATE_DIR}/${ROLE}.run.lock.meta"
 RATE_LIMIT_CACHE_FILE="${TMUX_ROLE_RATE_LIMIT_CACHE_FILE:-${STATE_DIR}/${AGENT_BIN_NAME}.rate_limit_gate_cache}"
@@ -5019,7 +5020,7 @@ if [[ "$FC_PLANNER_ORCHESTRATOR_ENABLED" == "1" ]]; then
   SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_ORCHESTRATOR_STATE: enabled=1; cron_planner_only=${FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY}; managed_roles=${FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES}; subagent_backend=${FC_PLANNER_ORCHESTRATOR_BACKEND}; max_active=${FC_PLANNER_ORCHESTRATOR_MAX_ACTIVE}."
   if [[ "$ROLE" == "planner" ]]; then
     SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_IS_SOLE_SCHEDULER=1: ne pas attendre une future lane dev/admin/scrum_master. Si une action delivery/runtime/flow est necessaire, lancer un planner subagent tout de suite."
-    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_MULTI_AGENT_POLICY=worker_first: `explorer` est exceptionnel et read-only; par defaut utiliser `worker`/capability pour produire patch, test, preuve ou runtime fix."
+    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_MULTI_AGENT_POLICY=capability_dispatch_only: ne jamais executer litteralement worker, explorer, monitor ou SYSTEM_PROMPT comme commandes shell; utiliser uniquement les wrappers planner-owned deja branches."
   fi
 fi
 if [[ "$ROLE" == "admin" && "$ADMIN_TSHAPE_ACTIVE" == "1" ]]; then
@@ -5043,8 +5044,8 @@ PROTOCOLE_ORCHESTRATION_COMMUN:
 - DELIVERY_VALUE_GATE: aucun complete sans root_cause, fix_applied, verify(before=/after=/test= ou proof=), artifact, tests_run, files_touched, architecture_check, vision_alignment, et commit_sha valide pour code/config/runtime.
 - PLANNER_ORCHESTRATOR: si planner_orchestrator_enabled=1, planner est la seule lane schedulée et doit lancer dev/admin/scrum_master via python3 platform/automation/planner_subagent_manager.py {plan,run,collect,cleanup}. Les subagents rendent des preuves; seul planner met a jour l'orchestration.
 - PLANNER_SUBAGENT_RULE: un subagent dev/admin/scrum_master ne claim/complete jamais le workboard directement. Resultat attendu = summary, artifact, verify, files_touched, tests_run, recommended_next, blocking_issue.
-- EXPLORER_POLICY: en runtime planner-only, ne pas lancer `explorer` par defaut. `explorer` est autorise seulement pour une question read-only et bornee quand le chemin d'implementation est deja clair. Sinon utiliser directement dev/admin/worker.
-- DYNAMIC_WORKERS: seuls planner/dev/admin peuvent utiliser python3 platform/automation/worker_manager.py {plan,run,collect,cleanup}. Types autorises: repo_scan_worker, test_worker, runtime_diag_worker, patch_proposal_worker.
+- EXPLORER_POLICY: en runtime planner-only, ne pas lancer de commande shell brute nommee explorer/worker. Si une capacite read-only est necessaire, passer par les wrappers planner_subagent_manager.py ou worker_manager.py deja branches; sinon rester sur le capability dispatch direct.
+- DYNAMIC_WORKERS: seuls planner/dev/admin peuvent utiliser python3 platform/automation/worker_manager.py {plan,run,collect,cleanup}. Si aucun backend wrapper n'est branche, supprimer ce chemin et rester sur le capability dispatch reel.
 - WORKER_RULE: un worker ne claim/complete jamais une tache metier. Son resultat = evidence/test result/patch proposal/runtime diagnostic, puis le parent decide merge, handoff ou complete.
 - Interdit: "analyse seulement" si une tâche READY/IN_PROGRESS existe pour le rôle.
 - Si workboard_role_has_in_progress=1: reprendre/fermer IN_PROGRESS avant tout nouveau claim.

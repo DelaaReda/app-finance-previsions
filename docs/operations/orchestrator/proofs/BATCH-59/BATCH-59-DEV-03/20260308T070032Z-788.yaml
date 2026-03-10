@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-59-BATCH-59-DEV-03-20260308T070032Z-788"
+stream_id: "BATCH-59"
+task_id: "BATCH-59-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-08T07:00:32Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope status: canonical [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_status:_canonical_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-08T07:00:32Z"
+      ended_at_utc: "2026-03-08T07:00:32Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "['node --test repo/apps/web/src/domains/forecasts/contracts/apiConnector.test.js (PASS)', 'bash platform/policies/backend_regression_gate.sh --no-live platform/tests/test_health_router.py (PASS)']"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit f2714854d870c3dc59573c288e7c4fe98e9b127a; canonical status wiring now lives in `apps/web/src/domains/forecasts/contracts/apiConnector.js` with targeted contract coverage in `apps/web/src/domains/forecasts/contract"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-59-DEV-03"
+  review_ref: "primary_structured:BATCH-59-DEV-03"
+  note: "source=primary_structured | root_cause=DEV-01 added the canonical `/api/status` route, but the web connector still fetched legacy `/health` and treated the backend `ok/data` envelope as a flat object, so frontend consumers never received canonical status meta | fix_applied=Updated `apps/web/src/domains/forecasts/contracts/apiConnector.js` to unwrap health/status envelopes via existing `getResponseData`, added reuse-first `getStatus()` that prefers `/status` and falls back to `/health`, and | verify=before=the forecasts connector fetched legacy `/health` only and kept the wrapped `ok/data` payload intact, so `window.apiHealth.status` and `window.apiHealth.last_updates` were not populated and the frontend did not act | architecture_check=layer=web integration connector; imports_ok=yes (reused existing `fetchWithCache` and `getResponseData`, added no cross-layer imports, and preserved the existing `window.apiHealth` consumer contract in `app.js`); path_ta | vision_alignment=batch=BATCH-59; target=status canonical [DEV-03]; impact=smallest end-to-end slice that makes the frontend actually consume the canonical backend status contract without widening into unrelated UI or backend refactors."

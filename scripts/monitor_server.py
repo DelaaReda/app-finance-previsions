@@ -77,7 +77,7 @@ def _monitor_status_url() -> str:
     url = os.environ.get("FC_MONITOR_LOCAL_URL", "").strip()
     if url:
         return url
-    return os.environ.get("FC_MONITOR_STATUS_URL", "http://127.0.0.1:7779/api/status")
+    return os.environ.get("FC_MONITOR_STATUS_URL", "http://127.0.0.1:7779/api/monitor/access")
 
 
 def _acquire_single_instance_lock(status_url: str) -> None:

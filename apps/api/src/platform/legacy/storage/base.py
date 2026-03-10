@@ -108,8 +108,10 @@ def save_json(*args, source: Optional[Union[str, list]] = None, **kwargs) -> str
 
     positional_source = args[2] if len(args) >= 3 else None
     src = _normalize_source(source if source is not None else positional_source)
+    last_update = datetime.utcnow().isoformat()
     metadata: Dict[str, Any] = {
-        "last_update": datetime.utcnow().isoformat(),
+        "last_update": last_update,
+        "updated_at": last_update,
         "source": src,
         "data": payload,
     }

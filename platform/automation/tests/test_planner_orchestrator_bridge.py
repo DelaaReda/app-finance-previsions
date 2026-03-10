@@ -107,6 +107,48 @@ class PlannerOrchestratorBridgeTests(unittest.TestCase):
         self.assertEqual(tasks["BATCH-58-ANALYSIS"]["verify"], "before=missing; after=proof_added; test=contract_bridge")
         self.assertIn("bridge_actions=planner_complete:BATCH-58-ANALYSIS", updated)
 
+
+    def test_dispatch_payload_exposes_live_bridge_fields(self) -> None:
+        self.board_path.write_text(
+            json.dumps(
+                {
+                    "version": "x",
+                    "roles": {},
+                    "streams": [{"id": "BATCH-27", "state": "READY_DEV", "updated_at": "2026-03-07T00:00:00Z"}],
+                    "tasks": [
+                        {"id": "BATCH-27-DEV-01", "stream_id": "BATCH-27", "role": "dev", "state": "DONE", "updated_at": "2026-03-06T00:00:00Z"},
+                        {"id": "BATCH-27-DEV-02", "stream_id": "BATCH-27", "role": "dev", "state": "READY_DEV", "priority": "P1", "depends_on": ["BATCH-27-DEV-01"], "updated_at": "2026-03-07T00:00:00Z", "current_step": "progress:contract_snapshot"},
+                    ],
+                    "events": [],
+                    "handoffs": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.queue_path.write_text(
+            json.dumps({"items": [{"id": "BATCH-27", "state": "READY_DEV", "updated_at": "2026-03-07T00:00:00Z"}]}),
+            encoding="utf-8",
+        )
+        contract = "
+".join([
+            "STATUS: IN_PROGRESS",
+            "DELTA: PLANNER_PROGRESS_REQUIRED",
+            "EVIDENCE: task_update=analysis_only; run_note=dispatch dev capability now; issues=none; issue_count=0; issue_severity=none",
+            "RISKS: none",
+            "NEXT: owner=planner; action=dispatch dev",
+            "VERDICT: GO_WITH_CAUTION",
+            "BLOCKER_ID: NONE",
+            "NEXT_ACTION_UNIQUE: DISPATCH_DEV_B27",
+        ])
+        _, payload = apply_bridge(self.root, "planner", contract, "test", backend="openclaw")
+        dispatch = payload.get("dispatch", {})
+        self.assertTrue(dispatch.get("dispatched"))
+        self.assertEqual(dispatch.get("task_id"), "BATCH-27-DEV-02")
+        self.assertEqual(dispatch.get("status"), "running")
+        self.assertEqual(dispatch.get("last_delivery_delta"), "none")
+        self.assertTrue(dispatch.get("capability_id"))
+        self.assertTrue(dispatch.get("last_heartbeat"))
+
     def test_ready_dev_is_claimed_and_completed_via_mock_capability(self) -> None:
         self.board_path.write_text(
             json.dumps(

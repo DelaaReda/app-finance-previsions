@@ -5,6 +5,8 @@ import json
 import urllib.request
 from typing import Any, Dict, List, Optional
 
+import pytest
+
 from domains.copilot.application import copilot_service
 from storage import io as storage_io
 

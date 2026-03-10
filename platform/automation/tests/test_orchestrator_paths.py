@@ -15,6 +15,7 @@ from orchestrator_paths import (
     load_runtime_state,
     persist_runtime_state,
     resolve_orchestrator_read_path,
+    runtime_state_is_paused,
     runtime_state_root,
 )
 
@@ -62,6 +63,20 @@ class OrchestratorPathsTests(unittest.TestCase):
             self.assertEqual(state.get("lifecycle"), "paused")
             self.assertEqual(state.get("reason"), "operator_paused_runtime")
             self.assertEqual(state.get("execution_mode"), "planner_experimental")
+
+    def test_runtime_state_is_paused_true_for_maintenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            persist_runtime_state(
+                root,
+                lifecycle="maintenance",
+                reason="operator_maintenance_runtime",
+                execution_mode="planner_experimental",
+                operator_mode="paused",
+                source="unit_test",
+            )
+
+            self.assertTrue(runtime_state_is_paused(root))
 
 
 if __name__ == "__main__":

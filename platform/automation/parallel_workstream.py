@@ -1315,6 +1315,45 @@ def _update_stream_next_action(board: dict) -> None:
             stream["updated_at"] = now_iso()
 
 
+def _update_queue_next_action_from_streams(queue_obj: dict, board: dict) -> bool:
+    """Mirror canonical stream next_action back into the queue."""
+    if not isinstance(queue_obj, dict):
+        return False
+    items = queue_obj.get("items")
+    if not isinstance(items, list):
+        return False
+
+    streams = {
+        str(stream.get("id", "")).strip().upper(): stream
+        for stream in board.get("streams", [])
+        if isinstance(stream, dict) and str(stream.get("id", "")).strip()
+    }
+
+    now = now_iso()
+    changed = False
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        item_id = str(item.get("id", "")).strip().upper()
+        if not item_id:
+            continue
+        stream = streams.get(item_id)
+        if not stream:
+            continue
+        stream_next_action = str(stream.get("next_action", "")).strip()
+        if not stream_next_action:
+            continue
+        if str(item.get("next_action", "")).strip() == stream_next_action:
+            continue
+        item["next_action"] = stream_next_action
+        item["updated_at"] = now
+        changed = True
+
+    if changed:
+        queue_obj["updated_at"] = now
+    return changed
+
+
 def recompute_states(board: dict, queue_states: Dict[str, str] | None = None) -> None:
     _sanitize_task_dependencies(board)
     tasks_by_id = task_index(board)
@@ -1396,6 +1435,8 @@ def recompute_states(board: dict, queue_states: Dict[str, str] | None = None) ->
             stream["state"] = stream_state
             stream["updated_at"] = now_iso()
 
+    _update_stream_next_action(board)
+
 
 def sync_from_priority_queue(board: dict, queue_path: Path, include_pass: bool = False) -> Tuple[int, int]:
     if not queue_path.exists():
@@ -1464,6 +1505,7 @@ def sync_from_priority_queue(board: dict, queue_path: Path, include_pass: bool =
             f"inter_batch_dependencies_remaining={remaining_inter_batch_deps} queue={queue_path}"
         )
 
+    queue_write_performed = False
     if (
         closed_streams
         or opened_batch
@@ -1471,8 +1513,10 @@ def sync_from_priority_queue(board: dict, queue_path: Path, include_pass: bool =
         or decoupled_counts["decoupled_total"]
         or decoupled_counts["waiting_dep_reclassified"]
     ):
+        _update_queue_next_action_from_streams(queue_obj, board)
         queue_obj.setdefault("updated_at", now_iso())
         queue_path.write_text(json.dumps(queue_obj, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+        queue_write_performed = True
         append_event(
             board,
             "auto_advance_queue",
@@ -1490,6 +1534,8 @@ def sync_from_priority_queue(board: dict, queue_path: Path, include_pass: bool =
         )
 
     recompute_states(board)
+    if _update_queue_next_action_from_streams(queue_obj, board) and not queue_write_performed:
+        queue_path.write_text(json.dumps(queue_obj, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
     if created_streams > 0 or created_tasks > 0:
         append_event(
             board,
@@ -1587,7 +1633,8 @@ def reconcile_state(board: dict, queue_path: Path) -> Dict[str, int]:
         queue_synced += 1
         queue_changed = True
 
-    if queue_changed:
+    queue_next_action_changed = _update_queue_next_action_from_streams(queue_obj, board)
+    if queue_changed or queue_next_action_changed:
         queue_obj["updated_at"] = now
         queue_path.write_text(json.dumps(queue_obj, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
@@ -1661,8 +1708,120 @@ def _next_batch_id(queue_obj: dict, board: dict) -> str:
     return f"BATCH-{max_seen + 1:02d}"
 
 
+def _ensure_autobatch_stream_and_task(
+    board: dict,
+    *,
+    batch_id: str,
+    title: str,
+    now: str,
+) -> Tuple[int, int]:
+    stream_created = 0
+    existing_stream = stream_index(board).get(batch_id)
+    if existing_stream is None:
+        board.setdefault("streams", []).append(
+            {
+                "id": batch_id,
+                "title": title,
+                "priority": "P2",
+                "source_state": STATE_READY,
+                "state": STATE_READY,
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
+        stream_created = 1
+    else:
+        existing_stream["title"] = title
+        existing_stream["priority"] = "P2"
+        existing_stream["source_state"] = STATE_READY
+        existing_stream["state"] = STATE_READY
+        existing_stream["updated_at"] = now
+
+    task_created = 0
+    task_id_value = f"{batch_id}-ANALYSIS"
+    existing_task = task_index(board).get(task_id_value)
+    if existing_task is None:
+        board.setdefault("tasks", []).append(
+            {
+                "id": task_id_value,
+                "stream_id": batch_id,
+                "code": "ANALYSIS",
+                "title": f"{title} [ANALYSIS]",
+                "role": "planner",
+                "state": STATE_READY,
+                "priority": "P2",
+                "depends_on": [],
+                "assignee": "",
+                "blocked_reason": "",
+                "artifacts": [],
+                "notes": [
+                    "AUTOBATCH-NOTE: generated by planner-autobatch to keep planner lane non-passive."
+                ],
+                "handoff_to": "",
+                "created_at": now,
+                "updated_at": now,
+                "started_at": "",
+                "completed_at": "",
+            }
+        )
+        task_created = 1
+    else:
+        existing_task["state"] = STATE_READY
+        existing_task["depends_on"] = []
+        existing_task["blocked_reason"] = ""
+        existing_task["assignee"] = ""
+        existing_task["started_at"] = ""
+        existing_task["completed_at"] = ""
+        existing_task["updated_at"] = now
+    return stream_created, task_created
+
+
+def _autobatch_runway_signal(board: dict, ignore_stream_ids: Iterable[str] = ()) -> Dict[str, int]:
+    blocking_task_states = {
+        STATE_WAITING_DEP,
+        STATE_READY,
+        STATE_READY_DEV,
+        STATE_READY_LEGACY,
+        STATE_IN_PROGRESS,
+        STATE_REVIEW,
+        STATE_BLOCKED,
+    }
+    blocking_stream_states = {
+        STATE_WAITING_DEP,
+        STATE_READY,
+        STATE_READY_DEV,
+        STATE_READY_LEGACY,
+        STATE_IN_PROGRESS,
+        STATE_REVIEW,
+        STATE_BLOCKED,
+    }
+    ignored = {str(stream_id or "").strip().upper() for stream_id in ignore_stream_ids if str(stream_id or "").strip()}
+    task_count = 0
+    for task in board.get("tasks", []):
+        if not isinstance(task, dict):
+            continue
+        stream_id = str(task.get("stream_id", "")).strip().upper()
+        if stream_id and stream_id in ignored:
+            continue
+        state = _normalize_state_token(task.get("state", ""))
+        if state in blocking_task_states:
+            task_count += 1
+    stream_count = 0
+    for stream in board.get("streams", []):
+        if not isinstance(stream, dict):
+            continue
+        stream_id = str(stream.get("id", "")).strip().upper()
+        if stream_id and stream_id in ignored:
+            continue
+        state = _normalize_state_token(stream.get("state", ""))
+        if state in blocking_stream_states:
+            stream_count += 1
+    return {"task_count": task_count, "stream_count": stream_count}
+
+
 def _autobatch_seed(workspace_root: Path) -> Tuple[str, str]:
     candidates = [
+        workspace_root / "docs/product/PRODUCT_VISION.md",
         workspace_root / "docs/product/planning/PRODUCT_VISION.md",
         workspace_root / "docs/product/planning/WORKSTATE.md",
         workspace_root / "docs/planning/WORKSTATE.md",
@@ -1676,9 +1835,17 @@ def _autobatch_seed(workspace_root: Path) -> Tuple[str, str]:
             continue
 
         heading = ""
+        in_frontmatter = False
         for idx, raw in enumerate(lines, start=1):
             line = str(raw or "").strip()
             if not line:
+                continue
+            if idx == 1 and line == "---":
+                in_frontmatter = True
+                continue
+            if in_frontmatter:
+                if line == "---":
+                    in_frontmatter = False
                 continue
             if line.startswith("#"):
                 heading = line.lstrip("#").strip()[:96]
@@ -1715,6 +1882,7 @@ def planner_autobatch(
 ) -> Dict[str, str]:
     now = now_iso()
     now_epoch = datetime.now(timezone.utc).timestamp()
+    recompute_states(board)
 
     planner_tasks = [
         task
@@ -1769,20 +1937,70 @@ def planner_autobatch(
     batch_id = _next_batch_id(queue_obj, board)
     title, vision_ref = _autobatch_seed(workspace_root)
 
-    # DUPLICATE_TITLE_GUARD: prevent creating the same-titled batch repeatedly.
-    # If an identical title already exists in any non-CLOSED batch, skip creation.
-    existing_titles = {
-        str(i.get("title", "")).strip().lower()
-        for i in queue_obj.get("items", [])
-        if str(i.get("state", "")).upper() not in {"CLOSED", "DONE", "PASS"}
-    }
-    if title.strip().lower() in existing_titles:
+    duplicate_item = next(
+        (
+            item
+            for item in queue_obj.get("items", [])
+            if isinstance(item, dict)
+            and str(item.get("state", "")).upper() not in {"CLOSED", "DONE", "PASS"}
+            and str(item.get("title", "")).strip().lower() == title.strip().lower()
+        ),
+        None,
+    )
+    ignore_stream_ids = []
+    if isinstance(duplicate_item, dict):
+        duplicate_batch_id = str(duplicate_item.get("id", "")).strip().upper()
+        if duplicate_batch_id:
+            ignore_stream_ids.append(duplicate_batch_id)
+    runway_signal = _autobatch_runway_signal(board, ignore_stream_ids=ignore_stream_ids)
+    if int(runway_signal.get("task_count", 0) or 0) > 0 or int(runway_signal.get("stream_count", 0) or 0) > 0:
         return {
             "status": "skip",
-            "reason": "duplicate_title",
+            "reason": "runway_not_empty",
             "batch_id": "none",
             "stream_created": "0",
             "task_created": "0",
+            "cooldown_applied": "0",
+        }
+
+    if isinstance(duplicate_item, dict):
+        existing_batch_id = str(duplicate_item.get("id", "")).strip().upper() or batch_id
+        duplicate_item["state"] = "READY"
+        duplicate_item["owner_role"] = "planner"
+        duplicate_item["created_by"] = duplicate_item.get("created_by") or "planner_autonomy"
+        duplicate_item["vision_ref"] = duplicate_item.get("vision_ref") or vision_ref
+        duplicate_item["next_action"] = f"ouvrir {existing_batch_id}-ANALYSIS"
+        duplicate_item["updated_at"] = now
+        duplicate_item["dispatch_authorized"] = True
+        duplicate_item.setdefault("ready_at", now)
+        stream_created, task_created = _ensure_autobatch_stream_and_task(
+            board,
+            batch_id=existing_batch_id,
+            title=title,
+            now=now,
+        )
+        queue_obj["updated_at"] = now
+        queue_path.parent.mkdir(parents=True, exist_ok=True)
+        queue_path.write_text(json.dumps(queue_obj, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+        append_event(
+            board,
+            "planner_autobatch_reused",
+            {
+                "batch_id": existing_batch_id,
+                "reason": reason,
+                "source": source,
+                "vision_ref": vision_ref,
+                "duplicate_title": "1",
+                "stream_created": str(stream_created),
+                "task_created": str(task_created),
+            },
+        )
+        return {
+            "status": "ok",
+            "reason": "duplicate_reused",
+            "batch_id": existing_batch_id,
+            "stream_created": str(stream_created),
+            "task_created": str(task_created),
             "cooldown_applied": "0",
         }
 
@@ -1807,53 +2025,12 @@ def planner_autobatch(
     queue_path.parent.mkdir(parents=True, exist_ok=True)
     queue_path.write_text(json.dumps(queue_obj, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
 
-    stream_created = 0
-    if batch_id not in stream_index(board):
-        board.setdefault("streams", []).append(
-            {
-                "id": batch_id,
-                "title": title,
-                "priority": "P2",
-                "source_state": STATE_READY,
-                "state": STATE_READY,
-                "created_at": now,
-                "updated_at": now,
-            }
-        )
-        stream_created = 1
-
-    task_created = 0
-    task_id_value = f"{batch_id}-ANALYSIS"
-    existing_task = task_index(board).get(task_id_value)
-    if existing_task is None:
-        board.setdefault("tasks", []).append(
-            {
-                "id": task_id_value,
-                "stream_id": batch_id,
-                "code": "ANALYSIS",
-                "title": f"{title} [ANALYSIS]",
-                "role": "planner",
-                "state": STATE_READY,
-                "priority": "P2",
-                "depends_on": [],
-                "assignee": "",
-                "blocked_reason": "",
-                "artifacts": [],
-                "notes": [
-                    "AUTOBATCH-NOTE: generated by planner-autobatch to keep planner lane non-passive."
-                ],
-                "handoff_to": "",
-                "created_at": now,
-                "updated_at": now,
-                "started_at": "",
-                "completed_at": "",
-            }
-        )
-        task_created = 1
-    else:
-        existing_task["state"] = STATE_READY
-        existing_task["depends_on"] = []
-        existing_task["updated_at"] = now
+    stream_created, task_created = _ensure_autobatch_stream_and_task(
+        board,
+        batch_id=batch_id,
+        title=title,
+        now=now,
+    )
 
     append_event(
         board,
@@ -2039,6 +2216,24 @@ def complete_task(
     not_done = [dep for dep in deps if str(tasks.get(dep, {}).get("state", "")) != STATE_DONE]
     if not_done:
         raise SystemExit(f"COMPLETE_ERROR: deps_not_done={','.join(not_done)} task={task_id_value}")
+
+    if role == "planner":
+        def _planner_proof_missing(value: object) -> bool:
+            token = str(value or "").strip().lower()
+            return token in {"", "none", "n/a", "na", "null", "unknown", "pending", "?"}
+
+        planner_missing: List[str] = []
+        for field in ("root_cause", "fix_applied", "architecture_check", "vision_alignment"):
+            if _planner_proof_missing(task.get(field, "")):
+                planner_missing.append(field)
+        verify_value = str(task.get("verify", "") or "").strip()
+        if _planner_proof_missing(verify_value) or not all(f"{key}=" in verify_value for key in ("before", "after", "test")):
+            planner_missing.append("verify")
+        if planner_missing:
+            raise SystemExit(
+                "COMPLETE_ERROR: planner_delivery_proof_missing="
+                f"{','.join(sorted(set(planner_missing)))} task={task_id_value}"
+            )
 
     prechange_plan_items: List[str] = _coerce_reasoning_from_value(task.get("prechange_plan_items"))
     prechange_architecture_checks: List[str] = _coerce_reasoning_from_value(task.get("prechange_architecture_checks"))

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-11-BATCH-11-GOV_REVIEW-20260309T050211Z-371"
+stream_id: "BATCH-11"
+task_id: "BATCH-11-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-03-09T05:02:11Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_workboard_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T05:02:11Z"
+      ended_at_utc: "2026-03-09T05:02:11Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_workboard_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/.tmp/role-runner/planner/BATCH-11-GOV-REVIEW-proof.txt"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "planner-batch-11-gov-review-20260309t0501z"
+  review_ref: "docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md"
+  note: "GOV review planner close after dependency check BATCH-11-ADMIN-01 DONE; root_cause=planner_gov_review_waited_for_admin_completion; fix_applied=completed_gov_review_with_runtime_proof; reuse_check=docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md; verify=before=gov_review_in_progress; after=gov_review_done; test=dependency_verified; vision_alignment=batch=BATCH-11; target=data_ingestion_core_freshness_slo; impact=unblock_next_ready_flow"

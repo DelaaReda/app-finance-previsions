@@ -67,7 +67,54 @@ AGENT_BUS_MAX_CONTENT_CHARS = int(os.environ.get("FC_AGENT_BUS_MAX_CONTENT_CHARS
 AGENT_EVENTS_MAX_COMMANDS = int(os.environ.get("FC_AGENT_EVENTS_MAX_COMMANDS", "25"))
 AGENT_EVENTS_FILE_LIMIT = int(os.environ.get("FC_AGENT_EVENTS_FILE_LIMIT", "120"))
 AGENT_RESPONSE_SOFT_LIMIT = int(os.environ.get("FC_AGENT_RESPONSE_SOFT_LIMIT", "2600"))
-CORE_STATUS_ROLES_DEFAULT: Tuple[str, ...] = ("planner", "dev", "tester", "qa")
+CORE_STATUS_ROLES_LEGACY_DEFAULT: Tuple[str, ...] = ("planner", "dev", "tester", "qa")
+
+
+def _bool_token(value: Any, default: bool = False) -> bool:
+    token = str(value or "").strip()
+    if not token:
+        return default
+    return token not in {"0", "false", "False"}
+
+
+def _read_json_file(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    except Exception:
+        return None
+
+
+def _runtime_state_file() -> Path:
+    token = str(os.environ.get("FC_ORCHESTRATOR_STATE_DIR", "")).strip()
+    if token:
+        state_root = Path(token).expanduser()
+        if not state_root.is_absolute():
+            state_root = PROJECT_DIR / state_root
+    else:
+        state_root = PROJECT_DIR / "logs-codex-runs" / "orchestrator-state"
+    return state_root / "runtime-state.json"
+
+
+def default_status_core_roles() -> Tuple[str, ...]:
+    planner_enabled = _bool_token(os.environ.get("FC_PLANNER_ORCHESTRATOR_ENABLED"), False)
+    planner_cron_only = _bool_token(os.environ.get("FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY"), False)
+    experimental = str(os.environ.get("FC_EXPERIMENTAL_PLANNER_ONLY", "")).strip()
+    if experimental:
+        planner_enabled = _bool_token(experimental, planner_enabled)
+        planner_cron_only = _bool_token(experimental, planner_cron_only)
+
+    execution_mode = str(os.environ.get("FC_EXECUTION_MODE", "")).strip()
+    if not execution_mode:
+        runtime_state = _read_json_file(_runtime_state_file())
+        if isinstance(runtime_state, dict):
+            execution_mode = str(runtime_state.get("execution_mode", "") or "").strip()
+
+    if execution_mode == "planner_experimental" or (planner_enabled and planner_cron_only):
+        return ("planner",)
+    return CORE_STATUS_ROLES_LEGACY_DEFAULT
+
+
+CORE_STATUS_ROLES_DEFAULT: Tuple[str, ...] = default_status_core_roles()
 SPECIALIST_ROLE_SPECS: Dict[str, Dict[str, str]] = {
     "analyst": {
         "env_var": "FC_SESS_ANALYST",

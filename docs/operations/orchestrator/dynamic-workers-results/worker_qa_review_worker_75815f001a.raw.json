@@ -1,0 +1,46 @@
+## QA Review Summary - BATCH-13-DEV-02
+
+**Verdict: PASS**
+
+### Summary
+Decision Journal + Outcome Feedback Loop implemented and verified. All 17 tests passing.
+
+### Artifacts Delivered
+| File | Lines | Purpose |
+|------|-------|---------|
+| `apps/api/src/domains/copilot/application/decision_journal.py` | 467 | Core service with 5 functions |
+| `apps/api/src/domains/copilot/api/copilot.py` | +106 | 5 API endpoints |
+| `apps/api/src/domains/copilot/tests/test_decision_journal.py` | 285 | 17 tests |
+
+### API Endpoints Verified
+- `POST /api/copilot/decision-journal/log` - Log copilot decisions
+- `POST /api/copilot/decision-journal/outcomes` - Record outcome feedback
+- `GET /api/copilot/decision-journal` - Retrieve entries (filter: limit/tickers/horizon/verdict)
+- `GET /api/copilot/decision-journal/outcomes` - Retrieve feedback records
+- `GET /api/copilot/decision-journal/metrics` - Hit rate & calibration metrics
+
+### Test Results
+```
+cd apps/api/src && pytest domains/copilot/tests/test_decision_journal.py -v
+============================== 17 passed in 0.14s ==============================
+```
+
+### Key Features
+- Immutable decision storage (file-based JSON)
+- Outcome tracking at 1d/1w/1m horizons
+- Hit rate calculation (same-sign prediction vs actual)
+- Calibration error metrics
+- Schema versioning for forward compatibility
+
+### Integration Notes
+- Frontend widgets can call new endpoints via existing API connector
+- No UI changes required for backend delivery
+- LLM Judge widget has placeholder (`#judgeDecisionJournal`) ready for integration
+
+---
+
+**Execution Trace**
+- Actions: Reviewed proof manifest, read implementation files, ran 17 tests (all passed), verified API router registration in main.py
+- Files changed: none (QA review only)
+- Files read: decision_journal.py, copilot.py, test_decision_journal.py, proof manifest
+- Network/API calls: none

@@ -54,6 +54,15 @@ When running in non-target profiles, monitor may still compute health from legac
 - Monitor should surface planner-owned delegation via `planner_subagents`.
 - Monitor should emphasize value and blockages over raw agent chatter.
 
+## Access Model
+- VM-local monitor endpoint remains `http://127.0.0.1:7779/`.
+- Host-facing canonical monitor endpoint is `http://192.168.64.9:7780/`.
+- `7780` is a LAN proxy managed by `scripts/monitor_stack_guard.sh`.
+- Public tunnels are disabled by default and are not part of normal monitor architecture.
+
+Reference:
+- [MONITOR_ACCESS_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/MONITOR_ACCESS_RUNBOOK.md)
+
 ## Product/Delivery Signals
 The monitor should progressively expose:
 - delivery proof sufficiency
@@ -66,7 +75,9 @@ The monitor should progressively expose:
 ## Operator Commands
 ```bash
 bash scripts/monitor_stack_guard.sh
-curl -s http://127.0.0.1:7779/api/status | jq '{health,execution_mode,core_roles,planner_subagents}'
+cat logs-codex-runs/monitor-lan-url.txt
+curl -s http://127.0.0.1:7779/api/status?lite=1 | jq '{health,execution_mode,core_roles,planner_subagents}'
+curl -s http://192.168.64.9:7780/api/status?lite=1 | jq '{health,execution_mode,core_roles,planner_subagents}'
 bash scripts/fc_doctor.sh --json | jq '.checks.sessions,.checks.providers'
 ```
 

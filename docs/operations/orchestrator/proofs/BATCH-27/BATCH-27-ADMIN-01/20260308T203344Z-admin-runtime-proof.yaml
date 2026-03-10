@@ -1,0 +1,89 @@
+proof_id: "PRF-BATCH-27-ADMIN-01-20260308T203344Z"
+stream_id: "BATCH-27"
+task_id: "BATCH-27-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-08T20:33:44Z"
+scope: "runtime truth, monitor contract, frontend smoke, live/degraded widget evidence"
+execution:
+  runtime_host:
+    cmd: "bash scripts/runtime_host_check.sh"
+    result:
+      runtime_host_kind: "vm_runtime"
+      runtime_is_vm: 1
+      expected_workspace: "/home/venom/analyse-financiere"
+  commands:
+    - cmd: "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779"
+      result: "PASS health=DEGRADED roles=2 agents=2 queue_states=5 workboard_ready=2 admin_timeouts_recent=0 issues_records=8"
+    - cmd: "bash scripts/critical_endpoints_smoke.sh --base-url http://127.0.0.1:8050"
+      result: "PASS base=http://127.0.0.1:8050 endpoints=3 degraded=0"
+    - cmd: "bash scripts/health_snapshot.sh"
+      result: "health=DEGRADED done=166 ready=2 blocked=planner:PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW critical_widgets=degraded"
+    - cmd: "timeout 60s node tests/smoke/batch_27_dev_03_connector_contract_check.mjs"
+      result: "PASS batch_27_dev_03_connector_contract_check"
+      note: "Smoke fixture logged stubbed /ingestion/health and /status fetch errors, but refreshLiveData completed twice and the contract remained stable."
+    - cmd: "timeout 120s bash scripts/runtime_e2e_gate.sh"
+      result: "OK doctor_status=degraded doctor_runtime_status=ok launcher_action=skipped endpoint_failures=0"
+      note: "Runtime healthy enough to skip restart; degraded doctor state is non-runtime only."
+    - cmd: "python3 platform/automation/browser_smoke.py --url http://127.0.0.1:5173/ --label batch-27-admin-01-frontend-root --root . --timeout-seconds 45"
+      result: "PASS openclaw_browser_smoke"
+findings:
+  runtime_truth:
+    stack:
+      frontend_http: 200
+      backend_http: 200
+      monitor_http: 200
+      listeners:
+        "5173": "up"
+        "8050": "up"
+        "7779": "up"
+    monitor:
+      health: "DEGRADED"
+      core_roles:
+        - "planner"
+      roles_reported:
+        - "planner"
+        - "admin"
+      planner_blocker: "PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW"
+      admin_timeouts_recent: 0
+    doctor:
+      overall: "degraded"
+      runtime_scope: "ok"
+      non_runtime_checks:
+        - "delivery_integrity"
+        - "suspicious_completions"
+  widgets:
+    news:
+      state: "live"
+      freshness: "fresh"
+      updated_at: "2026-03-08T19:56:30.480738"
+      evidence: "Monitor product_value_metrics reports fresh news data; API news feed returned 3 items."
+    forecasts:
+      state: "live"
+      freshness: "fresh"
+      rows_count: 1
+      fallback_used: false
+      updated_at: "2026-03-08T06:29:08.411664Z"
+      evidence: "Forecast endpoint returned live model-backed data with no fallback."
+    market_pulse:
+      state: "degraded_explicit"
+      evidence:
+        - "Browser snapshot shows 'Live Updated just now'."
+        - "Browser snapshot also shows 'Live market story unavailable. Check back after the next backend refresh.'"
+    shell_status:
+      state: "degraded_explicit"
+      evidence:
+        - "Browser snapshot status banner shows 'LOADING Cached data remains visible until live sync completes.'"
+        - "No browser console errors or page errors were captured."
+conclusion:
+  runtime_verdict: "RUNTIME_OK_NONRUNTIME_DEGRADED"
+  root_cause: "Observed degradation is not a frontend/backend/monitor outage. It is driven by planner/governance blocker visibility plus non-runtime doctor checks, while critical UI areas either show live data or explicit degraded copy."
+outputs:
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-27/BATCH-27-ADMIN-01/20260308T203344Z-admin-runtime-proof.yaml"
+    - "/home/venom/analyse-financiere/docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T203147Z.json"
+    - "/home/venom/analyse-financiere/docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T203147Z.log"
+    - "/home/venom/analyse-financiere/logs-codex-runs/browser-smoke/20260308T203235Z-batch-27-admin-01-frontend-root.json"
+    - "/home/venom/analyse-financiere/logs-codex-runs/browser-smoke/20260308T203235Z-batch-27-admin-01-frontend-root.png"
+signoff:
+  producer_agent: "admin"
+  planner_action: "Merge as runtime-unblocked evidence. Route remaining degraded monitor state to planner/scrum follow-up, not admin runtime repair."

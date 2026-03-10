@@ -1,0 +1,16 @@
+{
+  "worker_id": "worker_qa_review_worker_d03ed8dc4d",
+  "worker_type": "qa_review_worker",
+  "owner_task_id": "BATCH-12-DEV-01",
+  "parent_role": "planner",
+  "result_kind": "qa_fix_result",
+  "status": "completed",
+  "summary": "Reviewing the delivered slice in `./repo` with targeted checks. I\u2019m starting by locating the touched portfolio metadata and risk-profile contract files, then I\u2019ll run the focused QA test path and inspect any gaps before ",
+  "artifact": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_d03ed8dc4d.raw.json",
+  "verify": "proof=worker_backend:openclaw; rc=0",
+  "raw_output_ref": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_d03ed8dc4d.raw.json",
+  "backend": "openclaw",
+  "backend_ref": "worker_qa_review_worker_d03ed8dc4d",
+  "started_at": "2026-03-09T10:11:02Z",
+  "finished_at": "2026-03-09T10:18:24Z"
+}

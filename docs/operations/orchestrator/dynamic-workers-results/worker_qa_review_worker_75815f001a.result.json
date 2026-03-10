@@ -1,0 +1,16 @@
+{
+  "worker_id": "worker_qa_review_worker_75815f001a",
+  "worker_type": "qa_review_worker",
+  "owner_task_id": "BATCH-13-DEV-02",
+  "parent_role": "planner",
+  "result_kind": "qa_fix_result",
+  "status": "completed",
+  "summary": "## QA Review Summary - BATCH-13-DEV-02 **Verdict: PASS** ### Summary Decision Journal + Outcome Feedback Loop implemented and verified. All 17 tests passing. ### Artifacts Delivere",
+  "artifact": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_75815f001a.raw.json",
+  "verify": "proof=worker_backend:qwen; rc=0",
+  "raw_output_ref": "docs/operations/orchestrator/dynamic-workers-results/worker_qa_review_worker_75815f001a.raw.json",
+  "backend": "qwen",
+  "backend_ref": "qwen:worker_qa_review_worker_75815f001a",
+  "started_at": "2026-03-09T16:35:58Z",
+  "finished_at": "2026-03-09T16:38:43Z"
+}

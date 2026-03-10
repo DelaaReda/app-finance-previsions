@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-12-BATCH-12-DEV-02-20260309T103827Z-199"
+stream_id: "BATCH-12"
+task_id: "BATCH-12-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-09T10:38:27Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope portfolio state + risk profile core [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_portfolio_state_+_risk_profile_core_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-09T10:38:27Z"
+      ended_at_utc: "2026-03-09T10:38:27Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js apps/web/src/domains/forecasts/pages/js/utils/mountedDashboardSync.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=afa3dedea4e7d88b7e3be4ac493f7d4dbbe4ddcc; core evidence: `apps/web/src/domains/forecasts/contracts/apiConnector.js:1118`, `apps/web/src/domains/forecasts/contracts/apiConnector.js:1143`, `apps/web/src/domains/fore"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-12-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-12-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The live handoff exposed raw `portfolioRiskProfile`, but the page layer only merged precomputed `portfolioHealth`. `window.getLiveDashboardData()` also omitted `portfolioRiskProfileFreshness`, so portfolio state/risk-pro | fix_applied=Reused the existing `transformPortfolioHealth` mapper by exposing it as `window.FinanceAPI.transformPortfolioRiskProfileToHealth` in `apps/web/src/domains/forecasts/contracts/apiConnector.js`, added `portfolioRiskProfile | verify=before=`applyLiveDashboardData()` only trusted `data.portfolioHealth`, so payloads carrying only raw `portfolioRiskProfile` left the existing widget on fallback/demo values and lost risk-profile freshness in the shared l | architecture_check=layer=web forecasts contract->page data handoff; imports_ok=yes (no new imports/components, reused existing mapper and widget wiring); path_target=apps/web/src/domains/forecasts/contracts/apiConnector.js + apps/web/src/d | vision_alignment=batch=BATCH-12; target=Portfolio State + Risk Profile Core [DEV-02]; impact=smallest vertical slice that makes saved portfolio state/risk-profile data usable by the existing portfolio-health UI without widening scope"

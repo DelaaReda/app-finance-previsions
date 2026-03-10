@@ -1,0 +1,68 @@
+proof_id: "PRF-BATCH-27-BATCH-27-ADMIN-01-20260308T191044Z-778"
+stream_id: "BATCH-27"
+task_id: "BATCH-27-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-08T19:10:44Z"
+execution:
+  commands:
+    - cmd: "bash scripts/health_snapshot.sh"
+      result: "PASS health=DEGRADED critical_widgets=degraded"
+    - cmd: "timeout 90s bash scripts/runtime_e2e_gate.sh"
+      result: "TIMEOUT after runtime refresh; proof log only"
+      artifact: "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T190444Z.log"
+    - cmd: "timeout 30s node tests/smoke/batch_27_dev_03_connector_contract_check.mjs"
+      result: "PASS batch_27_dev_03_connector_contract_check"
+    - cmd: "bash scripts/critical_endpoints_smoke.sh --base-url http://127.0.0.1:8050"
+      result: "PASS base=http://127.0.0.1:8050 endpoints=3 degraded=0"
+    - cmd: "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779"
+      result: "PASS health=DEGRADED roles=2 agents=2 queue_states=5 workboard_ready=2 admin_timeouts_recent=0 issues_records=7"
+    - cmd: "curl -sS -o /dev/null -w 'frontend=%{http_code};backend=%{http_code};monitor=%{http_code}' ... "
+      result: "frontend=200 backend=200 monitor=200"
+validations:
+  runtime:
+    monitor_recovered: true
+    planner_only_roles_after_recovery:
+      roles:
+        - "planner"
+      core_roles:
+        - "planner"
+    planner_blocker:
+      status: "BLOCKED"
+      blocker_id: "PLANNER_COMPLETE_COMMAND_UNAVAILABLE_FOR_GOV_REVIEW"
+      next: "owner=planner; action=clore BATCH-28-GOV_REVIEW puis traiter BATCH-51-GOV_REVIEW et BATCH-58-GOV_REVIEW des que la commande complete est accessible"
+  widgets:
+    critical_widget_health_state: "degraded"
+    states:
+      hero:
+        state: "degraded"
+        recommendations_status: "ok"
+      news:
+        state: "degraded"
+        freshness: "fresh"
+        updated_at: "2026-03-08T19:06:10.751770"
+      forecasts:
+        state: "ok"
+        freshness: "fresh"
+        updated_at: "2026-03-08T06:29:08.411664Z"
+      judge:
+        state: "degraded"
+        recommendations_status: "ok"
+      deep-dive:
+        state: "degraded"
+        recommendations_status: "ok"
+        forecasts_status: "ok"
+  frontend:
+    load_status: 200
+    refresh_contract: "PASS via connector smoke"
+    log_note: "frontend log contains one duplicate-bind OSError during restart attempt, but final listener served 200 and subsequent GET / lines were healthy"
+outputs:
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-27/BATCH-27-ADMIN-01/20260308T191044Z-778.yaml"
+    - "docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260308T190444Z.log"
+    - "logs-codex-runs/monitor-server.log"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "BLOCKED_ON_PLANNER_CONTRACT"
+meta:
+  note: "Runtime outage repaired by clean monitor restart. Residual degradation is planner-contract/governance truth, not API/frontend liveness."
