@@ -38,6 +38,7 @@ if (fs.existsSync(integrationPath)) {
   assert(content.includes('getDecisionBadge'), 'Has getDecisionBadge function');
   assert(content.includes('getRiskIndicator'), 'Has getRiskIndicator function');
   assert(content.includes('getExpectedReturn'), 'Has getExpectedReturn function');
+  assert(content.includes('renderTickerPlaybookSummary'), 'Has shared ticker summary renderer');
   assert(content.includes('window.getStrategyPlaybooks'), 'Uses window.getStrategyPlaybooks API');
   assert(content.includes('CACHE_TTL_MS'), 'Implements caching mechanism');
 }
@@ -56,7 +57,7 @@ if (fs.existsSync(topMoversPath)) {
   assert(content.includes('playbook-MSFT'), 'Has playbook container for MSFT');
   assert(content.includes('playbook-GOOGL'), 'Has playbook container for GOOGL');
   assert(content.includes('loadTopMoversPlaybooks'), 'Has loadTopMoversPlaybooks function');
-  assert(content.includes('PlaybookIntegration.getDecisionBadge'), 'Uses PlaybookIntegration helper');
+  assert(content.includes('PlaybookIntegration.renderTickerPlaybookSummary'), 'Uses shared playbook summary helper');
   assert(content.includes('.playbook-badge'), 'Has playbook badge styles');
   assert(content.includes('.badge-go'), 'Has GO decision badge style');
   assert(content.includes('.badge-no-go'), 'Has NO-GO decision badge style');

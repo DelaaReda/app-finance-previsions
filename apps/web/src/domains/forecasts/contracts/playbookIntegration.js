@@ -151,6 +151,22 @@ async function getExpectedReturn(ticker) {
 }
 
 /**
+ * Render the standard playbook markup used in ticker-based widgets.
+ * Keeps badge/risk/return assembly in one place to avoid duplicate helpers.
+ * @param {string} ticker - Stock ticker symbol
+ * @returns {Promise<string>} Combined playbook markup
+ */
+async function renderTickerPlaybookSummary(ticker) {
+  const [badgeHtml, riskHtml, returnHtml] = await Promise.all([
+    getDecisionBadge(ticker),
+    getRiskIndicator(ticker),
+    getExpectedReturn(ticker)
+  ]);
+
+  return `${badgeHtml}${riskHtml}${returnHtml}`;
+}
+
+/**
  * Clear the playbook cache
  */
 function clearPlaybookCache() {
@@ -179,6 +195,7 @@ window.PlaybookIntegration = {
   getDecisionBadge,
   getRiskIndicator,
   getExpectedReturn,
+  renderTickerPlaybookSummary,
   clearPlaybookCache,
   initPlaybookIntegration
 };

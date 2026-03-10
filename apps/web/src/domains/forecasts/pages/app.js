@@ -2717,7 +2717,7 @@ function renderTopMoversWidget(stocks = liveTopMovers) {
 
 async function hydrateTopMoversPlaybooks(rows = []) {
   const playbookIntegration = window.PlaybookIntegration;
-  if (!playbookIntegration || typeof playbookIntegration.getDecisionBadge !== 'function') {
+  if (!playbookIntegration || typeof playbookIntegration.renderTickerPlaybookSummary !== 'function') {
     return;
   }
 
@@ -2728,12 +2728,7 @@ async function hydrateTopMoversPlaybooks(rows = []) {
     if (!container) continue;
 
     try {
-      const [badgeHtml, riskHtml, returnHtml] = await Promise.all([
-        playbookIntegration.getDecisionBadge(symbol),
-        playbookIntegration.getRiskIndicator(symbol),
-        playbookIntegration.getExpectedReturn(symbol)
-      ]);
-      container.innerHTML = `${badgeHtml}${riskHtml}${returnHtml}`;
+      container.innerHTML = await playbookIntegration.renderTickerPlaybookSummary(symbol);
     } catch (error) {
       console.warn(`[Top Movers] Failed to load playbook for ${symbol}:`, error.message);
       container.innerHTML = '<span class="playbook-badge badge-neutral">--</span>';

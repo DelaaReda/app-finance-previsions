@@ -182,11 +182,8 @@
             if (!container) continue;
 
             try {
-                if (window.PlaybookIntegration && typeof window.PlaybookIntegration.getDecisionBadge === 'function') {
-                    const badgeHtml = await window.PlaybookIntegration.getDecisionBadge(ticker);
-                    const riskHtml = await window.PlaybookIntegration.getRiskIndicator(ticker);
-                    const returnHtml = await window.PlaybookIntegration.getExpectedReturn(ticker);
-                    container.innerHTML = `${badgeHtml}${riskHtml}${returnHtml}`;
+                if (window.PlaybookIntegration && typeof window.PlaybookIntegration.renderTickerPlaybookSummary === 'function') {
+                    container.innerHTML = await window.PlaybookIntegration.renderTickerPlaybookSummary(ticker);
                 } else {
                     container.innerHTML = '<span class="playbook-badge badge-loading">⏳</span>';
                 }

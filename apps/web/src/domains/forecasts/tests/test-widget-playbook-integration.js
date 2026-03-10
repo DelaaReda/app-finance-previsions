@@ -49,6 +49,10 @@ test('PlaybookIntegration helper provides getPlaybookForTicker', () => {
     playbookIntegrationContent.includes('getPlaybookForTicker'),
     'Should define getPlaybookForTicker'
   );
+  assert(
+    playbookIntegrationContent.includes('renderTickerPlaybookSummary'),
+    'Should define shared ticker summary renderer'
+  );
 });
 
 // Test 2: Get playbook for existing ticker
@@ -105,8 +109,8 @@ test('Top Movers widget has playbook container for each ticker', () => {
     'Should load playbooks in top movers widget'
   );
   assert(
-    topMoversContent.includes('window.PlaybookIntegration.getDecisionBadge'),
-    'Should reuse the shared PlaybookIntegration helper in top movers'
+    topMoversContent.includes('window.PlaybookIntegration.renderTickerPlaybookSummary'),
+    'Should reuse the shared top movers summary helper'
   );
   assert(
     appJsContent.includes('class="mover-playbook" id="playbook-${symbolId}"'),
@@ -117,8 +121,8 @@ test('Top Movers widget has playbook container for each ticker', () => {
     'Live app renderer should hydrate top mover playbooks after rerender'
   );
   assert(
-    appJsContent.includes('playbookIntegration.getDecisionBadge(symbol)'),
-    'Live app renderer should reuse the shared playbook helper'
+    appJsContent.includes('playbookIntegration.renderTickerPlaybookSummary(symbol)'),
+    'Live app renderer should reuse the shared top movers summary helper'
   );
 });
 
