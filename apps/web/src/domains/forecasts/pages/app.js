@@ -1702,7 +1702,8 @@ function buildCopilotJudgePayload(raw) {
       detail: toString(action.detail, ''),
       action: toString(action.action, 'setAlert')
     })),
-    generatedAt: toString(data.generated_at || data.generatedAt, '')
+    generatedAt: toString(data.generated_at || data.generatedAt, ''),
+    playbook_id: toString(data.playbook_id || data.playbookId, '')
   };
 }
 
@@ -3458,11 +3459,17 @@ function buildCopilotChatResponseHtml(payload) {
     .map((source) => escapeHtml(toString(source.label, 'Source')))
     .join(', ');
   const updated = payload.generatedAt ? escapeHtml(formatRelativeTime(payload.generatedAt)) : 'just now';
+  const playbookId = payload.playbook_id ? escapeHtml(payload.playbook_id) : null;
+
+  const playbookHtml = playbookId
+    ? `<p style="margin-top: 8px; font-size: 11px; font-family: 'Courier New', monospace; background: rgba(59, 130, 246, 0.1); padding: 6px 10px; border-radius: 6px; display: inline-block;">📋 Playbook: <strong>${playbookId}</strong></p>`
+    : '';
 
   return `
     <p><strong>${verdict}</strong> position • Confidence ${confidence}% • Risk ${riskLevel}</p>
     ${reasoningHtml}
     ${riskHtml}
+    ${playbookHtml}
     <p style="margin-top: 10px; font-size: 12px; color: #94A3B8;">Model: ${model} • Sources: ${sourceLabels || 'Unavailable'} • Quality: ${quality} • Updated ${updated}</p>
   `;
 }
