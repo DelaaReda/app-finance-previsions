@@ -37,6 +37,14 @@ try:
 except ImportError:
     get_context_service = None
 
+# Strategy playbooks integration (BATCH-15-DEV-02)
+try:
+    from domains.copilot.application.playbook_resolver import get_playbook_resolver
+    from domains.copilot.domain.playbook import RiskProfile
+except ImportError:
+    get_playbook_resolver = None
+    RiskProfile = None
+
 # Storage
 try:
     from storage.io import load_json
@@ -70,17 +78,23 @@ class RecommendationsService:
         self.data_dir.mkdir(exist_ok=True, parents=True)
         if call_llm is None:
             self.logger.warning("call_llm unavailable, using simulated validation")
-        
+
         # Services
         if get_intelligence_service:
             self.intelligence_service = get_intelligence_service()
         else:
             self.intelligence_service = None
-        
+
         if get_context_service:
             self.context_service = get_context_service()
         else:
             self.context_service = None
+
+        # Strategy playbooks resolver (BATCH-15-DEV-02)
+        if get_playbook_resolver:
+            self.playbook_resolver = get_playbook_resolver()
+        else:
+            self.playbook_resolver = None
     
     async def generate_daily_recommendations(
         self,
@@ -572,15 +586,19 @@ Output ONLY valid JSON with this structure:
         validated: List[Dict],
         market_context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Format final recommendations output"""
-        
+        """Format final recommendations output enriched with strategy playbooks (BATCH-15-DEV-02)"""
+
         recommendations = []
-        
+
+        # Get market regime for playbook resolution
+        regime = market_context.get('regime', 'NORMAL')
+        risk_profile = 'moderate'  # Default risk profile for recommendations
+
         for item in validated:
             ticker = item['ticker']
             score = item['score']
             forecast = item.get('data', {}).get('forecast', {})
-            
+
             rec = {
                 'ticker': ticker,
                 'action': 'BUY' if forecast.get('direction') == 'up' else 'HOLD',
@@ -595,9 +613,32 @@ Output ONLY valid JSON with this structure:
                     'ml_score': round(score, 2)
                 }
             }
-            
+
+            # Enrich with playbook context (BATCH-15-DEV-02)
+            if self.playbook_resolver:
+                # Map forecast direction to signal direction for playbook resolver
+                forecast_dir = forecast.get('direction', 'flat')
+                signal_direction_map = {
+                    'up': 'bullish',
+                    'down': 'bearish',
+                    'flat': 'neutral'
+                }
+                signal_direction = signal_direction_map.get(forecast_dir.lower(), 'neutral')
+                
+                # Add signal direction and asset class for playbook enrichment
+                rec['direction'] = signal_direction
+                rec['asset_class'] = 'equities'  # Default to equities for stock recommendations
+
+                # Use resolver's enrich method
+                enriched = self.playbook_resolver.enrich_recommendation(
+                    recommendation=rec,
+                    regime=regime,
+                    risk_profile=risk_profile,
+                )
+                rec = enriched
+
             recommendations.append(rec)
-        
+
         return {
             'recommendations': recommendations,
             'market_context': {
