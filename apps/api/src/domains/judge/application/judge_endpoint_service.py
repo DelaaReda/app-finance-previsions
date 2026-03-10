@@ -49,9 +49,11 @@ except Exception:  # pragma: no cover
 
 try:
     from core.ticker_normalization import normalize_ticker  # type: ignore
+    from core.ticker_normalization import normalize_tickers  # type: ignore
 except Exception:  # pragma: no cover
     from platform.legacy.core.ticker_normalization import (  # type: ignore
         normalize_ticker,
+        normalize_tickers,
     )
 
 try:
@@ -259,7 +261,7 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
             "impact_keys": sorted(raw_impacts.keys()),
         },
         "reasons": reasons,
-        "conflicts": conflicts,
+        "conflicts": normalized_conflicts,
         "decision_id": verdict.get("decision_id"),
     }
 
@@ -1362,6 +1364,7 @@ async def get_judge_strategy_playbooks_payload(
     compute_verdicts_fn: JudgeVerdictsComputeFn,
 ) -> Dict[str, Any]:
     """Build strategy playbooks from verdict payload with stable, never-empty contract."""
+    normalized_tickers = normalize_tickers(ticker or [])
     verdict_payload = await get_judge_verdicts_payload(
         limit=limit,
         min_confidence=min_confidence,
@@ -1403,7 +1406,7 @@ async def get_judge_strategy_playbooks_payload(
     }
     response_data["filters_applied"] = {
         "min_confidence": min_confidence,
-        "tickers": ticker,
+        "tickers": normalized_tickers,
         "sort_by": str(sort_by),
         "sort_order": str(sort_order),
         "limit": limit,

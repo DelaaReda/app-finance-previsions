@@ -174,6 +174,70 @@ def test_judge_strategy_playbooks_maps_verdicts(monkeypatch):
     assert callable(captured["compute_verdicts_fn"])
 
 
+def test_judge_strategy_playbooks_merges_upstream_conflicts(monkeypatch):
+    now_iso = "2026-02-28T00:00:00Z"
+
+    async def fake_get_judge_verdicts_payload(**kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "TSLA",
+                        "horizon": "1w",
+                        "expected_return": 0.045,
+                        "risk_level": "low",
+                        "confidence": 0.72,
+                        "summary": ["Mixed macro support"],
+                        "scenarios": [],
+                        "risks": [],
+                        "impacts": {},
+                        "actions": ["trim"],
+                        "phase_scores": {},
+                        "data_needed": [],
+                        "go_no_go": {
+                            "decision": "no_go",
+                            "reasons": ["manual override"],
+                        },
+                        "conflicts": ["manual_override", "Manual_Override"],
+                        "meta": {
+                            "generated_at": now_iso,
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "stats": {
+                    "total_verdicts": 1,
+                    "high_confidence_count": 0,
+                    "avg_confidence": 0.48,
+                    "generated_at": now_iso,
+                },
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_verdicts_payload",
+        fake_get_judge_verdicts_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge/strategy-playbooks?limit=1&ticker=TSLA")
+    assert resp.status_code == 200
+    payload = resp.json()
+
+    conflicts = payload["data"]["playbooks"][0]["conflicts"]
+    assert conflicts == [
+        "manual_override",
+        "positive_signal_overridden_by_filters",
+        "signal_divergence",
+    ]
+
+
 def test_judge_strategy_playbooks_preserves_upstream_contract_fields(monkeypatch):
     now_iso = "2026-02-28T00:00:00Z"
 
