@@ -48,6 +48,13 @@ except Exception:  # pragma: no cover
     )
 
 try:
+    from core.ticker_normalization import normalize_ticker  # type: ignore
+except Exception:  # pragma: no cover
+    from platform.legacy.core.ticker_normalization import (  # type: ignore
+        normalize_ticker,
+    )
+
+try:
     from platform.legacy.research.versioned_notes import VersionedNotesStore  # type: ignore
 except Exception:  # pragma: no cover
     VersionedNotesStore = None  # type: ignore
@@ -153,6 +160,80 @@ def _coerce_text_list(*values: Any) -> List[str]:
         seen.add(key)
         items.append(text)
     return items
+
+
+def _coerce_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[str, Any]:
+    """Project a Judge verdict into a minimal strategy playbook payload."""
+    ticker = normalize_ticker(str(verdict.get("ticker") or "").strip()) or "UNKNOWN"
+
+    go_no_go = verdict.get("go_no_go") or {}
+    decision = str(go_no_go.get("decision") or "").strip().lower() if isinstance(go_no_go, dict) else ""
+    if decision in {"go", "buy", "long"}:
+        decision = "go"
+    elif decision in {"no_go", "sell", "short", "no-go"}:
+        decision = "no_go"
+    elif not decision:
+        confidence = _coerce_float(verdict.get("confidence"), 0.0)
+        expected_return = _coerce_float(verdict.get("expected_return"), 0.0)
+        if confidence >= 0.6 and expected_return >= 0:
+            decision = "go"
+        elif confidence <= 0.4 and expected_return <= 0:
+            decision = "no_go"
+        else:
+            decision = "hold"
+
+    summary = verdict.get("summary") or verdict.get("reasoning") or []
+    if isinstance(summary, str):
+        summary = [summary]
+    if not isinstance(summary, list):
+        summary = []
+
+    expected_return = _coerce_float(verdict.get("expected_return"), 0.0)
+    confidence = _coerce_float(verdict.get("confidence"), 0.0)
+    risk_level = str(verdict.get("risk_level") or "medium").strip().lower()
+    if risk_level not in {"low", "medium", "high", "critical"}:
+        risk_level = "medium"
+    horizon = str(verdict.get("horizon") or "1w").strip() or "1w"
+    playbook_id = f"{ticker}:{horizon}:{decision}:{profile}"
+    reasons = _coerce_text_list((go_no_go or {}).get("reasons", [])) if isinstance(go_no_go, dict) else []
+    raw_impacts = verdict.get("impacts") if isinstance(verdict.get("impacts"), dict) else {}
+    scenarios = verdict.get("scenarios") if isinstance(verdict.get("scenarios"), list) else []
+    risks = verdict.get("risks") if isinstance(verdict.get("risks"), list) else []
+
+    conflicts: List[str] = []
+    if decision == "go" and risk_level in {"high", "critical"}:
+        conflicts.append("risk_profile_too_aggressive")
+    if decision == "no_go" and expected_return > 0.03:
+        conflicts.append("positive_signal_overridden_by_filters")
+
+    return {
+        "playbook_id": playbook_id,
+        "ticker": ticker,
+        "horizon": horizon,
+        "profile": profile,
+        "decision": decision,
+        "confidence": round(confidence, 4),
+        "expected_return": round(expected_return, 6),
+        "risk_level": risk_level,
+        "summary": _coerce_text_list(summary)[:2],
+        "recommended_actions": _coerce_text_list(verdict.get("actions") or []),
+        "data_needed": _coerce_text_list(verdict.get("data_needed") or []),
+        "evidence": {
+            "scenario_count": len(scenarios),
+            "risk_count": len(risks),
+            "impact_keys": sorted(raw_impacts.keys()),
+        },
+        "reasons": reasons,
+        "conflicts": conflicts,
+        "decision_id": verdict.get("decision_id"),
+    }
 
 
 def _fallback_horizon(*, profile: str, verdict: Dict[str, Any]) -> str:
@@ -892,6 +973,8 @@ def _attach_decision_journal_projection(
 
     verdicts = data.get("verdicts")
     if not isinstance(verdicts, list):
+        verdicts = data.get("items")
+    if not isinstance(verdicts, list):
         verdicts = []
         data["verdicts"] = verdicts
 
@@ -1234,6 +1317,117 @@ async def get_judge_verdicts_payload(
         freshness=data.get("freshness"),
         status=data.get("status"),
         error=data.get("error"),
+    )
+
+
+async def get_judge_strategy_playbooks_payload(
+    *,
+    limit: int,
+    min_confidence: float,
+    ticker: Optional[List[str]],
+    sort_by: Any,
+    sort_order: Any,
+    profile: str,
+    debug: bool,
+    debug_full: bool,
+    x_debug_token: Optional[str],
+    compute_verdicts_fn: JudgeVerdictsComputeFn,
+) -> Dict[str, Any]:
+    """Build strategy playbooks from verdict payload with stable, never-empty contract."""
+    verdict_payload = await get_judge_verdicts_payload(
+        limit=limit,
+        min_confidence=min_confidence,
+        ticker=ticker,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        profile=profile,
+        debug=debug,
+        debug_full=debug_full,
+        x_debug_token=x_debug_token,
+        compute_verdicts_fn=compute_verdicts_fn,
+    )
+
+    if not isinstance(verdict_payload, dict):
+        return verdict_payload
+
+    data = verdict_payload.get("data")
+    if not isinstance(data, dict):
+        return verdict_payload
+
+    verdicts = data.get("verdicts")
+    if not isinstance(verdicts, list):
+        verdicts = []
+
+    playbooks = [
+        _build_strategy_playbook(verdict, profile=profile)
+        for verdict in verdicts
+        if isinstance(verdict, dict)
+    ]
+
+    now_iso = utc_now_iso()
+    response_data = {
+        **data,
+        "playbooks": playbooks,
+        "count": len(playbooks),
+        "generated_at": data.get("generated_at") or now_iso,
+    }
+    response_data["filters_applied"] = {
+        "min_confidence": min_confidence,
+        "tickers": ticker,
+        "sort_by": str(sort_by),
+        "sort_order": str(sort_order),
+        "limit": limit,
+        "profile": profile,
+    }
+    response_data["stats"] = {
+        "go_count": len([p for p in playbooks if p.get("decision") == "go"]),
+        "no_go_count": len([p for p in playbooks if p.get("decision") == "no_go"]),
+        "avg_confidence": (
+            sum(p.get("confidence", 0.0) for p in playbooks) / len(playbooks)
+            if playbooks
+            else 0.0
+        ),
+    }
+    response_data.pop("verdicts", None)
+
+    if debug:
+        response_data["judge_source"] = {
+            "data_count": len(verdicts),
+            "source": data.get("source"),
+            "status": verdict_payload.get("status"),
+            "error": verdict_payload.get("error"),
+        }
+        if isinstance(data.get("debug_pipeline"), list):
+            response_data["debug_pipeline"] = data.get("debug_pipeline")
+        if isinstance(data.get("verdicts_raw"), list):
+            response_data["verdicts_raw"] = data.get("verdicts_raw")
+        debug_payload = []
+        debug_llm_res = []
+        for verdict_entry in verdicts:
+            verdict_debug_payload = verdict_entry.get("debug_payload")
+            verdict_debug_llm_res = verdict_entry.get("debug_llm_res")
+            if isinstance(verdict_debug_payload, (dict, list)):
+                debug_payload.append(verdict_debug_payload)
+            if isinstance(verdict_debug_llm_res, (dict, list)):
+                debug_llm_res.append(verdict_debug_llm_res)
+        response_data["debug_payload"] = debug_payload
+        response_data["debug_llm_res"] = debug_llm_res
+
+    response_data.setdefault("source", ["judge_strategy_playbook_route"])
+    append_source_tag(
+        response_data,
+        "judge_strategy_playbook_route",
+        default_source="judge_strategy_playbook_route",
+    )
+
+    return service_response_with_metadata(
+        response_data,
+        default_source="judge_strategy_playbook_route",
+        freshness=verdict_payload.get("freshness")
+        or response_data.get("generated_at")
+        or now_iso,
+        status=verdict_payload.get("status"),
+        error=verdict_payload.get("error"),
     )
 
 

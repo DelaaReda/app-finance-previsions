@@ -3706,9 +3706,11 @@ async def get_judge_strategy_playbooks(
     ),
 ):
     """Build strategy playbooks from Judge verdicts using the existing LLM+cache stack."""
-    from services.judge_endpoint_service import get_judge_verdicts_payload
+    from services.judge_endpoint_service import (
+        get_judge_strategy_playbooks_payload,
+    )
 
-    verdict_payload = await get_judge_verdicts_payload(
+    return await get_judge_strategy_playbooks_payload(
         limit=limit,
         min_confidence=min_confidence,
         ticker=ticker,
@@ -3719,90 +3721,6 @@ async def get_judge_strategy_playbooks(
         debug_full=debug_full,
         x_debug_token=x_debug_token,
         compute_verdicts_fn=_legacy_get_judge_verdicts,
-    )
-
-    if not isinstance(verdict_payload, dict):
-        return verdict_payload
-
-    data = verdict_payload.get("data") if isinstance(verdict_payload, dict) else {}
-    if not isinstance(data, dict):
-        data = {}
-
-    verdicts = data.get("verdicts") if isinstance(data, dict) else []
-    if not isinstance(verdicts, list):
-        verdicts = []
-
-    playbooks = []
-    for verdict in verdicts:
-        if not isinstance(verdict, dict):
-            continue
-        playbooks.append(
-            _build_strategy_playbook(verdict, profile=profile),
-        )
-
-    response_base = deepcopy(data)
-    response_base.pop("verdicts", None)
-    now_iso = datetime.utcnow().isoformat() + "Z"
-    response_data = {
-        **response_base,
-        "playbooks": playbooks,
-        "count": len(playbooks),
-        "generated_at": response_base.get("generated_at") or now_iso,
-        "source": response_base.get("source") or ["judge_strategy_playbook_route"],
-        "filters_applied": {
-            "min_confidence": min_confidence,
-            "tickers": ticker,
-            "sort_by": str(sort_by),
-            "sort_order": str(sort_order),
-            "limit": limit,
-            "profile": profile,
-        },
-        "stats": {
-            "go_count": len([p for p in playbooks if p.get("decision") == "go"]),
-            "no_go_count": len([p for p in playbooks if p.get("decision") == "no_go"]),
-            "avg_confidence": (
-                sum(p.get("confidence", 0.0) for p in playbooks) / len(playbooks)
-                if playbooks
-                else 0.0
-            ),
-        },
-    }
-
-    if debug:
-        response_data["judge_source"] = {
-            "data_count": len(verdicts),
-            "source": data.get("source"),
-            "status": verdict_payload.get("status"),
-            "error": verdict_payload.get("error"),
-        }
-        if isinstance(data.get("debug_pipeline"), list):
-            response_data["debug_pipeline"] = data.get("debug_pipeline")
-        if isinstance(data.get("verdicts_raw"), list):
-            response_data["verdicts_raw"] = data.get("verdicts_raw")
-        debug_payload = []
-        debug_llm_res = []
-        for verdict_entry in verdicts:
-            if not isinstance(verdict_entry, dict):
-                continue
-            verdict_debug_payload = verdict_entry.get("debug_payload")
-            verdict_debug_llm_res = verdict_entry.get("debug_llm_res")
-            if isinstance(verdict_debug_payload, (dict, list)):
-                debug_payload.append(verdict_debug_payload)
-            if isinstance(verdict_debug_llm_res, (dict, list)):
-                debug_llm_res.append(verdict_debug_llm_res)
-        response_data["debug_payload"] = debug_payload
-        response_data["debug_llm_res"] = debug_llm_res
-    response_data.setdefault("source", ["judge_strategy_playbook_route"])
-    _append_source_tag(response_data, "judge_strategy_playbook_route")
-
-    return service_response_with_metadata(
-        response_data,
-        default_source="judge_strategy_playbook_route",
-        freshness=verdict_payload.get("freshness")
-        or data.get("generated_at")
-        or now_iso,
-        status=verdict_payload.get("status"),
-        error=verdict_payload.get("error"),
     )
 
 
