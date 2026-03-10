@@ -278,11 +278,11 @@ def _multi_agent_policy_snapshot(root: Path) -> dict:
         str(
             os.environ.get(
                 "FC_PLANNER_ORCHESTRATOR_DEFAULT_HELPER_MODE",
-                planner.get("default_helper_mode", "worker_first"),
+                planner.get("default_helper_mode", "native_codex"),
             )
-            or "worker_first"
+            or "native_codex"
         ).strip().lower()
-        or "worker_first"
+        or "native_codex"
     )
     return {
         "runtime_mode": default_helper_mode,
@@ -291,7 +291,7 @@ def _multi_agent_policy_snapshot(root: Path) -> dict:
         "interactive_recent_explorer_sessions": "not_tracked_in_runtime_monitor",
         "interactive_recent_explorer_agents": [],
         "note": (
-            "Runtime planner is worker-first; explorers are interactive diagnostics only and are not tracked as live delivery agents here."
+            "Runtime planner uses native Codex orchestration: Codex decides spawn, steer, wait, close, and monitor. Raw shell worker/explorer/monitor commands are not valid runtime agents here."
         ),
     }
 
@@ -378,16 +378,44 @@ PO_SCRUM_MASTER_REPORT_FILE = Path(
         str(ROOT / "docs" / "ops" / "PO_SCRUM_MASTER_REPORTS.md"),
     )
 ).expanduser()
-DOCTOR_SCRIPT_FILE = Path(
+DOCTOR_PY_FILE = Path(
     os.environ.get(
-        "FC_MONITOR_DOCTOR_SCRIPT",
-        str(ROOT / "scripts" / "fc_doctor.sh"),
+        "FC_MONITOR_DOCTOR_PY",
+        str(ROOT / "platform" / "automation" / "fc_doctor.py"),
     )
 ).expanduser()
 DOCTOR_CACHE_TTL_SECONDS = max(5, int(os.environ.get("FC_MONITOR_DOCTOR_CACHE_TTL_SECONDS", "120")))
 DOCTOR_RUN_TIMEOUT_SECONDS = max(8, int(os.environ.get("FC_MONITOR_DOCTOR_RUN_TIMEOUT_SECONDS", "20")))
 _DOCTOR_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 _DOCTOR_RUNNING = False
+PLANNER_SUBAGENTS_CACHE_TTL_SECONDS = max(
+    1,
+    int(os.environ.get("FC_MONITOR_PLANNER_SUBAGENTS_CACHE_TTL_SECONDS", "5")),
+)
+_PLANNER_SUBAGENTS_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
+
+
+def _extract_last_json_dict(text: str) -> dict:
+    raw = str(text or "").strip()
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        pass
+    decoder = json.JSONDecoder()
+    candidate: dict = {}
+    for idx, char in enumerate(raw):
+        if char != "{":
+            continue
+        try:
+            payload, _ = decoder.raw_decode(raw[idx:])
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            candidate = payload
+    return candidate
 
 
 def _iteration_issue_event_sources() -> list[Path]:
@@ -563,11 +591,41 @@ def _dynamic_workers_snapshot() -> dict:
 
 
 def _planner_subagents_snapshot() -> dict:
-    module = _planner_dispatch_metrics_module()
-    if module is not None and hasattr(module, "build_planner_dispatch_metrics"):
-        try:
-            snapshot = module.build_planner_dispatch_metrics(ROOT, recent_limit=12)
-        except Exception as exc:
+    cached_payload = _PLANNER_SUBAGENTS_CACHE.get("payload")
+    cached_ts = float(_PLANNER_SUBAGENTS_CACHE.get("ts") or 0.0)
+    now = time.time()
+    if (
+        isinstance(cached_payload, dict)
+        and cached_payload
+        and (now - cached_ts) <= PLANNER_SUBAGENTS_CACHE_TTL_SECONDS
+    ):
+        return cached_payload
+
+    try:
+        import planner_subagent_manager as native_module  # type: ignore
+
+        snapshot = native_module.status_snapshot(native_module._load_config(ROOT), "planner")
+    except Exception as exc:
+        module = _planner_dispatch_metrics_module()
+        if module is not None and hasattr(module, "build_planner_dispatch_metrics"):
+            try:
+                snapshot = module.build_planner_dispatch_metrics(ROOT, recent_limit=12)
+            except Exception:
+                snapshot = {
+                    "registry_path": str(orchestrator_file("planner-subagents-registry.json")),
+                    "active_count": 0,
+                    "active": [],
+                    "recent": [],
+                    "recent_total": 0,
+                    "recent_success_count": 0,
+                    "recent_failed_count": 0,
+                    "recent_blocked_count": 0,
+                    "recent_fallback_like_count": 0,
+                    "recent_success_rate": 1.0,
+                    "recent_by_role": {},
+                    "status": f"error:{exc}",
+                }
+        else:
             snapshot = {
                 "registry_path": str(orchestrator_file("planner-subagents-registry.json")),
                 "active_count": 0,
@@ -582,27 +640,15 @@ def _planner_subagents_snapshot() -> dict:
                 "recent_by_role": {},
                 "status": f"error:{exc}",
             }
-    else:
-        snapshot = {
-            "registry_path": str(orchestrator_file("planner-subagents-registry.json")),
-            "active_count": 0,
-            "active": [],
-            "recent": [],
-            "recent_total": 0,
-            "recent_success_count": 0,
-            "recent_failed_count": 0,
-            "recent_blocked_count": 0,
-            "recent_fallback_like_count": 0,
-            "recent_success_rate": 1.0,
-            "recent_by_role": {},
-            "status": "unknown",
-        }
     enabled, cron_planner_only = _planner_orchestrator_flags(ROOT)
-    return {
+    payload = {
         "enabled": enabled,
         "cron_planner_only": cron_planner_only,
         **snapshot,
     }
+    _PLANNER_SUBAGENTS_CACHE["payload"] = payload
+    _PLANNER_SUBAGENTS_CACHE["ts"] = time.time()
+    return payload
 
 
 def _planner_dispatch_snapshot(
@@ -631,6 +677,8 @@ def _planner_dispatch_snapshot(
     latest_owner_task_id = str(planner_subagents.get("latest_owner_task_id", "") or "").strip()
     latest_update_at = str(planner_subagents.get("latest_update_at", "") or "").strip()
     recovering = bool(planner_subagents.get("recovering"))
+    backend_route_reason = str(planner_subagents.get("backend_route_reason", "none") or "none").strip() or "none"
+    backend_cooldown_until = str(planner_subagents.get("backend_cooldown_until", "") or "").strip()
     stalled_capability_count = int(planner_subagents.get("stalled_capability_count", 0) or 0)
     takeover_required_count = int(planner_subagents.get("takeover_required_count", 0) or 0)
     recovery_required_count = int(planner_subagents.get("recovery_required_count", 0) or 0)
@@ -644,11 +692,27 @@ def _planner_dispatch_snapshot(
 
     needs_dispatch = lifecycle == "running" and active_count == 0 and (ready_dev_count > 0 or ready_planner_count > 0)
     stalled_ready_dev = lifecycle == "running" and ready_dev_count > 0 and active_count == 0 and tasks_progressed_last_1h == 0
+    planner_state = str(planner_subagents.get("planner_state", "") or "").strip() or (
+        "blocked" if lifecycle != "running" else
+        "degraded_backend" if bool(planner_subagents.get("degraded_backend")) else
+        "monitoring" if int(planner_subagents.get("monitoring_count", 0) or 0) > 0 else
+        "waiting_on_agents" if active_count > 0 else
+        "working"
+    )
+    last_meaningful_delta = str(planner_subagents.get("latest_last_meaningful_delta", planner_subagents.get("last_meaningful_delta", "none")) or "none").strip() or "none"
+    degraded_backend = bool(planner_subagents.get("degraded_backend"))
+    monitoring_count = int(planner_subagents.get("monitoring_count", 0) or 0)
+    monitor_without_target_count = int(planner_subagents.get("monitor_without_target_count", 0) or 0)
+    collect_timeout_without_agents = bool(planner_subagents.get("collect_timeout_without_agents"))
 
     status = "ok"
     if lifecycle != "running":
         status = lifecycle
-    elif active_count > 0:
+    elif planner_state == "degraded_backend":
+        status = "degraded"
+    elif planner_state == "blocked":
+        status = "blocked"
+    elif planner_state in {"waiting_on_agents", "monitoring"}:
         status = "recovering" if recovering else "active"
     elif (recent_failed_count > 0 and latest_status not in {"", "completed", "merged", "done", "pass", "ok", "success"}) or latest_fallback_like:
         status = "degraded"
@@ -673,8 +737,13 @@ def _planner_dispatch_snapshot(
         "latest_status": latest_status,
         "latest_fallback_like": latest_fallback_like,
         "latest_failure_mode": latest_failure_mode,
+        "backend_route_reason": backend_route_reason,
+        "backend_cooldown_until": backend_cooldown_until,
         "latest_owner_task_id": latest_owner_task_id,
         "latest_update_at": latest_update_at,
+        "latest_last_meaningful_delta": last_meaningful_delta,
+        "latest_monitor_agent_id": str(planner_subagents.get("latest_monitor_agent_id", "") or "").strip(),
+        "latest_purpose": str(planner_subagents.get("latest_purpose", "") or "").strip(),
         "recovering": recovering,
         "stalled_capability_count": stalled_capability_count,
         "takeover_required_count": takeover_required_count,
@@ -691,6 +760,12 @@ def _planner_dispatch_snapshot(
         "recommended_next_action": recommended_next_action,
         "needs_dispatch": needs_dispatch,
         "stalled_ready_dev": stalled_ready_dev,
+        "planner_state": planner_state,
+        "last_meaningful_delta": last_meaningful_delta,
+        "degraded_backend": degraded_backend,
+        "monitoring_count": monitoring_count,
+        "monitor_without_target_count": monitor_without_target_count,
+        "collect_timeout_without_agents": collect_timeout_without_agents,
         "registry_path": str(planner_subagents.get("registry_path", "") or ""),
     }
 
@@ -1173,7 +1248,7 @@ def doctor_snapshot(force_refresh: bool = False, allow_refresh: bool = True) -> 
         }
 
     # Prevent recursive refresh loops:
-    # /api/status -> doctor_snapshot -> fc_doctor.sh -> /api/status.
+    # /api/status -> doctor_snapshot -> fc_doctor.py -> /api/status.
     if _DOCTOR_RUNNING:
         if isinstance(cached_payload, dict) and cached_payload:
             return cached_payload
@@ -1187,14 +1262,20 @@ def doctor_snapshot(force_refresh: bool = False, allow_refresh: bool = True) -> 
             },
         }
 
-    if not DOCTOR_SCRIPT_FILE.exists():
+    doctor_py = DOCTOR_PY_FILE
+    if not doctor_py.exists():
+        fallback = ROOT / "platform" / "automation" / "doctor.py"
+        if fallback.exists():
+            doctor_py = fallback
+
+    if not doctor_py.exists():
         payload = {
             "status": "error",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "checks": {},
             "meta": {
                 "schema_version": "doctor.v1",
-                "error": f"doctor script missing: {DOCTOR_SCRIPT_FILE}",
+                "error": f"doctor script missing: {doctor_py}",
                 "duration_ms": 0,
             },
         }
@@ -1206,20 +1287,14 @@ def doctor_snapshot(force_refresh: bool = False, allow_refresh: bool = True) -> 
         _DOCTOR_RUNNING = True
         try:
             cp = subprocess.run(
-                [str(DOCTOR_SCRIPT_FILE), "--json"],
+                ["python3", str(doctor_py), "--root", str(ROOT), "--json"],
                 text=True,
                 capture_output=True,
                 check=False,
                 timeout=DOCTOR_RUN_TIMEOUT_SECONDS,
                 cwd=str(ROOT),
             )
-            payload = {}
-            try:
-                payload = json.loads(cp.stdout or "{}")
-            except Exception:
-                payload = {}
-            if not isinstance(payload, dict):
-                payload = {}
+            payload = _extract_last_json_dict(cp.stdout or "")
             if not payload:
                 payload = {
                     "status": "error",
@@ -5872,13 +5947,14 @@ function plannerDispatchHtml(){
   const rt=(D&&D.runtime_state)||{};
   const activitySummary=(D&&D.activity_summary)||{};
   const systemSummary=(A&&A.system_summary)||{};
-  const status=String(pd.status||ps.status||'unknown');
+  const status=String(pd.planner_state||pd.status||ps.planner_state||ps.status||'unknown');
   const lifecycle=String(pd.lifecycle||rt.lifecycle||'unknown');
   const cls=plannerDispatchStatusClass(status);
   const readyDev=Number(pd.ready_dev_count ?? ((D&&D.queue&&D.queue.ready_dev_count)||0));
   const readyPlanner=Number(pd.ready_planner_count ?? ((D&&D.queue&&D.queue.ready_planner_count)||0));
   const inProgress=Number(pd.in_progress_count ?? ((D&&D.workboard&&D.workboard.in_progress)||0));
   const activeCount=Number(pd.active_subagents ?? (ps.active_count||0));
+  const monitorCount=Number(pd.monitoring_count ?? ps.monitor_active_count ?? 0);
   const progressed1h=Number(pd.tasks_progressed_last_1h ?? (activitySummary.tasks_progressed_last_1h||0));
   const recentRate=Number(pd.recent_success_rate ?? (ps.recent_success_rate||0));
   const recentFailed=Number(pd.recent_failed_count ?? (ps.recent_failed_count||0));
@@ -5891,10 +5967,20 @@ function plannerDispatchHtml(){
   const recoveryRequired=Number(pd.recovery_required_count ?? 0);
   const nextAction=String(pd.recommended_next_action || systemSummary.recommended_next_action || 'monitor');
   const bottleneck=String(pd.current_bottleneck || activitySummary.current_bottleneck || 'none');
+  const latestOwner=String(pd.latest_owner_task_id || ps.latest_owner_task_id || 'none');
+  const latestPurpose=String(pd.latest_purpose || ps.latest_purpose || 'none');
+  const latestDelta=String(pd.latest_last_meaningful_delta || ps.latest_last_meaningful_delta || pd.last_meaningful_delta || 'none');
+  const latestMonitor=String(pd.latest_monitor_agent_id || ps.latest_monitor_agent_id || '');
+  const routeReason=String(pd.backend_route_reason || ps.backend_route_reason || 'none');
+  const routeCooldown=String(pd.backend_cooldown_until || ps.backend_cooldown_until || '');
+  const degradedBackend=Boolean(pd.degraded_backend || ps.latest_backend==='qwen' || status==='degraded_backend');
   const dispatchFlags=[];
   if(pd.needs_dispatch)dispatchFlags.push('dispatch required');
   if(pd.stalled_ready_dev)dispatchFlags.push('READY_DEV stalled');
   if(pd.recovering)dispatchFlags.push('recovering');
+  if(degradedBackend)dispatchFlags.push('backend=qwen degraded');
+  if(routeReason && routeReason!=='none')dispatchFlags.push(`route=${routeReason}`);
+  if(routeCooldown)dispatchFlags.push(`cooldown=${routeCooldown}`);
   if(takeoverRequired>0)dispatchFlags.push(`takeover required=${takeoverRequired}`);
   if(recoveryRequired>0)dispatchFlags.push(`recovery required=${recoveryRequired}`);
   const flagsHtml=dispatchFlags.length
@@ -5909,12 +5995,14 @@ function plannerDispatchHtml(){
     <div class="work-summary-grid" style="margin-top:8px">
       ${workSummaryStatHtml(`${readyDev}/${readyPlanner}`,'ready dev/planner',readyDev+readyPlanner>0?'warn':'ok')}
       ${workSummaryStatHtml(activeCount,'subagents actifs',activeCount>0?'warn':'info')}
+      ${workSummaryStatHtml(monitorCount,'monitor agents',monitorCount>0?'warn':'ok')}
       ${workSummaryStatHtml(progressed1h,'tasks progressed 1h',progressed1h>0?'ok':'warn')}
       ${workSummaryStatHtml(`${Math.round(recentRate*100)}%`,'success rate',recentFailed===0&&recentFallback===0?'ok':'warn')}
       ${workSummaryStatHtml(timeoutLike,'timeouts récents',timeoutLike>0?'error':'ok')}
       ${workSummaryStatHtml(stalledCapabilities,'capabilities stalled',stalledCapabilities>0?'error':'ok')}
     </div>
     <div class="queue-sync ${recentFailed===0&&recentFallback===0&&invalidResults===0?'ok':'warn'}" style="margin-top:8px"><strong>Recent execution</strong> · failed=${recentFailed} · blocked=${recentBlocked} · fallback_like=${recentFallback} · invalid=${invalidResults} · timeout_like=${timeoutLike} · bottleneck=${esc(bottleneck)}</div>
+    <div class="queue-sync ${latestDelta!=='none'?'ok':'warn'}" style="margin-top:8px"><strong>Native planner</strong> · owner=${esc(latestOwner)} · purpose=${esc(latestPurpose)} · delta=${esc(latestDelta)}${latestMonitor?` · monitor=${esc(latestMonitor)}`:''}</div>
     <div class="queue-sync ${(takeoverRequired===0&&recoveryRequired===0)?'ok':'warn'}" style="margin-top:8px"><strong>Recovery</strong> · takeover_required=${takeoverRequired} · recovery_required=${recoveryRequired} · in_progress=${inProgress}</div>
     ${flagsHtml}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
