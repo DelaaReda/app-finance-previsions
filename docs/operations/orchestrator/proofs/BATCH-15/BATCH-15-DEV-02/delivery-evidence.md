@@ -112,8 +112,8 @@ pytest -xvs apps/api/src/domains/judge/tests/test_judge_route_orchestration.py -
 ## Delivery Metadata
 - **root_cause:** Task was already implemented; verification and testing completed
 - **fix_applied:** None required; all components functional
-- **verify:** 
+- **verify:**
   - before=untested implementation
   - after=6/6 frontend tests + 6/6 backend tests passing
   - test=test-strategy-playbooks-widget.js + test_judge_route_orchestration.py
-- **commit_sha:** Pending git commit (see below)
+- **commit_sha:** 91887935f84b5186c3571adbb152f6450a1b3dca (docs: add delivery evidence)
