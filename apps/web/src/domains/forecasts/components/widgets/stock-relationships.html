@@ -13,17 +13,32 @@
     <div class="widget-body">
         <p class="widget-subtitle">Top 3 Correlated with Your Portfolio</p>
         <div class="correlation-list">
-            <div class="correlation-item">
+            <div class="correlation-item" data-ticker-a="AAPL" data-ticker-b="MSFT">
                 <span class="correlation-pair">AAPL ↔ MSFT</span>
                 <span class="correlation-value">85% correlation</span>
+                <div class="correlation-playbooks" id="playbooks-AAPL-MSFT">
+                    <span class="correlation-playbook-badge" data-role="ticker-a"></span>
+                    <span class="correlation-playbook-badge" data-role="ticker-b"></span>
+                </div>
+                <div class="correlation-playbook-summary" id="playbook-summary-AAPL-MSFT">Loading playbook alignment...</div>
             </div>
-            <div class="correlation-item">
+            <div class="correlation-item" data-ticker-a="MSFT" data-ticker-b="GOOGL">
                 <span class="correlation-pair">MSFT ↔ GOOGL</span>
                 <span class="correlation-value">78% correlation</span>
+                <div class="correlation-playbooks" id="playbooks-MSFT-GOOGL">
+                    <span class="correlation-playbook-badge" data-role="ticker-a"></span>
+                    <span class="correlation-playbook-badge" data-role="ticker-b"></span>
+                </div>
+                <div class="correlation-playbook-summary" id="playbook-summary-MSFT-GOOGL">Loading playbook alignment...</div>
             </div>
-            <div class="correlation-item">
+            <div class="correlation-item" data-ticker-a="AAPL" data-ticker-b="GOOGL">
                 <span class="correlation-pair">AAPL ↔ GOOGL</span>
                 <span class="correlation-value">72% correlation</span>
+                <div class="correlation-playbooks" id="playbooks-AAPL-GOOGL">
+                    <span class="correlation-playbook-badge" data-role="ticker-a"></span>
+                    <span class="correlation-playbook-badge" data-role="ticker-b"></span>
+                </div>
+                <div class="correlation-playbook-summary" id="playbook-summary-AAPL-GOOGL">Loading playbook alignment...</div>
             </div>
         </div>
         <button class="toggle-matrix-btn" onclick="toggleCorrelationMatrix(this)">Show Full Matrix</button>
@@ -33,6 +48,134 @@
         <p class="widget-context">These stocks tend to move in sync</p>
     </div>
     <div class="widget-footer">
-        <span class="widget-timestamp">Updated daily based on 1-year data</span>
+        <span class="widget-timestamp" id="stockRelationshipsTimestamp">Updated --</span>
     </div>
 </section>
+
+<script>
+function getCorrelationPlaybookSummary(playbookA, playbookB) {
+  if (!playbookA || !playbookB) {
+    return {
+      className: 'is-unavailable',
+      text: 'Playbook data unavailable for this pair.'
+    };
+  }
+
+  if (playbookA.decision === playbookB.decision) {
+    return {
+      className: 'is-aligned',
+      text: `Aligned ${playbookA.decision.toUpperCase()} setup across both names.`
+    };
+  }
+
+  return {
+    className: 'is-mixed',
+    text: `${playbookA.ticker} is ${playbookA.decision.toUpperCase()} while ${playbookB.ticker} is ${playbookB.decision.toUpperCase()}.`
+  };
+}
+
+async function loadStockRelationshipsPlaybooks() {
+  const pairs = document.querySelectorAll('.correlation-item[data-ticker-a][data-ticker-b]');
+
+  for (const pair of pairs) {
+    const tickerA = pair.getAttribute('data-ticker-a');
+    const tickerB = pair.getAttribute('data-ticker-b');
+    const pairKey = tickerA + '-' + tickerB;
+    const container = document.getElementById('playbooks-' + pairKey);
+    const summaryEl = document.getElementById('playbook-summary-' + pairKey);
+    if (!container) continue;
+
+    const tickerABadge = container.querySelector('[data-role="ticker-a"]');
+    const tickerBBadge = container.querySelector('[data-role="ticker-b"]');
+
+    try {
+      const [badgeA, badgeB, playbookA, playbookB] = await Promise.all([
+        window.PlaybookIntegration.getDecisionBadge(tickerA),
+        window.PlaybookIntegration.getDecisionBadge(tickerB),
+        window.PlaybookIntegration.getPlaybookForTicker(tickerA),
+        window.PlaybookIntegration.getPlaybookForTicker(tickerB)
+      ]);
+
+      if (tickerABadge) tickerABadge.innerHTML = badgeA;
+      if (tickerBBadge) tickerBBadge.innerHTML = badgeB;
+
+      if (summaryEl) {
+        const summary = getCorrelationPlaybookSummary(playbookA, playbookB);
+        summaryEl.className = 'correlation-playbook-summary ' + summary.className;
+        summaryEl.textContent = summary.text;
+      }
+    } catch (error) {
+      console.warn('[StockRelationships] Failed to load playbooks for ' + pairKey + ':', error.message);
+      if (tickerABadge) tickerABadge.innerHTML = '<span class="playbook-badge badge-neutral">--</span>';
+      if (tickerBBadge) tickerBBadge.innerHTML = '<span class="playbook-badge badge-neutral">--</span>';
+      if (summaryEl) {
+        summaryEl.className = 'correlation-playbook-summary is-unavailable';
+        summaryEl.textContent = 'Playbook data unavailable for this pair.';
+      }
+    }
+  }
+
+  const timestampEl = document.getElementById('stockRelationshipsTimestamp');
+  if (timestampEl) {
+    timestampEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+  }
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', loadStockRelationshipsPlaybooks);
+} else {
+  loadStockRelationshipsPlaybooks();
+}
+</script>
+
+<style>
+    .correlation-playbooks {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+        justify-content: center;
+    }
+    .correlation-playbook-badge {
+        flex: 1;
+        max-width: 100px;
+    }
+    .correlation-playbook-summary {
+        margin-top: 8px;
+        font-size: 11px;
+        color: rgba(255, 255, 255, 0.68);
+    }
+    .correlation-playbook-summary.is-aligned {
+        color: #4ade80;
+    }
+    .correlation-playbook-summary.is-mixed {
+        color: #fbbf24;
+    }
+    .correlation-playbook-summary.is-unavailable {
+        color: #9ca3af;
+    }
+    .playbook-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        width: 100%;
+        text-align: center;
+    }
+    .playbook-badge.badge-go {
+        background: rgba(34, 197, 94, 0.2);
+        border-color: rgba(34, 197, 94, 0.4);
+        color: #4ade80;
+    }
+    .playbook-badge.badge-no-go {
+        background: rgba(239, 68, 68, 0.2);
+        border-color: rgba(239, 68, 68, 0.4);
+        color: #f87171;
+    }
+    .playbook-badge.badge-neutral {
+        background: rgba(156, 163, 175, 0.2);
+        border-color: rgba(156, 163, 175, 0.4);
+        color: #9ca3af;
+    }
+</style>
