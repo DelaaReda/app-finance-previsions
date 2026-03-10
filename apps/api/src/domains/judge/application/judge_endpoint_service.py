@@ -207,11 +207,39 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
     scenarios = verdict.get("scenarios") if isinstance(verdict.get("scenarios"), list) else []
     risks = verdict.get("risks") if isinstance(verdict.get("risks"), list) else []
 
-    conflicts: List[str] = []
+    conflicts: List[str] = _coerce_text_list(verdict.get("conflicts", []))
     if decision == "go" and risk_level in {"high", "critical"}:
         conflicts.append("risk_profile_too_aggressive")
     if decision == "no_go" and expected_return > 0.03:
         conflicts.append("positive_signal_overridden_by_filters")
+
+    # Divergence visibility: when inferred signal logic and conflict-gated playbook decision disagree,
+    # we intentionally expose this as a conflict for explainability.
+    signal_signal = None
+    if expected_return >= 0 and confidence >= 0.6:
+        signal_signal = "go"
+    elif expected_return <= 0 and confidence <= 0.4:
+        signal_signal = "no_go"
+    else:
+        signal_signal = "hold"
+
+    if signal_signal != decision:
+        conflicts.append("signal_divergence")
+
+    # Preserve upstream conflict hints and keep response stable/deterministic.
+    seen_conflicts = set()
+    normalized_conflicts: List[str] = []
+    for conflict in conflicts:
+        if not isinstance(conflict, str):
+            continue
+        normalized = str(conflict).strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen_conflicts:
+            continue
+        seen_conflicts.add(key)
+        normalized_conflicts.append(normalized)
 
     return {
         "playbook_id": playbook_id,
@@ -1355,6 +1383,8 @@ async def get_judge_strategy_playbooks_payload(
         return verdict_payload
 
     verdicts = data.get("verdicts")
+    if not isinstance(verdicts, list):
+        verdicts = data.get("items")
     if not isinstance(verdicts, list):
         verdicts = []
 
