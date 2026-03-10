@@ -236,6 +236,25 @@ test('Stock Relationships widget uses pair-scoped rendering instead of duplicate
   );
 });
 
+test('Copilot chat preserves playbook context and conflict warnings', () => {
+  assert(
+    appJsContent.includes('playbook_context: rawPlaybookContext'),
+    'sanitizeCopilot response should preserve playbook context'
+  );
+  assert(
+    appJsContent.includes('conflict_warning: rawConflictWarning'),
+    'sanitizeCopilot response should preserve conflict warnings'
+  );
+  assert(
+    appJsContent.includes('playbookContext.name'),
+    'Copilot chat response should render the playbook name'
+  );
+  assert(
+    appJsContent.includes('<strong>Conflict:</strong>'),
+    'Copilot chat response should surface playbook conflicts'
+  );
+});
+
 // Summary
 console.log('\n' + '='.repeat(50));
 console.log(`Tests: ${passed + failed} | Passed: ${passed} | Failed: ${failed}`);

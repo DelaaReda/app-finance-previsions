@@ -1672,6 +1672,12 @@ function buildCopilotJudgePayload(raw) {
     ? (data.requirements_met || data.requirementsMet)
     : {};
   const qualityStatus = toString(data.quality_status || data.qualityStatus, 'insufficient_sources');
+  const rawPlaybookContext = isObject(data.playbook_context || data.playbookContext)
+    ? (data.playbook_context || data.playbookContext)
+    : null;
+  const rawConflictWarning = isObject(data.conflict_warning || data.conflictWarning)
+    ? (data.conflict_warning || data.conflictWarning)
+    : null;
 
   return {
     question: toString(data.question, 'Que faire avec votre portefeuille ?'),
@@ -1703,7 +1709,25 @@ function buildCopilotJudgePayload(raw) {
       action: toString(action.action, 'setAlert')
     })),
     generatedAt: toString(data.generated_at || data.generatedAt, ''),
-    playbook_id: toString(data.playbook_id || data.playbookId, '')
+    playbook_id: toString(data.playbook_id || data.playbookId, ''),
+    playbook_context: rawPlaybookContext
+      ? {
+        name: toString(rawPlaybookContext.name, ''),
+        description: toString(rawPlaybookContext.description, ''),
+        guardrails: toArray(rawPlaybookContext.guardrails, [])
+          .map((item) => toString(item, '').trim())
+          .filter(Boolean)
+          .slice(0, 2)
+      }
+      : null,
+    conflict_warning: rawConflictWarning
+      ? {
+        detected: !!rawConflictWarning.detected,
+        reason: toString(rawConflictWarning.reason, ''),
+        signal: toString(rawConflictWarning.signal, ''),
+        playbook_id: toString(rawConflictWarning.playbook_id || rawConflictWarning.playbookId, '')
+      }
+      : null
   };
 }
 
@@ -3491,9 +3515,25 @@ function buildCopilotChatResponseHtml(payload) {
     .join(', ');
   const updated = payload.generatedAt ? escapeHtml(formatRelativeTime(payload.generatedAt)) : 'just now';
   const playbookId = payload.playbook_id ? escapeHtml(payload.playbook_id) : null;
+  const playbookContext = payload.playbook_context && typeof payload.playbook_context === 'object'
+    ? payload.playbook_context
+    : null;
+  const guardrail = playbookContext && Array.isArray(playbookContext.guardrails)
+    ? toString(playbookContext.guardrails[0], '')
+    : '';
+  const conflictWarning = payload.conflict_warning && typeof payload.conflict_warning === 'object'
+    ? payload.conflict_warning
+    : null;
 
   const playbookHtml = playbookId
-    ? `<p style="margin-top: 8px; font-size: 11px; font-family: 'Courier New', monospace; background: rgba(59, 130, 246, 0.1); padding: 6px 10px; border-radius: 6px; display: inline-block;">📋 Playbook: <strong>${playbookId}</strong></p>`
+    ? `<div style="margin-top: 8px;">
+        <p style="font-size: 11px; font-family: 'Courier New', monospace; background: rgba(59, 130, 246, 0.1); padding: 6px 10px; border-radius: 6px; display: inline-block;">📋 Playbook: <strong>${playbookId}</strong></p>
+        ${playbookContext && playbookContext.name ? `<p style="margin-top: 6px; font-size: 12px;"><strong>${escapeHtml(playbookContext.name)}</strong>${playbookContext.description ? ` • ${escapeHtml(playbookContext.description)}` : ''}</p>` : ''}
+        ${guardrail ? `<p style="margin-top: 4px; font-size: 12px; color: #94A3B8;">Guardrail: ${escapeHtml(guardrail)}</p>` : ''}
+      </div>`
+    : '';
+  const conflictHtml = conflictWarning && conflictWarning.detected
+    ? `<p style="margin-top: 8px; color: #FCA5A5;"><strong>Conflict:</strong> ${escapeHtml(toString(conflictWarning.reason, 'Signal diverges from active playbook.'))}</p>`
     : '';
 
   return `
@@ -3501,6 +3541,7 @@ function buildCopilotChatResponseHtml(payload) {
     ${reasoningHtml}
     ${riskHtml}
     ${playbookHtml}
+    ${conflictHtml}
     <p style="margin-top: 10px; font-size: 12px; color: #94A3B8;">Model: ${model} • Sources: ${sourceLabels || 'Unavailable'} • Quality: ${quality} • Updated ${updated}</p>
   `;
 }
