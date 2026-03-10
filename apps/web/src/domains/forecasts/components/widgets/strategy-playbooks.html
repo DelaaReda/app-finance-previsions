@@ -1,167 +1,300 @@
-<section class="widget-card strategy-playbooks-widget" aria-label="Strategy Playbooks">
+<section class="widget-card strategy-playbooks" aria-label="Strategy Playbooks">
     <div class="widget-header">
         <div class="widget-title-row">
-            <span class="widget-icon">📚</span>
+            <span class="widget-icon">📊</span>
             <h2 class="widget-title">Strategy Playbooks</h2>
         </div>
-        <button class="help-icon" onclick="showPlaybooksHelp()" aria-label="Help">?</button>
+        <button class="help-icon" onclick="showToast('Strategy playbooks show AI-powered investment recommendations with playbook IDs for traceability.')" aria-label="Help" title="Strategy playbooks">?</button>
     </div>
     <div class="widget-body">
-        <div class="playbooks-controls">
-            <input type="text" class="playbook-ticker-input" id="playbookTickerInput"
-                placeholder="Filtrer par ticker (ex: AAPL,MSFT)" />
-            <button class="load-playbooks-btn" id="loadPlaybooksButton" onclick="loadStrategyPlaybooks()">Charger</button>
-        </div>
-        <div class="playbooks-status" id="playbooksStatus"></div>
-        <div class="playbooks-loading" id="playbooksLoading" style="display: none;">
-            <div class="loading-step"><span class="spinner"></span> Chargement des playbooks...</div>
-        </div>
-        <div class="playbooks-container" id="playbooksContainer" style="display: none;">
-            <div class="playbooks-stats" id="playbooksStats"></div>
-            <div class="playbooks-list" id="playbooksList"></div>
-        </div>
-        <div class="playbooks-empty" id="playbooksEmpty" style="display: none;">
-            <p>Aucun playbook disponible pour les critères sélectionnés.</p>
+        <div id="playbookContainer" class="playbook-list">
+            <!-- Playbooks will be loaded here dynamically -->
+            <div class="playbook-loading">Loading playbooks...</div>
         </div>
     </div>
 </section>
 
+<style>
+.strategy-playbooks .playbook-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.playbook-loading {
+    text-align: center;
+    padding: 20px;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+}
+
+.playbook-item {
+    background: var(--color-bg-tertiary);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 16px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.playbook-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.playbook-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.playbook-ticker {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+}
+
+.playbook-id {
+    font-size: 11px;
+    font-family: 'Courier New', monospace;
+    color: var(--color-text-secondary);
+    background: var(--color-bg-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.playbook-decision {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.playbook-decision.go {
+    background: rgba(52, 211, 153, 0.2);
+    color: #34D399;
+    border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.playbook-decision.no_go {
+    background: rgba(239, 68, 68, 0.2);
+    color: #EF4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.playbook-decision.hold {
+    background: rgba(251, 191, 36, 0.2);
+    color: #FBBF24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.playbook-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 12px 0;
+}
+
+.playbook-metric {
+    text-align: center;
+    padding: 8px;
+    background: var(--color-bg-secondary);
+    border-radius: 8px;
+}
+
+.playbook-metric-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.5px;
+}
+
+.playbook-metric-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-top: 4px;
+}
+
+.playbook-details {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+}
+
+.playbook-conflicts {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(239, 68, 68, 0.1);
+    border-left: 3px solid #EF4444;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #EF4444;
+}
+
+.playbook-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.playbook-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.playbook-btn.primary {
+    background: var(--color-primary);
+    color: white;
+}
+
+.playbook-btn.primary:hover {
+    background: var(--color-primary-hover);
+}
+
+.playbook-btn.secondary {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+}
+
+.playbook-btn.secondary:hover {
+    background: var(--color-bg-tertiary);
+}
+
+.playbook-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--color-text-secondary);
+}
+
+.playbook-empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
+</style>
+
 <script>
-function showPlaybooksHelp() {
-    showToast('Strategy Playbooks: Affiche les recommandations structurées du Judge API avec décision (GO/NO_GO/HOLD), confiance, et niveau de risque.', 'info', 5000);
-}
+/**
+ * Strategy Playbooks Widget
+ * Displays AI-generated strategy playbooks from Judge verdicts
+ */
 
-function loadStrategyPlaybooks() {
-    const input = document.getElementById('playbookTickerInput');
-    const loading = document.getElementById('playbooksLoading');
-    const container = document.getElementById('playbooksContainer');
-    const empty = document.getElementById('playbooksEmpty');
-    const status = document.getElementById('playbooksStatus');
-    const list = document.getElementById('playbooksList');
-    const stats = document.getElementById('playbooksStats');
-    const ticker = toString(input?.value, '').trim();
+async function loadStrategyPlaybooks() {
+    const container = document.getElementById('playbookContainer');
+    if (!container) return;
 
-    input.disabled = true;
-    loading.style.display = 'block';
-    container.style.display = 'none';
-    empty.style.display = 'none';
+    try {
+        // Direct fetch to the strategy playbooks endpoint
+        const response = await fetch('/api/judge/strategy-playbooks?limit=5&min_confidence=0.5&profile=equity_1w');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
 
-    if (status) {
-        status.className = 'playbooks-status playbooks-status-running';
-        status.innerText = 'Chargement en cours...';
-    }
+        if (!result || !result.data || !result.data.playbooks || result.data.playbooks.length === 0) {
+            container.innerHTML = `
+                <div class="playbook-empty">
+                    <div class="playbook-empty-icon">📋</div>
+                    <p>No strategy playbooks available yet.</p>
+                    <p style="font-size: 12px; margin-top: 8px;">Playbooks will appear here once the Judge engine generates recommendations.</p>
+                </div>
+            `;
+            return;
+        }
 
-    const params = { limit: 10, min_confidence: 0.5, profile: 'equity_1w' };
-    if (ticker) {
-        params.ticker = ticker;
-    }
+        const playbooks = result.data.playbooks;
+        container.innerHTML = playbooks.map((pb) => {
+            const decisionClass = (pb.decision || 'hold').toLowerCase().replace('no_go', 'no_go');
+            const decisionLabel = (pb.decision || 'HOLD').toUpperCase().replace('_', ' ');
+            const confidence = Math.round((pb.confidence || 0) * 100);
+            const expectedReturn = ((pb.expected_return || 0) * 100).toFixed(2);
+            const riskLevel = (pb.risk_level || 'medium').toUpperCase();
 
-    const apiCall = typeof window.getStrategyPlaybooks === 'function'
-        ? window.getStrategyPlaybooks(params)
-        : Promise.resolve(null);
+            const conflictsHtml = pb.conflicts && pb.conflicts.length
+                ? `<div class="playbook-conflicts">⚠️ ${pb.conflicts.join(', ')}</div>`
+                : '';
 
-    const timeoutMs = 15000;
-    const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-            reject(new Error('Timeout >15s'));
-        }, timeoutMs);
-    });
-
-    Promise.race([Promise.resolve(apiCall), timeoutPromise])
-        .then((payload) => {
-            input.disabled = false;
-            loading.style.display = 'none';
-
-            if (!payload || !payload.ok || !payload.data) {
-                throw new Error('Données invalides');
-            }
-
-            const playbooks = payload.data.playbooks || payload.data.items || [];
-            const playbookData = { playbooks, freshness: payload.freshness, source: payload.source };
-
-            if (!playbooks.length) {
-                empty.style.display = 'block';
-                if (status) {
-                    status.className = 'playbooks-status playbooks-status-empty';
-                    status.innerText = 'Aucun playbook trouvé';
-                }
-                return;
-            }
-
-            // Render stats
-            const goCount = playbooks.filter(p => p.decision === 'go').length;
-            const noGoCount = playbooks.filter(p => p.decision === 'no_go').length;
-            const holdCount = playbooks.filter(p => p.decision === 'hold').length;
-            const avgConf = playbooks.length ? (playbooks.reduce((sum, p) => sum + (p.confidence || 0), 0) / playbooks.length) : 0;
-
-            if (stats) {
-                stats.innerHTML = `
-                    <div class="stat-badge stat-go">GO: ${goCount}</div>
-                    <div class="stat-badge stat-no-go">NO_GO: ${noGoCount}</div>
-                    <div class="stat-badge stat-hold">HOLD: ${holdCount}</div>
-                    <div class="stat-badge stat-conf">Confiance moy: ${(avgConf * 100).toFixed(0)}%</div>
-                `;
-            }
-
-            // Render list
-            if (list) {
-                list.innerHTML = playbooks.map(pb => {
-                    const decisionClass = pb.decision === 'go' ? 'decision-go' : 
-                                         pb.decision === 'no_go' ? 'decision-no-go' : 'decision-hold';
-                    const decisionLabel = pb.decision === 'go' ? 'GO' : 
-                                         pb.decision === 'no_go' ? 'NO GO' : 'HOLD';
-                    const riskClass = `risk-${pb.risk_level || 'medium'}`;
-                    const conflictsHtml = pb.conflicts && pb.conflicts.length 
-                        ? `<div class="playbook-conflicts">⚠️ ${pb.conflicts.join(', ')}</div>` 
-                        : '';
-                    
-                    return `
-                        <div class="playbook-item">
-                            <div class="playbook-header">
-                                <span class="playbook-ticker">${pb.ticker || 'UNKNOWN'}</span>
-                                <span class="playbook-decision ${decisionClass}">${decisionLabel}</span>
-                            </div>
-                            <div class="playbook-meta">
-                                <span class="playbook-horizon">📅 ${pb.horizon || 'N/A'}</span>
-                                <span class="playbook-confidence">🎯 ${(pb.confidence || 0) * 100 | 0}%</span>
-                                <span class="playbook-risk ${riskClass}">⚡ ${pb.risk_level || 'medium'}</span>
-                            </div>
-                            ${conflictsHtml}
-                            <div class="playbook-summary">${pb.summary || pb.reasoning || 'Aucun résumé'}</div>
+            return `
+                <div class="playbook-item">
+                    <div class="playbook-header">
+                        <span class="playbook-ticker">${escapeHtml(pb.ticker || 'UNKNOWN')}</span>
+                        <span class="playbook-decision ${decisionClass}">${decisionLabel}</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--color-text-secondary); margin-bottom: 8px;">
+                        <span class="playbook-id">${escapeHtml(pb.playbook_id || '')}</span>
+                    </div>
+                    <div class="playbook-metrics">
+                        <div class="playbook-metric">
+                            <div class="playbook-metric-label">Confidence</div>
+                            <div class="playbook-metric-value">${confidence}%</div>
                         </div>
-                    `;
-                }).join('');
-            }
-
-            container.style.display = 'block';
-            if (status) {
-                status.className = 'playbooks-status playbooks-status-success';
-                const freshness = formatRelativeTime(payload.freshness);
-                status.innerText = `${playbooks.length} playbook(s) • Mis à jour ${freshness}`;
-            }
-
-        })
-        .catch((error) => {
-            input.disabled = false;
-            loading.style.display = 'none';
-            empty.style.display = 'block';
-            
-            if (status) {
-                status.className = 'playbooks-status playbooks-status-error';
-                status.innerText = `Erreur: ${error.message}`;
-            }
-            
-            console.error('[Playbooks] Error:', error);
-            showToast(`Erreur de chargement: ${error.message}`, 'error', 5000);
-        });
+                        <div class="playbook-metric">
+                            <div class="playbook-metric-label">Exp. Return</div>
+                            <div class="playbook-metric-value" style="color: ${expectedReturn >= 0 ? '#34D399' : '#EF4444'}">${expectedReturn >= 0 ? '+' : ''}${expectedReturn}%</div>
+                        </div>
+                        <div class="playbook-metric">
+                            <div class="playbook-metric-label">Risk</div>
+                            <div class="playbook-metric-value" style="font-size: 12px;">${riskLevel}</div>
+                        </div>
+                    </div>
+                    ${conflictsHtml}
+                    <div class="playbook-actions">
+                        <button class="playbook-btn primary" onclick="handlePlaybookAction('${escapeHtml(pb.ticker || '')}', 'view')">View Details</button>
+                        <button class="playbook-btn secondary" onclick="handlePlaybookAction('${escapeHtml(pb.ticker || '')}', 'apply')">Apply</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('[Playbooks] Error loading:', error);
+        container.innerHTML = `
+            <div class="playbook-empty">
+                <div class="playbook-empty-icon">⚠️</div>
+                <p>Unable to load playbooks.</p>
+                <p style="font-size: 12px; margin-top: 8px;">${escapeHtml(error.message || 'Unknown error')}</p>
+            </div>
+        `;
+    }
 }
 
-// Auto-load on widget mount
-(function() {
-    const container = document.getElementById('playbooksContainer');
-    if (container && container.style.display === 'none') {
-        // Delay initial load to allow DOM to settle
-        setTimeout(loadStrategyPlaybooks, 500);
+function handlePlaybookAction(ticker, action) {
+    if (action === 'view') {
+        showToast(`Viewing details for ${ticker}...`);
+        // Future: navigate to ticker details with playbook context
+    } else if (action === 'apply') {
+        showToast(`Applying playbook for ${ticker}...`);
+        // Future: apply playbook to portfolio
     }
-})();
+}
+
+/**
+ * Escape HTML to prevent XSS attacks
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Auto-load on DOM ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', loadStrategyPlaybooks);
+} else {
+    loadStrategyPlaybooks();
+}
+
+// Refresh every 2 minutes
+setInterval(loadStrategyPlaybooks, 120000);
 </script>

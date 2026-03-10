@@ -1297,6 +1297,7 @@ window.FinanceAPI = {
   askCopilot,
   searchUniverse,
   startAutoRefresh,
+  getStrategyPlaybooks,
   getCacheStats: () => ({ keys: Object.keys(cache.data), TTL: cache.TTL })
 };
 
@@ -1338,6 +1339,37 @@ window.getLiveDashboardData = () => ({
   ingestionHealth: window.ingestionHealth || null
 });
 
+async function getStrategyPlaybooks(params = {}) {
+  const { limit = 10, min_confidence = 0.5, ticker = '', profile = 'equity_1w', sort_by = 'confidence', sort_order = 'desc', debug = false } = params;
+  const queryParams = new URLSearchParams({
+    limit: String(limit),
+    min_confidence: String(min_confidence),
+    profile,
+    sort_by,
+    sort_order
+  });
+  if (ticker) queryParams.append('ticker', ticker);
+  if (debug) queryParams.append('debug', 'true');
+  
+  try {
+    const response = await fetch(API_BASE + '/judge/strategy-playbooks?' + queryParams.toString(), {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return {
+      ok: payload.ok ?? true,
+      data: payload.data || payload,
+      freshness: payload.freshness || payload.data?.generated_at || new Date().toISOString(),
+      source: payload.data?.source || payload.source || ['judge_strategy_playbooks']
+    };
+  } catch (error) {
+    console.warn('[API] Error fetching strategy playbooks:', error.message);
+    return null;
+  }
+}
+
 window.refreshLiveData = async () => {
   await populateWindowGlobals();
   return window.getLiveDashboardData();
@@ -1359,3 +1391,6 @@ if (document.readyState === 'loading') {
 }
 
 console.log('[API] FinanceAPI connector loaded');
+
+// Export strategy playbooks API
+window.getStrategyPlaybooks = getStrategyPlaybooks;
