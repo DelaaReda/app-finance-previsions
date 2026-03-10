@@ -174,6 +174,63 @@ def test_judge_strategy_playbooks_maps_verdicts(monkeypatch):
     assert callable(captured["compute_verdicts_fn"])
 
 
+def test_judge_strategy_playbooks_marks_signal_divergence(monkeypatch):
+    now_iso = "2026-02-28T00:00:00Z"
+
+    async def fake_get_judge_verdicts_payload(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "MSFT",
+                        "horizon": "1w",
+                        "expected_return": 0.01,
+                        "risk_level": "low",
+                        "confidence": 0.72,
+                        "summary": ["Positive setup but risk gate override."],
+                        "scenarios": [],
+                        "risks": [],
+                        "impacts": {},
+                        "actions": ["trim position"],
+                        "phase_scores": {},
+                        "data_needed": [],
+                        "attachments": [],
+                        "go_no_go": {
+                            "decision": "no_go",
+                            "reasons": ["hard risk gate"],
+                        },
+                        "meta": {
+                            "generated_at": now_iso,
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "stats": {"total_verdicts": 1},
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_verdicts_payload",
+        fake_get_judge_verdicts_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge/strategy-playbooks?limit=1&ticker=MSFT")
+    assert resp.status_code == 200
+    payload = resp.json()
+
+    assert payload["ok"] is True
+    assert payload["data"]["playbooks"][0]["ticker"] == "MSFT"
+    assert payload["data"]["playbooks"][0]["decision"] == "no_go"
+    assert payload["data"]["playbooks"][0]["conflicts"] == ["signal_divergence"]
+
+
 def test_judge_strategy_playbooks_supports_items_legacy_payload(monkeypatch):
     now_iso = "2026-02-28T00:00:00Z"
 
