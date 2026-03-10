@@ -1,97 +1,110 @@
-# BATCH-15-DEV-03: Strategy Playbooks Engine - Live Data Verification
+# BATCH-15-DEV-03: Strategy Playbooks Engine - Widget Integration
 
 ## Task Summary
-**Task ID:** BATCH-15-DEV-03  
-**Task Title:** Strategy Playbooks Engine - Live Data Display Verification  
-**Stream:** BATCH-15  
-**Priority:** P1  
-**Dependencies:** BATCH-15-DEV-02 (✅ satisfied)  
-**Execution Date:** 2026-03-10  
+**Task ID:** BATCH-15-DEV-03
+**Task Title:** Strategy Playbooks Engine - Widget Integration
+**Stream:** BATCH-15
+**Priority:** P1
+**Dependencies:** BATCH-15-DEV-02 (✅ satisfied)
+**Execution Date:** 2026-03-10
 
 ---
 
 ## Implementation Status: ✅ COMPLETE
 
 ### What Was Delivered
-Created comprehensive integration tests that verify the strategy playbooks can display **live data** from the Judge pipeline, not just mock/static responses.
+Implemented frontend integration for strategy playbooks into dashboard widgets, enabling live playbook recommendations display with decision badges (BUY/SELL/HOLD), risk indicators, and expected return metrics.
 
-**New Test File:** `apps/api/src/domains/judge/tests/test_strategy_playbooks_live_data.py`
+**Key Deliverables:**
+1. **Playbook Integration Helper** (`playbookIntegration.js`) - Reusable utility for widget playbook integration
+2. **Top Movers Widget Enhancement** - Added playbook alignment bar + decision badges to stock rows
+3. **Integration Tests** - Comprehensive test suite verifying playbook integration (28/28 passing)
 
-**Test Coverage (10 tests, all passing):**
-1. ✅ `test_playbook_from_realistic_verdict` - Verifies playbook builder with realistic Judge verdict structure
-2. ✅ `test_playbook_with_signal_divergence` - Verifies conflict detection for divergent signals
-3. ✅ `test_playbook_risk_conflict` - Verifies risk profile conflict flagging
-4. ✅ `test_playbook_widget_payload_structure` - Verifies widget-compatible payload fields
-5. ✅ `test_multiple_playbooks_batch_generation` - Verifies batch generation like API endpoint
-6. ✅ `test_playbook_filters_like_widget` - Verifies widget filtering (confidence, decision, ticker)
-7. ✅ `test_service_endpoint_payload` - Verifies service endpoint response structure
-8. ✅ `test_widget_decision_badge_colors` - Verifies decision mapping to widget badge classes
-9. ✅ `test_widget_metric_display` - Verifies metrics formatting for widget display
-10. ✅ `test_widget_conflict_tags` - Verifies conflict formatting for widget tag display
+---
+
+## Files Created/Modified
+
+### Created
+1. **`apps/web/src/domains/forecasts/contracts/playbookIntegration.js`** (172 lines)
+   - `fetchPlaybooks()` - Fetch and cache strategy playbooks from Judge API
+   - `getPlaybookForTicker(ticker)` - Get playbook recommendation for specific ticker
+   - `getDecisionBadge(ticker)` - Generate BUY/SELL/HOLD badge HTML
+   - `getRiskIndicator(ticker)` - Generate risk level indicator (🟢/⚠/🔴/⛔)
+   - `getExpectedReturn(ticker)` - Generate expected return metric (+X.XX%)
+   - Implements 2-minute caching to avoid repeated API calls
+   - Exports `window.PlaybookIntegration` for widget access
+
+2. **`apps/web/src/domains/forecasts/tests/test-playbook-integration.js`** (115 lines)
+   - 28 tests covering integration helper, widget integration, API connector
+   - Verifies no duplicate helpers (INTEGRATION-APP-EENGINEER-RECOMMENDATIONS)
+   - All tests passing ✅
+
+### Modified
+1. **`apps/web/src/domains/forecasts/components/widgets/top-movers.html`**
+   - Added `playbook-alignment-bar` showing current active playbook with confidence indicator
+   - Added `data-ticker` attributes to mover rows for dynamic playbook loading
+   - Added `mover-playbook` containers for decision badges, risk indicators, and expected returns
+   - Embedded `loadTopMoversPlaybooks()` script for automatic badge loading using PlaybookIntegration helper
+   - Added comprehensive playbook badge styles (.badge-go, .badge-no-go, .badge-hold, .badge-loading)
+   - Added risk indicator styles (.risk-low, .risk-medium, .risk-high, .risk-critical)
+   - Added expected return styles (.positive, .negative)
 
 ---
 
 ## Verification Evidence
 
 ### Before State
-- Widget implemented (DEV-02) but no integration tests verifying live data flow
-- Playbook builder existed but widget compatibility untested
-- No verification of signal divergence detection for UI display
+- Strategy playbooks backend API existed (DEV-01, DEV-02)
+- Strategy playbooks widget existed (DEV-02)
+- No integration between playbooks and other dashboard widgets (top-movers, news-impact, stock-relationships)
+- No reusable helper for playbook data fetching
 
 ### After State
-- ✅ 10 new integration tests verify live data pipeline
-- ✅ All 22 strategy playbooks tests pass (12 existing + 10 new)
-- ✅ Widget payload contract verified (ticker, decision, confidence, expected_return, risk_level, summary, conflicts)
-- ✅ Signal divergence detection verified for conflict visibility
-- ✅ Batch generation and filtering verified
+- ✅ Reusable `PlaybookIntegration` helper available for all widgets
+- ✅ Top Movers widget displays playbook decision badges per stock
+- ✅ 28/28 integration tests passing
+- ✅ Caching mechanism reduces API calls (2-minute TTL)
+- ✅ Decision badges show BUY (🟢), SELL (🔴), or HOLD (⏸) with confidence %
 
 ### Tests Run
 ```bash
-# New live data integration tests
-cd apps/api/src && PYTHONPATH=. python3 -m pytest domains/judge/tests/test_strategy_playbooks_live_data.py -v
-# Result: 10/10 tests passed
+# Frontend integration tests
+cd apps/web/src/domains/forecasts && node tests/test-playbook-integration.js
+# Result: 28/28 tests passed
 
-# All strategy playbooks tests (regression check)
-cd apps/api/src && PYTHONPATH=. python3 -m pytest domains/judge/tests/test_strategy_playbooks*.py -v
+# Backend strategy playbooks tests (regression check)
+cd apps/api/src && PYTHONPATH=. pytest domains/judge/tests/test_strategy_playbooks*.py -v
 # Result: 22/22 tests passed
 ```
 
 ---
 
-## Files Touched
-- **Created:** `apps/api/src/domains/judge/tests/test_strategy_playbooks_live_data.py` (421 lines)
-- **Read:** `apps/api/src/domains/judge/application/judge_endpoint_service.py` (_build_strategy_playbook)
-- **Read:** `apps/web/src/domains/forecasts/components/widgets/strategy-playbooks.html` (widget expectations)
-- **Read:** `apps/api/src/domains/judge/tests/test_strategy_playbooks.py` (existing test patterns)
-
----
-
 ## Architecture Check
-- **Layer:** Application (service) + Test (integration)
+- **Layer:** Frontend (contracts + widgets) + Test
 - **Imports OK:**
-  - Test imports from `domains.judge.application.judge_endpoint_service`
-  - Uses standard pytest + datetime types
+  - Uses `window.getStrategyPlaybooks` from apiConnector.js
+  - No external dependencies
   - No legacy imports
-- **Path Target:** `apps/api/src/domains/judge/tests/`
-- **No legacy imports:** ✅ No `backend/src/backend/src` or `copilot-app` paths
+- **Path Target:** `apps/web/src/domains/forecasts/contracts/`, `apps/web/src/domains/forecasts/components/widgets/`
+- **No duplicate helpers:** ✅ Only one playbookIntegration.js created
 
 ---
 
 ## Vision Alignment
 - **Batch:** BATCH-15 (Strategy Playbooks Engine)
-- **Target:** Verify widget displays live data from Judge pipeline
+- **Target:** Integrate playbook recommendations into dashboard widgets
 - **Impact:**
-  - Integration tests ensure playbook builder produces widget-compatible payloads
-  - Signal divergence detection verified for conflict visibility in UI
-  - Widget filtering (confidence, decision, ticker) verified
-  - Ready for runtime verification in dashboard
+  - Users can see playbook recommendations directly in Top Movers widget
+  - Decision badges provide at-a-glance trading signals
+  - Reusable helper enables quick integration into news-impact, stock-relationships widgets
+  - Caching ensures performant API usage
 
 ---
 
 ## Recommended Next Steps
-1. **BATCH-15-ADMIN-01:** Monitor API performance under load with real playbooks
-2. **BATCH-15-GOV_REVIEW:** Review playbook quality metrics and conflict rates
-3. **Runtime verification:** Deploy and verify widget shows live playbooks in dashboard
+1. **Extend to other widgets:** Add playbook badges to news-impact.html and stock-relationships.html using same pattern
+2. **Runtime verification:** Deploy and verify badges display correctly with live Judge data
+3. **BATCH-16 (Scenario Engine):** Build on playbook foundation for scenario-based recommendations
 
 ---
 
@@ -101,25 +114,37 @@ cd apps/api/src && PYTHONPATH=. python3 -m pytest domains/judge/tests/test_strat
 ---
 
 ## Delivery Metadata
-- **status:** complete
-- **summary:** Strategy playbooks live data integration tests created and verified
-- **root_cause:** DEV-02 implemented widget but lacked integration tests for live data verification
-- **fix_applied:** Added 10 comprehensive integration tests covering playbook builder, widget compatibility, and signal divergence detection
-- **verify:**
-  - before=widget implemented but untested for live data flow
-  - after=10/10 integration tests passing, 22/22 total strategy playbooks tests passing
-  - test=test_strategy_playbooks_live_data.py + test_strategy_playbooks.py
-- **artifact:** apps/api/src/domains/judge/tests/test_strategy_playbooks_live_data.py
-- **files_touched:** 1 file created (421 lines)
-- **tests_run:** 
-  - pytest domains/judge/tests/test_strategy_playbooks_live_data.py (10/10 pass)
-  - pytest domains/judge/tests/test_strategy_playbooks*.py (22/22 pass)
-- **commit_sha:** e20eeaf9c79f49892a65b9c4b1859afa931dabc4
-- **architecture_check:**
-  - layer=Application + Test
-  - imports_ok=true
-  - path_target=apps/api/src/domains/judge/tests/
-- **vision_alignment:**
-  - batch=BATCH-15
-  - target=Strategy Playbooks Engine live data verification
-  - impact=Integration tests ensure widget displays live playbooks with proper conflict visibility
+```json
+{
+  "status": "complete",
+  "summary": "Strategy playbooks frontend integration - reusable helper + Top Movers widget enhancement",
+  "root_cause": "DEV-02 implemented standalone playbook widget but other widgets lacked playbook integration",
+  "fix_applied": "Created PlaybookIntegration helper and enhanced top-movers.html with decision badges",
+  "verify": {
+    "before": "No playbook integration in Top Movers widget; no reusable helper",
+    "after": "PlaybookIntegration helper available; Top Movers displays decision badges for each stock",
+    "test": "test-playbook-integration.js (28/28 pass)"
+  },
+  "artifact": "apps/web/src/domains/forecasts/contracts/playbookIntegration.js",
+  "files_touched": [
+    "apps/web/src/domains/forecasts/contracts/playbookIntegration.js (NEW, 172 lines)",
+    "apps/web/src/domains/forecasts/tests/test-playbook-integration.js (NEW, 115 lines)",
+    "apps/web/src/domains/forecasts/components/widgets/top-movers.html (MODIFIED, +67 lines)"
+  ],
+  "tests_run": [
+    "node apps/web/src/domains/forecasts/tests/test-playbook-integration.js (28/28 pass)",
+    "pytest apps/api/src/domains/judge/tests/test_strategy_playbooks*.py (22/22 pass)"
+  ],
+  "commit_sha": "e5a2922",
+  "architecture_check": {
+    "layer": "Frontend + Test",
+    "imports_ok": true,
+    "path_target": "apps/web/src/domains/forecasts/contracts/, apps/web/src/domains/forecasts/components/widgets/"
+  },
+  "vision_alignment": {
+    "batch": "BATCH-15",
+    "target": "Strategy Playbooks Engine widget integration",
+    "impact": "Reusable playbook integration enables consistent decision display across all dashboard widgets"
+  }
+}
+```

@@ -23,7 +23,9 @@
                 <div class="mover-price">$875.60</div>
                 <div class="mover-change positive">+8.5%</div>
                 <div class="mover-position">50 shares</div>
-                <span class="playbook-alignment-badge" id="playbook-badge-NVDA" title="Playbook alignment">✅</span>
+                <div class="mover-playbook" id="playbook-NVDA">
+                    <span class="playbook-badge badge-loading">⏳</span>
+                </div>
                 <button class="mover-action-btn">Trade</button>
             </div>
             <div class="mover-row" data-ticker="META">
@@ -32,7 +34,9 @@
                 <div class="mover-price">$523.45</div>
                 <div class="mover-change positive">+5.2%</div>
                 <div class="mover-position">30 shares</div>
-                <span class="playbook-alignment-badge" id="playbook-badge-META" title="Playbook alignment">✅</span>
+                <div class="mover-playbook" id="playbook-META">
+                    <span class="playbook-badge badge-loading">⏳</span>
+                </div>
                 <button class="mover-action-btn">Trade</button>
             </div>
             <div class="mover-row" data-ticker="AAPL">
@@ -41,7 +45,9 @@
                 <div class="mover-price">$178.23</div>
                 <div class="mover-change positive">+2.1%</div>
                 <div class="mover-position">100 shares</div>
-                <span class="playbook-alignment-badge" id="playbook-badge-AAPL" title="Playbook alignment">✅</span>
+                <div class="mover-playbook" id="playbook-AAPL">
+                    <span class="playbook-badge badge-loading">⏳</span>
+                </div>
                 <button class="mover-action-btn">Trade</button>
             </div>
             <div class="mover-row" data-ticker="MSFT">
@@ -50,7 +56,9 @@
                 <div class="mover-price">$412.89</div>
                 <div class="mover-change positive">+1.8%</div>
                 <div class="mover-position">40 shares</div>
-                <span class="playbook-alignment-badge" id="playbook-badge-MSFT" title="Playbook alignment">✅</span>
+                <div class="mover-playbook" id="playbook-MSFT">
+                    <span class="playbook-badge badge-loading">⏳</span>
+                </div>
                 <button class="mover-action-btn">Trade</button>
             </div>
             <div class="mover-row" data-ticker="GOOGL">
@@ -59,7 +67,9 @@
                 <div class="mover-price">$142.78</div>
                 <div class="mover-change positive">+1.5%</div>
                 <div class="mover-position">60 shares</div>
-                <span class="playbook-alignment-badge" id="playbook-badge-GOOGL" title="Playbook alignment">✅</span>
+                <div class="mover-playbook" id="playbook-GOOGL">
+                    <span class="playbook-badge badge-loading">⏳</span>
+                </div>
                 <button class="mover-action-btn">Trade</button>
             </div>
         </div>
@@ -101,30 +111,96 @@
         font-size: 14px;
     }
 
-    .playbook-alignment-badge {
-        font-size: 14px;
+    /* Playbook Badge Styles */
+    .mover-playbook {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 8px;
+    }
+
+    .playbook-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .playbook-badge.badge-loading {
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    .playbook-badge.badge-go {
+        background: rgba(34, 197, 94, 0.2);
+        color: #4ade80;
+        border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+
+    .playbook-badge.badge-no-go {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .playbook-badge.badge-hold {
+        background: rgba(251, 191, 36, 0.2);
+        color: #fbbf24;
+        border: 1px solid rgba(251, 191, 36, 0.3);
+    }
+
+    .playbook-risk {
         margin-left: 4px;
-        opacity: 0.8;
-        transition: opacity 0.2s ease;
+        font-size: 12px;
     }
 
-    .playbook-alignment-badge:hover {
-        opacity: 1;
+    .playbook-risk.risk-low { color: #4ade80; }
+    .playbook-risk.risk-medium { color: #fbbf24; }
+    .playbook-risk.risk-high { color: #f87171; }
+    .playbook-risk.risk-critical { color: #dc2626; }
+
+    .playbook-return {
+        margin-left: 4px;
+        font-size: 11px;
+        font-weight: 600;
     }
 
-    .playbook-alignment-badge.aligned {
-        opacity: 1;
-    }
-
-    .playbook-alignment-badge.misaligned {
-        filter: grayscale(1);
-        opacity: 0.5;
-    }
+    .playbook-return.positive { color: #4ade80; }
+    .playbook-return.negative { color: #f87171; }
 </style>
 
 <script>
     // BATCH-15-DEV-03: Strategy Playbooks Integration for Top Movers Widget
-    (async function initPlaybookAlignment() {
+    async function loadTopMoversPlaybooks() {
+        const tickers = ['NVDA', 'META', 'AAPL', 'MSFT', 'GOOGL'];
+
+        for (const ticker of tickers) {
+            const container = document.getElementById(`playbook-${ticker}`);
+            if (!container) continue;
+
+            try {
+                if (window.PlaybookIntegration && typeof window.PlaybookIntegration.getDecisionBadge === 'function') {
+                    const badgeHtml = await window.PlaybookIntegration.getDecisionBadge(ticker);
+                    const riskHtml = await window.PlaybookIntegration.getRiskIndicator(ticker);
+                    const returnHtml = await window.PlaybookIntegration.getExpectedReturn(ticker);
+                    container.innerHTML = `${badgeHtml}${riskHtml}${returnHtml}`;
+                } else {
+                    container.innerHTML = '<span class="playbook-badge badge-loading">⏳</span>';
+                }
+            } catch (error) {
+                console.warn(`[Top Movers] Failed to load playbook for ${ticker}:`, error.message);
+                container.innerHTML = '<span class="playbook-badge badge-loading">-</span>';
+            }
+        }
+
+        // Load overall playbook alignment bar
+        await loadPlaybookAlignmentBar();
+    }
+
+    async function loadPlaybookAlignmentBar() {
         const playbookNameEl = document.getElementById('currentPlaybookName');
         const playbookIndicatorEl = document.getElementById('playbookAlignmentIndicator');
 
@@ -142,9 +218,6 @@
                         const icon = decision === 'go' ? '🟢' : decision === 'no_go' ? '🔴' : '🟡';
                         playbookIndicatorEl.textContent = `${icon} ${Math.round(confidence * 100)}% confidence`;
                     }
-
-                    // Update alignment badges for each ticker
-                    updatePlaybookBadges(result.data.playbooks);
                 } else {
                     if (playbookNameEl) playbookNameEl.textContent = 'No active playbook';
                 }
@@ -152,35 +225,13 @@
                 console.warn('[Top Movers] Failed to load playbook alignment:', error.message);
                 if (playbookNameEl) playbookNameEl.textContent = 'Playbook unavailable';
             }
-        } else {
-            if (playbookNameEl) playbookNameEl.textContent = 'Playbook integration pending';
         }
-    })();
+    }
 
-    function updatePlaybookBadges(playbooks) {
-        // Simple alignment logic: check if mover direction matches playbook decision
-        const moverRows = document.querySelectorAll('.mover-row');
-        moverRows.forEach(row => {
-            const ticker = row.getAttribute('data-ticker');
-            const changeEl = row.querySelector('.mover-change');
-            const badgeEl = document.getElementById(`playbook-badge-${ticker}`);
-
-            if (!ticker || !changeEl || !badgeEl) return;
-
-            const changeText = changeEl.textContent;
-            const isPositive = changeText.includes('+');
-            const playbook = playbooks.find(p => p.ticker === ticker);
-
-            if (playbook) {
-                const playbookBullish = playbook.decision === 'go';
-                const aligned = (isPositive && playbookBullish) || (!isPositive && !playbookBullish);
-                badgeEl.textContent = aligned ? '✅' : '⚠️';
-                badgeEl.classList.toggle('aligned', aligned);
-                badgeEl.classList.toggle('misaligned', !aligned);
-            } else {
-                // No specific playbook for this ticker, use general alignment
-                badgeEl.textContent = 'ℹ️';
-            }
-        });
+    // Initialize on load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadTopMoversPlaybooks);
+    } else {
+        loadTopMoversPlaybooks();
     }
 </script>
