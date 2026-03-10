@@ -2665,6 +2665,9 @@ function renderTopMoversWidget(stocks = liveTopMovers) {
         <div class="mover-price">$${toFiniteNumber(item.price, 0).toFixed(2)}</div>
         <div class="mover-change ${colorClass}">${sign} ${Math.abs(change).toFixed(1)}%</div>
         <div class="mover-position">${toString(item.position, '0 shares')}</div>
+        <div class="mover-playbook" id="playbook-${symbolId}">
+          <span class="playbook-badge badge-loading">⏳</span>
+        </div>
         <button class="mover-action-btn" onclick="showToast('Trading ${symbol}...')">Trade</button>
       </div>
     `;
@@ -2683,6 +2686,34 @@ function renderTopMoversWidget(stocks = liveTopMovers) {
   const footer = widget.querySelector('.widget-footer .widget-timestamp');
   if (footer) {
     footer.textContent = `Updated ${formatRelativeTime(liveDataMeta.generatedAt)}`;
+  }
+
+  hydrateTopMoversPlaybooks(rows);
+}
+
+async function hydrateTopMoversPlaybooks(rows = []) {
+  const playbookIntegration = window.PlaybookIntegration;
+  if (!playbookIntegration || typeof playbookIntegration.getDecisionBadge !== 'function') {
+    return;
+  }
+
+  for (const item of rows) {
+    const symbol = toString(item.symbol, '').toUpperCase();
+    const symbolId = symbol.replace(/[^A-Za-z0-9]/g, '') || 'stock';
+    const container = document.getElementById(`playbook-${symbolId}`);
+    if (!container) continue;
+
+    try {
+      const [badgeHtml, riskHtml, returnHtml] = await Promise.all([
+        playbookIntegration.getDecisionBadge(symbol),
+        playbookIntegration.getRiskIndicator(symbol),
+        playbookIntegration.getExpectedReturn(symbol)
+      ]);
+      container.innerHTML = `${badgeHtml}${riskHtml}${returnHtml}`;
+    } catch (error) {
+      console.warn(`[Top Movers] Failed to load playbook for ${symbol}:`, error.message);
+      container.innerHTML = '<span class="playbook-badge badge-neutral">--</span>';
+    }
   }
 }
 
