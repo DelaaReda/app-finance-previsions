@@ -5,6 +5,14 @@ Tests that the playbook resolver correctly enriches recommendations
 with playbook_id and conflict warnings.
 """
 import pytest
+import sys
+from pathlib import Path
+
+# Add src to path for imports
+SRC_ROOT = Path(__file__).resolve().parents[3]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
 from typing import Dict, Any, Optional
 
 from domains.copilot.domain.playbook import (

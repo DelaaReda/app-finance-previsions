@@ -5,6 +5,14 @@ Minimal test suite for strategy playbooks engine.
 Tests playbook resolution and conflict detection.
 """
 import pytest
+import sys
+from pathlib import Path
+
+# Add src to path for imports
+SRC_ROOT = Path(__file__).resolve().parents[3]
+if str(SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(SRC_ROOT))
+
 from domains.copilot.domain.playbook import (
     Playbook,
     PlaybookAction,
