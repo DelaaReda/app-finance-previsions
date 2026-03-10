@@ -84,7 +84,7 @@ assert(playbookHelpers.length === 1, `Only one playbook helper file (${playbookH
 
 // Test 5: Integration script loading
 console.log('\n📜 Test Suite: Script Loading Order');
-const indexHtmlPath = path.join(__dirname, '../index.html');
+const indexHtmlPath = path.join(__dirname, '../pages/index.html');
 if (fs.existsSync(indexHtmlPath)) {
   const indexContent = fs.readFileSync(indexHtmlPath, 'utf8');
   // Check if playbookIntegration would be loaded after apiConnector
@@ -99,7 +99,7 @@ if (fs.existsSync(indexHtmlPath)) {
     assert(false, 'playbookIntegration.js should be added to index.html');
   }
 } else {
-  assert(true, 'index.html not found (skipping script order check)');
+  assert(false, 'pages/index.html should exist for script order verification');
 }
 
 // Summary
