@@ -563,6 +563,9 @@ function transformNewsItem(item) {
     effect: formatNewsEffect(item, sentimentEffect),
     time: timeAgo,
     source: item.source || 'API',
+    ticker: Array.isArray(item.tickers) && item.tickers.length > 0
+      ? String(item.tickers[0]).toUpperCase()
+      : (item.ticker ? String(item.ticker).toUpperCase() : ''),
     category: (item.tickers && item.tickers.length > 0) ? item.tickers[0] : 'Market',
     sentiment: item.sentiment || 'neutral',
     summary: item.summary || '',

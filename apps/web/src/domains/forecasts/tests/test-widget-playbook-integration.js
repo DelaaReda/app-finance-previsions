@@ -123,15 +123,27 @@ test('Top Movers widget has playbook container for each ticker', () => {
 });
 
 // Test 7: News Impact widget structure
-test('News Impact widget has playbook container for each news item', () => {
-  const tickers = ['NVDA', 'META', 'AAPL', 'TSLA'];
-  tickers.forEach(ticker => {
-    assert(
-      newsImpactContent.includes(`id="playbook-news-${ticker}"`),
-      `Should render news playbook container for ${ticker}`
-    );
-  });
-  assert(newsImpactContent.includes('loadNewsImpactPlaybooks'), 'Should load playbooks in news widget');
+test('News Impact widget refreshes dynamic rows without hardcoding fallback headlines', () => {
+  assert(
+    newsImpactContent.includes('window.NewsImpactPlaybooks'),
+    'Should expose a News Impact playbook refresh hook'
+  );
+  assert(
+    newsImpactContent.includes("document.querySelectorAll('.news-row[data-ticker]')"),
+    'Should scan rendered news rows with ticker metadata'
+  );
+  assert(
+    appJsContent.includes('id="playbook-news-${getTicker(news)}"'),
+    'renderNewsImpact should add a playbook container for ticker-tagged rows'
+  );
+  assert(
+    appJsContent.includes('window.NewsImpactPlaybooks.refresh()'),
+    'renderNewsImpact should refresh playbook badges after rendering'
+  );
+  assert(
+    !newsImpactContent.includes('NVDA surges on AI chip demand'),
+    'Should not replace live news rendering with hardcoded stories'
+  );
 });
 
 // Test 8: Stock Relationships widget structure

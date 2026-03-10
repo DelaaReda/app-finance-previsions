@@ -5200,13 +5200,43 @@ function renderNewsImpact() {
     ? appData.newsImpact
     : (Array.isArray(newsItems) ? newsItems : []);
 
+  const getTicker = (news) => {
+    if (typeof news?.ticker === 'string' && news.ticker.trim()) {
+      return news.ticker.trim().toUpperCase();
+    }
+    if (typeof news?.category === 'string' && /^[A-Z.-]{1,10}$/.test(news.category.trim())) {
+      return news.category.trim().toUpperCase();
+    }
+    return '';
+  };
+
+  const getImpactLabel = (impactValue) => {
+    if (impactValue >= 8) return 'High';
+    if (impactValue >= 5) return 'Medium';
+    return 'Low';
+  };
+
+  const getImpactClass = (news) => {
+    if (typeof news?.effect === 'string' && news.effect.startsWith('+')) return 'positive';
+    if (typeof news?.effect === 'string' && news.effect.startsWith('-')) return 'negative';
+    return news?.impact >= 8 ? 'positive' : news?.impact >= 5 ? 'neutral' : 'negative';
+  };
+
   container.innerHTML = rows.slice(0, 10).map(news => `
-    <div class="news-row">
-      <div class="news-headline">${news.headline}</div>
-      <div class="news-impact">Impact: ${news.impact.toFixed(1)}</div>
+    <div class="news-row" ${getTicker(news) ? `data-ticker="${getTicker(news)}"` : ''}>
+      <div class="news-content">
+        <div class="news-headline">${news.headline}</div>
+        <div class="news-source">${news.source || 'API'} • ${news.time || 'Recently'}</div>
+      </div>
+      <div class="news-impact-badge ${getImpactClass(news)}">${getImpactLabel(Number(news.impact) || 0)}</div>
       <div class="news-delta ${news.effect.startsWith('+') ? 'positive' : 'negative'}">${news.effect}</div>
+      ${getTicker(news) ? `<div class="news-playbook" id="playbook-news-${getTicker(news)}"></div>` : ''}
     </div>
   `).join('');
+
+  if (window.NewsImpactPlaybooks && typeof window.NewsImpactPlaybooks.refresh === 'function') {
+    window.NewsImpactPlaybooks.refresh();
+  }
 }
 
 function drawSectorPerformance() {

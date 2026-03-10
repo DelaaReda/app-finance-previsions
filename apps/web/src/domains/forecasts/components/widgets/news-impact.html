@@ -14,7 +14,142 @@
         <div class="news-table" id="newsTable"></div>
     </div>
     <div class="widget-footer">
-        <span class="widget-timestamp">Updated 5 minutes ago</span>
+        <span class="widget-timestamp" id="newsImpactTimestamp">Updated --</span>
         <button class="widget-action-btn" onclick="showToast('Reading all news...')">Read All News</button>
     </div>
 </section>
+
+<script>
+async function refreshNewsImpactPlaybooks() {
+    const integration = window.PlaybookIntegration;
+    const rows = document.querySelectorAll('.news-row[data-ticker]');
+
+    for (const row of rows) {
+        const ticker = row.getAttribute('data-ticker');
+        const container = document.getElementById('playbook-news-' + ticker);
+        if (!ticker || !container) continue;
+
+        if (!integration || typeof integration.getDecisionBadge !== 'function') {
+            container.innerHTML = '<span class="playbook-badge badge-neutral">--</span>';
+            continue;
+        }
+
+        try {
+            container.innerHTML = await integration.getDecisionBadge(ticker);
+        } catch (error) {
+            console.warn('[NewsImpact] Failed to load playbook for ' + ticker + ':', error.message);
+            container.innerHTML = '<span class="playbook-badge badge-neutral">--</span>';
+        }
+    }
+
+    const timestampEl = document.getElementById('newsImpactTimestamp');
+    if (timestampEl) {
+        timestampEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
+    }
+}
+
+window.NewsImpactPlaybooks = {
+    refresh: refreshNewsImpactPlaybooks
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', refreshNewsImpactPlaybooks);
+} else {
+    refreshNewsImpactPlaybooks();
+}
+</script>
+
+<style>
+    .news-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto auto;
+        gap: 12px;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .news-row:last-child {
+        border-bottom: none;
+    }
+    .news-content {
+        min-width: 0;
+    }
+    .news-headline {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--color-text);
+        margin-bottom: 4px;
+    }
+    .news-source {
+        font-size: 12px;
+        color: var(--color-text-secondary);
+    }
+    .news-impact-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 72px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .news-impact-badge.positive {
+        background: rgba(34, 197, 94, 0.16);
+        color: #4ade80;
+    }
+    .news-impact-badge.neutral {
+        background: rgba(251, 191, 36, 0.16);
+        color: #fbbf24;
+    }
+    .news-impact-badge.negative {
+        background: rgba(239, 68, 68, 0.16);
+        color: #f87171;
+    }
+    .news-delta {
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .news-delta.positive {
+        color: #4ade80;
+    }
+    .news-delta.negative {
+        color: #f87171;
+    }
+    .news-playbook {
+        min-width: 74px;
+    }
+    .playbook-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .playbook-badge.badge-go {
+        background: rgba(34, 197, 94, 0.2);
+        border-color: rgba(34, 197, 94, 0.4);
+        color: #4ade80;
+    }
+    .playbook-badge.badge-no-go {
+        background: rgba(239, 68, 68, 0.2);
+        border-color: rgba(239, 68, 68, 0.4);
+        color: #f87171;
+    }
+    .playbook-badge.badge-neutral {
+        background: rgba(156, 163, 175, 0.2);
+        border-color: rgba(156, 163, 175, 0.4);
+        color: #9ca3af;
+    }
+    @media (max-width: 720px) {
+        .news-row {
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+        .news-playbook {
+            min-width: 0;
+        }
+    }
+</style>
