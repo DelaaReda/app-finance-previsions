@@ -117,6 +117,39 @@ DEFAULT_PLAYBOOKS: List[Playbook] = [
         conflict_signals=["bearish_divergence", "overbought_rsi"],
     ),
     Playbook(
+        id="bear_moderate_001",
+        name="Bear Market Defensive Strategy",
+        regime=MarketRegime.BEAR_MARKET,
+        risk_profile=RiskProfile.MODERATE,
+        description="Reduce risk while maintaining strategic exposure",
+        actions=[
+            PlaybookAction(
+                action_type="reduce",
+                asset_class="equities",
+                conviction=0.7,
+                rationale="Downside protection in confirmed bear market",
+            ),
+            PlaybookAction(
+                action_type="increase",
+                asset_class="bonds",
+                conviction=0.65,
+                rationale="Flight to quality supports fixed income",
+            ),
+            PlaybookAction(
+                action_type="hold",
+                asset_class="cash",
+                conviction=0.6,
+                rationale="Maintain dry powder for opportunities",
+            ),
+        ],
+        guardrails=[
+            "Equity exposure <=60%",
+            "Focus on quality and defensive sectors",
+            "Avoid leverage",
+        ],
+        conflict_signals=["bullish_reversal", "oversold_bounce"],
+    ),
+    Playbook(
         id="bear_conservative_001",
         name="Bear Market Preservation Strategy",
         regime=MarketRegime.BEAR_MARKET,
@@ -148,6 +181,39 @@ DEFAULT_PLAYBOOKS: List[Playbook] = [
             "No leverage or speculative positions",
         ],
         conflict_signals=["bullish_reversal", "oversold_bounce"],
+    ),
+    Playbook(
+        id="risk_off_moderate_001",
+        name="Risk-Off Balanced Defense",
+        regime=MarketRegime.RISK_OFF,
+        risk_profile=RiskProfile.MODERATE,
+        description="Defensive positioning with measured risk reduction",
+        actions=[
+            PlaybookAction(
+                action_type="reduce",
+                asset_class="equities",
+                conviction=0.75,
+                rationale="Risk aversion favors reducing equity exposure",
+            ),
+            PlaybookAction(
+                action_type="increase",
+                asset_class="gold",
+                conviction=0.65,
+                rationale="Safe haven demand supports precious metals",
+            ),
+            PlaybookAction(
+                action_type="increase",
+                asset_class="bonds",
+                conviction=0.7,
+                rationale="Treasuries benefit from flight to quality",
+            ),
+        ],
+        guardrails=[
+            "Reduce equity exposure to strategic minimum",
+            "Avoid high-yield and emerging market debt",
+            "Maintain cash buffer (10-20%)",
+        ],
+        conflict_signals=["risk_on_rotation", "oversold_equities"],
     ),
     Playbook(
         id="risk_off_conservative_001",
@@ -183,6 +249,39 @@ DEFAULT_PLAYBOOKS: List[Playbook] = [
         conflict_signals=["risk_on_rotation", "oversold_equities"],
     ),
     Playbook(
+        id="risk_on_moderate_001",
+        name="Risk-On Opportunity Strategy",
+        regime=MarketRegime.RISK_ON,
+        risk_profile=RiskProfile.MODERATE,
+        description="Participate in risk appetite with measured exposure",
+        actions=[
+            PlaybookAction(
+                action_type="increase",
+                asset_class="equities",
+                conviction=0.7,
+                rationale="Positive sentiment supports equity exposure",
+            ),
+            PlaybookAction(
+                action_type="increase",
+                asset_class="emerging_markets",
+                conviction=0.6,
+                rationale="Risk-on favors higher beta assets",
+            ),
+            PlaybookAction(
+                action_type="reduce",
+                asset_class="cash",
+                conviction=0.65,
+                rationale="Deploy cash into growth opportunities",
+            ),
+        ],
+        guardrails=[
+            "Monitor volatility for regime shift warning",
+            "Set stop-losses at 10-12% below entry",
+            "Maintain diversification across sectors",
+        ],
+        conflict_signals=["volatility_spike", "risk_off_flow"],
+    ),
+    Playbook(
         id="risk_on_aggressive_001",
         name="Risk-On Opportunity Strategy",
         regime=MarketRegime.RISK_ON,
@@ -214,6 +313,72 @@ DEFAULT_PLAYBOOKS: List[Playbook] = [
             "Avoid excessive concentration in single trade",
         ],
         conflict_signals=["volatility_spike", "risk_off_flow"],
+    ),
+    Playbook(
+        id="high_volatility_moderate_001",
+        name="High Volatility Navigation Strategy",
+        regime=MarketRegime.HIGH_VOLATILITY,
+        risk_profile=RiskProfile.MODERATE,
+        description="Navigate extreme volatility with caution and flexibility",
+        actions=[
+            PlaybookAction(
+                action_type="reduce",
+                asset_class="equities",
+                conviction=0.65,
+                rationale="High volatility favors lower exposure",
+            ),
+            PlaybookAction(
+                action_type="increase",
+                asset_class="bonds",
+                conviction=0.6,
+                rationale="Stability from fixed income allocation",
+            ),
+            PlaybookAction(
+                action_type="hold",
+                asset_class="cash",
+                conviction=0.7,
+                rationale="Maintain flexibility for opportunities",
+            ),
+        ],
+        guardrails=[
+            "Avoid large new positions until volatility subsides",
+            "Use limit orders and wide stops",
+            "Rebalance on volatility normalization",
+        ],
+        conflict_signals=["volatility_compression", "calm_before_storm"],
+    ),
+    Playbook(
+        id="elevated_risk_moderate_001",
+        name="Elevated Risk Caution Strategy",
+        regime=MarketRegime.ELEVATED_RISK,
+        risk_profile=RiskProfile.MODERATE,
+        description="Cautious positioning with selective exposure",
+        actions=[
+            PlaybookAction(
+                action_type="hold",
+                asset_class="equities",
+                conviction=0.55,
+                rationale="Maintain exposure but monitor closely",
+            ),
+            PlaybookAction(
+                action_type="increase",
+                asset_class="bonds",
+                conviction=0.6,
+                rationale="Add defensive ballast",
+            ),
+            PlaybookAction(
+                action_type="hold",
+                asset_class="cash",
+                conviction=0.65,
+                rationale="Reserve for better entry points",
+            ),
+        ],
+        guardrails=[
+            "Tighten stop-losses on equity positions",
+            "Avoid speculative additions",
+            "Review portfolio for hidden risk concentrations",
+        ],
+        conflict_signals=["risk_escalation", "volatility_breakout"],
     ),
     Playbook(
         id="normal_moderate_001",
