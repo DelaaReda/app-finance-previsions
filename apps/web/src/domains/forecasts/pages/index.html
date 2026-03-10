@@ -202,6 +202,10 @@
       <!-- Loaded dynamically from components/widgets/trade-ideas.html -->
       <div id="trade-ideas-widget-container"></div>
 
+      <!-- ============ BATCH-15-DEV-02: STRATEGY PLAYBOOKS WIDGET ============ -->
+      <!-- Loaded dynamically from components/widgets/strategy-playbooks.html -->
+      <div id="strategy-playbooks-widget-container"></div>
+
       <!-- ============ V13: MARKET CALENDAR WIDGET (SCREENSHOT STYLE) ============ -->
       <!-- Loaded dynamically from components/widgets/market-calendar.html -->
       <div id="market-calendar-widget-container"></div>
@@ -280,7 +284,12 @@
     <!-- ============ TAB CONTENT: MARKET ANALYSIS ============ -->
     <div class="tab-content" id="tab-market" style="display: none;">
 
-      <!-- ============ WIDGETS GRID ROW 1: MARKET DRIVERS ============ -->
+      <!-- ============ WIDGETS GRID ROW 1: STRATEGY PLAYBOOKS ============ -->
+      <!-- ============ WIDGET: Strategy Playbooks Engine ============ -->
+      <!-- Loaded dynamically from components/widgets/strategy-playbooks.html -->
+      <div id="strategy-playbooks-widget-container"></div>
+
+      <!-- ============ WIDGETS GRID ROW 2: MARKET DRIVERS ============ -->
       <div class="grid-2col">
         <!-- ============ WIDGET: ALERTS TIMELINE (RECENT SIGNALS) ============ -->
         <!-- ============ WIDGET: ALERTS TIMELINE (RECENT SIGNALS) ============ -->
@@ -1112,6 +1121,7 @@
           { path: '../components/sections/split-view.html', target: '#split-view-container' },
           { path: '../components/widgets/market-pulse.html', target: '#market-pulse-widget-container' },
           { path: '../components/widgets/trade-ideas.html', target: '#trade-ideas-widget-container' },
+          { path: '../components/widgets/strategy-playbooks.html', target: '#strategy-playbooks-widget-container' },
           { path: '../components/widgets/market-calendar.html', target: '#market-calendar-widget-container' },
           { path: '../components/widgets/news-feed.html', target: '#news-feed-widget-container' },
           { path: '../components/widgets/llm-judge.html', target: '#llm-judge-widget-container' },

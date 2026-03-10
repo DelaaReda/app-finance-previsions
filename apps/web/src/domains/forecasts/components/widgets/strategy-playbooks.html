@@ -1,0 +1,167 @@
+<section class="widget-card strategy-playbooks-widget" aria-label="Strategy Playbooks">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">📚</span>
+            <h2 class="widget-title">Strategy Playbooks</h2>
+        </div>
+        <button class="help-icon" onclick="showPlaybooksHelp()" aria-label="Help">?</button>
+    </div>
+    <div class="widget-body">
+        <div class="playbooks-controls">
+            <input type="text" class="playbook-ticker-input" id="playbookTickerInput"
+                placeholder="Filtrer par ticker (ex: AAPL,MSFT)" />
+            <button class="load-playbooks-btn" id="loadPlaybooksButton" onclick="loadStrategyPlaybooks()">Charger</button>
+        </div>
+        <div class="playbooks-status" id="playbooksStatus"></div>
+        <div class="playbooks-loading" id="playbooksLoading" style="display: none;">
+            <div class="loading-step"><span class="spinner"></span> Chargement des playbooks...</div>
+        </div>
+        <div class="playbooks-container" id="playbooksContainer" style="display: none;">
+            <div class="playbooks-stats" id="playbooksStats"></div>
+            <div class="playbooks-list" id="playbooksList"></div>
+        </div>
+        <div class="playbooks-empty" id="playbooksEmpty" style="display: none;">
+            <p>Aucun playbook disponible pour les critères sélectionnés.</p>
+        </div>
+    </div>
+</section>
+
+<script>
+function showPlaybooksHelp() {
+    showToast('Strategy Playbooks: Affiche les recommandations structurées du Judge API avec décision (GO/NO_GO/HOLD), confiance, et niveau de risque.', 'info', 5000);
+}
+
+function loadStrategyPlaybooks() {
+    const input = document.getElementById('playbookTickerInput');
+    const loading = document.getElementById('playbooksLoading');
+    const container = document.getElementById('playbooksContainer');
+    const empty = document.getElementById('playbooksEmpty');
+    const status = document.getElementById('playbooksStatus');
+    const list = document.getElementById('playbooksList');
+    const stats = document.getElementById('playbooksStats');
+    const ticker = toString(input?.value, '').trim();
+
+    input.disabled = true;
+    loading.style.display = 'block';
+    container.style.display = 'none';
+    empty.style.display = 'none';
+
+    if (status) {
+        status.className = 'playbooks-status playbooks-status-running';
+        status.innerText = 'Chargement en cours...';
+    }
+
+    const params = { limit: 10, min_confidence: 0.5, profile: 'equity_1w' };
+    if (ticker) {
+        params.ticker = ticker;
+    }
+
+    const apiCall = typeof window.getStrategyPlaybooks === 'function'
+        ? window.getStrategyPlaybooks(params)
+        : Promise.resolve(null);
+
+    const timeoutMs = 15000;
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+            reject(new Error('Timeout >15s'));
+        }, timeoutMs);
+    });
+
+    Promise.race([Promise.resolve(apiCall), timeoutPromise])
+        .then((payload) => {
+            input.disabled = false;
+            loading.style.display = 'none';
+
+            if (!payload || !payload.ok || !payload.data) {
+                throw new Error('Données invalides');
+            }
+
+            const playbooks = payload.data.playbooks || payload.data.items || [];
+            const playbookData = { playbooks, freshness: payload.freshness, source: payload.source };
+
+            if (!playbooks.length) {
+                empty.style.display = 'block';
+                if (status) {
+                    status.className = 'playbooks-status playbooks-status-empty';
+                    status.innerText = 'Aucun playbook trouvé';
+                }
+                return;
+            }
+
+            // Render stats
+            const goCount = playbooks.filter(p => p.decision === 'go').length;
+            const noGoCount = playbooks.filter(p => p.decision === 'no_go').length;
+            const holdCount = playbooks.filter(p => p.decision === 'hold').length;
+            const avgConf = playbooks.length ? (playbooks.reduce((sum, p) => sum + (p.confidence || 0), 0) / playbooks.length) : 0;
+
+            if (stats) {
+                stats.innerHTML = `
+                    <div class="stat-badge stat-go">GO: ${goCount}</div>
+                    <div class="stat-badge stat-no-go">NO_GO: ${noGoCount}</div>
+                    <div class="stat-badge stat-hold">HOLD: ${holdCount}</div>
+                    <div class="stat-badge stat-conf">Confiance moy: ${(avgConf * 100).toFixed(0)}%</div>
+                `;
+            }
+
+            // Render list
+            if (list) {
+                list.innerHTML = playbooks.map(pb => {
+                    const decisionClass = pb.decision === 'go' ? 'decision-go' : 
+                                         pb.decision === 'no_go' ? 'decision-no-go' : 'decision-hold';
+                    const decisionLabel = pb.decision === 'go' ? 'GO' : 
+                                         pb.decision === 'no_go' ? 'NO GO' : 'HOLD';
+                    const riskClass = `risk-${pb.risk_level || 'medium'}`;
+                    const conflictsHtml = pb.conflicts && pb.conflicts.length 
+                        ? `<div class="playbook-conflicts">⚠️ ${pb.conflicts.join(', ')}</div>` 
+                        : '';
+                    
+                    return `
+                        <div class="playbook-item">
+                            <div class="playbook-header">
+                                <span class="playbook-ticker">${pb.ticker || 'UNKNOWN'}</span>
+                                <span class="playbook-decision ${decisionClass}">${decisionLabel}</span>
+                            </div>
+                            <div class="playbook-meta">
+                                <span class="playbook-horizon">📅 ${pb.horizon || 'N/A'}</span>
+                                <span class="playbook-confidence">🎯 ${(pb.confidence || 0) * 100 | 0}%</span>
+                                <span class="playbook-risk ${riskClass}">⚡ ${pb.risk_level || 'medium'}</span>
+                            </div>
+                            ${conflictsHtml}
+                            <div class="playbook-summary">${pb.summary || pb.reasoning || 'Aucun résumé'}</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            container.style.display = 'block';
+            if (status) {
+                status.className = 'playbooks-status playbooks-status-success';
+                const freshness = formatRelativeTime(payload.freshness);
+                status.innerText = `${playbooks.length} playbook(s) • Mis à jour ${freshness}`;
+            }
+
+        })
+        .catch((error) => {
+            input.disabled = false;
+            loading.style.display = 'none';
+            empty.style.display = 'block';
+            
+            if (status) {
+                status.className = 'playbooks-status playbooks-status-error';
+                status.innerText = `Erreur: ${error.message}`;
+            }
+            
+            console.error('[Playbooks] Error:', error);
+            showToast(`Erreur de chargement: ${error.message}`, 'error', 5000);
+        });
+}
+
+// Auto-load on widget mount
+(function() {
+    const container = document.getElementById('playbooksContainer');
+    if (container && container.style.display === 'none') {
+        // Delay initial load to allow DOM to settle
+        setTimeout(loadStrategyPlaybooks, 500);
+    }
+})();
+</script>
