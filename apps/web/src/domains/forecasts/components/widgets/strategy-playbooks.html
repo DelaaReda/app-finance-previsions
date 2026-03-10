@@ -1,300 +1,402 @@
-<section class="widget-card strategy-playbooks" aria-label="Strategy Playbooks">
+<section class="widget-card strategy-playbooks-widget" aria-label="Strategy Playbooks">
     <div class="widget-header">
         <div class="widget-title-row">
-            <span class="widget-icon">📊</span>
+            <span class="widget-icon">📚</span>
             <h2 class="widget-title">Strategy Playbooks</h2>
         </div>
-        <button class="help-icon" onclick="showToast('Strategy playbooks show AI-powered investment recommendations with playbook IDs for traceability.')" aria-label="Help" title="Strategy playbooks">?</button>
+        <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('strategy-playbooks')" aria-label="Help"
+                title="AI-generated trading playbooks from Judge verdicts">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
     </div>
     <div class="widget-body">
-        <div id="playbookContainer" class="playbook-list">
-            <!-- Playbooks will be loaded here dynamically -->
-            <div class="playbook-loading">Loading playbooks...</div>
+        <p class="widget-subtitle">Actionable trading strategies based on AI analysis</p>
+        
+        <!-- Filter Bar -->
+        <div class="playbooks-filter-bar">
+            <select id="playbookProfile" class="playbook-filter-select" onchange="loadStrategyPlaybooks()">
+                <option value="equity_1w">Equity 1W</option>
+                <option value="equity_1m">Equity 1M</option>
+                <option value="crypto_1w">Crypto 1W</option>
+                <option value="forex_1d">Forex 1D</option>
+            </select>
+            <select id="playbookDecision" class="playbook-filter-select" onchange="loadStrategyPlaybooks()">
+                <option value="all">All Decisions</option>
+                <option value="go">Go (Buy/Long)</option>
+                <option value="no_go">No Go (Sell/Short)</option>
+                <option value="hold">Hold</option>
+            </select>
+            <input type="text" id="playbookTickerFilter" class="playbook-search-input" 
+                placeholder="Search ticker..." oninput="debounceLoadPlaybooks()" />
         </div>
+
+        <!-- Playbooks List -->
+        <div class="playbooks-list" id="playbooksList">
+            <!-- Loaded dynamically -->
+            <div class="playbook-loading-state">
+                <div class="loading-spinner"></div>
+                <p>Loading strategy playbooks...</p>
+            </div>
+        </div>
+    </div>
+    <div class="widget-footer">
+        <span class="widget-timestamp" id="playbooksTimestamp">Updated --</span>
+        <button class="widget-action-btn" onclick="loadStrategyPlaybooks()">🔄 Refresh</button>
     </div>
 </section>
 
 <style>
-.strategy-playbooks .playbook-list {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    max-height: 400px;
-    overflow-y: auto;
-}
+    .strategy-playbooks-widget {
+        grid-column: span 2;
+    }
 
-.playbook-loading {
-    text-align: center;
-    padding: 20px;
-    color: var(--color-text-secondary);
-    font-size: 14px;
-}
+    .playbooks-filter-bar {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+    }
 
-.playbook-item {
-    background: var(--color-bg-tertiary);
-    border: 1px solid var(--color-border);
-    border-radius: 12px;
-    padding: 16px;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
+    .playbook-filter-select,
+    .playbook-search-input {
+        padding: 8px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--color-text);
+        font-size: 13px;
+        cursor: pointer;
+    }
 
-.playbook-item:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
+    .playbook-filter-select:focus,
+    .playbook-search-input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+    }
 
-.playbook-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-}
+    .playbook-search-input {
+        flex: 1;
+        min-width: 150px;
+    }
 
-.playbook-ticker {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--color-text-primary);
-}
+    .playbooks-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-height: 400px;
+        overflow-y: auto;
+    }
 
-.playbook-id {
-    font-size: 11px;
-    font-family: 'Courier New', monospace;
-    color: var(--color-text-secondary);
-    background: var(--color-bg-secondary);
-    padding: 4px 8px;
-    border-radius: 4px;
-}
+    .playbook-card {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 16px;
+        transition: all 0.2s ease;
+    }
 
-.playbook-decision {
-    display: inline-block;
-    padding: 4px 12px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-}
+    .playbook-card:hover {
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.2);
+        transform: translateY(-2px);
+    }
 
-.playbook-decision.go {
-    background: rgba(52, 211, 153, 0.2);
-    color: #34D399;
-    border: 1px solid rgba(52, 211, 153, 0.3);
-}
+    .playbook-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
 
-.playbook-decision.no_go {
-    background: rgba(239, 68, 68, 0.2);
-    color: #EF4444;
-    border: 1px solid rgba(239, 68, 68, 0.3);
-}
+    .playbook-ticker {
+        font-size: 18px;
+        font-weight: 700;
+        color: var(--color-text);
+    }
 
-.playbook-decision.hold {
-    background: rgba(251, 191, 36, 0.2);
-    color: #FBBF24;
-    border: 1px solid rgba(251, 191, 36, 0.3);
-}
+    .playbook-decision-badge {
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
 
-.playbook-metrics {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin: 12px 0;
-}
+    .playbook-decision-badge.go {
+        background: rgba(52, 211, 153, 0.2);
+        color: #34D399;
+        border: 1px solid rgba(52, 211, 153, 0.3);
+    }
 
-.playbook-metric {
-    text-align: center;
-    padding: 8px;
-    background: var(--color-bg-secondary);
-    border-radius: 8px;
-}
+    .playbook-decision-badge.no_go {
+        background: rgba(239, 68, 68, 0.2);
+        color: #EF4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
 
-.playbook-metric-label {
-    font-size: 10px;
-    text-transform: uppercase;
-    color: var(--color-text-secondary);
-    letter-spacing: 0.5px;
-}
+    .playbook-decision-badge.hold {
+        background: rgba(251, 191, 36, 0.2);
+        color: #FBBF24;
+        border: 1px solid rgba(251, 191, 36, 0.3);
+    }
 
-.playbook-metric-value {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--color-text-primary);
-    margin-top: 4px;
-}
+    .playbook-metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-bottom: 12px;
+    }
 
-.playbook-details {
-    font-size: 13px;
-    color: var(--color-text-secondary);
-    line-height: 1.5;
-}
+    .playbook-metric {
+        text-align: center;
+        padding: 8px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+    }
 
-.playbook-conflicts {
-    margin-top: 8px;
-    padding: 8px;
-    background: rgba(239, 68, 68, 0.1);
-    border-left: 3px solid #EF4444;
-    border-radius: 4px;
-    font-size: 12px;
-    color: #EF4444;
-}
+    .playbook-metric-label {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--color-text-tertiary);
+        margin-bottom: 4px;
+    }
 
-.playbook-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 12px;
-}
+    .playbook-metric-value {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--color-text);
+    }
 
-.playbook-btn {
-    flex: 1;
-    padding: 8px 12px;
-    border: none;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s;
-}
+    .playbook-metric-value.positive {
+        color: #34D399;
+    }
 
-.playbook-btn.primary {
-    background: var(--color-primary);
-    color: white;
-}
+    .playbook-metric-value.negative {
+        color: #EF4444;
+    }
 
-.playbook-btn.primary:hover {
-    background: var(--color-primary-hover);
-}
+    .playbook-summary {
+        font-size: 13px;
+        color: var(--color-text-secondary);
+        line-height: 1.5;
+        margin-bottom: 12px;
+    }
 
-.playbook-btn.secondary {
-    background: var(--color-bg-secondary);
-    color: var(--color-text-primary);
-}
+    .playbook-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
 
-.playbook-btn.secondary:hover {
-    background: var(--color-bg-tertiary);
-}
+    .playbook-action-tag {
+        padding: 4px 10px;
+        background: rgba(59, 130, 246, 0.15);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: 6px;
+        font-size: 11px;
+        color: #60A5FA;
+        font-weight: 500;
+    }
 
-.playbook-empty {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--color-text-secondary);
-}
+    .playbook-loading-state,
+    .playbook-empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--color-text-secondary);
+    }
 
-.playbook-empty-icon {
-    font-size: 48px;
-    margin-bottom: 12px;
-}
+    .loading-spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(255, 255, 255, 0.1);
+        border-top-color: var(--color-primary);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .playbook-conflicts {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .playbook-conflict-tag {
+        display: inline-block;
+        padding: 2px 8px;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        border-radius: 4px;
+        font-size: 10px;
+        color: #F87171;
+        margin-right: 6px;
+        margin-top: 4px;
+    }
 </style>
 
 <script>
-/**
- * Strategy Playbooks Widget
- * Displays AI-generated strategy playbooks from Judge verdicts
- */
+    // Strategy Playbooks Widget Logic
+    let playbooksData = [];
+    let playbooksDebounceTimer = null;
 
-async function loadStrategyPlaybooks() {
-    const container = document.getElementById('playbookContainer');
-    if (!container) return;
-
-    try {
-        // Direct fetch to the strategy playbooks endpoint
-        const response = await fetch('/api/judge/strategy-playbooks?limit=5&min_confidence=0.5&profile=equity_1w');
+    async function loadStrategyPlaybooks() {
+        const profile = document.getElementById('playbookProfile')?.value || 'equity_1w';
+        const decisionFilter = document.getElementById('playbookDecision')?.value || 'all';
+        const tickerFilter = document.getElementById('playbookTickerFilter')?.value || '';
         
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
+        const listEl = document.getElementById('playbooksList');
+        const timestampEl = document.getElementById('playbooksTimestamp');
         
-        const result = await response.json();
-
-        if (!result || !result.data || !result.data.playbooks || result.data.playbooks.length === 0) {
-            container.innerHTML = `
-                <div class="playbook-empty">
-                    <div class="playbook-empty-icon">📋</div>
-                    <p>No strategy playbooks available yet.</p>
-                    <p style="font-size: 12px; margin-top: 8px;">Playbooks will appear here once the Judge engine generates recommendations.</p>
+        try {
+            listEl.innerHTML = `
+                <div class="playbook-loading-state">
+                    <div class="loading-spinner"></div>
+                    <p>Loading strategy playbooks...</p>
                 </div>
             `;
-            return;
+
+            const params = new URLSearchParams({
+                limit: '20',
+                min_confidence: '0.3',
+                profile: profile
+            });
+
+            if (tickerFilter) {
+                params.append('ticker', tickerFilter);
+            }
+
+            const response = await fetch(`/api/judge/strategy-playbooks?${params}`);
+            const result = await response.json();
+
+            if (result.status !== 'ok' || !result.data) {
+                throw new Error(result.error || 'Failed to load playbooks');
+            }
+
+            playbooksData = result.data.playbooks || [];
+            
+            // Apply decision filter
+            let filtered = playbooksData;
+            if (decisionFilter !== 'all') {
+                filtered = playbooksData.filter(p => p.decision === decisionFilter);
+            }
+
+            // Apply ticker search filter
+            if (tickerFilter) {
+                const searchLower = tickerFilter.toLowerCase();
+                filtered = filtered.filter(p => 
+                    (p.ticker || '').toLowerCase().includes(searchLower)
+                );
+            }
+
+            if (filtered.length === 0) {
+                listEl.innerHTML = `
+                    <div class="playbook-empty-state">
+                        <p>No strategy playbooks found</p>
+                        <p style="font-size: 12px; margin-top: 8px;">Try adjusting your filters</p>
+                    </div>
+                `;
+            } else {
+                listEl.innerHTML = filtered.map(playbook => renderPlaybookCard(playbook)).join('');
+            }
+
+            if (timestampEl) {
+                const now = new Date();
+                timestampEl.textContent = `Updated ${now.toLocaleTimeString()}`;
+            }
+
+        } catch (error) {
+            console.error('Error loading strategy playbooks:', error);
+            listEl.innerHTML = `
+                <div class="playbook-empty-state">
+                    <p>⚠️ Failed to load playbooks</p>
+                    <p style="font-size: 12px; margin-top: 8px;">${error.message}</p>
+                    <button onclick="loadStrategyPlaybooks()" class="widget-action-btn" style="margin-top: 12px;">
+                        🔄 Retry
+                    </button>
+                </div>
+            `;
         }
+    }
 
-        const playbooks = result.data.playbooks;
-        container.innerHTML = playbooks.map((pb) => {
-            const decisionClass = (pb.decision || 'hold').toLowerCase().replace('no_go', 'no_go');
-            const decisionLabel = (pb.decision || 'HOLD').toUpperCase().replace('_', ' ');
-            const confidence = Math.round((pb.confidence || 0) * 100);
-            const expectedReturn = ((pb.expected_return || 0) * 100).toFixed(2);
-            const riskLevel = (pb.risk_level || 'medium').toUpperCase();
+    function renderPlaybookCard(playbook) {
+        const decisionClass = (playbook.decision || 'hold').toLowerCase();
+        const expectedReturn = playbook.expected_return || 0;
+        const returnClass = expectedReturn >= 0 ? 'positive' : 'negative';
+        const returnSign = expectedReturn >= 0 ? '+' : '';
+        
+        const conflictsHtml = (playbook.conflicts || []).length > 0 ? `
+            <div class="playbook-conflicts">
+                ${(playbook.conflicts || []).map(c => 
+                    `<span class="playbook-conflict-tag">${escapeHtml(c)}</span>`
+                ).join('')}
+            </div>
+        ` : '';
 
-            const conflictsHtml = pb.conflicts && pb.conflicts.length
-                ? `<div class="playbook-conflicts">⚠️ ${pb.conflicts.join(', ')}</div>`
-                : '';
+        return `
+            <div class="playbook-card">
+                <div class="playbook-header">
+                    <span class="playbook-ticker">${escapeHtml(playbook.ticker || 'UNKNOWN')}</span>
+                    <span class="playbook-decision-badge ${decisionClass}">
+                        ${escapeHtml(playbook.decision || 'hold')}
+                    </span>
+                </div>
+                
+                <div class="playbook-metrics">
+                    <div class="playbook-metric">
+                        <div class="playbook-metric-label">Confidence</div>
+                        <div class="playbook-metric-value">${Math.round((playbook.confidence || 0) * 100)}%</div>
+                    </div>
+                    <div class="playbook-metric">
+                        <div class="playbook-metric-label">Expected Return</div>
+                        <div class="playbook-metric-value ${returnClass}">
+                            ${returnSign}${Math.round((expectedReturn || 0) * 100)}%
+                        </div>
+                    </div>
+                    <div class="playbook-metric">
+                        <div class="playbook-metric-label">Risk Level</div>
+                        <div class="playbook-metric-value">${escapeHtml(playbook.risk_level || 'medium')}</div>
+                    </div>
+                </div>
 
-            return `
-                <div class="playbook-item">
-                    <div class="playbook-header">
-                        <span class="playbook-ticker">${escapeHtml(pb.ticker || 'UNKNOWN')}</span>
-                        <span class="playbook-decision ${decisionClass}">${decisionLabel}</span>
+                ${playbook.summary && playbook.summary.length > 0 ? `
+                    <div class="playbook-summary">
+                        ${escapeHtml(playbook.summary[0])}
                     </div>
-                    <div style="font-size: 11px; color: var(--color-text-secondary); margin-bottom: 8px;">
-                        <span class="playbook-id">${escapeHtml(pb.playbook_id || '')}</span>
-                    </div>
-                    <div class="playbook-metrics">
-                        <div class="playbook-metric">
-                            <div class="playbook-metric-label">Confidence</div>
-                            <div class="playbook-metric-value">${confidence}%</div>
-                        </div>
-                        <div class="playbook-metric">
-                            <div class="playbook-metric-label">Exp. Return</div>
-                            <div class="playbook-metric-value" style="color: ${expectedReturn >= 0 ? '#34D399' : '#EF4444'}">${expectedReturn >= 0 ? '+' : ''}${expectedReturn}%</div>
-                        </div>
-                        <div class="playbook-metric">
-                            <div class="playbook-metric-label">Risk</div>
-                            <div class="playbook-metric-value" style="font-size: 12px;">${riskLevel}</div>
-                        </div>
-                    </div>
-                    ${conflictsHtml}
+                ` : ''}
+
+                ${playbook.recommended_actions && playbook.recommended_actions.length > 0 ? `
                     <div class="playbook-actions">
-                        <button class="playbook-btn primary" onclick="handlePlaybookAction('${escapeHtml(pb.ticker || '')}', 'view')">View Details</button>
-                        <button class="playbook-btn secondary" onclick="handlePlaybookAction('${escapeHtml(pb.ticker || '')}', 'apply')">Apply</button>
+                        ${playbook.recommended_actions.slice(0, 3).map(action => 
+                            `<span class="playbook-action-tag">${escapeHtml(action)}</span>`
+                        ).join('')}
                     </div>
-                </div>
-            `;
-        }).join('');
-    } catch (error) {
-        console.error('[Playbooks] Error loading:', error);
-        container.innerHTML = `
-            <div class="playbook-empty">
-                <div class="playbook-empty-icon">⚠️</div>
-                <p>Unable to load playbooks.</p>
-                <p style="font-size: 12px; margin-top: 8px;">${escapeHtml(error.message || 'Unknown error')}</p>
+                ` : ''}
+
+                ${conflictsHtml}
             </div>
         `;
     }
-}
 
-function handlePlaybookAction(ticker, action) {
-    if (action === 'view') {
-        showToast(`Viewing details for ${ticker}...`);
-        // Future: navigate to ticker details with playbook context
-    } else if (action === 'apply') {
-        showToast(`Applying playbook for ${ticker}...`);
-        // Future: apply playbook to portfolio
+    function debounceLoadPlaybooks() {
+        clearTimeout(playbooksDebounceTimer);
+        playbooksDebounceTimer = setTimeout(loadStrategyPlaybooks, 300);
     }
-}
 
-/**
- * Escape HTML to prevent XSS attacks
- */
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 
-// Auto-load on DOM ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadStrategyPlaybooks);
-} else {
-    loadStrategyPlaybooks();
-}
-
-// Refresh every 2 minutes
-setInterval(loadStrategyPlaybooks, 120000);
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+        loadStrategyPlaybooks();
+    });
 </script>
