@@ -174,6 +174,55 @@ def test_judge_strategy_playbooks_maps_verdicts(monkeypatch):
     assert callable(captured["compute_verdicts_fn"])
 
 
+def test_judge_strategy_playbooks_supports_items_legacy_payload(monkeypatch):
+    now_iso = "2026-02-28T00:00:00Z"
+
+    async def fake_get_judge_verdicts_payload(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "items": [
+                    {
+                        "ticker": "GOOG",
+                        "horizon": "1m",
+                        "expected_return": 0.0,
+                        "risk_level": "medium",
+                        "confidence": 0.55,
+                        "summary": "Hold; mixed macro and macro setup.",
+                        "scenarios": [],
+                        "risks": [],
+                        "impacts": {},
+                        "actions": ["hold", "monitor"],
+                        "phase_scores": {},
+                        "data_needed": ["earnings"],
+                        "go_no_go": {"decision": "hold"},
+                        "meta": {"generated_at": now_iso, "source": ["judge_route", "tests"]},
+                    }
+                ],
+                "count": 1,
+                "stats": {"total_verdicts": 1},
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_verdicts_payload",
+        fake_get_judge_verdicts_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge/strategy-playbooks?limit=1")
+    assert resp.status_code == 200
+    payload = resp.json()
+
+    assert payload["ok"] is True
+    assert payload["data"]["count"] == 1
+    assert payload["data"]["playbooks"][0]["playbook_id"] == "GOOG:1m:hold:equity_1w"
+
+
 def test_judge_strategy_playbooks_merges_upstream_conflicts(monkeypatch):
     now_iso = "2026-02-28T00:00:00Z"
 
