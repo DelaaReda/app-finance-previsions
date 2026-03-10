@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass
@@ -58,6 +59,8 @@ RATE_LIMIT_MARKERS = (
     "http 429",
     " 429",
 )
+SECONDARY_CODEX_DEFAULT_MODEL = "gpt-5.4"
+SECONDARY_CODEX_DEFAULT_THINKING = "low"
 
 
 @dataclass
@@ -296,6 +299,45 @@ def _qwen_bin() -> str:
     return shutil_which("qwen")
 
 
+def _apply_model_family(current_model: Any, replacement_model: Any) -> str:
+    current = str(current_model or "").strip()
+    replacement = str(replacement_model or "").strip()
+    if not replacement:
+        return ""
+    if "/" in current and "/" not in replacement:
+        prefix = current.split("/", 1)[0].strip()
+        if prefix:
+            return f"{prefix}/{replacement}"
+    return replacement
+
+
+def _secondary_codex_model(current_model: str) -> tuple[str, str]:
+    model = str(
+        os.environ.get("FC_DYNAMIC_WORKERS_SECONDARY_CODEX_MODEL")
+        or os.environ.get("TMUX_ROLE_SECONDARY_CODEX_MODEL")
+        or os.environ.get("LM_USED_SECONDARY_FALLBACK_MODEL")
+        or os.environ.get("LM_FALLBACK_SECONDARY_MODEL")
+        or os.environ.get("LM_TIER_BUILD_SECONDARY_MODEL")
+        or SECONDARY_CODEX_DEFAULT_MODEL
+    ).strip()
+    thinking = str(
+        os.environ.get("FC_DYNAMIC_WORKERS_SECONDARY_CODEX_THINKING")
+        or os.environ.get("TMUX_ROLE_SECONDARY_CODEX_THINKING")
+        or os.environ.get("LM_USED_SECONDARY_FALLBACK_THINKING")
+        or os.environ.get("LM_FALLBACK_SECONDARY_THINKING")
+        or os.environ.get("LM_TIER_BUILD_SECONDARY_THINKING")
+        or SECONDARY_CODEX_DEFAULT_THINKING
+    ).strip()
+    effective_model = _apply_model_family(current_model, model)
+    # `codex exec` on this runtime accepts plain GPT model ids, not the
+    # `codex-full/*` family aliases used for OpenClaw capability workers.
+    if effective_model.startswith("codex-full/"):
+        effective_model = effective_model.split("/", 1)[1].strip()
+    if not effective_model or effective_model == str(current_model or "").strip():
+        return "", ""
+    return effective_model, thinking or SECONDARY_CODEX_DEFAULT_THINKING
+
+
 def _run_qwen_worker(config: WorkerManagerConfig, worker_type: str, owner_task_id: str, task_kind: str, message: str, timeout_seconds: int) -> tuple[int, str, str, str]:
     qwen_bin = _qwen_bin()
     if not qwen_bin:
@@ -331,13 +373,114 @@ def _run_qwen_worker(config: WorkerManagerConfig, worker_type: str, owner_task_i
         return 124, str(exc.stdout or ""), str(exc.stderr or "") or f"qwen_timeout_after_{timeout_value}s", "qwen"
 
 
+def _run_secondary_codex_worker(
+    config: WorkerManagerConfig,
+    worker_type: str,
+    owner_task_id: str,
+    task_kind: str,
+    message: str,
+    timeout_seconds: int,
+    current_model: str,
+) -> tuple[int, str, str, str, str]:
+    codex_bin = shutil_which("codex")
+    if not codex_bin:
+        return 5, "", "secondary_codex_missing", "codex_exec", ""
+    model, thinking = _secondary_codex_model(current_model)
+    if not model:
+        return 5, "", "secondary_codex_not_configured", "codex_exec", ""
+    timeout_value = max(30, int(timeout_seconds or 180))
+    with tempfile.TemporaryDirectory(prefix="dynamic-worker-") as td:
+        out_path = Path(td) / "last_message.txt"
+        cmd = [
+            codex_bin,
+            "exec",
+            "--enable",
+            "multi_agent",
+            "--enable",
+            "apps",
+            "--enable",
+            "js_repl",
+            "-C",
+            str(config.root),
+            "--skip-git-repo-check",
+            "--color",
+            "never",
+            "--dangerously-bypass-approvals-and-sandbox",
+            "--output-last-message",
+            str(out_path),
+            "-m",
+            model,
+            "-c",
+            f'model_reasoning_effort="{thinking}"',
+            _worker_prompt(worker_type, owner_task_id, task_kind, message),
+        ]
+        try:
+            proc = subprocess.run(
+                cmd,
+                text=True,
+                capture_output=True,
+                check=False,
+                cwd=str(config.root),
+                timeout=timeout_value,
+            )
+            stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else (proc.stdout or "")
+            stderr = proc.stderr or ""
+            return proc.returncode, stdout, stderr, "codex_exec", model
+        except subprocess.TimeoutExpired as exc:
+            return 124, str(exc.stdout or ""), str(exc.stderr or "") or f"secondary_codex_timeout_after_{timeout_value}s", "codex_exec", model
+
+
+def _run_worker_fallback_chain(
+    config: WorkerManagerConfig,
+    worker_id: str,
+    worker_type: str,
+    owner_task_id: str,
+    task_kind: str,
+    message: str,
+    timeout_seconds: int,
+    current_model: str,
+    reason: str,
+    source: str,
+) -> tuple[int, str, str, str, str, str]:
+    secondary_rc, secondary_stdout, secondary_stderr, secondary_backend, secondary_model = _run_secondary_codex_worker(
+        config,
+        worker_type,
+        owner_task_id,
+        task_kind,
+        message,
+        timeout_seconds,
+        current_model,
+    )
+    secondary_combined = "\n".join(part for part in (secondary_stdout, secondary_stderr) if str(part or "").strip())
+    if (secondary_rc == 0 or str(secondary_stdout or "").strip()) and not _looks_like_rate_limited(secondary_combined):
+        note = _compact(f"secondary_codex_fallback_from={source}; reason={reason}; model={secondary_model}", 220)
+        stderr = "\n".join(part for part in (secondary_stderr, note) if str(part or "").strip())
+        return secondary_rc, secondary_stdout, stderr, secondary_backend, f"{secondary_backend}:{worker_id}:{secondary_model}", "secondary_codex_fallback"
+
+    qwen_rc, qwen_stdout, qwen_stderr, qwen_backend = _run_qwen_worker(
+        config,
+        worker_type,
+        owner_task_id,
+        task_kind,
+        message,
+        timeout_seconds,
+    )
+    if qwen_rc == 0 or str(qwen_stdout or "").strip():
+        note = _compact(f"qwen_fallback_from={source}; reason={reason}", 220)
+        stderr = "\n".join(part for part in (qwen_stderr, note) if str(part or "").strip())
+        return qwen_rc, qwen_stdout, stderr, qwen_backend, f"{qwen_backend}:{worker_id}", "qwen_fallback"
+
+    return secondary_rc, secondary_stdout, secondary_stderr, secondary_backend, f"{secondary_backend}:{worker_id}:{secondary_model}", "secondary_codex_failed"
+
+
 def _worker_runtime_model(worker_type: str) -> str:
     env_override = str(os.environ.get("FC_DYNAMIC_WORKERS_MODEL", "")).strip()
     if env_override:
         return env_override
+    base_model = str(os.environ.get("LM_USED_ROLE_MODEL", "gpt-5.3-codex-spark")).strip() or "gpt-5.3-codex-spark"
     if str(worker_type or "").strip() == "qa_review_worker":
-        return "codex-full/gpt-5.3-codex-spark"
-    return "gpt-5.3-codex-spark"
+        return _apply_model_family("codex-full/gpt-5.3-codex-spark", base_model)
+    return base_model
 
 
 def _worker_prompt(worker_type: str, owner_task_id: str, task_kind: str, message: str) -> str:
@@ -698,7 +841,7 @@ def run_worker(
         backend=backend,
         result_kind=result_kind or default_result_kind(worker_type),
         message_ref="inline_message",
-        metadata={"thinking": thinking or default_thinking(worker_type)},
+        metadata={"thinking": thinking or default_thinking(worker_type), "backend_route_reason": "none"},
     )
     records.append(record)
     _save_registry(config.registry_path, records)
@@ -708,6 +851,7 @@ def run_worker(
     stderr = ""
     rc = 0
     backend_ref = worker_id
+    backend_route_reason = "none"
     record.status = "running"
     record.last_update_at = _iso()
     _save_registry(config.registry_path, records)
@@ -718,16 +862,27 @@ def run_worker(
         chosen_backend = "openclaw" if shutil_which("openclaw") else "unavailable"
 
     if chosen_backend == "openclaw":
+        runtime_model = _worker_runtime_model(worker_type)
         ok, backend_ref = _ensure_agent(
             worker_id,
             config.root,
-            _worker_runtime_model(worker_type),
+            runtime_model,
             workspace_key=f"worker-{role}-{worker_type}",
             thinking=thinking or "medium",
         )
         if not ok:
-            rc = 5
-            stderr = "openclaw_agent_create_failed"
+            rc, stdout, stderr, chosen_backend, backend_ref, backend_route_reason = _run_worker_fallback_chain(
+                config,
+                worker_id,
+                worker_type,
+                owner_task_id,
+                task_kind,
+                message,
+                timeout_seconds,
+                runtime_model,
+                "openclaw_agent_create_failed",
+                "openclaw_init",
+            )
         else:
             proc = subprocess.run(
                 [
@@ -753,20 +908,18 @@ def run_worker(
             stdout = proc.stdout or ""
             stderr = proc.stderr or ""
         if _looks_like_rate_limited(f"{stdout}\n{stderr}"):
-            qwen_rc, qwen_stdout, qwen_stderr, qwen_backend = _run_qwen_worker(
+            rc, stdout, stderr, chosen_backend, backend_ref, backend_route_reason = _run_worker_fallback_chain(
                 config,
+                worker_id,
                 worker_type,
                 owner_task_id,
                 task_kind,
                 message,
                 timeout_seconds,
+                runtime_model,
+                _compact(f"{stdout}\n{stderr}", 220),
+                "openclaw_rate_limit",
             )
-            if qwen_rc == 0 or str(qwen_stdout or "").strip():
-                rc = qwen_rc
-                stdout = qwen_stdout
-                stderr = qwen_stderr
-                chosen_backend = qwen_backend
-                backend_ref = f"{qwen_backend}:{worker_id}"
     elif chosen_backend == "mock":
         stdout = json.dumps(
             {
@@ -777,8 +930,18 @@ def run_worker(
             ensure_ascii=True,
         )
     else:
-        rc = 5
-        stderr = "openclaw_missing"
+        rc, stdout, stderr, chosen_backend, backend_ref, backend_route_reason = _run_worker_fallback_chain(
+            config,
+            worker_id,
+            worker_type,
+            owner_task_id,
+            task_kind,
+            message,
+            timeout_seconds,
+            _worker_runtime_model(worker_type),
+            "openclaw_missing",
+            "backend_unavailable",
+        )
 
     raw_path = config.results_dir / f"{worker_id}.raw.json"
     raw_path.parent.mkdir(parents=True, exist_ok=True)
@@ -814,6 +977,8 @@ def run_worker(
             records[idx].verify = result.verify
             records[idx].raw_output_ref = result.raw_output_ref
             records[idx].result_kind = result.result_kind
+            records[idx].metadata = dict(records[idx].metadata or {})
+            records[idx].metadata["backend_route_reason"] = backend_route_reason
             break
     _save_registry(config.registry_path, records)
     _emit_event(
@@ -825,6 +990,14 @@ def run_worker(
     payload = result.as_dict()
     payload["ok"] = rc == 0
     payload["rc"] = rc
+    payload["backend_route_reason"] = backend_route_reason
+    if chosen_backend == "openclaw":
+        payload["model"] = _openclaw_cli_model(_worker_runtime_model(worker_type))
+    elif chosen_backend == "qwen":
+        payload["model"] = str(os.environ.get("FC_DYNAMIC_WORKERS_QWEN_MODEL", "qwen")).strip() or "qwen"
+    elif str(backend_ref or "").startswith("codex_exec:"):
+        parts = str(backend_ref or "").split(":", 2)
+        payload["model"] = parts[2] if len(parts) == 3 and str(parts[2] or "").strip() else _worker_runtime_model(worker_type)
     if stderr:
         payload["stderr"] = _compact(stderr, 220)
     return 0 if rc == 0 else 6, payload

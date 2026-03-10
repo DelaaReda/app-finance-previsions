@@ -26,6 +26,7 @@ _load_config = MODULE._load_config
 _openclaw_capability_workspace = MODULE._openclaw_capability_workspace
 _worker_prompt = MODULE._worker_prompt
 _worker_runtime_model = MODULE._worker_runtime_model
+_secondary_codex_model = MODULE._secondary_codex_model
 plan_worker = MODULE.plan_worker
 run_worker = MODULE.run_worker
 collect_worker = MODULE.collect_worker
@@ -214,6 +215,7 @@ class WorkerManagerTests(unittest.TestCase):
 
     def test_qa_worker_uses_full_model_and_fix_prompt(self) -> None:
         self.assertEqual(_worker_runtime_model("qa_review_worker"), "codex-full/gpt-5.3-codex-spark")
+        self.assertEqual(_secondary_codex_model("codex-full/gpt-5.3-codex-spark"), ("gpt-5.4", "low"))
         prompt = _worker_prompt("qa_review_worker", "BATCH-28-DEV-01", "qa_review", "Check and fix API contract drift.")
         self.assertIn("allowed to resolve the issues you discover", prompt)
         self.assertIn("Preserve the existing frontend theme", prompt)
