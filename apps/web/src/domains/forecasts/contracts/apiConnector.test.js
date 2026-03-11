@@ -207,7 +207,7 @@ test('getCopilotContext normalizes brief-first entry points into ask/open starte
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'brief' },
+      { id: 'brief_of_day', target: 'market' },
       { id: 'open_copilot', target: 'copilot' },
     ]
   );
@@ -260,7 +260,7 @@ test('getCopilotContext normalizes direct copilot_start open targets for the exi
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'brief' },
+      { id: 'brief_of_day', target: 'market' },
       { id: 'copilot', target: 'copilot' },
     ]
   );
@@ -496,7 +496,7 @@ test('getCopilotStart unwraps the dedicated starter contract and normalizes open
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'brief' },
+      { id: 'brief_of_day', target: 'market' },
       { id: 'open_copilot', target: 'copilot' },
     ]
   );
@@ -545,6 +545,14 @@ test('getCopilotStart falls back to copilot context when the starter route is un
       throw new Error('starter route unavailable');
     }
 
+    if (url === 'http://localhost:8050/api/brief/daily') {
+      return {
+        async json() {
+          return null;
+        },
+      };
+    }
+
     assert.equal(url, 'http://localhost:8050/api/copilot/context');
     return {
       async json() {
@@ -586,6 +594,7 @@ test('getCopilotStart falls back to copilot context when the starter route is un
 
   assert.deepEqual(calls, [
     'http://localhost:8050/api/copilot/start',
+    'http://localhost:8050/api/brief/daily',
     'http://localhost:8050/api/copilot/context',
   ]);
   assert.equal(copilotStart.brief_of_day.summary, 'Fallback context still has the brief ready.');
@@ -595,7 +604,7 @@ test('getCopilotStart falls back to copilot context when the starter route is un
   );
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
-    [{ id: 'brief_of_day', target: 'brief' }]
+    [{ id: 'brief_of_day', target: 'market' }]
   );
 });
 
