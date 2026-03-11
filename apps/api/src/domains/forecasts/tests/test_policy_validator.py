@@ -462,6 +462,38 @@ class TestPolicyVersioning:
         assert result["violation_badge"] is not None
         assert "policy_version" in result["violation_badge"]
 
+    def test_policy_version_reuses_explicit_policy_revision(self, validator, sample_recommendation):
+        """Test validation returns the stored policy revision when provided."""
+        policies = [
+            {
+                "type": "sector_exclusion",
+                "enabled": True,
+                "excluded_sectors": ["tobacco"],
+                "policy_version": "2026-03-11T09:00:00Z",
+            }
+        ]
+
+        result = validator.validate_recommendation(sample_recommendation, policies)
+
+        assert result["policy_version"] == "2026-03-11T09:00:00Z"
+        assert result["validated_at"] == "2026-03-11T09:00:00Z"
+
+    def test_policy_version_falls_back_to_updated_at(self, validator, sample_recommendation):
+        """Test policy metadata timestamp is used when no explicit version exists."""
+        policies = [
+            {
+                "type": "risk_concentration",
+                "enabled": True,
+                "max_risk_score": 0.7,
+                "updated_at": "2026-03-11T10:15:00Z",
+            }
+        ]
+
+        result = validator.validate_recommendation(sample_recommendation, policies)
+
+        assert result["policy_version"] == "2026-03-11T10:15:00Z"
+        assert result["validated_at"] == "2026-03-11T10:15:00Z"
+
 
 class TestSingleton:
     """Tests for singleton pattern."""

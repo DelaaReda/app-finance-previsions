@@ -45,6 +45,19 @@ class PolicyValidatorService:
         self.logger = logging.getLogger(__name__)
         self._policy_cache: Dict[str, Any] = {}
 
+    def _resolve_policy_version(self, user_policies: List[Dict[str, Any]]) -> str:
+        """Prefer an explicit policy revision marker over validation time."""
+        for policy in user_policies:
+            if not isinstance(policy, dict) or not policy.get("enabled", True):
+                continue
+            explicit_version = str(policy.get("policy_version") or "").strip()
+            if explicit_version:
+                return explicit_version
+            updated_at = str(policy.get("updated_at") or "").strip()
+            if updated_at:
+                return updated_at
+        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
     def validate_recommendation(
         self,
         recommendation: Dict[str, Any],
@@ -71,7 +84,7 @@ class PolicyValidatorService:
         risk_score = recommendation.get("risk_score", 0.5)
         
         violations: List[Dict[str, Any]] = []
-        policy_timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        policy_timestamp = self._resolve_policy_version(user_policies)
         
         for policy in user_policies:
             if not policy.get("enabled", True):
