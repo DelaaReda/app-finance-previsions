@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "updated_at": "2026-03-07T04:22:36Z",
+  "updated_at": "2026-03-11T07:35:21Z",
   "items": [
     {
       "id": "BATCH-01",
       "title": "Contrats API",
       "state": "CLOSED",
       "priority": "P0",
-      "next_action": "CLOSE_BATCH01_AND_HANDOFF_BATCH02",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "closed_at": "2026-02-28T20:01:54Z",
-      "updated_at": "2026-03-05T22:51:26Z",
+      "updated_at": "2026-03-08T21:34:02Z",
       "created_at": "2026-03-05T22:47:19Z"
     },
     {
@@ -18,10 +18,10 @@
       "title": "Multi-ticker + news",
       "state": "CLOSED",
       "priority": "P1",
-      "next_action": "CLOSE_BATCH02_AND_PREPARE_NEXT_PRIORITY_BATCH",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "closed_at": "2026-02-28T20:01:54Z",
-      "updated_at": "2026-03-05T23:04:01Z",
+      "updated_at": "2026-03-08T21:34:02Z",
       "created_at": "2026-03-05T22:47:19Z",
       "legacy_depends_on": [
         "BATCH-01"
@@ -34,10 +34,10 @@
       "title": "Frontend Live + Qualit\u00e9 Donn\u00e9es",
       "state": "CLOSED",
       "priority": "P0",
-      "next_action": "DISPATCH_BATCH03_TO_FRONTEND_AND_DATA_ROLES",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "created_at": "2026-02-28T20:01:54Z",
-      "updated_at": "2026-03-05T23:04:01Z",
+      "updated_at": "2026-03-08T21:34:02Z",
       "closed_at": "2026-03-02T20:04:33.039712+00:00",
       "legacy_depends_on": [
         "BATCH-02"
@@ -51,9 +51,9 @@
       "state": "CLOSED",
       "priority": "P0",
       "closed_at": "2026-03-02T20:04:33.039712+00:00",
-      "next_action": "",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
-      "updated_at": "2026-03-05T23:04:01Z",
+      "updated_at": "2026-03-08T21:34:02Z",
       "created_at": "2026-03-05T22:47:19Z",
       "legacy_depends_on": [
         "BATCH-03"
@@ -67,10 +67,10 @@
       "state": "CLOSED",
       "priority": "P0",
       "created_at": "2026-03-02T20:04:33.039712+00:00",
-      "next_action": "planner=BATCH-05-PLAN READY; backend=BATCH-05-BACKEND READY; frontend=BATCH-05-FRONTEND READY",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "closed_at": "2026-03-03T01:09:05.384438+00:00",
-      "updated_at": "2026-03-05T23:04:01Z",
+      "updated_at": "2026-03-08T21:34:02Z",
       "legacy_depends_on": [
         "BATCH-04"
       ],
@@ -83,9 +83,9 @@
       "state": "CLOSED",
       "priority": "P1",
       "created_at": "2026-03-03T01:10:00Z",
-      "next_action": "BATCH-06 est READY: traiter d'abord les P0 architecture/import/data (F-001..F-005 Claude), puis ex\u00e9cuter BATCH-06-DEV-01/02/03 en lane dev unique.",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
-      "updated_at": "2026-03-05T23:04:01Z",
+      "updated_at": "2026-03-08T21:34:02Z",
       "closed_at": "2026-03-03T15:18:01.915327+00:00",
       "legacy_depends_on": [
         "BATCH-05"
@@ -99,9 +99,9 @@
       "state": "CLOSED",
       "priority": "P1",
       "created_at": "2026-03-03T01:10:00Z",
-      "next_action": "attendre la cl\u00f4ture de BATCH-06, puis ouvrir BATCH-07-PLAN + BATCH-07-DEV-01/02/03 avec d\u00e9tails Deep Dive, recherche universelle et scoring d'impact.",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
-      "updated_at": "2026-03-05T23:04:01Z",
+      "updated_at": "2026-03-08T21:34:02Z",
       "closed_at": "2026-03-03T16:02:01.603336+00:00",
       "legacy_depends_on": [
         "BATCH-06"
@@ -116,8 +116,8 @@
       "priority": "P1",
       "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-05T23:04:01Z",
-      "next_action": "planner completes BATCH-08-PLAN then dispatches canonical chain BATCH-08-DEV-01 -> DEV-02 -> DEV-03 -> ADMIN-01 -> GOV_REVIEW.",
+      "updated_at": "2026-03-08T21:34:02Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "closed_at": "2026-03-04T01:10:21.892112+00:00",
       "legacy_depends_on": [
         "BATCH-07"
@@ -132,8 +132,8 @@
       "priority": "P1",
       "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-05T23:04:01Z",
-      "next_action": "preparer BATCH-09-PLAN avec matrice severite, dedupe strategy et runbook de verification SLA.",
+      "updated_at": "2026-03-08T21:34:02Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "closed_at": "2026-03-04T10:49:57Z",
       "legacy_depends_on": [
         "BATCH-08"
@@ -149,8 +149,8 @@
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-05T23:04:01Z",
-      "next_action": "ouvrir BATCH-10-PLAN et cadrer gate GO/NO-GO avec checklist et rollback testable.",
+      "updated_at": "2026-03-08T21:34:02Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: centralize runtime guard logic in existing orchestration scripts, no duplicate quota logic per endpoint.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: mirror Judge API pattern for endpoint gating and provider fallback orchestration.",
@@ -167,13 +167,13 @@
     {
       "id": "BATCH-11",
       "title": "Data Ingestion Core + Freshness SLO",
-      "state": "READY_DEV",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-06T19:29:01Z",
-      "next_action": "claim BATCH-11-ARCH (READY pour planner) \u2192 produire artefact architecture \u2192 d\u00e9bloquer DEV-01",
+      "updated_at": "2026-03-09T05:15:47Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: keep ingestion in existing legacy jobs + domain services, normalize outputs before UI.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing market_data + forecasts modules and avoid parallel ingestion frameworks.",
@@ -194,18 +194,19 @@
           "migrated_from_role": "planner",
           "migrated_from_state": "READY_DEV"
         }
-      }
+      },
+      "closed_at": "2026-03-09T05:02:23Z"
     },
     {
       "id": "BATCH-12",
       "title": "Portfolio State + Risk Profile Core",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-12-PLAN avec schema portefeuille/risk profile et plan de migration.",
+      "updated_at": "2026-03-09T11:50:53Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: persistence adapter behind existing copilot context service; avoid duplicate portfolio stores.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse context_service and existing web state contracts before adding new storage abstractions.",
@@ -214,18 +215,22 @@
       ],
       "legacy_depends_on": [
         "BATCH-11"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-09T05:38:15Z",
+      "opened_at": "2026-03-09T05:38:15Z",
+      "closed_at": "2026-03-09T11:50:53Z"
     },
     {
       "id": "BATCH-13",
       "title": "Decision Journal + Outcome Feedback Loop",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-13-PLAN avec schema journal, outcomes, et cadence review hebdo.",
+      "updated_at": "2026-03-09T18:49:43Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: append-only decision log + analytics pass on top, no mutation-heavy workflow.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing judge outputs and forecasts artifacts for journaling keys.",
@@ -234,18 +239,22 @@
       ],
       "legacy_depends_on": [
         "BATCH-12"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-09T12:01:26Z",
+      "opened_at": "2026-03-09T12:01:26Z",
+      "closed_at": "2026-03-09T18:49:43Z"
     },
     {
       "id": "BATCH-14",
       "title": "Finalisation Core v2: Robustness Drills + GO/NO-GO",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-14-PLAN et cadrer gate final production avec preuves obligatoires.",
+      "updated_at": "2026-03-09T23:16:52Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: orchestrate drills via existing cron/health scripts and monitor APIs; avoid custom one-off harness.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse fc_health_check, monitor_agents, and role proof manifests as release evidence backbone.",
@@ -254,18 +263,22 @@
       ],
       "legacy_depends_on": [
         "BATCH-13"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-09T18:54:02Z",
+      "opened_at": "2026-03-09T18:54:02Z",
+      "closed_at": "2026-03-09T23:16:52Z"
     },
     {
       "id": "BATCH-15",
       "title": "Strategy Playbooks Engine",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T13:01:49.535081Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-15-PLAN puis decomposer en lanes backend/frontend/data avec contrat playbook commun.",
+      "updated_at": "2026-03-11T01:29:02Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: strategy layer wraps existing signal/judge outputs instead of replacing them.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge API decision format and copilot context pipeline to inject strategy constraints.",
@@ -274,28 +287,38 @@
       ],
       "legacy_depends_on": [
         "BATCH-14"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-09T23:19:01Z",
+      "opened_at": "2026-03-09T23:19:01Z",
+      "closed_at": "2026-03-11T01:24:46Z"
     },
     {
       "id": "BATCH-16",
       "title": "Scenario and Stress Testing Lite",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-16-PLAN et cadrer scenarios standards + impacts portefeuille avec contrat de restitution unique.",
+      "updated_at": "2026-03-11T03:09:05Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: branch stress layer on top of existing judge + forecasts pipeline, no separate scoring engine.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge API endpoint orchestration pattern (input normalization, fallback, verdict payload).",
         "reuse_targets: apps/api/src/domains/judge/application/intelligence_service.py, apps/api/src/domains/forecasts, apps/web/src/domains/forecasts/components/widgets/llm-judge.html",
         "integration_contract: scenario_input + portfolio_snapshot -> decision_payload(verdict,confidence,risks,actions) identical to existing UI contracts.",
-        "validation_path: scenario fixture tests + API contract tests + mobile/desktop rendering smoke."
+        "validation_path: scenario fixture tests + API contract tests + mobile/desktop rendering smoke.",
+        "planner_runtime_repair 2026-03-11T03:03:54.106433Z: legacy ready-dev chain retired; current VB-* product map remains canonical.",
+        "planner_runtime_repair 2026-03-11T03:04:33.562645Z: legacy ready-dev chain retired; current VB map remains canonical."
       ],
       "legacy_depends_on": [
         "BATCH-15"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T01:29:02Z",
+      "opened_at": "2026-03-11T01:29:02Z",
+      "closed_at": "2026-03-11T03:03:54.106433Z"
     },
     {
       "id": "BATCH-17",
@@ -493,8 +516,8 @@
       "priority": "P0",
       "depends_on": [],
       "created_at": "2026-03-03T20:44:58.684171Z",
-      "updated_at": "2026-03-05T23:04:01Z",
-      "next_action": "Continue BATCH-26-DEV-02 (READY), then chain DEV-03 -> ADMIN-01 -> GOV-REVIEW with proofs.",
+      "updated_at": "2026-03-08T21:34:02Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "closed_at": "2026-03-04T00:44:37.961711+00:00",
       "legacy_depends_on": [
         "BATCH-25"
@@ -505,13 +528,13 @@
     {
       "id": "BATCH-27",
       "title": "Reliability SRE Pack + Chaos Drills",
-      "state": "READY_PLANNER",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-07T03:05:25Z",
-      "next_action": "claim BATCH-27-DEV-01 (READY pour dev) \u2192 Reliability SRE Pack + Chaos Drills",
+      "updated_at": "2026-03-09T01:54:14Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "reuse_targets_ui: apps/web/src/domains/forecasts/pages/app.js, apps/web/src/domains/forecasts/contracts/apiConnector.js, apps/web/src/domains/forecasts/pages/index.html.",
         "dynamic_gap_refs: generateFacetteContent placeholder flow, fallback-heavy widgets, deterministic transform required for news effect.",
@@ -532,7 +555,7 @@
       "ready_at": "2026-03-06T00:18:03Z",
       "ready_starvation": true,
       "ready_starved_at": "2026-03-06T14:20:01Z",
-      "reconciled_at": "2026-03-07T03:00:02Z",
+      "reconciled_at": "2026-03-09T01:52:28Z",
       "meta": {
         "planner_monolane": {
           "migrated_at": "2026-03-06T19:21:19Z",
@@ -540,18 +563,19 @@
           "migrated_from_state": "READY_DEV"
         }
       },
-      "stalled_reason": "parked_by_rebuild_cannot_stay_in_progress"
+      "stalled_reason": "parked_by_rebuild_cannot_stay_in_progress",
+      "closed_at": "2026-03-09T01:54:14Z"
     },
     {
       "id": "BATCH-28",
       "title": "MVP v3 Release Gate + Adoption Analytics",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-04T02:48:16Z",
-      "updated_at": "2026-03-07T04:22:36Z",
-      "next_action": "claim BATCH-28-DEV-01 (READY pour dev) \u2192 MVP v3 Release Gate + Adoption Analytics",
+      "updated_at": "2026-03-08T21:34:02Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "focus: apps/web/src/domains/forecasts/pages/app.js rendering states + apps/web/src/domains/forecasts/components/widgets/*.html.",
         "reuse-first: exploit existing live event financecopilot:live-dashboard-updated and window.getLiveDashboardData().",
@@ -573,14 +597,15 @@
           "migrated_from_role": "planner",
           "migrated_from_state": "READY_DEV"
         }
-      }
+      },
+      "closed_at": "2026-03-08T21:08:42Z"
     },
     {
       "id": "BATCH-29",
       "title": "Probabilistic Forecast Calibration Lab",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T03:09:05Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -593,14 +618,18 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "closed_at": "2026-03-11T03:03:54.106433Z"
     },
     {
       "id": "BATCH-30",
       "title": "Multi-Horizon Forecast Decomposition",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T03:09:05Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -613,14 +642,18 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "closed_at": "2026-03-11T03:03:54.106433Z"
     },
     {
       "id": "BATCH-31",
       "title": "Cross-Asset Correlation Regime Map",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T03:09:05Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -633,14 +666,18 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "closed_at": "2026-03-11T03:03:54.106433Z"
     },
     {
       "id": "BATCH-32",
       "title": "Forecast Ensemble Governance",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T03:09:05Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -653,14 +690,18 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "closed_at": "2026-03-11T03:03:54.106433Z"
     },
     {
       "id": "BATCH-33",
       "title": "Macro Narrative-to-Signal Parser",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T03:09:05Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -673,14 +714,18 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "closed_at": "2026-03-11T03:03:54.106433Z"
     },
     {
       "id": "BATCH-34",
       "title": "Alternative Data Sentiment Fusion",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T03:09:05Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -693,14 +738,18 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "closed_at": "2026-03-11T03:03:54.106433Z"
     },
     {
       "id": "BATCH-35",
       "title": "Forecast Drift Sentinel + Auto-Recalibration",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T03:09:05Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -713,14 +762,18 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "closed_at": "2026-03-11T03:03:54.106433Z"
     },
     {
       "id": "BATCH-36",
       "title": "Uncertainty Visualization UX",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T03:09:05Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -733,14 +786,18 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "closed_at": "2026-03-11T03:03:54.106433Z"
     },
     {
       "id": "BATCH-37",
       "title": "Hypothesis Workbench",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T03:09:05Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -753,14 +810,18 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "closed_at": "2026-03-11T03:03:54.106433Z"
     },
     {
       "id": "BATCH-38",
       "title": "Walk-Forward Forecast Scoreboard",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T06:23:47Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -773,14 +834,21 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T06:23:47Z"
     },
     {
       "id": "BATCH-39",
       "title": "Forecast Data Quality SLA + Provenance",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T06:45:05Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -793,14 +861,21 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T06:45:05Z"
     },
     {
       "id": "BATCH-40",
       "title": "Predictive Research Hub Finalization Gate",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T06:23:36Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -813,14 +888,21 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T06:23:36Z"
     },
     {
       "id": "BATCH-41",
       "title": "Free Global Signal Mesh",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T06:54:01Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -833,14 +915,21 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T06:54:01Z"
     },
     {
       "id": "BATCH-42",
       "title": "Geopolitical Risk Graph + Conflict Escalation",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T06:50:17Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -853,14 +942,21 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T06:50:17Z"
     },
     {
       "id": "BATCH-43",
       "title": "Law and Policy Change Impact Engine",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T07:18:30Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -873,14 +969,21 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T07:18:30Z"
     },
     {
       "id": "BATCH-44",
       "title": "Insider Behavior Intelligence Layer",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T07:06:41Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -893,14 +996,21 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T07:06:41Z"
     },
     {
       "id": "BATCH-45",
       "title": "Supply Chain + Commodity Shock Propagation",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T07:23:31Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -913,14 +1023,21 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T07:23:31Z"
     },
     {
       "id": "BATCH-46",
       "title": "Country/Continent/World Macro Regime Forecasts",
-      "state": "PLANNED",
+      "state": "IN_PROGRESS",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T07:12:16Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -933,14 +1050,20 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "compl\u00e9ter BATCH-46-ADMIN-01 (PLANNED pour admin)",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z"
     },
     {
       "id": "BATCH-47",
       "title": "Sector-to-Company Impact Transmission",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T07:35:21Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -953,14 +1076,21 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T07:35:21Z"
     },
     {
       "id": "BATCH-48",
       "title": "Event Impact Horizon Matrix",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T07:33:17Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -973,14 +1103,21 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T07:33:17Z"
     },
     {
       "id": "BATCH-49",
       "title": "Multi-Layer Forecast Fusion + Attribution",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T05:54:17Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -993,14 +1130,20 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "claim BATCH-49-ADMIN-01 (PLANNED pour admin)",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z"
     },
     {
       "id": "BATCH-50",
       "title": "Global Forecast Board Final Gate",
       "state": "PLANNED",
       "depends_on": [],
-      "updated_at": "2026-03-06T19:21:19Z",
+      "updated_at": "2026-03-11T06:01:46Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -1013,18 +1156,24 @@
           "migrated_from_role": "",
           "migrated_from_state": "PLANNED"
         }
-      }
+      },
+      "next_action": "claim BATCH-50-ADMIN-01 (PLANNED pour admin)",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T02:59:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-11T03:30:22Z",
+      "reconciled_at": "2026-03-11T03:30:22Z"
     },
     {
       "id": "BATCH-51",
       "title": "PRODUCT VISION \u2014 Finance Copilot",
-      "state": "READY_DEV",
+      "state": "CLOSED",
       "priority": "P2",
-      "next_action": "CLAIM_PLANNER_ANALYSIS",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-06T01:00:02Z",
-      "updated_at": "2026-03-06T19:29:01Z",
+      "updated_at": "2026-03-08T21:34:02Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T01:45:01Z",
       "ready_starvation": true,
@@ -1037,7 +1186,8 @@
           "migrated_from_role": "",
           "migrated_from_state": "READY_DEV"
         }
-      }
+      },
+      "closed_at": "2026-03-08T21:08:45Z"
     },
     {
       "id": "BATCH-52",
@@ -1047,11 +1197,11 @@
       "owner_role": "planner",
       "created_by": "planner_autonomy",
       "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
-      "next_action": "ouvrir BATCH-52-PLAN",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-06T02:22:01Z",
-      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "updated_at": "2026-03-08T21:34:02Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T03:04:01Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
@@ -1065,11 +1215,11 @@
       "owner_role": "planner",
       "created_by": "planner_autonomy",
       "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
-      "next_action": "ouvrir BATCH-53-PLAN",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-06T03:22:01Z",
-      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "updated_at": "2026-03-08T21:34:02Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T04:04:01Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
@@ -1083,11 +1233,11 @@
       "owner_role": "planner",
       "created_by": "planner_autonomy",
       "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
-      "next_action": "ouvrir BATCH-54-PLAN",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-06T04:22:01Z",
-      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "updated_at": "2026-03-08T21:34:02Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T05:00:36Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
@@ -1101,11 +1251,11 @@
       "owner_role": "planner",
       "created_by": "planner_autonomy",
       "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
-      "next_action": "ouvrir BATCH-55-PLAN",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-06T05:22:02Z",
-      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "updated_at": "2026-03-08T21:34:02Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T06:00:47Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
@@ -1119,11 +1269,11 @@
       "owner_role": "planner",
       "created_by": "planner_autonomy",
       "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
-      "next_action": "ouvrir BATCH-56-PLAN",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-06T06:22:02Z",
-      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "updated_at": "2026-03-08T21:34:02Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T07:04:01Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
@@ -1137,32 +1287,125 @@
       "owner_role": "planner",
       "created_by": "planner_autonomy",
       "vision_ref": "docs/product/planning/PRODUCT_VISION.md#PRODUCT VISION \u2014 Finance Copilot",
-      "next_action": "ouvrir BATCH-57-PLAN",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-06T07:22:02Z",
-      "updated_at": "2026-03-06T10:57:32.847640+00:00",
+      "updated_at": "2026-03-08T21:34:02Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
       "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
     },
     {
       "id": "BATCH-58",
       "title": "**Profil:** Reda (venom) \u2014 professionnel non-expert en finance qui g\u00e8re ses investissements pers",
-      "state": "READY_DEV",
+      "state": "CLOSED",
       "priority": "P2",
       "owner_role": "planner",
       "created_by": "planner_autonomy",
       "vision_ref": "docs/product/planning/PRODUCT_VISION.md#\ud83c\udfaf Qui est l'utilisateur",
-      "next_action": "ouvrir BATCH-58-PLAN",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-06T11:00:03Z",
-      "updated_at": "2026-03-07T02:13:28Z",
+      "updated_at": "2026-03-08T21:34:02Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T11:30:04Z",
       "ready_starvation": true,
       "ready_starved_at": "2026-03-07T02:44:01Z",
-      "reconciled_at": "2026-03-07T02:44:01Z"
+      "reconciled_at": "2026-03-07T02:44:01Z",
+      "closed_at": "2026-03-08T21:08:45Z"
+    },
+    {
+      "id": "BATCH-59",
+      "title": "status: canonical",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/planning/PRODUCT_VISION.md:L2",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-07T20:20:32Z",
+      "updated_at": "2026-03-09T05:29:39Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-07T20:54:56Z",
+      "reconciled_at": "2026-03-07T20:54:56Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-07T20:55:59Z",
+      "closed_at": "2026-03-09T05:29:39Z"
+    },
+    {
+      "id": "BATCH-60",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-08T21:35:16Z",
+      "updated_at": "2026-03-09T10:00:07Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-08T21:40:02Z",
+      "closed_at": "2026-03-09T10:00:07Z"
+    },
+    {
+      "id": "BATCH-61",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-09T10:01:17Z",
+      "updated_at": "2026-03-09T18:49:55Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-09T10:28:16Z",
+      "closed_at": "2026-03-09T18:49:55Z"
+    },
+    {
+      "id": "VB-04",
+      "title": "Minimal Frontend Wiring",
+      "state": "CLOSED",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [],
+      "created_at": "2026-03-11T03:06:23.969731Z",
+      "updated_at": "2026-03-11T06:10:24Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "vision_ref": "docs/product/planning/VISION_ALIGNED_DELIVERY_BATCHES_2026-03-10.md#batch-vb-04",
+      "notes": [
+        "planner-created runtime bridge from canonical VB map",
+        "scope: finish remaining UI consumers of normalized brief, memo, and context influence without redesign"
+      ],
+      "ready_at": "2026-03-11T03:15:05Z",
+      "closed_at": "2026-03-11T06:10:24Z"
+    },
+    {
+      "id": "VB-03",
+      "title": "Portfolio Context Injection",
+      "state": "CLOSED",
+      "priority": "P1",
+      "owner_role": "planner",
+      "depends_on": [],
+      "created_at": "2026-03-11T03:06:23.969731Z",
+      "updated_at": "2026-03-11T06:14:06Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "dispatch_authorized": true,
+      "vision_ref": "docs/product/planning/VISION_ALIGNED_DELIVERY_BATCHES_2026-03-10.md#batch-vb-03",
+      "notes": [
+        "planner-created runtime bridge from canonical VB map",
+        "scope: make portfolio-aware vs market-wide influence explicit across active copilot surfaces"
+      ],
+      "ready_at": "2026-03-11T03:15:05Z",
+      "closed_at": "2026-03-11T06:15:00Z"
     }
   ],
   "meta": {
