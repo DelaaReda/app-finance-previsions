@@ -64,12 +64,16 @@ def test_walk_forward_scoreboard_contract_and_cache(monkeypatch):
     assert any(row["scope"] == "overall" for row in first_data["rows"])
     assert any(row["scope"] == "horizon:1w" for row in first_data["rows"])
     assert first_data["rows"][0]["metric_key"] == "walk_forward_direction_hit_rate"
+    assert first_data["updated_at"] == FRESH_TS
+    assert first_data["provenance"]["source"] == first_data["source"]
+    assert first_data["provenance"]["sla"]["updated_at"] == FRESH_TS
 
     second = client.get(path)
     assert second.status_code == 200
     second_data = second.json()["data"]
     assert second_data["cache"]["hit"] is True
     assert "forecasts_scoreboard_cache_hit" in (second_data.get("source") or [])
+    assert second_data["provenance"]["sla"]["updated_at"] == FRESH_TS
 
 
 def test_walk_forward_scoreboard_debug_bypass_and_fallback(monkeypatch):
@@ -109,3 +113,5 @@ def test_walk_forward_scoreboard_debug_bypass_and_fallback(monkeypatch):
     assert isinstance(data.get("debug_pipeline"), list)
     assert data["count"] == 2
     assert data["summary"]["total_predictions_analyzed"] == 0
+    assert data["updated_at"] == FRESH_TS
+    assert data["provenance"]["fallback_used"] is False

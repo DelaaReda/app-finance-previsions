@@ -680,6 +680,7 @@ def _base_scoreboard_payload(
         "generated_at": now_iso,
         "freshness": now_iso,
         "last_update": now_iso,
+        "updated_at": now_iso,
         "freshness_status": "unknown",
         "freshness_age": -1.0,
         "source": source,
@@ -703,6 +704,13 @@ def _base_scoreboard_payload(
             "hit": False,
             "age_seconds": 0.0,
             "ttl_seconds": int(FORECASTS_CACHE_TTL_SECONDS),
+        },
+        "provenance": {
+            "source": source,
+            "provider_chain": [],
+            "model_version": None,
+            "fallback_used": False,
+            "sla": _build_sla_block(updated_at=now_iso, now_iso=now_iso),
         },
     }
 
@@ -870,6 +878,7 @@ async def get_walk_forward_scoreboard_payload(
                     "generated_at": now_iso,
                     "freshness": report_generated_at,
                     "last_update": report_generated_at,
+                    "updated_at": report_generated_at,
                     "freshness_age": freshness_age,
                     "freshness_status": _freshness_status_from_age(freshness_age),
                     "summary": {
@@ -914,6 +923,7 @@ async def get_walk_forward_scoreboard_payload(
                 "forecasts_scoreboard_live_compute",
                 default_source="forecasts_route",
             )
+            payload["provenance"] = _build_payload_provenance(payload=payload, now_iso=now_iso)
             if debug:
                 payload["debug_pipeline"] = traces
             return payload
@@ -929,6 +939,7 @@ async def get_walk_forward_scoreboard_payload(
                 "walk_forward_scoreboard",
                 "critical_error_fallback",
             ]
+            payload["provenance"] = _build_payload_provenance(payload=payload, now_iso=now_iso)
             if debug:
                 add_trace("compute_exception", error=str(exc))
                 payload["debug_pipeline"] = traces

@@ -131,6 +131,7 @@ class WalkForwardScoreboardDataDto(BaseModel):
     generated_at: str = Field(default="")
     freshness: str = Field(default="")
     last_update: str = Field(default="")
+    updated_at: str = Field(default="")
     freshness_status: Literal["fresh", "stale", "unknown"] = Field(default="unknown")
     freshness_age: float = Field(default=-1.0)
     source: List[str] = Field(default_factory=list)
@@ -140,6 +141,7 @@ class WalkForwardScoreboardDataDto(BaseModel):
     cache: Dict[str, Any] = Field(default_factory=dict)
     threshold_summary: Dict[str, Any] = Field(default_factory=dict)
     summary: Dict[str, Any] = Field(default_factory=dict)
+    provenance: Dict[str, Any] = Field(default_factory=dict)
     debug_pipeline: Optional[List[Dict[str, Any]]] = None
     message: Optional[str] = None
     error: Optional[str] = None

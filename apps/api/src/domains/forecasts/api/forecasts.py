@@ -95,6 +95,23 @@ def _apply_decision_contract(payload: Dict[str, Any], *, route: str) -> Dict[str
     payload.setdefault("last_update", payload.get("last_update") or now_iso)
     payload.setdefault("source", [route])
 
+    def _sync_payload_provenance() -> None:
+        if not isinstance(payload.get("provenance"), dict):
+            return
+        payload["provenance"] = {
+            **payload["provenance"],
+            "source": list(payload.get("source") or [route]),
+            "fallback_used": bool(payload.get("error")) or bool(payload.get("fallback_used")),
+            "sla": {
+                **(
+                    payload["provenance"].get("sla")
+                    if isinstance(payload["provenance"].get("sla"), dict)
+                    else {}
+                ),
+                "updated_at": str(payload.get("last_update") or payload.get("freshness") or now_iso),
+            },
+        }
+
     if callable(ensure_decision_contract):
         ensure_decision_contract(
             payload,
@@ -105,6 +122,7 @@ def _apply_decision_contract(payload: Dict[str, Any], *, route: str) -> Dict[str
             risk_level=payload.get("risk_level") or payload.get("risk", {}).get("level") if isinstance(payload.get("risk"), dict) else None,
             freshness=payload.get("freshness"),
         )
+        _sync_payload_provenance()
         return payload
 
     payload.setdefault("verdict", "hold")
@@ -113,6 +131,7 @@ def _apply_decision_contract(payload: Dict[str, Any], *, route: str) -> Dict[str
     payload.setdefault("risk_level", "medium")
     payload.setdefault("risk", {"level": "medium", "caveat": ""})
     payload.setdefault("risk_flag", payload.get("risk_level") in {"high", "critical"})
+    _sync_payload_provenance()
     return payload
 
 # Expose service state for test/backward-compat contract checks.
@@ -258,6 +277,7 @@ async def get_walk_forward_scoreboard(
             "generated_at": now_iso,
             "freshness": now_iso,
             "last_update": now_iso,
+            "updated_at": now_iso,
             "freshness_status": "unknown",
             "freshness_age": -1.0,
             "source": ["forecasts_route", "walk_forward_scoreboard", "critical_route_error_fallback"],
@@ -269,6 +289,19 @@ async def get_walk_forward_scoreboard(
             "summary": {},
             "warnings": [],
             "cache": {"hit": False, "age_seconds": 0.0, "ttl_seconds": 0},
+            "provenance": {
+                "source": ["forecasts_route", "walk_forward_scoreboard", "critical_route_error_fallback"],
+                "provider_chain": [],
+                "model_version": None,
+                "fallback_used": False,
+                "sla": {
+                    "updated_at": now_iso,
+                    "freshness_age_seconds": 0.0,
+                    "freshness_status": "fresh",
+                    "target_max_age_seconds": 0,
+                    "within_target": True,
+                },
+            },
             "error": str(route_exc),
             "message": "Walk-forward scoreboard route failed critically but returned never-empty fallback.",
         }
