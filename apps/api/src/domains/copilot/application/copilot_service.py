@@ -756,12 +756,15 @@ def _build_allocation_drift_alerts(
                 {
                     "id": "largest_position_concentration",
                     "severity": "high" if weight_pct - concentration_threshold >= 5 else "medium",
+                    "basis": "position_weight_proxy",
                     "symbol": symbol,
                     "current_weight_pct": round(weight_pct, 2),
                     "threshold_pct": round(concentration_threshold, 2),
                     "reason": (
                         f"{symbol} is {weight_pct:.2f}% of saved weights, above the "
-                        f"{concentration_threshold:.2f}% playbook guardrail."
+                        f"{concentration_threshold:.2f}% playbook concentration proxy. "
+                        "Sector exposure details were unavailable, so this alert uses "
+                        "position weight as a guardrail proxy."
                     ),
                 }
             )
