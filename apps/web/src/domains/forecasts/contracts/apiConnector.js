@@ -375,6 +375,34 @@ async function getPolicyImpact(params = {}) {
   return payload && typeof payload === 'object' ? payload : null;
 }
 
+async function getInsiderBehavior(params = {}) {
+  const safeParams = params && typeof params === 'object' ? params : {};
+  const search = new URLSearchParams();
+  const tickers = Array.isArray(safeParams.tickers)
+    ? safeParams.tickers
+    : (typeof safeParams.tickers === 'string' ? safeParams.tickers.split(',') : []);
+  const limit = Number(safeParams.limit);
+  const debug = safeParams.debug === true;
+
+  tickers
+    .map((ticker) => String(ticker || '').trim().toUpperCase())
+    .filter(Boolean)
+    .forEach((ticker) => search.append('tickers', ticker));
+
+  if (Number.isFinite(limit) && limit > 0) {
+    search.set('limit', String(Math.min(25, Math.max(1, Math.floor(limit)))));
+  }
+  if (debug) {
+    search.set('debug', 'true');
+  }
+
+  const query = search.toString();
+  const endpoint = `/forecasts/insider-behavior${query ? `?${query}` : ''}`;
+  const cacheKey = `insider-behavior:${query || 'default'}`;
+  const payload = getResponseData(await fetchWithCache(endpoint, cacheKey));
+  return payload && typeof payload === 'object' ? payload : null;
+}
+
 async function getDashboardKPIs() {
   const payload = await fetchWithCache('/dashboard/kpis', 'kpis');
   if (!payload) return null;
@@ -1447,6 +1475,14 @@ async function populateWindowGlobals() {
       contractWarnings.push('marketDrivers-unavailable');
     }
 
+    const insiderBehavior = await getInsiderBehavior({ limit: 3 });
+    window.insiderBehavior = insiderBehavior && typeof insiderBehavior === 'object'
+      ? insiderBehavior
+      : null;
+    if (!window.insiderBehavior || !Array.isArray(window.insiderBehavior.signals) || window.insiderBehavior.signals.length === 0) {
+      contractWarnings.push('insiderBehavior-unavailable');
+    }
+
     const derivedCalendar = buildMarketCalendar(brief, rawNews, window.alertTimeline || []);
     if (hasCalendarEntries(derivedCalendar)) {
       window.marketCalendar = derivedCalendar;
@@ -1590,6 +1626,7 @@ async function populateWindowGlobals() {
           story: window.storyData || null,
           marketCalendar: window.marketCalendar || null,
           marketDrivers: window.marketDrivers || [],
+          insiderBehavior: window.insiderBehavior || null,
           llmJudgeData: window.llmJudgeData || null,
           judgeDecisionJournal: window.judgeDecisionJournal || null,
           kpis: window.liveKpis || null,
@@ -1660,6 +1697,7 @@ window.FinanceAPI = {
   getHealth,
   getGlobalSignalMesh,
   getPolicyImpact,
+  getInsiderBehavior,
   getJudgeAnalysis,
   getCopilotStart,
   getCopilotContext,
@@ -1692,6 +1730,7 @@ window.getLiveDashboardData = () => ({
     story: window.storyData || null,
     marketCalendar: window.marketCalendar || null,
     marketDrivers: window.marketDrivers || [],
+    insiderBehavior: window.insiderBehavior || null,
     kpis: window.liveKpis || null,
     portfolioSummary: window.livePortfolioSummary || null,
     portfolioRiskProfile: window.livePortfolioRiskProfile || null,

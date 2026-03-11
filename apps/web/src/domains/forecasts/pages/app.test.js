@@ -76,6 +76,9 @@ function loadApplyLiveDashboardData() {
     sanitizeMarketDrivers(value) {
       return Array.isArray(value) ? value : [];
     },
+    sanitizeInsiderBehavior(value) {
+      return value && typeof value === 'object' ? value : null;
+    },
     buildTradeIdeasFromForecasts() {
       return [];
     },
@@ -242,6 +245,12 @@ function loadRenderForecastScenarioWidget() {
   const geopoliticalGraph = createElementStub();
   const geopoliticalAlertCopy = createElementStub();
   const geopoliticalAlertBand = createElementStub();
+  const shockChain = createElementStub();
+  const shockChainBand = createElementStub();
+  const shockChainUpstream = createElementStub();
+  const shockChainTransmission = createElementStub();
+  const shockChainWatchlist = createElementStub();
+  const shockChainCopy = createElementStub();
   const bars = Array.from({ length: 3 }, () => {
     const fill = createElementStub();
     const label = createElementStub();
@@ -263,6 +272,12 @@ function loadRenderForecastScenarioWidget() {
       if (selector === '[data-role="geo-graph"]') return geopoliticalGraph;
       if (selector === '[data-role="geo-alert-copy"]') return geopoliticalAlertCopy;
       if (selector === '[data-role="geo-alert-band"]') return geopoliticalAlertBand;
+      if (selector === '[data-role="shock-chain"]') return shockChain;
+      if (selector === '[data-role="shock-chain-band"]') return shockChainBand;
+      if (selector === '[data-role="shock-chain-upstream"]') return shockChainUpstream;
+      if (selector === '[data-role="shock-chain-transmission"]') return shockChainTransmission;
+      if (selector === '[data-role="shock-chain-watchlist"]') return shockChainWatchlist;
+      if (selector === '[data-role="shock-chain-copy"]') return shockChainCopy;
       return null;
     },
     querySelectorAll(selector) {
@@ -323,7 +338,51 @@ function loadRenderForecastScenarioWidget() {
     geopoliticalGraph,
     geopoliticalAlertCopy,
     geopoliticalAlertBand,
+    shockChain,
+    shockChainBand,
+    shockChainUpstream,
+    shockChainTransmission,
+    shockChainWatchlist,
+    shockChainCopy,
   };
+}
+
+function loadRenderMarketDrivers() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractFunction(source, 'renderMarketDrivers', '\n\n// V13: Ask LLM Judge');
+  const container = createInteractiveElementStub();
+  const sandbox = {
+    console,
+    marketDrivers: [
+      { factor: 'Technical Signals', contribution: 40, color: '#1F40AF' },
+    ],
+    insiderBehavior: {
+      fallbackUsed: false,
+      policy: 'Insider activity is evidence with uncertainty, never a standalone directive.',
+      signals: [
+        {
+          ticker: 'NVDA',
+          confidence: 61,
+          uncertaintyLevel: 'medium',
+          summary: 'Insider activity for NVDA suggests accumulation bias.',
+          netTrades30d: 4,
+          reviewNote: 'Use insider behavior only as corroborating evidence.',
+        },
+      ],
+    },
+    document: {},
+    getFacetteWidgetSlot() {
+      return container;
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.renderMarketDrivers = renderMarketDrivers;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return { sandbox, container };
 }
 
 function createElementStub() {
@@ -1502,6 +1561,46 @@ test('applyLiveDashboardData stores walk-forward scoreboard payloads for forecas
   assert.equal(sandbox.rendered, true);
 });
 
+test('applyLiveDashboardData stores insider behavior payloads for existing widgets', () => {
+  const { sandbox } = loadApplyLiveDashboardData();
+  const insiderBehavior = {
+    engineId: 'insider_behavior_intelligence_v1',
+    fallbackUsed: false,
+    signals: [
+      {
+        ticker: 'NVDA',
+        confidence: 61,
+        uncertaintyLevel: 'medium',
+        summary: 'Insider activity suggests accumulation bias.',
+        netTrades30d: 4,
+      },
+    ],
+  };
+
+  sandbox.applyLiveDashboardData({
+    generatedAt: '2026-03-11T05:00:00Z',
+    data: {
+      insiderBehavior,
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.appData.insiderBehavior)), insiderBehavior);
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.insiderBehavior)), insiderBehavior);
+  assert.equal(sandbox.rendered, true);
+});
+
+test('renderMarketDrivers appends insider behavior summary to the existing widget', () => {
+  const { sandbox, container } = loadRenderMarketDrivers();
+
+  sandbox.renderMarketDrivers();
+
+  assert.match(container.innerHTML, /Technical Signals/);
+  assert.match(container.innerHTML, /Insider behavior/);
+  assert.match(container.innerHTML, /NVDA/);
+  assert.match(container.innerHTML, /61% confidence/);
+  assert.match(container.innerHTML, /30d net trades: 4/);
+});
+
 test('renderForecastScenarioWidget prefers threshold_summary over scoreboard rows for hit-rate copy', () => {
   const { sandbox, scenarioContext, widgetTimestamp } = loadRenderForecastScenarioWidget();
   sandbox.liveForecastRows = [
@@ -1572,6 +1671,59 @@ test('renderForecastScenarioWidget surfaces geopolitical conflict escalation fro
   assert.equal(
     geopoliticalAlertCopy.textContent,
     'Conflict escalation critical in Ukraine (87/100) • refreshed 2 minutes ago'
+  );
+});
+
+test('renderForecastScenarioWidget surfaces a supply-chain shock propagation chain from existing live datasets', () => {
+  const {
+    sandbox,
+    shockChain,
+    shockChainBand,
+    shockChainUpstream,
+    shockChainTransmission,
+    shockChainWatchlist,
+    shockChainCopy,
+  } = loadRenderForecastScenarioWidget();
+  sandbox.liveForecastRows = [
+    { ticker: 'NVDA', direction: 'up', expectedReturn: 4.5 },
+    { ticker: 'CAT', direction: 'neutral', expectedReturn: 1.2 },
+    { ticker: 'XOM', direction: 'down', expectedReturn: -2.3 },
+  ];
+  sandbox.liveDataMeta = {
+    geopoliticalRiskGraph: {
+      nodes: [
+        { label: 'Taiwan', escalation_score: 73, escalation_band: 'high', latest_at: '2026-03-10T10:00:00Z' },
+      ],
+      alerts: [
+        { region: 'Taiwan', escalation_band: 'high', escalation_score: 73, timestamp: '2026-03-10T10:00:00Z' },
+      ],
+    },
+    globalSignalMesh: {
+      coverage: {
+        layers: ['macro', 'policy', 'geopolitical'],
+      },
+    },
+  };
+  sandbox.window.policyImpact = {
+    events: [
+      {
+        sectors: ['technology', 'industrials', 'energy'],
+        status: 'effective',
+      },
+    ],
+  };
+
+  sandbox.renderForecastScenarioWidget();
+
+  assert.equal(shockChain.hidden, false);
+  assert.equal(shockChainBand.textContent, 'High');
+  assert.equal(shockChainBand.className, 'scenario-geopolitical-badge band-high');
+  assert.equal(shockChainUpstream.textContent, 'Taiwan high shock (73/100)');
+  assert.equal(shockChainTransmission.textContent, 'technology -> industrials -> energy • mesh macro / policy / geopolitical');
+  assert.equal(shockChainWatchlist.textContent, 'NVDA -> CAT -> XOM');
+  assert.equal(
+    shockChainCopy.textContent,
+    'Taiwan shock is the active upstream driver; transmission is being watched through technology, industrials, energy before it reaches NVDA, CAT, XOM forecasts • policy status effective.'
   );
 });
 

@@ -213,6 +213,40 @@ test('getGeopoliticalRiskGraph unwraps region risk graph payloads and preserves 
   assert.equal(payload.stats.alerts_count, 1);
 });
 
+test('getInsiderBehavior unwraps insider signals and preserves ticker filters', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            engine_id: 'insider_behavior_intelligence_v1',
+            signals: [
+              {
+                ticker: 'NVDA',
+                stance: 'accumulation_bias',
+                confidence: 0.6,
+              },
+            ],
+            guardrails: {
+              deterministic_language_allowed: false,
+            },
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getInsiderBehavior({ tickers: ['nvda', 'msft'], limit: 2 });
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/forecasts/insider-behavior?tickers=NVDA&tickers=MSFT&limit=2']);
+  assert.equal(payload.engine_id, 'insider_behavior_intelligence_v1');
+  assert.equal(payload.signals[0].ticker, 'NVDA');
+  assert.equal(payload.guardrails.deterministic_language_allowed, false);
+});
+
 test('getCopilotContext normalizes brief-first entry points into ask/open starters', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {

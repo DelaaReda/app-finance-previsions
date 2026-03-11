@@ -1466,6 +1466,7 @@ let liveAlerts = [];
 let llmJudgeData = window.llmJudgeData || FALLBACK_LLM_JUDGE_DATA;
 let judgeDecisionJournal = sanitizeJudgeDecisionJournal(window.judgeDecisionJournal || []);
 let marketDrivers = sanitizeMarketDrivers(window.marketDrivers || FALLBACK_MARKET_DRIVERS);
+let insiderBehavior = sanitizeInsiderBehavior(window.insiderBehavior || null);
 let liveForecastRows = [];
 let liveForecastScoreboard = null;
 let liveTopMovers = [];
@@ -2238,6 +2239,35 @@ function sanitizeMarketDrivers(items) {
   }));
 }
 
+function sanitizeInsiderBehavior(payload) {
+  if (!isObject(payload)) {
+    return null;
+  }
+
+  const signals = toArray(payload.signals, [])
+    .filter((item) => isObject(item))
+    .slice(0, 3)
+    .map((item) => ({
+      ticker: toString(item.ticker, 'MARKET').toUpperCase(),
+      stance: toString(item.stance, 'insufficient_evidence'),
+      summary: toString(item.summary, ''),
+      confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, 0) * 100))),
+      uncertaintyLevel: toString(item.uncertainty?.level, 'high'),
+      uncertaintyFactors: toArray(item.uncertainty?.factors, []).map((factor) => toString(factor, '')).filter(Boolean),
+      netTrades30d: Math.round(toFiniteNumber(item.activity?.window_30d?.net_trades, 0)),
+      reviewNote: toString(item.guardrails?.review_note, ''),
+      sources: toArray(item.provenance?.source, []).map((source) => toString(source, '')).filter(Boolean),
+    }));
+
+  return {
+    engineId: toString(payload.engine_id, 'insider_behavior_intelligence_v1'),
+    fallbackUsed: payload.fallback_used === true,
+    warnings: toArray(payload.warnings, []).map((warning) => toString(warning, '')).filter(Boolean),
+    policy: toString(payload.guardrails?.policy, ''),
+    signals,
+  };
+}
+
 function sanitizeJudgeDecisionJournal(entries) {
   const rows = extractArray(entries, ['entries', 'journal', 'decisions', 'history', 'verdicts']);
   return rows
@@ -2945,9 +2975,19 @@ function renderForecastScenarioWidget() {
   const geopoliticalGraph = scenarioWidget.querySelector('[data-role="geo-graph"]');
   const geopoliticalAlertCopy = scenarioWidget.querySelector('[data-role="geo-alert-copy"]');
   const geopoliticalAlertBand = scenarioWidget.querySelector('[data-role="geo-alert-band"]');
+  const shockChainSection = scenarioWidget.querySelector('[data-role="shock-chain"]');
+  const shockChainBand = scenarioWidget.querySelector('[data-role="shock-chain-band"]');
+  const shockChainUpstream = scenarioWidget.querySelector('[data-role="shock-chain-upstream"]');
+  const shockChainTransmission = scenarioWidget.querySelector('[data-role="shock-chain-transmission"]');
+  const shockChainWatchlist = scenarioWidget.querySelector('[data-role="shock-chain-watchlist"]');
+  const shockChainCopy = scenarioWidget.querySelector('[data-role="shock-chain-copy"]');
   const geopoliticalPayload = isObject(liveDataMeta?.geopoliticalRiskGraph)
     ? liveDataMeta.geopoliticalRiskGraph
     : (isObject(window.geopoliticalRiskGraph) ? window.geopoliticalRiskGraph : null);
+  const globalSignalMesh = isObject(liveDataMeta?.globalSignalMesh)
+    ? liveDataMeta.globalSignalMesh
+    : (isObject(window.globalSignalMesh) ? window.globalSignalMesh : null);
+  const policyImpact = isObject(window.policyImpact) ? window.policyImpact : null;
   const geopoliticalNodes = Array.isArray(geopoliticalPayload?.nodes)
     ? geopoliticalPayload.nodes.filter((node) => isObject(node)).slice(0, 3)
     : [];
@@ -2999,6 +3039,79 @@ function renderForecastScenarioWidget() {
       geopoliticalAlertCopy.textContent = `Conflict escalation ${alertBandLabel.toLowerCase()} in ${region} (${score}/100) • refreshed ${relativeTime}`;
     } else {
       geopoliticalAlertCopy.textContent = 'Conflict escalation signals will appear here.';
+    }
+  }
+
+  const policyEvents = Array.isArray(policyImpact?.events)
+    ? policyImpact.events.filter((event) => isObject(event))
+    : [];
+  const supplyChainEvent = policyEvents.find((event) => {
+    const sectors = Array.isArray(event.sectors) ? event.sectors : [];
+    return sectors.some((sector) => {
+      const token = toString(sector, '').trim().toLowerCase();
+      return token === 'industrials' || token === 'energy' || token === 'materials' || token === 'technology';
+    });
+  }) || null;
+  const transmissionSectors = supplyChainEvent && Array.isArray(supplyChainEvent.sectors)
+    ? supplyChainEvent.sectors
+      .map((sector) => toString(sector, '').trim())
+      .filter(Boolean)
+      .slice(0, 3)
+    : [];
+  const meshLayers = Array.isArray(globalSignalMesh?.coverage?.layers)
+    ? globalSignalMesh.coverage.layers
+      .map((layer) => toString(layer, '').trim())
+      .filter(Boolean)
+      .slice(0, 3)
+    : [];
+  const watchlistTickers = rows
+    .map((row) => toString(row.ticker, '').trim().toUpperCase())
+    .filter(Boolean)
+    .slice(0, 3);
+  const shockRegion = toString(topGeopoliticalAlert?.region, toString(geopoliticalNodes[0]?.label, ''));
+  const shockScore = Math.max(0, Math.min(100, Math.round(toFiniteNumber(topGeopoliticalAlert?.escalation_score, 0))));
+  const shockBandToken = toString(topGeopoliticalAlert?.escalation_band, '').trim().toLowerCase();
+  const shockBand = shockBandToken || (supplyChainEvent ? 'monitoring' : '');
+  const shockBandLabel = shockBand ? `${shockBand.charAt(0).toUpperCase()}${shockBand.slice(1)}` : 'Monitoring';
+  const hasShockChain = Boolean((shockRegion && watchlistTickers.length) || (transmissionSectors.length && watchlistTickers.length));
+
+  if (shockChainSection) {
+    shockChainSection.hidden = !hasShockChain;
+  }
+  if (shockChainBand) {
+    shockChainBand.textContent = shockBandLabel;
+    shockChainBand.className = `scenario-geopolitical-badge ${shockBand ? `band-${shockBand}` : ''}`.trim();
+  }
+  if (shockChainUpstream) {
+    shockChainUpstream.textContent = shockRegion
+      ? `${shockRegion} ${shockBandLabel.toLowerCase()} shock${shockScore ? ` (${shockScore}/100)` : ''}`
+      : 'No upstream shock in focus';
+  }
+  if (shockChainTransmission) {
+    if (transmissionSectors.length) {
+      const meshCopy = meshLayers.length ? ` • mesh ${meshLayers.join(' / ')}` : '';
+      shockChainTransmission.textContent = `${transmissionSectors.join(' -> ')}${meshCopy}`;
+    } else if (meshLayers.length) {
+      shockChainTransmission.textContent = `Mesh coverage: ${meshLayers.join(' / ')}`;
+    } else {
+      shockChainTransmission.textContent = 'Awaiting sector transmission';
+    }
+  }
+  if (shockChainWatchlist) {
+    shockChainWatchlist.textContent = watchlistTickers.length
+      ? watchlistTickers.join(' -> ')
+      : 'Awaiting forecast coverage';
+  }
+  if (shockChainCopy) {
+    if (hasShockChain) {
+      const lead = shockRegion
+        ? `${shockRegion} shock is the active upstream driver`
+        : 'Sector transmission is the active upstream driver';
+      const eventStatus = toString(supplyChainEvent?.status, '').trim().toLowerCase();
+      const eventStatusCopy = eventStatus ? ` • policy status ${eventStatus}` : '';
+      shockChainCopy.textContent = `${lead}; transmission is being watched through ${transmissionSectors.length ? transmissionSectors.join(', ') : 'the live mesh'} before it reaches ${watchlistTickers.join(', ')} forecasts${eventStatusCopy}.`;
+    } else {
+      shockChainCopy.textContent = 'Shock propagation context will appear here.';
     }
   }
 }
@@ -3218,6 +3331,7 @@ function applyLiveDashboardData(payload = {}) {
   marketCalendar = sanitizeMarketCalendar(data.marketCalendar);
   newsItems = sanitizeNewsItems(data.newsItems);
   marketDrivers = sanitizeMarketDrivers(data.marketDrivers);
+  insiderBehavior = sanitizeInsiderBehavior(data.insiderBehavior || payload.insiderBehavior || window.insiderBehavior || null);
   tradeIdeas = buildTradeIdeasFromForecasts(liveForecastRows);
 
   const payloadTopStocks = toArray(data.topStocks, []);
@@ -3262,6 +3376,7 @@ function applyLiveDashboardData(payload = {}) {
     },
     copilotStart,
     topStocks: sanitizeTopStockRows(toArray(fallbackTopStocks, [])),
+    insiderBehavior,
     ...(storyOverride ? { story: storyOverride } : {})
   });
   if (isObject(data.llmJudgeData)) {
@@ -6557,6 +6672,27 @@ function renderMarketDrivers(root = document) {
   const container = getFacetteWidgetSlot(root, 'driversBarsVisual');
   if (!container) return;
 
+  const insiderMarkup = insiderBehavior && Array.isArray(insiderBehavior.signals) && insiderBehavior.signals.length
+    ? `
+      <div class="driver-insider-panel" style="margin-top:14px;padding:12px;border-radius:14px;border:1px solid rgba(15,23,42,0.08);background:linear-gradient(135deg, rgba(255,255,255,0.96), rgba(239,246,255,0.92));">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;">
+          <strong style="font-size:13px;color:#0f172a;">Insider behavior</strong>
+          <span style="font-size:11px;color:#475569;">${insiderBehavior.fallbackUsed ? 'Conservative fallback' : 'Form 4 evidence'}</span>
+        </div>
+        ${insiderBehavior.signals.map((signal) => `
+          <div style="padding:10px 0;border-top:1px solid rgba(148,163,184,0.2);">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <span style="font-weight:600;color:#0f172a;">${signal.ticker}</span>
+              <span style="font-size:11px;color:#475569;">${signal.confidence}% confidence • ${signal.uncertaintyLevel}</span>
+            </div>
+            <div style="margin-top:4px;font-size:12px;color:#334155;">${signal.summary}</div>
+            <div style="margin-top:6px;font-size:11px;color:#64748b;">30d net trades: ${signal.netTrades30d} • ${signal.reviewNote || insiderBehavior.policy}</div>
+          </div>
+        `).join('')}
+      </div>
+    `
+    : '';
+
   container.innerHTML = marketDrivers.map(driver => `
     <div class="driver-bar-item">
       <span class="driver-label">${driver.factor}</span>
@@ -6566,7 +6702,7 @@ function renderMarketDrivers(root = document) {
         </div>
       </div>
     </div>
-  `).join('');
+  `).join('') + insiderMarkup;
 }
 
 // V13: Ask LLM Judge
