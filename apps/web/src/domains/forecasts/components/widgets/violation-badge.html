@@ -1,0 +1,413 @@
+<!-- 
+    Violation Badge Component - Personal Policy Guardrails (BATCH-20-DEV-02)
+    
+    Reusable component for displaying policy violation badges on recommendation cards.
+    Use this component to show policy violations with severity indicators.
+    
+    Usage:
+    1. Include this HTML in recommendation card templates
+    2. Call renderViolationBadge(containerElement, violationData) to render
+    3. Call hideViolationBadge(containerElement) to hide
+    
+    Example violationData:
+    {
+        visible: true,
+        severity: "critical" | "warning" | "info",
+        message: "2 policy violation(s)",
+        violations: [
+            { rule: "sector_exclusion", reason: "Sector excluded", severity: "critical" }
+        ],
+        policy_version: "2026-03-11T12:00:00Z"
+    }
+-->
+
+<template id="violationBadgeTemplate">
+    <div class="violation-badge-container" role="alert" aria-live="polite">
+        <div class="violation-badge-header">
+            <span class="violation-badge-icon">⚠️</span>
+            <span class="violation-badge-title">Policy Violation</span>
+            <button class="violation-badge-dismiss" onclick="hideViolationBadge(this)" aria-label="Dismiss">
+                ✕
+            </button>
+        </div>
+        <div class="violation-badge-message"></div>
+        <div class="violation-badge-details">
+            <ul class="violation-badge-list"></ul>
+        </div>
+        <div class="violation-badge-footer">
+            <span class="violation-badge-version"></span>
+            <button class="violation-badge-override" onclick="showPolicyOverrideModal(this)">
+                Override
+            </button>
+        </div>
+    </div>
+</template>
+
+<style>
+    .violation-badge-container {
+        background: linear-gradient(135deg, rgba(244, 67, 54, 0.15), rgba(244, 67, 54, 0.05));
+        border: 1px solid rgba(244, 67, 54, 0.4);
+        border-radius: 8px;
+        padding: 12px;
+        margin: 12px 0;
+        animation: violationBadgeSlideIn 0.3s ease-out;
+    }
+
+    .violation-badge-container.severity-warning {
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.15), rgba(255, 193, 7, 0.05));
+        border-color: rgba(255, 193, 7, 0.4);
+    }
+
+    .violation-badge-container.severity-info {
+        background: linear-gradient(135deg, rgba(33, 150, 243, 0.15), rgba(33, 150, 243, 0.05));
+        border-color: rgba(33, 150, 243, 0.4);
+    }
+
+    @keyframes violationBadgeSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .violation-badge-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .violation-badge-icon {
+        font-size: 16px;
+        flex-shrink: 0;
+    }
+
+    .violation-badge-title {
+        font-weight: 600;
+        font-size: 12px;
+        color: #f44336;
+        flex: 1;
+    }
+
+    .severity-warning .violation-badge-title {
+        color: #ffc107;
+    }
+
+    .severity-info .violation-badge-title {
+        color: #2196f3;
+    }
+
+    .violation-badge-dismiss {
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.6);
+        cursor: pointer;
+        font-size: 14px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: all 0.2s;
+    }
+
+    .violation-badge-dismiss:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+
+    .violation-badge-message {
+        font-size: 13px;
+        color: var(--color-text);
+        margin-bottom: 10px;
+        font-weight: 500;
+    }
+
+    .violation-badge-details {
+        margin-bottom: 10px;
+    }
+
+    .violation-badge-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .violation-badge-list li {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--color-text-secondary);
+        padding: 6px 8px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 6px;
+        border-left: 2px solid #f44336;
+    }
+
+    .severity-warning .violation-badge-list li {
+        border-left-color: #ffc107;
+    }
+
+    .severity-info .violation-badge-list li {
+        border-left-color: #2196f3;
+    }
+
+    .violation-badge-list li::before {
+        content: "•";
+        color: #f44336;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    .severity-warning .violation-badge-list li::before {
+        color: #ffc107;
+    }
+
+    .severity-info .violation-badge-list li::before {
+        color: #2196f3;
+    }
+
+    .violation-badge-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 8px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .violation-badge-version {
+        font-size: 10px;
+        color: var(--color-text-secondary);
+    }
+
+    .violation-badge-override {
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: transparent;
+        color: var(--color-text-secondary);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .violation-badge-override:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--color-text);
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Compact version for tight spaces */
+    .violation-badge-compact {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        background: rgba(244, 67, 54, 0.1);
+        border: 1px solid rgba(244, 67, 54, 0.3);
+        border-radius: 6px;
+        font-size: 11px;
+        color: #f44336;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .violation-badge-compact:hover {
+        background: rgba(244, 67, 54, 0.2);
+    }
+
+    .violation-badge-compact.severity-warning {
+        background: rgba(255, 193, 7, 0.1);
+        border-color: rgba(255, 193, 7, 0.3);
+        color: #ffc107;
+    }
+
+    .violation-badge-compact.severity-warning:hover {
+        background: rgba(255, 193, 7, 0.2);
+    }
+
+    .violation-badge-compact.severity-info {
+        background: rgba(33, 150, 243, 0.1);
+        border-color: rgba(33, 150, 243, 0.3);
+        color: #2196f3;
+    }
+
+    .violation-badge-compact.severity-info:hover {
+        background: rgba(33, 150, 243, 0.2);
+    }
+
+    /* Hidden state */
+    .violation-badge-hidden {
+        display: none !important;
+    }
+</style>
+
+<script>
+    /**
+     * Render violation badge in a container element
+     * @param {HTMLElement} container - Container element to render badge into
+     * @param {Object} violationData - Violation data from policy validator
+     */
+    function renderViolationBadge(container, violationData) {
+        if (!container || !violationData || !violationData.visible) {
+            hideViolationBadge(container);
+            return;
+        }
+
+        const template = document.getElementById('violationBadgeTemplate');
+        const clone = template.content.cloneNode(true);
+        
+        const badgeContainer = clone.querySelector('.violation-badge-container');
+        
+        // Set severity class
+        if (violationData.severity === 'warning') {
+            badgeContainer.classList.add('severity-warning');
+        } else if (violationData.severity === 'info') {
+            badgeContainer.classList.add('severity-info');
+        }
+
+        // Set message
+        const messageEl = clone.querySelector('.violation-badge-message');
+        messageEl.textContent = violationData.message || 'Policy violation detected';
+
+        // Populate violations list
+        const listEl = clone.querySelector('.violation-badge-list');
+        if (violationData.violations && violationData.violations.length > 0) {
+            violationData.violations.forEach(violation => {
+                const li = document.createElement('li');
+                li.textContent = violation.reason || violation.message || 'Policy violation';
+                listEl.appendChild(li);
+            });
+        } else {
+            listEl.innerHTML = '<li>Policy violation detected</li>';
+        }
+
+        // Set policy version
+        const versionEl = clone.querySelector('.violation-badge-version');
+        versionEl.textContent = violationData.policy_version 
+            ? 'Policy: ' + formatPolicyVersion(violationData.policy_version)
+            : '';
+
+        // Clear container and append
+        container.innerHTML = '';
+        container.appendChild(clone);
+    }
+
+    /**
+     * Hide/remove violation badge from container
+     * @param {HTMLElement} containerOrButton - Container element or dismiss button
+     */
+    function hideViolationBadge(containerOrButton) {
+        let container;
+        
+        if (containerOrButton.classList && containerOrButton.classList.contains('violation-badge-container')) {
+            container = containerOrButton;
+        } else if (containerOrButton.closest) {
+            container = containerOrButton.closest('.violation-badge-container');
+        }
+        
+        if (container) {
+            container.classList.add('violation-badge-hidden');
+            setTimeout(() => {
+                container.style.display = 'none';
+            }, 300);
+        }
+    }
+
+    /**
+     * Show policy override modal
+     * @param {HTMLElement} button - Override button clicked
+     */
+    function showPolicyOverrideModal(button) {
+        const container = button.closest('.violation-badge-container');
+        const violationsList = container.querySelector('.violation-badge-list');
+        
+        if (!violationsList) return;
+
+        const violationItems = Array.from(violationsList.querySelectorAll('li'));
+        const violationTexts = violationItems.map(li => li.textContent);
+
+        const confirmMsg = `Override policy guardrails?\n\nViolations:\n${violationTexts.join('\n')}\n\nThis will allow the recommendation despite policy violations. Continue?`;
+        
+        if (confirm(confirmMsg)) {
+            showToast('⚠️ Policy override recorded - recommendation allowed');
+            hideViolationBadge(container);
+            
+            // Log override for audit trail
+            logPolicyOverride({
+                violations: violationTexts,
+                timestamp: new Date().toISOString(),
+                policy_version: container.querySelector('.violation-badge-version')?.textContent
+            });
+        }
+    }
+
+    /**
+     * Format policy version timestamp
+     * @param {string} isoString - ISO timestamp
+     * @returns {string} Formatted timestamp
+     */
+    function formatPolicyVersion(isoString) {
+        try {
+            const date = new Date(isoString);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        } catch (e) {
+            return isoString;
+        }
+    }
+
+    /**
+     * Log policy override for audit trail
+     * @param {Object} overrideData - Override details
+     */
+    function logPolicyOverride(overrideData) {
+        try {
+            const overrides = JSON.parse(localStorage.getItem('policy_overrides_log') || '[]');
+            overrides.push(overrideData);
+            localStorage.setItem('policy_overrides_log', JSON.stringify(overrides));
+            
+            // Update stats
+            const stats = JSON.parse(localStorage.getItem('judge_policy_stats') || '{"violationsBlocked":0,"downgradesCount":0}');
+            stats.overridesCount = (stats.overridesCount || 0) + 1;
+            localStorage.setItem('judge_policy_stats', JSON.stringify(stats));
+        } catch (e) {
+            console.error('Error logging policy override:', e);
+        }
+    }
+
+    /**
+     * Create compact violation badge (inline version)
+     * @param {Object} violationData - Violation data
+     * @returns {string} HTML string for compact badge
+     */
+    function createCompactViolationBadge(violationData) {
+        if (!violationData || !violationData.visible) return '';
+        
+        const severity = violationData.severity || 'critical';
+        const count = violationData.violations?.length || 1;
+        
+        return `
+            <div class="violation-badge-compact severity-${severity}" 
+                 onclick="showFullViolationDetails(this)"
+                 title="${count} policy violation(s)">
+                <span>⚠️</span>
+                <span>${count} violation${count > 1 ? 's' : ''}</span>
+            </div>
+        `;
+    }
+
+    /**
+     * Show full violation details from compact badge
+     * @param {HTMLElement} badge - Compact badge element
+     */
+    function showFullViolationDetails(badge) {
+        showToast('Opening violation details...');
+        // Could open a modal with full details
+    }
+</script>

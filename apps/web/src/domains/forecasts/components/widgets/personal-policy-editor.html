@@ -1,0 +1,904 @@
+<section class="widget-card personal-policy-editor" aria-label="Personal Policy Guardrails">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">🛡️</span>
+            <h2 class="widget-title">Personal Policy Guardrails</h2>
+        </div>
+        <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('personal-policy')" aria-label="Help"
+                title="Configure investment policy rules to filter recommendations">?</button>
+            <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
+        </div>
+    </div>
+    <div class="widget-body">
+        <p class="widget-subtitle">Set rules to automatically filter violating recommendations</p>
+
+        <!-- Policy Status Summary -->
+        <div class="policy-status-card" id="policyStatusCard">
+            <div class="policy-status-header">
+                <span class="policy-status-icon" id="policyStatusIcon">⚠️</span>
+                <div class="policy-status-text">
+                    <div class="policy-status-title" id="policyStatusTitle">No active policies</div>
+                    <div class="policy-status-subtitle" id="policyStatusSubtitle">Configure rules to enable guardrails</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Settings -->
+        <div class="policy-quick-settings">
+            <div class="policy-setting-group">
+                <label class="policy-setting-label" for="policyExcludedTickersWidget">
+                    <span class="setting-icon">🚫</span>
+                    Excluded Tickers
+                </label>
+                <input
+                    type="text"
+                    id="policyExcludedTickersWidget"
+                    class="policy-setting-input"
+                    placeholder="TSLA, GME, AMC"
+                    onchange="onPolicyChange()"
+                >
+                <p class="policy-setting-help">Comma-separated tickers to auto-downgrade to HOLD</p>
+            </div>
+
+            <div class="policy-setting-group">
+                <label class="policy-setting-label" for="policyBlockedActionsWidget">
+                    <span class="setting-icon">🔒</span>
+                    Blocked Actions
+                </label>
+                <select class="policy-setting-select" id="policyBlockedActionsWidget" multiple size="3" onchange="onPolicyChange()">
+                    <option value="buy">Buy</option>
+                    <option value="sell">Sell</option>
+                    <option value="hold">Hold</option>
+                </select>
+                <p class="policy-setting-help">Ctrl/Cmd + click to select multiple</p>
+            </div>
+
+            <div class="policy-setting-group">
+                <label class="policy-setting-label" for="policyMaxRiskLevelWidget">
+                    <span class="setting-icon">📊</span>
+                    Maximum Risk Level
+                </label>
+                <select class="policy-setting-select" id="policyMaxRiskLevelWidget" onchange="onPolicyChange()">
+                    <option value="low">Low (Conservative)</option>
+                    <option value="medium">Medium (Balanced)</option>
+                    <option value="high">High (Aggressive)</option>
+                    <option value="critical" selected>Critical (No Limit)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Policy Rules List -->
+        <div class="policy-rules-section">
+            <div class="policy-rules-header">
+                <h3 class="policy-rules-title">Active Policy Rules</h3>
+                <button class="policy-add-btn" onclick="showPolicyTypeSelector()">+ Add Rule</button>
+            </div>
+            <div class="policy-rules-list" id="policyRulesList">
+                <!-- Dynamic policy rules will be inserted here -->
+                <div class="policy-rules-empty" id="policyRulesEmpty">
+                    <span class="empty-icon">📋</span>
+                    <p>No custom policy rules configured</p>
+                    <button class="policy-add-btn secondary" onclick="showPolicyTypeSelector()">Create your first rule</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Violation Statistics -->
+        <div class="policy-stats-card" id="policyStatsCard" style="display: none;">
+            <h3 class="policy-stats-title">Guardrail Impact</h3>
+            <div class="policy-stats-grid">
+                <div class="policy-stat">
+                    <div class="stat-value" id="policyStatViolations">0</div>
+                    <div class="stat-label">Violations Blocked</div>
+                </div>
+                <div class="policy-stat">
+                    <div class="stat-value" id="policyStatDowngrades">0</div>
+                    <div class="stat-label">BUY → HOLD</div>
+                </div>
+                <div class="policy-stat">
+                    <div class="stat-value" id="policyStatLastViolation">-</div>
+                    <div class="stat-label">Last Violation</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="widget-footer">
+        <span class="widget-timestamp" id="policyTimestamp">Updated --</span>
+        <button class="widget-action-btn" id="policySaveBtn" onclick="savePolicy()" disabled>💾 Save</button>
+    </div>
+</section>
+
+<!-- Policy Rule Template (hidden) -->
+<template id="policyRuleTemplate">
+    <div class="policy-rule-card">
+        <div class="policy-rule-header">
+            <span class="policy-rule-icon" data-role="rule-icon">📌</span>
+            <div class="policy-rule-info">
+                <div class="policy-rule-name" data-role="rule-name">Rule Name</div>
+                <div class="policy-rule-description" data-role="rule-description">Rule description</div>
+            </div>
+            <div class="policy-rule-actions">
+                <label class="policy-rule-toggle">
+                    <input type="checkbox" data-role="rule-enabled" checked onchange="onPolicyChange()">
+                    <span class="toggle-slider"></span>
+                </label>
+                <button class="policy-rule-delete" onclick="deletePolicyRule(this)" aria-label="Delete rule">🗑️</button>
+            </div>
+        </div>
+        <div class="policy-rule-body" data-role="rule-config">
+            <!-- Rule-specific config fields -->
+        </div>
+    </div>
+</template>
+
+<!-- Policy Type Selector Modal -->
+<div id="policyTypeSelectorModal" class="modal" style="display: none;" role="dialog" aria-label="Add Policy Rule">
+    <div class="modal-content modal-content-sm">
+        <div class="modal-header">
+            <h2>Add Policy Rule</h2>
+            <button class="close-btn" onclick="closePolicyTypeSelector()" aria-label="Close">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="policy-type-grid">
+                <button class="policy-type-card" onclick="addPolicyRule('sector_exclusion')">
+                    <span class="policy-type-icon">🏭</span>
+                    <div class="policy-type-name">Sector Exclusion</div>
+                    <div class="policy-type-desc">Block specific industries</div>
+                </button>
+                <button class="policy-type-card" onclick="addPolicyRule('risk_concentration')">
+                    <span class="policy-type-icon">📈</span>
+                    <div class="policy-type-name">Risk Limit</div>
+                    <div class="policy-type-desc">Max risk score per asset</div>
+                </button>
+                <button class="policy-type-card" onclick="addPolicyRule('position_size_limit')">
+                    <span class="policy-type-icon">💰</span>
+                    <div class="policy-type-name">Position Size</div>
+                    <div class="policy-type-desc">Max % per position</div>
+                </button>
+                <button class="policy-type-card" onclick="addPolicyRule('esg_minimum')">
+                    <span class="policy-type-icon">🌱</span>
+                    <div class="policy-type-name">ESG Minimum</div>
+                    <div class="policy-type-desc">Min ESG rating</div>
+                </button>
+                <button class="policy-type-card" onclick="addPolicyRule('geographic_restriction')">
+                    <span class="policy-type-icon">🌍</span>
+                    <div class="policy-type-name">Geographic</div>
+                    <div class="policy-type-desc">Region restrictions</div>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .personal-policy-editor {
+        grid-column: span 2;
+    }
+
+    .policy-status-card {
+        background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 193, 7, 0.05));
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+    }
+
+    .policy-status-card.active {
+        background: linear-gradient(135deg, rgba(76, 175, 80, 0.1), rgba(76, 175, 80, 0.05));
+        border-color: rgba(76, 175, 80, 0.3);
+    }
+
+    .policy-status-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .policy-status-icon {
+        font-size: 24px;
+    }
+
+    .policy-status-title {
+        font-weight: 600;
+        font-size: 14px;
+        color: var(--color-text);
+    }
+
+    .policy-status-subtitle {
+        font-size: 12px;
+        color: var(--color-text-secondary);
+        margin-top: 2px;
+    }
+
+    .policy-quick-settings {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+
+    .policy-setting-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .policy-setting-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+        font-size: 13px;
+        color: var(--color-text);
+    }
+
+    .setting-icon {
+        font-size: 14px;
+    }
+
+    .policy-setting-input,
+    .policy-setting-select {
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--color-text);
+        font-size: 13px;
+        transition: all 0.2s ease;
+    }
+
+    .policy-setting-input:focus,
+    .policy-setting-select:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    .policy-setting-select[multiple] {
+        min-height: 80px;
+    }
+
+    .policy-setting-help {
+        font-size: 11px;
+        color: var(--color-text-secondary);
+        margin: 0;
+    }
+
+    .policy-rules-section {
+        margin-top: 20px;
+    }
+
+    .policy-rules-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+
+    .policy-rules-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--color-text);
+        margin: 0;
+    }
+
+    .policy-add-btn {
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--color-primary);
+        background: transparent;
+        color: var(--color-primary);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .policy-add-btn:hover {
+        background: var(--color-primary);
+        color: white;
+    }
+
+    .policy-add-btn.secondary {
+        border-color: rgba(255, 255, 255, 0.2);
+        color: var(--color-text-secondary);
+    }
+
+    .policy-add-btn.secondary:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .policy-rules-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .policy-rules-empty {
+        text-align: center;
+        padding: 32px 16px;
+        color: var(--color-text-secondary);
+    }
+
+    .empty-icon {
+        font-size: 32px;
+        display: block;
+        margin-bottom: 8px;
+    }
+
+    .policy-rules-empty p {
+        margin: 8px 0 16px;
+        font-size: 13px;
+    }
+
+    .policy-rule-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        padding: 14px;
+        transition: all 0.2s ease;
+    }
+
+    .policy-rule-card:hover {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .policy-rule-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .policy-rule-icon {
+        font-size: 20px;
+    }
+
+    .policy-rule-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .policy-rule-name {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--color-text);
+    }
+
+    .policy-rule-description {
+        font-size: 11px;
+        color: var(--color-text-secondary);
+        margin-top: 2px;
+    }
+
+    .policy-rule-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .policy-rule-toggle {
+        position: relative;
+        display: inline-block;
+        width: 36px;
+        height: 20px;
+    }
+
+    .policy-rule-toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(255, 255, 255, 0.2);
+        transition: 0.3s;
+        border-radius: 20px;
+    }
+
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+        background-color: white;
+        transition: 0.3s;
+        border-radius: 50%;
+    }
+
+    .policy-rule-toggle input:checked + .toggle-slider {
+        background-color: var(--color-primary);
+    }
+
+    .policy-rule-toggle input:checked + .toggle-slider:before {
+        transform: translateX(16px);
+    }
+
+    .policy-rule-delete {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        opacity: 0.6;
+        transition: opacity 0.2s;
+        padding: 4px;
+    }
+
+    .policy-rule-delete:hover {
+        opacity: 1;
+    }
+
+    .policy-stats-card {
+        margin-top: 20px;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+    }
+
+    .policy-stats-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-text);
+        margin: 0 0 12px;
+    }
+
+    .policy-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+    }
+
+    .policy-stat {
+        text-align: center;
+    }
+
+    .stat-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--color-primary);
+    }
+
+    .stat-label {
+        font-size: 11px;
+        color: var(--color-text-secondary);
+        margin-top: 4px;
+    }
+
+    /* Policy Type Selector Modal */
+    .policy-type-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        padding: 8px;
+    }
+
+    .policy-type-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: center;
+    }
+
+    .policy-type-card:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: var(--color-primary);
+        transform: translateY(-2px);
+    }
+
+    .policy-type-icon {
+        font-size: 32px;
+        margin-bottom: 8px;
+    }
+
+    .policy-type-name {
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--color-text);
+        margin-bottom: 4px;
+    }
+
+    .policy-type-desc {
+        font-size: 11px;
+        color: var(--color-text-secondary);
+    }
+
+    .modal-content-sm {
+        max-width: 500px;
+    }
+</style>
+
+<script>
+    // Policy editor state
+    let policyState = {
+        excludedTickers: [],
+        blockedActions: [],
+        maxRiskLevel: 'critical',
+        customRules: [],
+        lastUpdated: null,
+        hasUnsavedChanges: false
+    };
+
+    let policyStats = {
+        violationsBlocked: 0,
+        downgradesCount: 0,
+        lastViolationTicker: null,
+        lastViolationTime: null
+    };
+
+    // API base URL (adjust based on environment)
+    const API_BASE = window.API_BASE_URL || '/api';
+
+    // Initialize policy editor
+    function initPolicyEditor() {
+        loadPolicyFromBackend();
+        updatePolicyUI();
+        updatePolicyStats();
+    }
+
+    // Load policy from backend API
+    async function loadPolicyFromBackend() {
+        try {
+            const response = await fetch(`${API_BASE}/forecasts/policy-validator/user-policy`);
+            const result = await response.json();
+            
+            if (result.ok && result.data.has_policy) {
+                const policy = result.data.policy;
+                policyState = {
+                    ...policyState,
+                    ...policy,
+                    excludedTickers: policy.excluded_tickers || [],
+                    blockedActions: policy.blocked_actions || [],
+                    maxRiskLevel: policy.max_risk_level || 'critical',
+                    hasUnsavedChanges: false
+                };
+            } else {
+                // Fallback to localStorage
+                loadPolicyFromStorage();
+            }
+        } catch (e) {
+            console.error('Error loading policy from backend:', e);
+            loadPolicyFromStorage();
+        }
+    }
+
+    // Load policy from localStorage (fallback)
+    function loadPolicyFromStorage() {
+        try {
+            const stored = localStorage.getItem('judge_personal_policy');
+            if (stored) {
+                const policy = JSON.parse(stored);
+                policyState = {
+                    ...policyState,
+                    ...policy,
+                    hasUnsavedChanges: false
+                };
+            }
+        } catch (e) {
+            console.error('Error loading policy:', e);
+        }
+    }
+
+    // Save policy to backend API
+    async function savePolicy() {
+        try {
+            policyState.lastUpdated = new Date().toISOString();
+            policyState.hasUnsavedChanges = false;
+            
+            // Prepare policy for backend
+            const policyPayload = {
+                schema_version: 'judge_personal_policy_v1',
+                policy_id: policyState.policy_id || 'default',
+                policy_version: policyState.policy_version || 'v1',
+                excluded_tickers: policyState.excludedTickers,
+                blocked_actions: policyState.blockedActions,
+                max_risk_level: policyState.maxRiskLevel,
+                custom_rules: policyState.customRules,
+                updated_at: policyState.lastUpdated
+            };
+            
+            const response = await fetch(`${API_BASE}/forecasts/policy-validator/user-policy`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ policy: policyPayload })
+            });
+            
+            const result = await response.json();
+            
+            if (result.ok) {
+                // Also save to localStorage as cache
+                localStorage.setItem('judge_personal_policy', JSON.stringify(policyState));
+                
+                updatePolicyUI();
+                showToast('✅ Policy saved successfully');
+                
+                // Update timestamp
+                document.getElementById('policyTimestamp').textContent = 
+                    'Updated ' + formatTimestamp(policyState.lastUpdated);
+                
+                // Disable save button
+                document.getElementById('policySaveBtn').disabled = true;
+            } else {
+                throw new Error(result.error || 'Save failed');
+            }
+        } catch (e) {
+            console.error('Error saving policy:', e);
+            showToast('❌ Error saving policy: ' + e.message);
+        }
+    }
+
+    // Handle policy changes
+    function onPolicyChange() {
+        const excludedTickersInput = document.getElementById('policyExcludedTickersWidget');
+        const blockedActionsSelect = document.getElementById('policyBlockedActionsWidget');
+        const maxRiskLevelSelect = document.getElementById('policyMaxRiskLevelWidget');
+
+        policyState.excludedTickers = parseTickers(excludedTickersInput.value);
+        policyState.blockedActions = Array.from(blockedActionsSelect.selectedOptions).map(opt => opt.value);
+        policyState.maxRiskLevel = maxRiskLevelSelect.value;
+        policyState.hasUnsavedChanges = true;
+
+        document.getElementById('policySaveBtn').disabled = false;
+        updatePolicyStatus();
+    }
+
+    // Parse comma-separated tickers
+    function parseTickers(input) {
+        if (!input) return [];
+        return input.split(',')
+            .map(t => t.trim().toUpperCase())
+            .filter(t => t.length > 0);
+    }
+
+    // Update policy status card
+    function updatePolicyStatus() {
+        const statusCard = document.getElementById('policyStatusCard');
+        const statusIcon = document.getElementById('policyStatusIcon');
+        const statusTitle = document.getElementById('policyStatusTitle');
+        const statusSubtitle = document.getElementById('policyStatusSubtitle');
+
+        const hasActiveRules = 
+            policyState.excludedTickers.length > 0 ||
+            policyState.blockedActions.length > 0 ||
+            policyState.maxRiskLevel !== 'critical' ||
+            policyState.customRules.length > 0;
+
+        if (hasActiveRules) {
+            statusCard.classList.add('active');
+            statusIcon.textContent = '✅';
+            statusTitle.textContent = 'Policy guardrails active';
+            const ruleCount = policyState.excludedTickers.length + 
+                            policyState.blockedActions.length + 
+                            policyState.customRules.length;
+            statusSubtitle.textContent = `${ruleCount} rule(s) configured`;
+        } else {
+            statusCard.classList.remove('active');
+            statusIcon.textContent = '⚠️';
+            statusTitle.textContent = 'No active policies';
+            statusSubtitle.textContent = 'Configure rules to enable guardrails';
+        }
+    }
+
+    // Update entire policy UI
+    function updatePolicyUI() {
+        // Populate quick settings
+        document.getElementById('policyExcludedTickersWidget').value = 
+            policyState.excludedTickers.join(', ');
+        
+        const blockedActionsSelect = document.getElementById('policyBlockedActionsWidget');
+        Array.from(blockedActionsSelect.options).forEach(opt => {
+            opt.selected = policyState.blockedActions.includes(opt.value);
+        });
+        
+        document.getElementById('policyMaxRiskLevelWidget').value = policyState.maxRiskLevel;
+
+        // Update status
+        updatePolicyStatus();
+
+        // Update rules list
+        renderPolicyRules();
+
+        // Update timestamp
+        if (policyState.lastUpdated) {
+            document.getElementById('policyTimestamp').textContent = 
+                'Updated ' + formatTimestamp(policyState.lastUpdated);
+        }
+    }
+
+    // Render custom policy rules
+    function renderPolicyRules() {
+        const rulesList = document.getElementById('policyRulesList');
+        const emptyState = document.getElementById('policyRulesEmpty');
+
+        if (policyState.customRules.length === 0) {
+            rulesList.innerHTML = '';
+            rulesList.appendChild(emptyState);
+            emptyState.style.display = 'block';
+            return;
+        }
+
+        emptyState.style.display = 'none';
+        rulesList.innerHTML = '';
+
+        policyState.customRules.forEach((rule, index) => {
+            const template = document.getElementById('policyRuleTemplate');
+            const clone = template.content.cloneNode(true);
+            
+            clone.querySelector('[data-role="rule-name"]').textContent = rule.name || getRuleTypeName(rule.type);
+            clone.querySelector('[data-role="rule-description"]').textContent = rule.description || getRuleDescription(rule.type);
+            clone.querySelector('[data-role="rule-enabled"]').checked = rule.enabled !== false;
+            
+            // Add delete handler
+            const deleteBtn = clone.querySelector('.policy-rule-delete');
+            deleteBtn.onclick = () => deletePolicyRuleByIndex(index);
+            
+            rulesList.appendChild(clone);
+        });
+    }
+
+    // Get rule type name
+    function getRuleTypeName(type) {
+        const names = {
+            sector_exclusion: 'Sector Exclusion',
+            risk_concentration: 'Risk Limit',
+            position_size_limit: 'Position Size Limit',
+            esg_minimum: 'ESG Minimum',
+            geographic_restriction: 'Geographic Restriction'
+        };
+        return names[type] || type;
+    }
+
+    // Get rule description
+    function getRuleDescription(type) {
+        const descriptions = {
+            sector_exclusion: 'Exclude investments in specific sectors',
+            risk_concentration: 'Limit exposure to high-risk assets',
+            position_size_limit: 'Maximum percentage per position',
+            esg_minimum: 'Minimum ESG rating required',
+            geographic_restriction: 'Restrict investments to specific regions'
+        };
+        return descriptions[type] || 'Custom policy rule';
+    }
+
+    // Show policy type selector modal
+    function showPolicyTypeSelector() {
+        document.getElementById('policyTypeSelectorModal').style.display = 'block';
+    }
+
+    // Close policy type selector modal
+    function closePolicyTypeSelector() {
+        document.getElementById('policyTypeSelectorModal').style.display = 'none';
+    }
+
+    // Add new policy rule
+    function addPolicyRule(type) {
+        const newRule = {
+            id: 'rule_' + Date.now(),
+            type: type,
+            name: getRuleTypeName(type),
+            description: getRuleDescription(type),
+            enabled: true,
+            config: getDefaultRuleConfig(type)
+        };
+
+        policyState.customRules.push(newRule);
+        policyState.hasUnsavedChanges = true;
+        
+        closePolicyTypeSelector();
+        renderPolicyRules();
+        updatePolicyStatus();
+        
+        document.getElementById('policySaveBtn').disabled = false;
+        showToast(`✅ Added ${getRuleTypeName(type)} rule`);
+    }
+
+    // Get default config for rule type
+    function getDefaultRuleConfig(type) {
+        switch(type) {
+            case 'sector_exclusion':
+                return { excluded_sectors: ['tobacco', 'weapons', 'fossil_fuels'] };
+            case 'risk_concentration':
+                return { max_risk_score: 0.7 };
+            case 'position_size_limit':
+                return { max_position_percentage: 20.0 };
+            case 'esg_minimum':
+                return { min_esg_score: 0.6 };
+            case 'geographic_restriction':
+                return { allowed_regions: ['US', 'EU', 'developed_markets'] };
+            default:
+                return {};
+        }
+    }
+
+    // Delete policy rule by index
+    function deletePolicyRuleByIndex(index) {
+        if (confirm('Delete this policy rule?')) {
+            policyState.customRules.splice(index, 1);
+            policyState.hasUnsavedChanges = true;
+            renderPolicyRules();
+            updatePolicyStatus();
+            document.getElementById('policySaveBtn').disabled = false;
+            showToast('🗑️ Rule deleted');
+        }
+    }
+
+    // Delete policy rule (called from template)
+    function deletePolicyRule(btn) {
+        // Handled by deletePolicyRuleByIndex
+    }
+
+    // Update policy stats
+    function updatePolicyStats() {
+        // Load stats from localStorage
+        try {
+            const statsStored = localStorage.getItem('judge_policy_stats');
+            if (statsStored) {
+                policyStats = JSON.parse(statsStored);
+            }
+        } catch (e) {
+            console.error('Error loading policy stats:', e);
+        }
+
+        const statsCard = document.getElementById('policyStatsCard');
+        const hasStats = policyStats.violationsBlocked > 0 || policyStats.downgradesCount > 0;
+
+        if (hasStats) {
+            statsCard.style.display = 'block';
+            document.getElementById('policyStatViolations').textContent = policyStats.violationsBlocked;
+            document.getElementById('policyStatDowngrades').textContent = policyStats.downgradesCount;
+            document.getElementById('policyStatLastViolation').textContent = 
+                policyStats.lastViolationTicker || '-';
+        } else {
+            statsCard.style.display = 'none';
+        }
+    }
+
+    // Format timestamp
+    function formatTimestamp(isoString) {
+        const date = new Date(isoString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        
+        if (diffMins < 1) return 'just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours}h ago`;
+        
+        return date.toLocaleDateString();
+    }
+
+    // Show toast notification
+    function showToast(message) {
+        if (typeof window.showToast === 'function') {
+            window.showToast(message);
+        } else {
+            console.log('Toast:', message);
+        }
+    }
+
+    // Initialize on load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPolicyEditor);
+    } else {
+        initPolicyEditor();
+    }
+</script>

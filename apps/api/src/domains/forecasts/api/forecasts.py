@@ -810,11 +810,93 @@ async def get_policy_template(policy_type: str):
         })
 
 
+@router.get("/policy-validator/user-policy")
+async def get_user_policy():
+    """Get current user policy configuration."""
+    try:
+        from storage.io import load_json
+        
+        policy = load_json("judge_personal_policy")
+        if not isinstance(policy, dict):
+            policy = {}
+        
+        return ok({
+            "policy": policy,
+            "has_policy": bool(policy),
+            "generated_at": _now_iso()
+        })
+    except Exception as exc:
+        logger.error("Error loading user policy: %s", exc, exc_info=True)
+        return ok({
+            "policy": {},
+            "has_policy": False,
+            "error": str(exc),
+            "generated_at": _now_iso()
+        })
+
+
+@router.post("/policy-validator/user-policy")
+async def save_user_policy(payload: Dict[str, Any]):
+    """
+    Save user policy configuration.
+
+    Request body:
+        {
+            "schema_version": "judge_personal_policy_v1",
+            "policy_id": "default",
+            "policy_version": "v1",
+            "excluded_tickers": ["TSLA", "GME"],
+            "blocked_actions": ["sell"],
+            "max_risk_level": "medium",
+            "custom_rules": [...]
+        }
+
+    Response:
+        {
+            "ok": true,
+            "policy": {...},
+            "saved_at": "2026-03-11T12:00:00Z"
+        }
+    """
+    try:
+        from storage.io import save_json
+        
+        policy = payload.get("policy", payload)
+        if not isinstance(policy, dict):
+            return ok({
+                "ok": False,
+                "error": "Invalid policy format",
+                "generated_at": _now_iso()
+            })
+        
+        # Ensure schema version
+        if not policy.get("schema_version"):
+            policy["schema_version"] = "judge_personal_policy_v1"
+        
+        # Ensure timestamps
+        policy["updated_at"] = _now_iso()
+        
+        save_json("judge_personal_policy", policy)
+        
+        return ok({
+            "ok": True,
+            "policy": policy,
+            "saved_at": policy["updated_at"]
+        })
+    except Exception as exc:
+        logger.error("Error saving user policy: %s", exc, exc_info=True)
+        return ok({
+            "ok": False,
+            "error": str(exc),
+            "generated_at": _now_iso()
+        })
+
+
 @router.post("/policy-validator/validate")
 async def validate_recommendation(payload: Dict[str, Any]):
     """
     Validate a recommendation against user policies.
-    
+
     Request body:
         {
             "recommendation": {
@@ -839,7 +921,7 @@ async def validate_recommendation(payload: Dict[str, Any]):
                 }
             ]
         }
-    
+
     Response:
         {
             "ticker": "AAPL",
@@ -853,16 +935,16 @@ async def validate_recommendation(payload: Dict[str, Any]):
     """
     try:
         from domains.forecasts.application.policy_validator_service import get_policy_validator
-        
+
         validator = get_policy_validator()
         recommendation = payload.get("recommendation", {})
         user_policies = payload.get("user_policies", [])
-        
+
         result = validator.validate_recommendation(
             recommendation=recommendation,
             user_policies=user_policies
         )
-        
+
         return ok({
             "validation": result,
             "generated_at": _now_iso()
@@ -873,7 +955,7 @@ async def validate_recommendation(payload: Dict[str, Any]):
         ticker = recommendation.get("ticker", "UNKNOWN")
         original_action = recommendation.get("action", "HOLD")
         now_iso = _now_iso()
-        
+
         # Never-empty fallback: return pass-through validation
         return ok({
             "validation": {
