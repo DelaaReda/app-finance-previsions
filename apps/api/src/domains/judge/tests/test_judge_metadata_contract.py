@@ -276,6 +276,96 @@ def test_judge_verdicts_payload_builds_weighted_source_traceability(monkeypatch)
     assert explainability["stats"]["avg_source_weight"] > 0
 
 
+def test_judge_verdicts_payload_counts_invalid_source_links(monkeypatch):
+    now_iso = "2026-03-07T16:54:00Z"
+
+    async def fake_compute_verdicts_fn(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "NVDA",
+                        "verdict": "buy",
+                        "confidence": 0.82,
+                        "expected_return": 0.11,
+                        "generated_at": now_iso,
+                        "source": ["judge_route", "news_feed_snapshot"],
+                        "debug_payload": {
+                            "news": [
+                                {
+                                    "title": "NVIDIA demand accelerates",
+                                    "source": "Reuters",
+                                    "ts": "2026-03-07T12:54:00Z",
+                                    "sent": 0.7,
+                                    "url": "https://example.com/nvda-demand",
+                                },
+                                {
+                                    "title": "Malformed trace source",
+                                    "source": "Blog",
+                                    "ts": "2026-03-07T11:54:00Z",
+                                    "sent": 0.2,
+                                    "url": "not-a-valid-url",
+                                },
+                            ]
+                        },
+                    }
+                ],
+                "count": 1,
+                "generated_at": now_iso,
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "load_json",
+        lambda _key: {"schema_version": "decision_journal_v1", "entries": []},
+    )
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "save_json",
+        lambda key, payload, source=None, version="v1": Path("runtime/data") / f"{key}.json",
+    )
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_persist_immutable_decision_journal_entries",
+        lambda entries, generated_at: {
+            "status": "persisted",
+            "storage_key_prefix": "decision_journal/entries",
+            "schema_version": "decision_journal_v1",
+            "path_prefix": "runtime/data/decision_journal/entries",
+            "persisted_count": len(entries),
+            "existing_count": 0,
+            "failed_count": 0,
+        },
+    )
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_verdicts_payload(
+            limit=1,
+            min_confidence=0.3,
+            ticker=["NVDA"],
+            sort_by="confidence",
+            sort_order="desc",
+            profile="balanced",
+            debug=False,
+            debug_full=False,
+            x_debug_token=None,
+            compute_verdicts_fn=fake_compute_verdicts_fn,
+        )
+    )
+
+    explainability = payload["data"]["explainability"]
+    trace = explainability["source_traceability"][0]
+    links = {source["label"]: source for source in trace["supporting_sources"]}
+
+    assert explainability["stats"]["broken_source_count"] == 1
+    assert links["NVIDIA demand accelerates"]["url"] == "https://example.com/nvda-demand"
+    assert links["NVIDIA demand accelerates"]["link_status"] == "ok"
+    assert links["Malformed trace source"]["link_status"] == "invalid"
+
+
 def test_judge_verdicts_payload_respects_stored_outcome_feedback(monkeypatch):
     now_iso = "2026-03-07T16:54:00Z"
     judge_decision_id = "judge_c28e370c4d647688"

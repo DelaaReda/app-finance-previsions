@@ -12,6 +12,7 @@ from hashlib import sha1
 from pathlib import Path
 import sys
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from storage.io import load_json, save_json
 
@@ -215,6 +216,16 @@ def _as_freshness_hours(value: Any) -> Optional[float]:
     )
 
 
+def _normalize_source_link(value: Any) -> Tuple[Optional[str], str]:
+    url = str(value or "").strip()
+    if not url:
+        return None, "missing"
+    parsed = urlparse(url)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return url, "ok"
+    return url, "invalid"
+
+
 def _normalize_trace_source_items(verdict: Dict[str, Any]) -> List[Dict[str, Any]]:
     meta = verdict.get("meta") if isinstance(verdict.get("meta"), dict) else {}
     debug_payload = verdict.get("debug_payload") if isinstance(verdict.get("debug_payload"), dict) else {}
@@ -265,6 +276,7 @@ def _normalize_trace_source_items(verdict: Dict[str, Any]) -> List[Dict[str, Any
         weight = round(max(0.05, 1.0 / (1.0 + freshness_hours / 24.0) + sent_abs * 0.15), 4)
         quality_score = round(max(0.0, min(1.0, 1.0 / (1.0 + freshness_hours / 48.0) + sent_abs * 0.1)), 4)
         source_id = f"news:{sha1(f'{source_name}|{title}'.encode('utf-8')).hexdigest()[:12]}"
+        source_url, link_status = _normalize_source_link(item.get("url") or item.get("link"))
         if source_id in seen:
             continue
         normalized.append(
@@ -283,6 +295,8 @@ def _normalize_trace_source_items(verdict: Dict[str, Any]) -> List[Dict[str, Any
                     "publisher": source_name,
                     "position": idx,
                 },
+                "url": source_url,
+                "link_status": link_status,
             }
         )
         seen.add(source_id)
@@ -398,6 +412,8 @@ def _build_explainability_graph(
             weighted_source_count += 1
             if age_hours_value >= 72.0:
                 graph_stats["stale_source_count"] += 1
+            if source.get("link_status") == "invalid":
+                graph_stats["broken_source_count"] += 1
             supporting_sources.append(
                 {
                     "source_id": source_id,
@@ -407,6 +423,8 @@ def _build_explainability_graph(
                     "quality_score": source.get("quality_score"),
                     "freshness": freshness_meta,
                     "trace": source.get("trace") or {},
+                    "url": source.get("url"),
+                    "link_status": source.get("link_status") or "missing",
                 }
             )
 
