@@ -1015,6 +1015,44 @@ test('getLiveDashboardData preserves portfolio risk profile freshness and status
   assert.equal(payload.data.portfolioRiskProfileFreshness, '2026-03-09T06:30:00Z');
 });
 
+test('getLiveDashboardData aggregates live provenance sources from the active research surfaces', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {};
+    },
+  }));
+
+  sandbox.window.storyData = {
+    sources: ['brief_daily', 'weekly_brief_snapshot'],
+  };
+  sandbox.window.liveForecastScoreboard = {
+    source: ['forecasts_scoreboard', 'prediction_analyzer_service'],
+  };
+  sandbox.window.globalSignalMesh = {
+    source: ['forecasts_global_signal_mesh', 'free_data_source_registry'],
+  };
+  sandbox.window.apiHealth = {
+    source: ['api_status'],
+  };
+  sandbox.window.livePortfolioRiskProfile = {
+    source: ['portfolio_risk_profile'],
+  };
+
+  const payload = sandbox.window.getLiveDashboardData();
+
+  assert.equal(JSON.stringify(payload.sources), JSON.stringify([
+    'api-connector',
+    'brief_daily',
+    'weekly_brief_snapshot',
+    'forecasts_scoreboard',
+    'prediction_analyzer_service',
+    'forecasts_global_signal_mesh',
+    'free_data_source_registry',
+    'api_status',
+    'portfolio_risk_profile',
+  ]));
+});
+
 test('initLiveData hydrates judgeDecisionJournal without relying on page globals', async () => {
   const sandbox = loadConnector(async (url) => {
     if (url.includes('/api/judge?limit=5')) {

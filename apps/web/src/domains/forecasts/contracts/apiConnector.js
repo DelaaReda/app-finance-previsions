@@ -824,6 +824,27 @@ function normalizeConnectorSourceList(value) {
   return values.filter((entry) => entry !== null && entry !== undefined && entry !== '');
 }
 
+function appendUniqueSourceEntries(target, value) {
+  normalizeConnectorSourceList(value).forEach((entry) => {
+    if (!target.includes(entry)) {
+      target.push(entry);
+    }
+  });
+}
+
+function collectLiveDashboardSources() {
+  const sources = [];
+  appendUniqueSourceEntries(sources, 'api-connector');
+  appendUniqueSourceEntries(sources, window.storyData && window.storyData.sources);
+  appendUniqueSourceEntries(sources, window.liveForecastScoreboard && window.liveForecastScoreboard.source);
+  appendUniqueSourceEntries(sources, window.globalSignalMesh && window.globalSignalMesh.source);
+  appendUniqueSourceEntries(sources, window.apiHealth && window.apiHealth.source);
+  appendUniqueSourceEntries(sources, window.livePortfolioRiskProfile && window.livePortfolioRiskProfile.source);
+  appendUniqueSourceEntries(sources, window.liveKpis && window.liveKpis.source);
+  appendUniqueSourceEntries(sources, window.livePortfolioSummary && window.livePortfolioSummary.source);
+  return sources.length ? sources : ['api-connector'];
+}
+
 function normalizeBriefOfDayPayload(payload) {
   const source = payload && typeof payload === 'object' ? payload : {};
   if (!Object.keys(source).length) {
@@ -1414,7 +1435,7 @@ async function populateWindowGlobals() {
           kpiFreshness: window.liveKpisFreshness || null
         },
         generatedAt: new Date().toISOString(),
-        sources: ['api-connector'],
+        sources: collectLiveDashboardSources(),
         modelVersions: ['live'],
         warnings: contractWarnings,
         freshness: liveFreshnessContract.freshness,
@@ -1511,7 +1532,7 @@ window.getLiveDashboardData = () => ({
     judgeDecisionJournal: window.judgeDecisionJournal || null
   },
   generatedAt: window.FinanceAPI && window.FinanceAPI.getCacheStats ? new Date().toISOString() : new Date().toISOString(),
-  sources: ['api-connector'],
+  sources: collectLiveDashboardSources(),
   modelVersions: ['live'],
   warnings: window.liveContractWarnings || ['live-connector'],
   freshness: window.liveFreshnessContract && window.liveFreshnessContract.freshness
