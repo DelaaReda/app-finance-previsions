@@ -885,6 +885,29 @@ function policyStatusSeverity(status) {
   return 'info';
 }
 
+function summarizePolicyTransmission(raw, sectors, companies) {
+  const transmission = isObject(raw.transmission) ? raw.transmission : {};
+  const transmissionCompanies = Array.isArray(transmission.companies) ? transmission.companies : [];
+  const transmissionSectors = normalizeConnectorStringList(transmission.primary_sectors || sectors);
+  const highlightedCompanies = transmissionCompanies
+    .map((row) => {
+      if (isObject(row)) {
+        return String(row.ticker || row.company_name || '').trim().toUpperCase();
+      }
+      return String(row || '').trim().toUpperCase();
+    })
+    .filter(Boolean);
+  const companyList = highlightedCompanies.length ? highlightedCompanies : companies;
+
+  if (!transmissionSectors.length && !companyList.length) {
+    return '';
+  }
+
+  const sectorCopy = transmissionSectors.length ? transmissionSectors.slice(0, 2).join(', ') : 'broad market';
+  const companyCopy = companyList.length ? companyList.slice(0, 3).join(', ') : 'watchlist names';
+  return `transmission: ${sectorCopy} -> ${companyCopy}`;
+}
+
 function transformPolicyImpactEvent(event) {
   const raw = event && typeof event === 'object' && !Array.isArray(event) ? event : {};
   const companies = Array.isArray(raw.companies)
@@ -907,6 +930,10 @@ function transformPolicyImpactEvent(event) {
   if (sectors.length > 0) {
     summaryParts.push(`sectors: ${sectors.slice(0, 2).join(', ')}`);
   }
+  const transmissionSummary = summarizePolicyTransmission(raw, sectors, companies);
+  if (transmissionSummary) {
+    summaryParts.push(transmissionSummary);
+  }
 
   return {
     id: raw.event_id || `policy-impact-${primaryTicker}-${status}-${effectiveDate || 'na'}`,
@@ -924,6 +951,9 @@ function transformPolicyImpactEvent(event) {
       effective_date: effectiveDate || null,
       sectors,
       companies,
+      transmission_path: String(raw.transmission?.path || '').trim() || null,
+      transmission_summary: transmissionSummary || null,
+      transmission_company_count: Number(raw.transmission?.company_count) || companies.length || 0,
     },
   };
 }

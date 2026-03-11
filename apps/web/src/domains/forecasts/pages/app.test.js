@@ -2915,7 +2915,7 @@ test('renderAlertTimeline includes policy summary copy in the visible card body'
       ticker: 'US',
       type: 'news',
       category: 'policy-impact',
-      description: 'Disclosure rules proposed for cloud and semiconductor firms.',
+      description: 'Disclosure rules proposed for cloud and semiconductor firms. • transmission: technology -> NVDA, MSFT',
       severity: 'info',
       confidence: 0.41,
       timestamp: '2026-03-10T09:00:00Z',
@@ -2928,4 +2928,5 @@ test('renderAlertTimeline includes policy summary copy in the visible card body'
 
   assert.match(timelineContainer.innerHTML, /US Policy • PROPOSED/);
   assert.match(timelineContainer.innerHTML, /Disclosure rules proposed for cloud and semiconductor firms\./);
+  assert.match(timelineContainer.innerHTML, /transmission: technology -> NVDA, MSFT/);
 });

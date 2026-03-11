@@ -1173,6 +1173,17 @@ test('getPolicyImpact unwraps the policy engine contract', async () => {
                 event_id: 'policy-1',
                 jurisdiction: 'US',
                 status: 'effective',
+                sectors: ['technology'],
+                companies: ['NVDA', 'MSFT'],
+                transmission: {
+                  path: 'sector_to_company',
+                  primary_sectors: ['technology'],
+                  company_count: 2,
+                  companies: [
+                    { ticker: 'NVDA', transmission_path: 'sector_policy_direct' },
+                    { ticker: 'MSFT', transmission_path: 'sector_policy_direct' },
+                  ],
+                },
               },
             ],
           },
@@ -1187,6 +1198,9 @@ test('getPolicyImpact unwraps the policy engine contract', async () => {
   assert.equal(payload.engine_id, 'policy_change_impact_v1');
   assert.equal(payload.events.length, 1);
   assert.equal(payload.events[0].status, 'effective');
+  assert.equal(payload.events[0].transmission.path, 'sector_to_company');
+  assert.equal(payload.events[0].transmission.company_count, 2);
+  assert.deepEqual(payload.events[0].transmission.primary_sectors, ['technology']);
 });
 
 test('getLiveDashboardData preserves portfolio risk profile freshness and status for downstream UI mapping', async () => {
@@ -1500,6 +1514,12 @@ test('initLiveData merges policy-impact events into the shared alert timeline', 
                   effective_date: '2026-06-01',
                   sectors: ['technology'],
                   companies: ['NVDA', 'MSFT'],
+                  transmission: {
+                    path: 'sector_to_company',
+                    primary_sectors: ['technology'],
+                    company_count: 2,
+                    companies: ['NVDA', 'MSFT'],
+                  },
                   impact_score: 0.82,
                   evidence: {
                     published_at: '2026-03-11T04:00:00Z',
@@ -1536,5 +1556,7 @@ test('initLiveData merges policy-impact events into the shared alert timeline', 
   assert.equal(sandbox.window.alertTimeline[0].category, 'policy-impact');
   assert.equal(sandbox.window.alertTimeline[0].ticker, 'NVDA');
   assert.equal(sandbox.window.alertTimeline[0].severity, 'high');
+  assert.match(sandbox.window.alertTimeline[0].description, /transmission: technology -> NVDA, MSFT/i);
+  assert.equal(sandbox.window.alertTimeline[0].signals.transmission_company_count, 2);
   assert.equal(sandbox.window.getLiveDashboardData().sources.includes('forecasts_policy_change_impact'), true);
 });
