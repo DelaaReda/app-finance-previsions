@@ -74,6 +74,27 @@
             <div class="scenario-geopolitical-graph" data-role="geo-graph"></div>
             <p class="scenario-geopolitical-alert" data-role="geo-alert-copy">Conflict escalation signals will appear here.</p>
         </div>
+        <div class="scenario-shock-chain" data-role="shock-chain" hidden>
+            <div class="scenario-geopolitical-header">
+                <span class="scenario-geopolitical-title">Shock Propagation</span>
+                <span class="scenario-geopolitical-badge" data-role="shock-chain-band">Monitoring</span>
+            </div>
+            <div class="scenario-shock-chain-grid">
+                <div class="scenario-shock-chain-node">
+                    <span class="scenario-shock-chain-label">Upstream shock</span>
+                    <strong data-role="shock-chain-upstream">Awaiting live shock signal</strong>
+                </div>
+                <div class="scenario-shock-chain-node">
+                    <span class="scenario-shock-chain-label">Transmission</span>
+                    <strong data-role="shock-chain-transmission">Awaiting sector transmission</strong>
+                </div>
+                <div class="scenario-shock-chain-node">
+                    <span class="scenario-shock-chain-label">Company watchlist</span>
+                    <strong data-role="shock-chain-watchlist">Awaiting forecast coverage</strong>
+                </div>
+            </div>
+            <p class="scenario-geopolitical-alert" data-role="shock-chain-copy">Shock propagation context will appear here.</p>
+        </div>
     </div>
     <div class="widget-footer">
         <span class="widget-timestamp">Updated 5 minutes ago</span>
@@ -165,8 +186,43 @@
         font-size: 12px;
         color: var(--color-text-secondary, #94a3b8);
     }
+    .scenario-shock-chain {
+        margin-top: 14px;
+        padding: 14px;
+        border-radius: 14px;
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.44));
+        border: 1px solid rgba(96, 165, 250, 0.18);
+    }
+    .scenario-shock-chain-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .scenario-shock-chain-node {
+        padding: 12px;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.45);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        display: grid;
+        gap: 6px;
+    }
+    .scenario-shock-chain-label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-text-secondary, #94a3b8);
+    }
+    .scenario-shock-chain-node strong {
+        font-size: 13px;
+        line-height: 1.4;
+        color: var(--color-text, #e2e8f0);
+    }
     @media (max-width: 720px) {
         .scenario-geopolitical-node {
+            grid-template-columns: 1fr;
+        }
+        .scenario-shock-chain-grid {
             grid-template-columns: 1fr;
         }
     }
