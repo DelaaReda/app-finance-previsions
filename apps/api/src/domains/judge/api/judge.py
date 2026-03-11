@@ -278,6 +278,7 @@ def _judge_cache_key(
     limit: int,
     min_confidence: float,
     ticker: Optional[List[str]],
+    portfolio_id: Optional[str],
     sort_by: Optional[str],
     sort_order: Optional[str],
     profile: str,
@@ -288,6 +289,7 @@ def _judge_cache_key(
         "limit": int(limit),
         "min_confidence": float(min_confidence),
         "ticker": tickers,
+        "portfolio_id": str(portfolio_id or "").strip() or None,
         "sort_by": sort_by or "confidence",
         "sort_order": sort_order or "desc",
         "profile": profile or "equity_1w",
@@ -321,6 +323,39 @@ def _truncate_str(value: Any, max_chars: int) -> str:
     if len(txt) <= max_chars:
         return txt
     return f"{txt[:max_chars]}…"
+
+
+def _resolve_portfolio_prompt_context(
+    *,
+    ticker: Optional[List[str]],
+    portfolio_id: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    requested_portfolio_id = str(portfolio_id or "").strip()
+    if not requested_portfolio_id and normalize_tickers(ticker or []):
+        return None
+    try:
+        from domains.copilot.application.copilot_service import (
+            _format_saved_portfolio_prompt,
+            _resolve_scope_with_saved_portfolio,
+        )
+    except Exception:
+        return None
+
+    resolved_scope, saved_portfolio_context = _resolve_scope_with_saved_portfolio(
+        {"portfolio_id": requested_portfolio_id} if requested_portfolio_id else {},
+        tickers=normalize_tickers(ticker or []),
+    )
+    if not isinstance(saved_portfolio_context, dict):
+        return None
+    effective_tickers = normalize_tickers((resolved_scope or {}).get("tickers") or [])
+    prompt = _format_saved_portfolio_prompt(saved_portfolio_context)
+    return {
+        "portfolio_context": saved_portfolio_context,
+        "portfolio_prompt": prompt,
+        "effective_tickers": effective_tickers,
+        "portfolio_id": requested_portfolio_id
+        or ((saved_portfolio_context.get("portfolio") or {}).get("id")),
+    }
 
 
 def _sanitize_debug_payload(payload: Any) -> Dict[str, Any]:
@@ -738,6 +773,10 @@ async def _legacy_get_judge_verdicts(
     ticker: Optional[List[str]] = Query(
         None, description="Filtre par ticker (plusieurs autorisés)"
     ),
+    portfolio_id: Optional[str] = Query(
+        None,
+        description="Saved portfolio id used to inject portfolio context when tickers are absent or explicitly requested.",
+    ),
     sort_by: JudgeSortBy = Query(
         "confidence",
         description="Tri par: confidence, expected_return, score, risk_level, timestamp",
@@ -781,6 +820,7 @@ async def _legacy_get_judge_verdicts(
                 limit=limit,
                 min_confidence=min_confidence,
                 ticker=ticker,
+                portfolio_id=portfolio_id,
                 sort_by=sort_by,
                 sort_order=sort_order,
                 profile=profile,
@@ -808,6 +848,8 @@ async def _legacy_get_judge_verdicts(
         async def compute_judge_verdicts():
             logger.info("🔄 compute_judge_verdicts started")
             traces: List[Dict[str, Any]] = []
+            requested_tickers = normalize_tickers(ticker or [])
+            active_tickers = list(requested_tickers)
 
             def add_trace(event: str, **kwargs):
                 if not debug:
@@ -823,7 +865,7 @@ async def _legacy_get_judge_verdicts(
                 except Exception:
                     pass
 
-            add_trace("debug_start", limit=limit, profile=profile, ticker=ticker)
+            add_trace("debug_start", limit=limit, profile=profile, ticker=requested_tickers)
             if debug and debug_full and not debug_full_enabled:
                 add_trace("debug_full_denied", reason=debug_full_reason or "unknown")
 
@@ -957,6 +999,20 @@ async def _legacy_get_judge_verdicts(
             backtest_ctx = _backtest_context()
             add_trace("backtest_context", **backtest_ctx)
 
+            portfolio_prompt_context = _resolve_portfolio_prompt_context(
+                ticker=requested_tickers,
+                portfolio_id=portfolio_id,
+            )
+            if portfolio_prompt_context:
+                effective_tickers = portfolio_prompt_context.get("effective_tickers") or []
+                if effective_tickers and not active_tickers:
+                    active_tickers = effective_tickers
+                add_trace(
+                    "portfolio_context_resolved",
+                    portfolio_id=portfolio_prompt_context.get("portfolio_id"),
+                    effective_tickers=effective_tickers,
+                )
+
             prices_data = _load_prices()
             macro_series = _load_macro()
             ownership_data = _load_ownership()
@@ -1028,8 +1084,8 @@ async def _legacy_get_judge_verdicts(
                 )
 
             # Filter by explicit ticker query parameter
-            if ticker:
-                ticker_set = set(normalize_tickers(ticker))
+            if active_tickers:
+                ticker_set = set(active_tickers)
                 before = len(rows_sorted)
                 rows_sorted = [
                     r
@@ -1063,7 +1119,8 @@ async def _legacy_get_judge_verdicts(
                     },
                     "filters_applied": {
                         "min_confidence": min_confidence,
-                        "tickers": ticker,
+                        "tickers": active_tickers,
+                        "portfolio_id": portfolio_id,
                         "sort_by": str(sort_by),
                         "sort_order": str(sort_order),
                         "limit": limit,
@@ -1891,6 +1948,13 @@ async def _legacy_get_judge_verdicts(
                         question = (
                             f"Verdict structuré pour {sym} (horizon {horizon}). " + base_prompt
                         )
+                    portfolio_prompt = (
+                        portfolio_prompt_context.get("portfolio_prompt")
+                        if isinstance(portfolio_prompt_context, dict)
+                        else ""
+                    )
+                    if portfolio_prompt:
+                        question = f"{portfolio_prompt}\n\n{question}"
 
                     phase_blocks: Dict[str, Any] = {}
                     t_phase = time.perf_counter()
@@ -2097,6 +2161,16 @@ async def _legacy_get_judge_verdicts(
                             },
                         },
                     }
+                    if isinstance(portfolio_prompt_context, dict):
+                        payload["features"]["portfolio_context"] = portfolio_prompt_context.get(
+                            "portfolio_context"
+                        )
+                        payload["meta"]["portfolio_context"] = portfolio_prompt_context.get(
+                            "portfolio_context"
+                        )
+                        payload["meta"]["portfolio_id"] = portfolio_prompt_context.get(
+                            "portfolio_id"
+                        )
 
                     # Debug: log payload summary (no heavy data) + compact JSON
                     try:
@@ -3315,7 +3389,8 @@ async def _legacy_get_judge_verdicts(
                 "decision_readiness": decision_readiness,
                 "filters_applied": {
                     "min_confidence": min_confidence,
-                    "tickers": ticker,
+                    "tickers": active_tickers,
+                    "portfolio_id": portfolio_id,
                     "sort_by": str(sort_by),
                     "sort_order": str(sort_order),
                     "limit": limit,
@@ -3456,7 +3531,8 @@ async def _legacy_get_judge_verdicts(
                 },
                 "filters_applied": {
                     "min_confidence": min_confidence,
-                    "tickers": ticker,
+                    "tickers": active_tickers,
+                    "portfolio_id": portfolio_id,
                     "sort_by": str(sort_by),
                     "sort_order": str(sort_order),
                     "limit": limit,
@@ -3553,6 +3629,10 @@ async def get_judge_verdicts(
     ticker: Optional[List[str]] = Query(
         None, description="Filtre par ticker (plusieurs autorisés)"
     ),
+    portfolio_id: Optional[str] = Query(
+        None,
+        description="Portfolio sauvegarde utilise pour injecter le contexte Judge.",
+    ),
     sort_by: JudgeSortBy = Query(
         "confidence",
         description="Tri par: confidence, expected_return, score, risk_level, timestamp",
@@ -3581,6 +3661,7 @@ async def get_judge_verdicts(
         limit=limit,
         min_confidence=min_confidence,
         ticker=ticker,
+        portfolio_id=portfolio_id,
         sort_by=sort_by,
         sort_order=sort_order,
         profile=profile,
@@ -3601,6 +3682,10 @@ async def get_judge_strategy_playbooks(
     ),
     ticker: Optional[List[str]] = Query(
         None, description="Filter by ticker before playbook synthesis"
+    ),
+    portfolio_id: Optional[str] = Query(
+        None,
+        description="Saved portfolio id used to inject Judge portfolio context before playbook synthesis.",
     ),
     sort_by: JudgeSortBy = Query(
         "confidence",
@@ -3628,6 +3713,7 @@ async def get_judge_strategy_playbooks(
         limit=limit,
         min_confidence=min_confidence,
         ticker=ticker,
+        portfolio_id=portfolio_id,
         sort_by=sort_by,
         sort_order=sort_order,
         profile=profile,

@@ -77,13 +77,14 @@ def test_judge_route_delegates_to_service(monkeypatch):
     )
 
     client = _client()
-    resp = client.get("/api/judge?limit=1&ticker=AAPL&debug=true")
+    resp = client.get("/api/judge?limit=1&ticker=AAPL&portfolio_id=pf-123&debug=true")
     assert resp.status_code == 200
     payload = resp.json()
     assert payload["ok"] is True
     assert payload["data"]["count"] == 1
     assert captured["limit"] == 1
     assert captured["ticker"] == ["AAPL"]
+    assert captured["portfolio_id"] == "pf-123"
     assert captured["debug"] is True
     assert callable(captured["compute_verdicts_fn"])
 
@@ -156,7 +157,9 @@ def test_judge_strategy_playbooks_maps_verdicts(monkeypatch):
     )
 
     client = _client()
-    resp = client.get("/api/judge/strategy-playbooks?limit=1&ticker=AAPL&profile=equity_1w")
+    resp = client.get(
+        "/api/judge/strategy-playbooks?limit=1&ticker=AAPL&portfolio_id=pf-123&profile=equity_1w"
+    )
     assert resp.status_code == 200
     payload = resp.json()
 
@@ -170,6 +173,7 @@ def test_judge_strategy_playbooks_maps_verdicts(monkeypatch):
 
     assert captured["limit"] == 1
     assert captured["ticker"] == ["AAPL"]
+    assert captured["portfolio_id"] == "pf-123"
     assert captured["profile"] == "equity_1w"
     assert callable(captured["compute_verdicts_fn"])
 

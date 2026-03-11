@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 import sys
+import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -227,3 +228,41 @@ def test_debug_full_access_requires_token_when_configured(monkeypatch):
 
 def test_judge_risk_levels_include_critical():
     assert judge_route._judge_risk_levels() == ["low", "medium", "high", "critical"]
+
+
+def test_resolve_portfolio_prompt_context_uses_saved_portfolio_helpers(monkeypatch):
+    fake_module = SimpleNamespace(
+        _resolve_scope_with_saved_portfolio=lambda scope, tickers=None: (
+            {"tickers": ["MSFT", "NVDA"]},
+            {
+                "portfolio": {"id": scope.get("portfolio_id"), "tickers": ["MSFT", "NVDA"]},
+                "source": ["copilot_saved_portfolio"],
+            },
+        ),
+        _format_saved_portfolio_prompt=lambda context: (
+            f"Portfolio context for {(context.get('portfolio') or {}).get('id')}"
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "domains.copilot.application.copilot_service",
+        fake_module,
+    )
+
+    resolved = judge_route._resolve_portfolio_prompt_context(
+        ticker=None,
+        portfolio_id="pf-123",
+    )
+
+    assert resolved is not None
+    assert resolved["portfolio_id"] == "pf-123"
+    assert resolved["effective_tickers"] == ["MSFT", "NVDA"]
+    assert resolved["portfolio_prompt"] == "Portfolio context for pf-123"
+
+
+def test_resolve_portfolio_prompt_context_skips_when_explicit_tickers_present():
+    resolved = judge_route._resolve_portfolio_prompt_context(
+        ticker=["AAPL"],
+        portfolio_id=None,
+    )
+    assert resolved is None
