@@ -823,6 +823,129 @@ def test_judge_route_preserves_decision_feedback_loop_payload(monkeypatch):
     assert entry["outcome_feedback"]["next_checkpoint"]["horizon"] == "1d"
 
 
+def test_judge_route_keeps_explainability_graph_contract(monkeypatch):
+    now_iso = "2026-03-08T00:00:00Z"
+
+    async def fake_get_judge_verdicts_payload(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "NVDA",
+                        "decision_id": "judge_demo_nvda",
+                        "horizon": "1w",
+                        "expected_return": 0.03,
+                        "risk_level": "medium",
+                        "confidence": 0.82,
+                        "summary": ["Demand remains strong."],
+                        "scenarios": [],
+                        "risks": [],
+                        "impacts": {},
+                        "actions": [],
+                        "phase_scores": {},
+                        "data_needed": [],
+                        "attachments": [],
+                        "meta": {
+                            "generated_at": now_iso,
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests", "judge_explainability_graph_v1"],
+                "explainability": {
+                    "schema_version": "judge_explainability_graph_v1",
+                    "generated_at": now_iso,
+                    "graph": {
+                        "nodes": [
+                            {
+                                "id": "verdict:judge_demo_nvda",
+                                "label": "NVDA",
+                                "kind": "verdict",
+                                "ticker": "NVDA",
+                                "weight": 0.82,
+                            },
+                            {
+                                "id": "source:news:reuters",
+                                "label": "NVIDIA demand accelerates",
+                                "kind": "news_item",
+                                "weight": 0.91,
+                                "quality_score": 0.88,
+                                "freshness": {
+                                    "timestamp": "2026-03-07T20:00:00Z",
+                                    "age_hours": 4.0,
+                                },
+                            },
+                        ],
+                        "edges": [
+                            {
+                                "from": "source:news:reuters",
+                                "to": "verdict:judge_demo_nvda",
+                                "relationship": "supports",
+                                "weight": 0.91,
+                                "trace": {
+                                    "origin": "debug_payload.news",
+                                    "publisher": "Reuters",
+                                },
+                            }
+                        ],
+                    },
+                    "source_traceability": [
+                        {
+                            "verdict_id": "verdict:judge_demo_nvda",
+                            "ticker": "NVDA",
+                            "primary_source_count": 1,
+                            "supporting_sources": [
+                                {
+                                    "source_id": "news:reuters",
+                                    "label": "NVIDIA demand accelerates",
+                                    "kind": "news_item",
+                                    "weight": 0.91,
+                                    "quality_score": 0.88,
+                                    "freshness": {
+                                        "timestamp": "2026-03-07T20:00:00Z",
+                                        "age_hours": 4.0,
+                                    },
+                                }
+                            ],
+                        }
+                    ],
+                    "stats": {
+                        "verdict_count": 1,
+                        "source_count": 1,
+                        "edge_count": 1,
+                        "stale_source_count": 0,
+                        "broken_source_count": 0,
+                        "avg_source_weight": 0.91,
+                    },
+                },
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_verdicts_payload",
+        fake_get_judge_verdicts_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge?limit=1&ticker=NVDA")
+    assert resp.status_code == 200
+    payload = resp.json()
+    explainability = payload["data"]["explainability"]
+
+    assert "judge_explainability_graph_v1" in (payload["data"].get("source") or [])
+    assert explainability["schema_version"] == "judge_explainability_graph_v1"
+    assert explainability["graph"]["nodes"][0]["ticker"] == "NVDA"
+    assert explainability["graph"]["edges"][0]["relationship"] == "supports"
+    assert explainability["source_traceability"][0]["primary_source_count"] == 1
+    assert explainability["source_traceability"][0]["supporting_sources"][0]["freshness"]["age_hours"] == 4.0
+    assert explainability["stats"]["avg_source_weight"] == 0.91
+
+
 def test_judge_quality_route_delegates_to_service(monkeypatch):
     async def fake_quality(**kwargs):
         return {
