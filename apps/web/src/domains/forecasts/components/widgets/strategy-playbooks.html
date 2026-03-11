@@ -269,6 +269,28 @@
         color: var(--color-text-secondary);
     }
 
+    .playbook-policy-shift {
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--color-text);
+        font-weight: 600;
+    }
+
+    .playbook-policy-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+    }
+
+    .playbook-policy-tag {
+        padding: 3px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        background: rgba(15, 23, 42, 0.08);
+        color: var(--color-text-secondary);
+    }
+
     .playbook-action-tag {
         padding: 4px 10px;
         background: rgba(59, 130, 246, 0.15);
@@ -473,6 +495,7 @@
             return '';
         }
 
+        const originalAction = String(policyGuardrails.original_action || '').trim().toUpperCase();
         const effectiveAction = String(policyGuardrails.effective_action || 'hold').trim().toUpperCase();
         const violationCount = Number.isFinite(policyGuardrails.violation_count)
             ? policyGuardrails.violation_count
@@ -480,6 +503,17 @@
         const countCopy = violationCount > 0
             ? `${violationCount} policy check${violationCount > 1 ? 's' : ''} triggered`
             : 'Policy review required';
+        const downgradeCopy = originalAction && originalAction !== effectiveAction
+            ? `${originalAction} downgraded to ${effectiveAction}`
+            : '';
+        const violationTags = Array.isArray(policyGuardrails.violations)
+            ? policyGuardrails.violations
+                .map((violation) => violation && typeof violation === 'object'
+                    ? String(violation.code || violation.rule || '').trim()
+                    : '')
+                .filter(Boolean)
+                .slice(0, 3)
+            : [];
 
         return `
             <div class="playbook-policy-guardrail ${escapeHtml(status)}">
@@ -491,6 +525,12 @@
                     ${escapeHtml(countCopy)}
                     ${policyGuardrails.policy_version ? ` • version ${escapeHtml(policyGuardrails.policy_version)}` : ''}
                 </div>
+                ${downgradeCopy ? `<div class="playbook-policy-shift">${escapeHtml(downgradeCopy)}</div>` : ''}
+                ${violationTags.length ? `
+                    <div class="playbook-policy-tags">
+                        ${violationTags.map((tag) => `<span class="playbook-policy-tag">${escapeHtml(tag)}</span>`).join('')}
+                    </div>
+                ` : ''}
             </div>
         `;
     }

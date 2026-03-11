@@ -218,6 +218,16 @@ function testWidgetConflictVisibility() {
             'Widget should expose a policy guardrail panel'
         );
 
+        assert(
+            content.includes('original_action') && content.includes('playbook-policy-shift'),
+            'Widget should expose downgrade copy when policy changes the original action'
+        );
+
+        assert(
+            content.includes('policyGuardrails.violations') && content.includes('playbook-policy-tag'),
+            'Widget should surface violation codes as compact tags'
+        );
+
         console.log('✅ Test 6 PASSED: Widget displays conflict visibility');
         return true;
     } catch (error) {
