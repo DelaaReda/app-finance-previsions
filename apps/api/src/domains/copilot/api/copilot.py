@@ -38,6 +38,74 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _normalize_string_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    token = str(value or "").strip()
+    return [token] if token else []
+
+
+def _normalize_memo_why(payload: Dict[str, Any]) -> List[str]:
+    why = payload.get("why")
+    if isinstance(why, list):
+        normalized = [str(item).strip() for item in why if str(item).strip()]
+        if normalized:
+            return normalized
+    if isinstance(why, str) and why.strip():
+        return [why.strip()]
+
+    reasoning = payload.get("reasoning")
+    if isinstance(reasoning, list):
+        normalized = [str(item).strip() for item in reasoning if str(item).strip()]
+        if normalized:
+            return normalized
+    if isinstance(reasoning, str) and reasoning.strip():
+        return [reasoning.strip()]
+
+    answer = str(payload.get("answer") or "").strip()
+    return [answer] if answer else []
+
+
+def _normalize_memo_risks(payload: Dict[str, Any]) -> List[str]:
+    risks = payload.get("risks")
+    if isinstance(risks, list):
+        normalized = [str(item).strip() for item in risks if str(item).strip()]
+        if normalized:
+            return normalized
+    if isinstance(risks, str) and risks.strip():
+        return [risks.strip()]
+
+    risk = payload.get("risk")
+    if isinstance(risk, dict):
+        items: List[str] = []
+        level = str(risk.get("level") or payload.get("risk_level") or "").strip()
+        caveat = str(risk.get("caveat") or payload.get("risk_caveat") or "").strip()
+        if level:
+            items.append(level)
+        if caveat:
+            items.append(caveat)
+        if items:
+            return items
+
+    risk_caveat = str(payload.get("risk_caveat") or "").strip()
+    return [risk_caveat] if risk_caveat else []
+
+
+def _normalize_memo_sources(payload: Dict[str, Any]) -> List[Any]:
+    sources = payload.get("sources")
+    if isinstance(sources, list) and sources:
+        return list(sources)
+    source = payload.get("source")
+    if isinstance(source, list) and source:
+        return list(source)
+    token = str(source or "").strip()
+    return [token] if token else []
+
+
+def _normalize_ask_payload(payload: Any) -> Dict[str, Any]:
+    return copilot_service.normalize_ask_payload_contract(payload)
+
+
 def _normalize_scope(
     tickers: Optional[List[str]],
 ) -> Optional[Dict[str, List[str]]]:
@@ -54,6 +122,8 @@ def _build_start_response(
     *,
     scope: Optional[Dict[str, List[str]]] = None,
     note: Optional[str] = None,
+    context_influence: Optional[Dict[str, Any]] = None,
+    portfolio_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     resolved_start = dict(start_payload) if isinstance(start_payload, dict) else {}
     brief_of_day = (
@@ -71,7 +141,9 @@ def _build_start_response(
         str(brief_of_day.get("freshness") or brief_of_day.get("generated_at") or "").strip()
         or _utc_now_iso()
     )
-    source = brief_of_day.get("source")
+    source = brief_of_day.get("sources")
+    if not isinstance(source, list):
+        source = brief_of_day.get("source")
     normalized_source = [
         str(item).strip()
         for item in (source if isinstance(source, list) else [])
@@ -87,6 +159,7 @@ def _build_start_response(
         "generated_at": generated_at,
         "freshness": generated_at,
         "source": normalized_source or ["copilot_start_route"],
+        "sources": normalized_source or ["copilot_start_route"],
         "filters_applied": {"tickers": list((scope or {}).get("tickers") or [])},
         "stats": {
             "ask_count": len(ask_items),
@@ -98,6 +171,10 @@ def _build_start_response(
         payload["note"] = note
     if (scope or {}).get("tickers"):
         payload["scope_tickers"] = list((scope or {}).get("tickers") or [])
+    if isinstance(context_influence, dict) and context_influence:
+        payload["context_influence"] = dict(context_influence)
+    if isinstance(portfolio_context, dict) and portfolio_context:
+        payload["portfolio_context"] = dict(portfolio_context)
     return payload
 
 
@@ -130,7 +207,7 @@ async def copilot_ask(req: CopilotAskRequest):
         tickers=req.tickers,
         max_sources=req.max_sources,
     )
-    return {"ok": True, "data": payload}
+    return {"ok": True, "data": _normalize_ask_payload(payload)}
 
 
 @router.get("/copilot/history")
@@ -206,6 +283,8 @@ async def copilot_start(
                 start_payload,
                 scope=effective_scope,
                 note=note,
+                context_influence=payload.get("context_influence") if isinstance(payload, dict) else None,
+                portfolio_context=payload.get("portfolio_context") if isinstance(payload, dict) else None,
             ),
         }
     except Exception:
@@ -237,6 +316,8 @@ async def copilot_start(
                 fallback_start,
                 scope=scope,
                 note="Market context service temporarily unavailable.",
+                context_influence=fallback.get("context_influence"),
+                portfolio_context=fallback.get("portfolio_context"),
             ),
         }
 

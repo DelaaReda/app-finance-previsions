@@ -92,6 +92,13 @@ def test_ask_payload_injects_market_context_and_structured_response():
     assert response["requirements_met"]["min_sources_2"] is True
     assert response["quality_status"] == "sufficient_sources"
     assert len(response.get("reasoning", [])) == 3
+    assert response["memo"]["verdict"] == "buy"
+    assert response["memo"]["horizon"] == "1w"
+    assert response["memo"]["why"] == response["why"]
+    assert response["memo"]["risks"][-1] == response["risk_caveat"]
+    assert response["memo"]["confidence"] == response["confidence"]
+    assert response["memo"]["freshness"] == response["freshness"]
+    assert response["memo"]["sources"] == response["sources"]
 
 
 def test_ask_payload_uses_market_context_when_rag_empty():
@@ -200,6 +207,78 @@ def test_ask_payload_uses_structured_confidence_when_sources_are_sufficient():
     assert response["freshness"] == response["generated_at"]
 
 
+def test_ask_payload_preserves_structured_memo_fields():
+    fake_rag = _FakeRAGStore()
+
+    def fake_ask_llm(*, question: str, context_chunks: List[Dict[str, Any]], max_tokens: int = 1000):
+        assert len(context_chunks) == 2
+        return {
+            "model": "test-llm",
+            "answer": json.dumps(
+                {
+                    "action": "buy",
+                    "horizon": "3m",
+                    "why": [
+                        "Earnings revisions stay positive",
+                        "Sector breadth keeps improving",
+                    ],
+                    "risks": [
+                        "Valuation is already demanding",
+                        "Macro surprises could compress multiples",
+                    ],
+                    "next_steps": [
+                        "Wait for the next CPI release",
+                    ],
+                    "invalidation": [
+                        "Break below the prior earnings gap",
+                    ],
+                    "confidence": 0.64,
+                }
+            ),
+            "citations": [],
+        }
+
+    response = asyncio.run(
+        copilot_service.build_ask_payload(
+            question="Build an investment memo for NVDA.",
+            tickers=["NVDA"],
+            max_sources=2,
+            rag_store_cls=lambda: fake_rag,
+            ask_llm_fn=fake_ask_llm,
+            context_service_cls=_FakeContextService,
+        )
+    )
+
+    assert response["horizon"] == "3m"
+    assert response["why"] == [
+        "Earnings revisions stay positive",
+        "Sector breadth keeps improving",
+    ]
+    assert response["risks"] == [
+        "Valuation is already demanding",
+        "Macro surprises could compress multiples",
+    ]
+    assert response["next_steps"] == ["Wait for the next CPI release"]
+    assert response["invalidation"] == ["Break below the prior earnings gap"]
+    assert response["memo"] == {
+        "verdict": "buy",
+        "horizon": "3m",
+        "why": [
+            "Earnings revisions stay positive",
+            "Sector breadth keeps improving",
+        ],
+        "risks": [
+            "Valuation is already demanding",
+            "Macro surprises could compress multiples",
+        ],
+        "confidence": 0.64,
+        "freshness": response["freshness"],
+        "sources": response["sources"],
+        "next_steps": ["Wait for the next CPI release"],
+        "invalidation": ["Break below the prior earnings gap"],
+    }
+
+
 def test_ask_payload_caps_structured_confidence_when_sources_are_insufficient():
     class _EmptyRAGStore(_FakeRAGStore):
         def search(self, scope: Optional[Dict[str, Any]] = None, top_k: int = 10):
@@ -238,6 +317,13 @@ def test_ask_payload_caps_structured_confidence_when_sources_are_insufficient():
     assert response["sources_count"] == 1
     assert response["confidence"] == 0.45
     assert "Sources insuffisantes" in response["risk_caveat"]
+    assert response["memo"]["verdict"] == "buy"
+    assert response["memo"]["horizon"] == "1w"
+    assert response["memo"]["why"] == response["why"]
+    assert any("Sources insuffisantes" in item for item in response["memo"]["risks"])
+    assert response["memo"]["confidence"] == 0.45
+    assert response["memo"]["freshness"] == response["freshness"]
+    assert response["memo"]["sources"] == response["sources"]
 
 
 def test_ask_payload_uses_saved_portfolio_context_when_request_has_no_tickers(monkeypatch):
@@ -310,6 +396,19 @@ def test_ask_payload_uses_saved_portfolio_context_when_request_has_no_tickers(mo
         "conviction": "high",
         "risk_tolerance": "moderate",
     }
+    assert response["context_influence"] == {
+        "mode": "portfolio_aware",
+        "portfolio_applied": True,
+        "source": "saved_portfolio_default",
+        "requested_tickers": [],
+        "effective_tickers": ["AAPL", "MSFT"],
+        "portfolio_id": "portfolio-123",
+        "portfolio_state": {
+            "horizon": "1y",
+            "conviction": "high",
+            "risk_tolerance": "moderate",
+        },
+    }
 
 
 def test_ask_payload_keeps_explicit_tickers_without_saved_portfolio_default(monkeypatch):
@@ -347,6 +446,13 @@ def test_ask_payload_keeps_explicit_tickers_without_saved_portfolio_default(monk
     assert captured_scope["scope"]["tickers"] == ["NVDA"]
     assert response["action"] == "hold"
     assert "portfolio_context" not in response
+    assert response["context_influence"] == {
+        "mode": "market_wide",
+        "portfolio_applied": False,
+        "source": "explicit_tickers",
+        "requested_tickers": ["NVDA"],
+        "effective_tickers": ["NVDA"],
+    }
 
 
 def test_ask_payload_defaults_to_judge_stack_llm(monkeypatch):
@@ -520,6 +626,19 @@ def test_build_context_payload_uses_saved_portfolio_scope_when_tickers_are_missi
         "AAPL",
         "MSFT",
     ]
+    assert response.get("context_influence") == {
+        "mode": "portfolio_aware",
+        "portfolio_applied": True,
+        "source": "saved_portfolio_default",
+        "requested_tickers": [],
+        "effective_tickers": ["AAPL", "MSFT"],
+        "portfolio_id": "portfolio-123",
+        "portfolio_state": {
+            "horizon": "1y",
+            "conviction": "high",
+            "risk_tolerance": "moderate",
+        },
+    }
 
 
 def test_build_context_payload_fallback_keeps_daily_brief_contract(monkeypatch):
