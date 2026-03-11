@@ -1,0 +1,37 @@
+{
+  "task_id": "BATCH-19-ADMIN-01",
+  "stream_id": "BATCH-19",
+  "role": "admin",
+  "produced_at_utc": "2026-03-11T09:21:00Z",
+  "status": "COMPLETED_RUNTIME_VALIDATED",
+  "summary": "Explainability Graph + Source Traceability runtime validation completed and verified. BATCH-19-ADMIN-01 state is DONE in workboard. All runtime probes confirm healthy judge endpoint with full explainability contract and monitor observability restored.",
+  "root_cause": "BATCH-19-DEV-03 delivered the explainability graph + source traceability feature. Previous admin probes (09:15-09:17) identified monitor wrapper instability that was repaired. Final validation confirms all runtime surfaces are healthy and the feature is production-ready.",
+  "fix_applied": "SKIP(no_code_change_required_final_validation). Previous admin iterations repaired monitor wrapper connection-reset handling in scripts/monitor_server.py. This final probe is validation-only.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-19/BATCH-19-ADMIN-01/20260311T092100Z-final-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1 (VM-only policy enforced)",
+    "workboard_state": "PASS BATCH-19-ADMIN-01 state=DONE",
+    "batch_state": "PASS BATCH-19 state=CLOSED (4/4 tasks done)",
+    "judge_runtime": "PASS GET /api/judge?limit=1 => status=ok, explainability.schema_version=judge_explainability_graph_v1",
+    "judge_source_traceability": "PASS source_traceability array present with supporting_sources[].link_status field",
+    "judge_broken_source_count": "PASS stats.broken_source_count=0",
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=3 workboard_ready=0",
+    "monitor_status_lite": "PASS GET /api/status?lite=1 => health=OK",
+    "judge_metadata_tests": "PASS pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -k 'weighted_source_traceability or invalid_source_links' (2 passed)"
+  },
+  "files_touched": [
+    "docs/operations/orchestrator/proofs/BATCH-19/BATCH-19-ADMIN-01/20260311T092100Z-final-runtime-proof.json"
+  ],
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "curl -sS --max-time 15 'http://127.0.0.1:8050/api/judge?limit=1'",
+    "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 --timeout 20",
+    "curl -sS --max-time 10 'http://127.0.0.1:7779/api/status?lite=1'",
+    "python3 -m pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -k 'weighted_source_traceability or invalid_source_links' -q"
+  ],
+  "commit_sha": "SKIP(no_code_change_final_validation_only)",
+  "architecture_check": "PASS: validation-only probe, no architectural changes. Feature surface remains apps/api/src/domains/judge/application/judge_endpoint_service.py + apps/api/src/domains/judge/tests/test_judge_metadata_contract.py. Monitor observability on :7779 unchanged.",
+  "vision_alignment": "PASS(BATCH-19): Explainability Graph + Source Traceability feature is runtime-validated with weighted sources, freshness markers, link-status traceability (ok|missing|invalid), broken_source_count metric, and full monitor observability. BATCH-19 is CLOSED with all 4 tasks (PLAN/ARCH/DEV-03/ADMIN-01) completed.",
+  "recommended_next": "Planner can close BATCH-19-ADMIN-01 as completed. BATCH-19 is already CLOSED. No further action required for this stream.",
+  "blocking_issue": "none"
+}
