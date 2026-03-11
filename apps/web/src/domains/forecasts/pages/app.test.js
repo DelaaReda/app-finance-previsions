@@ -79,6 +79,9 @@ function loadApplyLiveDashboardData() {
     buildTradeIdeasFromForecasts() {
       return [];
     },
+    summarizeForecastSla() {
+      return null;
+    },
     inferTopStocksFromMovers(_movers, fallback = []) {
       return fallback;
     },
@@ -136,6 +139,54 @@ function loadApplyLiveDashboardData() {
   });
 
   return { sandbox, transformCalls };
+}
+
+function loadForecastSlaHelpers() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const sanitizeForecastRowsSource = extractFunction(source, 'sanitizeForecastRows', '\n\nfunction sanitizeTopMovers');
+  const summarizeForecastSlaSource = extractFunction(source, 'summarizeForecastSla', '\n\nfunction syncDashboardCards');
+  const updateLiveProvenanceSource = extractFunction(source, 'updateLiveProvenance', '\n\nfunction summarizeForecastSla');
+  const lineage = { textContent: '' };
+  const sandbox = {
+    console,
+    LIVE_FALLBACK_TAG: 'live-fallback',
+    document: {
+      getElementById(id) {
+        return id === 'liveDataProvenance' ? lineage : null;
+      },
+    },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : fallback;
+    },
+    normalizePercentValue(value) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) return 0;
+      return Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+    },
+    formatRelativeTime() {
+      return '2 minutes ago';
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${sanitizeForecastRowsSource}\n${updateLiveProvenanceSource}\n${summarizeForecastSlaSource}\nthis.sanitizeForecastRows = sanitizeForecastRows;\nthis.updateLiveProvenance = updateLiveProvenance;\nthis.summarizeForecastSla = summarizeForecastSla;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  return { sandbox, lineage };
 }
 
 function createElementStub() {
@@ -2035,4 +2086,72 @@ test('index.html exposes the hero brief slots required by the copilot starter', 
   ].forEach((snippet) => {
     assert.ok(html.includes(snippet), `Expected ${snippet} in index.html`);
   });
+});
+
+test('sanitizeForecastRows preserves forecast provenance SLA metadata for UI consumers', () => {
+  const { sandbox } = loadForecastSlaHelpers();
+
+  const [row] = sandbox.sanitizeForecastRows([
+    {
+      ticker: 'NVDA',
+      confidence: 0.72,
+      expected_return: 0.034,
+      updated_at: '2026-03-10T10:00:00Z',
+      provenance: {
+        source: ['forecast_hybrid_v1'],
+        sla: {
+          updated_at: '2026-03-10T10:00:00Z',
+          target_max_age_seconds: 600,
+          within_target: true,
+        },
+      },
+    },
+  ]);
+
+  assert.equal(row.updatedAt, '2026-03-10T10:00:00Z');
+  assert.equal(row.provenance.sla.target_max_age_seconds, 600);
+  assert.equal(row.provenance.sla.within_target, true);
+});
+
+test('updateLiveProvenance surfaces aggregated forecast SLA compliance', () => {
+  const { sandbox, lineage } = loadForecastSlaHelpers();
+  const rows = sandbox.sanitizeForecastRows([
+    {
+      ticker: 'NVDA',
+      confidence: 0.72,
+      expected_return: 0.034,
+      updated_at: '2026-03-10T10:00:00Z',
+      provenance: {
+        sla: {
+          updated_at: '2026-03-10T10:00:00Z',
+          target_max_age_seconds: 600,
+          within_target: true,
+        },
+      },
+    },
+    {
+      ticker: 'TSLA',
+      confidence: 0.41,
+      expected_return: -0.012,
+      updated_at: '2026-03-10T09:45:00Z',
+      provenance: {
+        sla: {
+          updated_at: '2026-03-10T09:45:00Z',
+          target_max_age_seconds: 600,
+          within_target: false,
+        },
+      },
+    },
+  ]);
+
+  sandbox.updateLiveProvenance({
+    generatedAt: '2026-03-10T10:02:00Z',
+    sources: ['api-connector'],
+    modelVersions: ['hybrid_v1'],
+    contractState: 'degraded',
+    forecastSla: sandbox.summarizeForecastSla(rows),
+  });
+
+  assert.match(lineage.textContent, /freshness: DEGRADED/);
+  assert.match(lineage.textContent, /forecast SLA: 1\/2 within 10m/);
 });

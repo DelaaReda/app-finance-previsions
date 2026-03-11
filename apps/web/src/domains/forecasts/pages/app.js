@@ -1837,6 +1837,8 @@ function sanitizeForecastRows(rows) {
     const expected = normalizePercentValue(toFiniteNumber(item.expectedReturn ?? item.expected_return ?? item.expected_return_pct ?? 0, 0));
     const targetPrice = toFiniteNumber(item.targetPrice ?? item.target_price ?? item.target, 0);
     const currentPrice = toFiniteNumber(item.currentPrice ?? item.current_price ?? item.current, 0);
+    const updatedAt = toString(item.updatedAt || item.updated_at || item.generated_at || item.timestamp, '');
+    const provenance = isObject(item.provenance) ? item.provenance : {};
     return {
       ticker: toString(item.ticker || item.symbol || item.asset || 'UNKNOWN', 'UNKNOWN').toUpperCase(),
       direction: direction,
@@ -1848,7 +1850,12 @@ function sanitizeForecastRows(rows) {
       targetPrice,
       reasoning: toString(item.reasoning, item.reason || ''),
       action: toString(item.action, 'hold'),
-      riskLevel: toString(item.riskLevel || item.risk, 'medium')
+      riskLevel: toString(item.riskLevel || item.risk, 'medium'),
+      updatedAt,
+      provenance: {
+        ...provenance,
+        sla: isObject(provenance.sla) ? provenance.sla : {}
+      }
     };
   });
 }
@@ -2609,9 +2616,42 @@ function updateLiveProvenance(meta = {}) {
   const warnings = configuredWarnings.length ? configuredWarnings : [];
   const contractState = toString(meta.contractState, '').toLowerCase();
   const contractText = contractState ? ` | freshness: ${contractState.toUpperCase()}` : '';
+  const forecastSla = isObject(meta.forecastSla) ? meta.forecastSla : null;
+  const forecastSlaText = forecastSla
+    ? ` | forecast SLA: ${forecastSla.withinTargetCount}/${forecastSla.totalCount} within ${forecastSla.targetLabel}`
+    : '';
   const warningText = warnings.length ? ` | warnings: ${warnings.join(', ')}` : '';
   const freshness = formatRelativeTime(meta.generatedAt);
-  lineage.textContent = `Source: ${sources.join(', ')} | model: ${models.join(', ')} | updated: ${freshness}${contractText}${warningText}`;
+  lineage.textContent = `Source: ${sources.join(', ')} | model: ${models.join(', ')} | updated: ${freshness}${contractText}${forecastSlaText}${warningText}`;
+}
+
+function summarizeForecastSla(rows) {
+  const items = toArray(rows, []).filter((row) => isObject(row));
+  const slaRows = items
+    .map((row) => (isObject(row.provenance) && isObject(row.provenance.sla) ? row.provenance.sla : null))
+    .filter((sla) => !!sla);
+  if (!slaRows.length) {
+    return null;
+  }
+
+  const targetSeconds = Math.max(
+    0,
+    ...slaRows.map((sla) => toFiniteNumber(sla.target_max_age_seconds, 0))
+  );
+  const withinTargetCount = slaRows.filter((sla) => Boolean(sla.within_target)).length;
+  const totalCount = slaRows.length;
+  const compliancePct = totalCount ? Math.round((withinTargetCount / totalCount) * 100) : 0;
+  const status = compliancePct >= 90 ? 'ok' : compliancePct > 0 ? 'degraded' : 'stale';
+  const targetMinutes = Math.max(1, Math.round(targetSeconds / 60));
+
+  return {
+    withinTargetCount,
+    totalCount,
+    compliancePct,
+    targetSeconds,
+    targetLabel: `${targetMinutes}m`,
+    status
+  };
 }
 
 function syncDashboardCards() {
@@ -2948,6 +2988,7 @@ function applyLiveDashboardData(payload = {}) {
 
   tradeIdeas = sanitizeTradeIdeas(data.tradeIdeas);
   liveForecastRows = sanitizeForecastRows(data.forecasts || window.liveForecasts);
+  liveDataMeta.forecastSla = summarizeForecastSla(liveForecastRows);
   liveTopMovers = sanitizeTopMovers(data.topMovers || data.stocks || window.topMovers);
   liveAlerts = sanitizeAlertTimeline(data.alerts || window.alertTimeline || []);
   liveKpis = data.kpis || window.liveKpis;
