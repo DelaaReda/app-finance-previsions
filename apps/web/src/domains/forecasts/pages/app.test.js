@@ -2598,6 +2598,33 @@ test('renderTradeIdeas locks the paper trade CTA after a recorded execution', ()
   assert.match(container.innerHTML, /Unrealized PnL \+\$2\.15/);
 });
 
+test('renderTradeIdeas disables the paper trade CTA while execution is pending', () => {
+  const { sandbox, container } = loadTradeIdeaHelpers();
+  sandbox.copilotDecisionJournal = {
+    entries: [
+      { decision_id: 'dec-aapl-1', tickers: ['AAPL'] },
+    ],
+  };
+  sandbox.window.copilotDecisionJournal = sandbox.copilotDecisionJournal;
+  sandbox.tradeIdeas = [
+    {
+      symbol: 'AAPL',
+      signalType: 'BUY',
+      entry: 195,
+      target: 210,
+      confidence: 82,
+    },
+  ];
+  sandbox.tradeIdeaExecutionState['DEC-AAPL-1'] = {
+    status: 'pending',
+  };
+
+  sandbox.renderTradeIdeas();
+
+  assert.match(container.innerHTML, />Executing\.\.\.</);
+  assert.match(container.innerHTML, /<button class="trade-btn" onclick="executeTradeIdea\('AAPL'\)" disabled>/);
+});
+
 test('executeTradeIdea refreshes the decision journal after a recorded paper trade', async () => {
   const { sandbox, journalRenders, toasts } = loadPaperTradeExecutionFlowHelpers();
 
