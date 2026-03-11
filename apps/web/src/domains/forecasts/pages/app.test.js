@@ -643,6 +643,9 @@ function loadTradeIdeaHelpers() {
   const sanitizeTradeIdeasSource = extractFunction(source, 'sanitizeTradeIdeas', '\n\nfunction normalizePercentValue');
   const normalizePercentValueSource = extractFunction(source, 'normalizePercentValue', '\n\nfunction sanitizeForecastRows');
   const buildTradeIdeasSource = extractFunction(source, 'buildTradeIdeasFromForecasts', '\n\nfunction normalizeKpiHero');
+  const inferTradeIdeaSideSource = extractFunction(source, 'inferTradeIdeaSide', '\n\nfunction resolveTradeIdeaDecisionId');
+  const resolveTradeIdeaDecisionIdSource = extractFunction(source, 'resolveTradeIdeaDecisionId', '\n\nfunction getTradeIdeaExecutionState');
+  const getTradeIdeaExecutionStateSource = extractFunction(source, 'getTradeIdeaExecutionState', '\n\nasync function executeTradeIdea');
   const renderTradeIdeasSource = extractFunction(source, 'renderTradeIdeas', '\n\n// V13: Render Market Calendar');
   const container = { innerHTML: '' };
   const sandbox = {
@@ -650,6 +653,8 @@ function loadTradeIdeaHelpers() {
     window: {
       liveRecommendations: [],
       tradeIdeas: [],
+      copilotDecisionJournal: null,
+      FinanceAPI: {},
     },
     FALLBACK_TRADE_IDEAS: [],
     isObject(value) {
@@ -657,6 +662,14 @@ function loadTradeIdeaHelpers() {
     },
     toArray(value, fallback = []) {
       return Array.isArray(value) ? value : fallback;
+    },
+    extractArray(payload, keys) {
+      if (!payload || typeof payload !== 'object') return [];
+      for (const key of keys) {
+        const value = payload[key];
+        if (Array.isArray(value)) return value;
+      }
+      return [];
     },
     toString(value, fallback = '') {
       return value === null || value === undefined ? fallback : String(value);
@@ -671,14 +684,17 @@ function loadTradeIdeaHelpers() {
     getFacetteWidgetSlot() {
       return container;
     },
+    showToast() {},
     tradeIdeas: [],
+    tradeIdeaExecutionState: Object.create(null),
+    copilotDecisionJournal: null,
     document: {},
   };
   sandbox.globalThis = sandbox;
 
   vm.createContext(sandbox);
   vm.runInContext(
-    `${sanitizeTradeIdeasSource}\n${normalizePercentValueSource}\n${buildTradeIdeasSource}\n${renderTradeIdeasSource}\nthis.sanitizeTradeIdeas = sanitizeTradeIdeas;\nthis.buildTradeIdeasFromForecasts = buildTradeIdeasFromForecasts;\nthis.renderTradeIdeas = renderTradeIdeas;`,
+    `${sanitizeTradeIdeasSource}\n${normalizePercentValueSource}\n${buildTradeIdeasSource}\n${inferTradeIdeaSideSource}\n${resolveTradeIdeaDecisionIdSource}\n${getTradeIdeaExecutionStateSource}\n${renderTradeIdeasSource}\nthis.sanitizeTradeIdeas = sanitizeTradeIdeas;\nthis.buildTradeIdeasFromForecasts = buildTradeIdeasFromForecasts;\nthis.renderTradeIdeas = renderTradeIdeas;`,
     sandbox,
     { filename: 'app.js' }
   );
@@ -2252,6 +2268,41 @@ test('sanitizeJudgeDecisionJournal preserves policy guardrail details for violat
   assert.deepEqual(rows[0].policy_guardrails.violations.map((item) => item.code), ['ticker_excluded', 'risk_above_limit']);
 });
 
+test('sanitizeJudgeDecisionJournal preserves paper trade execution details for the journal widget', () => {
+  const { sandbox } = loadJudgeDecisionJournalHelpers();
+  const rows = JSON.parse(JSON.stringify(sandbox.sanitizeJudgeDecisionJournal({
+    entries: [
+      {
+        symbol: 'AAPL',
+        decision: 'BUY',
+        paper_trade_execution: {
+          count: 1,
+          latest_recorded_at: '2026-03-11T12:00:00Z',
+          records: [
+            {
+              execution_id: 'exec123',
+              ticker: 'AAPL',
+              side: 'buy',
+              quantity: 1,
+              assumed_fill_price: 100.25,
+              market_price: 102,
+              unrealized_pnl: 1.75,
+              unrealized_pnl_percent: 0.0175,
+              recorded_at: '2026-03-11T12:00:00Z',
+            },
+          ],
+        },
+      },
+    ],
+  })));
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].paper_trade_execution.count, 1);
+  assert.equal(rows[0].paper_trade_execution.records[0].executionId, 'exec123');
+  assert.equal(rows[0].paper_trade_execution.records[0].assumedFillPrice, 100.25);
+  assert.equal(rows[0].paper_trade_execution.records[0].unrealizedPnlPercent, 0.0175);
+});
+
 test('renderMarketDrivers appends insider behavior summary to the existing widget', () => {
   const { sandbox, container } = loadRenderMarketDrivers();
 
@@ -2291,11 +2342,44 @@ test('renderJudgeDecisionJournal surfaces the policy downgrade badge inside the 
   assert.match(container.innerHTML, /Risk exceeds your configured ceiling\./);
 });
 
+test('renderJudgeDecisionJournal surfaces paper trade execution summary inside the existing journal widget', () => {
+  const { sandbox, container } = loadJudgeDecisionJournalHelpers();
+
+  sandbox.renderJudgeDecisionJournal([
+    {
+      symbol: 'AAPL',
+      decision: 'BUY',
+      paper_trade_execution: {
+        count: 1,
+        latest_recorded_at: '2026-03-11T12:00:00Z',
+        records: [
+          {
+            execution_id: 'exec123',
+            ticker: 'AAPL',
+            side: 'buy',
+            quantity: 1,
+            assumed_fill_price: 100.25,
+            unrealized_pnl: 1.75,
+            unrealized_pnl_percent: 0.0175,
+            recorded_at: '2026-03-11T12:00:00Z',
+          },
+        ],
+      },
+    },
+  ]);
+
+  assert.match(container.innerHTML, /Paper trade/);
+  assert.match(container.innerHTML, /1 execution/);
+  assert.match(container.innerHTML, /BUY • 1 share • fill \$100\.25/);
+  assert.match(container.innerHTML, /Unrealized P&amp;L: \+\$1\.75 \(\+1\.75%\)/);
+});
+
 test('buildTradeIdeasFromForecasts prefers recommendation forecast fusion attribution', () => {
   const { sandbox } = loadTradeIdeaHelpers();
   const ideas = sandbox.buildTradeIdeasFromForecasts([], [
     {
       ticker: 'NVDA',
+      decision_id: 'dec-nvda-1',
       action: 'BUY',
       confidence: 0.81,
       score: 0.78,
@@ -2315,6 +2399,7 @@ test('buildTradeIdeasFromForecasts prefers recommendation forecast fusion attrib
 
   assert.equal(ideas.length, 1);
   assert.equal(ideas[0].symbol, 'NVDA');
+  assert.equal(ideas[0].decisionId, 'dec-nvda-1');
   assert.equal(ideas[0].attributionLabel, 'Fusion 78%');
   assert.match(ideas[0].attributionDetail, /Layer: forecast confidence/i);
   assert.match(ideas[0].attributionDetail, /Regime: BULL MARKET/i);
@@ -2340,6 +2425,33 @@ test('renderTradeIdeas renders attribution badge and detail when present', () =>
   assert.match(container.innerHTML, /Fusion 71%/);
   assert.match(container.innerHTML, /Layer: macro alignment/);
   assert.match(container.innerHTML, /Regime: RISK OFF/);
+});
+
+test('renderTradeIdeas enables paper trade CTA when a linked decision journal entry exists', () => {
+  const { sandbox, container } = loadTradeIdeaHelpers();
+  sandbox.copilotDecisionJournal = {
+    entries: [
+      { decision_id: 'dec-aapl-1', tickers: ['AAPL'] },
+    ],
+  };
+  sandbox.window.copilotDecisionJournal = sandbox.copilotDecisionJournal;
+  sandbox.tradeIdeas = [
+    {
+      symbol: 'AAPL',
+      signalType: 'BUY',
+      entry: 195,
+      target: 210,
+      confidence: 82,
+      attributionLabel: 'Fusion 82%',
+      attributionDetail: 'Layer: forecast confidence',
+    },
+  ];
+
+  sandbox.renderTradeIdeas();
+
+  assert.match(container.innerHTML, /Paper Trade/);
+  assert.doesNotMatch(container.innerHTML, /No Journal/);
+  assert.match(container.innerHTML, /executeTradeIdea\('AAPL'\)/);
 });
 
 test('renderForecastScenarioWidget prefers threshold_summary over scoreboard rows for hit-rate copy', () => {

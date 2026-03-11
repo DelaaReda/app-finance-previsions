@@ -686,6 +686,65 @@ async function getJudgeAnalysis(limit) {
   return payload.data && typeof payload.data === 'object' ? payload.data : payload;
 }
 
+async function getCopilotDecisionJournal(params = {}) {
+  const safeParams = params && typeof params === 'object' ? params : {};
+  const search = new URLSearchParams();
+  const limit = Number(safeParams.limit);
+  const ticker = String(safeParams.ticker || safeParams.symbol || '').trim().toUpperCase();
+  const verdict = String(safeParams.verdict || '').trim().toLowerCase();
+  const horizon = String(safeParams.horizon || '').trim();
+
+  if (Number.isFinite(limit) && limit > 0) {
+    search.set('limit', String(Math.min(50, Math.max(1, Math.floor(limit)))));
+  }
+  if (ticker) {
+    search.set('tickers', ticker);
+  }
+  if (verdict) {
+    search.set('verdict', verdict);
+  }
+  if (horizon) {
+    search.set('horizon', horizon);
+  }
+
+  const query = search.toString();
+  const endpoint = `/copilot/decision-journal${query ? `?${query}` : ''}`;
+  const payload = getResponseData(await fetchWithCache(endpoint, `copilot_decision_journal:${query || 'default'}`));
+  return payload && typeof payload === 'object' ? payload : {};
+}
+
+async function executePaperTrade(payload = {}) {
+  const body = payload && typeof payload === 'object' ? payload : {};
+
+  try {
+    const response = await fetch(API_BASE + '/copilot/paper-trades/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const responsePayload = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: responsePayload?.detail || responsePayload?.message || 'paper_trade_execute_failed',
+        data: responsePayload?.data || null,
+      };
+    }
+
+    clearCacheEntriesWithPrefix('copilot_decision_journal:');
+    return {
+      ok: responsePayload?.ok ?? true,
+      data: responsePayload?.data || responsePayload,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'paper_trade_execute_failed',
+      data: null,
+    };
+  }
+}
+
 async function askCopilot(question, tickers) {
   if (!tickers) tickers = [];
   try {
@@ -1824,6 +1883,11 @@ async function populateWindowGlobals() {
       }
     }
 
+    const copilotDecisionJournalPayload = await getCopilotDecisionJournal({ limit: 20 });
+    window.copilotDecisionJournal = copilotDecisionJournalPayload && typeof copilotDecisionJournalPayload === 'object'
+      ? copilotDecisionJournalPayload
+      : null;
+
     // Judge decision journal for outcome feedback loop visibility
     const judgeAnalysis = await getJudgeAnalysis(5);
     const normalizedJudgeDecisionJournal = isObject(judgeAnalysis) || Array.isArray(judgeAnalysis)
@@ -2044,6 +2108,7 @@ window.FinanceAPI = {
   getPolicyImpact,
   getInsiderBehavior,
   getJudgeAnalysis,
+  getCopilotDecisionJournal,
   getCopilotStart,
   getCopilotContext,
   getDailyBrief,
@@ -2052,6 +2117,7 @@ window.FinanceAPI = {
   getPortfolioHealth,
   transformPortfolioRiskProfileToHealth: transformPortfolioHealth,
   askCopilot,
+  executePaperTrade,
   searchUniverse,
   startAutoRefresh,
   getStrategyPlaybooks,
@@ -2085,6 +2151,7 @@ window.getLiveDashboardData = () => ({
     portfolioHealth: window.livePortfolioHealth || null,
     llmJudgeData: window.llmJudgeData || null,
     judgeDecisionJournal: window.judgeDecisionJournal || null,
+    copilotDecisionJournal: window.copilotDecisionJournal || null,
     finalGlobalForecastGate: window.finalGlobalForecastGate || null,
     macroRegimeHierarchy: window.macroRegimeHierarchy || null
   },

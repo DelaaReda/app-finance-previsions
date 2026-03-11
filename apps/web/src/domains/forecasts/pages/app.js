@@ -1580,6 +1580,7 @@ let newsItems = sanitizeNewsItems(window.newsItems || FALLBACK_NEWS_ITEMS);
 let liveAlerts = [];
 let llmJudgeData = window.llmJudgeData || FALLBACK_LLM_JUDGE_DATA;
 let judgeDecisionJournal = sanitizeJudgeDecisionJournal(window.judgeDecisionJournal || []);
+let copilotDecisionJournal = window.copilotDecisionJournal || null;
 let marketDrivers = sanitizeMarketDrivers(window.marketDrivers || FALLBACK_MARKET_DRIVERS);
 let insiderBehavior = sanitizeInsiderBehavior(window.insiderBehavior || null);
 let liveForecastRows = [];
@@ -1598,6 +1599,7 @@ let liveDataMeta = {
   contractState: 'unknown',
   ingestionHealth: null
 };
+const tradeIdeaExecutionState = Object.create(null);
 const EVENT_IMPACT_HORIZONS = ['1d', '1w', '1m'];
 const CRITICAL_WIDGET_HEALTH_TARGETS = {
   hero: {
@@ -2073,6 +2075,7 @@ function sanitizeTradeIdeas(items) {
     entry: toFiniteNumber(item.entry, 0),
     target: toFiniteNumber(item.target, 0),
     confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, 70)))),
+    decisionId: toString(item.decisionId || item.decision_id, ''),
     attributionLabel: toString(item.attributionLabel || item.attribution_label, ''),
     attributionDetail: toString(item.attributionDetail || item.attribution_detail, '')
   }));
@@ -2197,6 +2200,7 @@ function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecomm
         entry: toFiniteNumber(item.entry || item.current_price || item.currentPrice, 0),
         target: toFiniteNumber(item.target || item.target_price || item.targetPrice, 0),
         confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, item.score) * 100))),
+        decisionId: toString(item.decision_id || item.decisionId, ''),
         attributionLabel: blendedScore > 0 ? `Fusion ${blendedScore}%` : 'Fusion tracked',
         attributionDetail: detailParts.join(' • ')
       };
@@ -2659,6 +2663,41 @@ function sanitizeJudgeDecisionJournal(entries) {
               : []
           }
         : null;
+      const rawPaperTradeExecution = isObject(entry.paper_trade_execution)
+        ? entry.paper_trade_execution
+        : null;
+      const paperTradeRecords = rawPaperTradeExecution
+        ? toArray(rawPaperTradeExecution.records, [])
+          .filter((record) => isObject(record))
+          .map((record) => ({
+            executionId: toString(record.execution_id, ''),
+            ticker: toString(record.ticker, symbol).toUpperCase(),
+            side: toString(record.side, '').toLowerCase(),
+            quantity: toFiniteNumber(record.quantity, 0),
+            assumedFillPrice: toFiniteNumber(record.assumed_fill_price, null),
+            marketPrice: toFiniteNumber(record.market_price, null),
+            unrealizedPnl: toFiniteNumber(record.unrealized_pnl, null),
+            unrealizedPnlPercent: toFiniteNumber(record.unrealized_pnl_percent, null),
+            recordedAt: record.recorded_at || null,
+          }))
+        : [];
+      const paperTradeExecution = rawPaperTradeExecution
+        ? {
+            schemaVersion: toString(rawPaperTradeExecution.schema_version, 'paper_trade_execution_v1'),
+            recordMode: toString(rawPaperTradeExecution.record_mode, 'append_only'),
+            count: Math.max(
+              0,
+              Math.round(
+                toFiniteNumber(
+                  rawPaperTradeExecution.count,
+                  paperTradeRecords.length,
+                ),
+              ),
+            ),
+            latestRecordedAt: rawPaperTradeExecution.latest_recorded_at || null,
+            records: paperTradeRecords,
+          }
+        : null;
 
       return {
         symbol,
@@ -2668,7 +2707,8 @@ function sanitizeJudgeDecisionJournal(entries) {
         confidence,
         timestamp: timeText || null,
         policy_guardrails: policyGuardrails,
-        outcome_feedback: outcomeFeedback
+        outcome_feedback: outcomeFeedback,
+        paper_trade_execution: paperTradeExecution,
       };
     })
     .filter(Boolean)
@@ -3835,6 +3875,42 @@ function renderJudgeDecisionJournal(entries = judgeDecisionJournal) {
       </div>`;
     }
 
+    const paperTradeExecution = entry.paper_trade_execution;
+    let paperTradeMarkup = '';
+    if (paperTradeExecution && typeof paperTradeExecution === 'object') {
+      const latestExecution = Array.isArray(paperTradeExecution.records)
+        ? paperTradeExecution.records[0] || null
+        : null;
+      const sideLabel = toString(latestExecution?.side, '').toUpperCase();
+      const quantityValue = toFiniteNumber(latestExecution?.quantity, null);
+      const quantityLabel = Number.isFinite(quantityValue) ? quantityValue.toFixed(2).replace(/\.00$/, '') : 'N/A';
+      const assumedFillPrice = toFiniteNumber(latestExecution?.assumedFillPrice, null);
+      const fillLabel = Number.isFinite(assumedFillPrice) ? `$${assumedFillPrice.toFixed(2)}` : 'N/A';
+      const unrealizedPnl = toFiniteNumber(latestExecution?.unrealizedPnl, null);
+      const pnlValue = Number.isFinite(unrealizedPnl)
+        ? `${unrealizedPnl >= 0 ? '+' : '-'}$${Math.abs(unrealizedPnl).toFixed(2)}`
+        : 'N/A';
+      const pnlPercent = toFiniteNumber(latestExecution?.unrealizedPnlPercent, null);
+      const pnlPercentLabel = Number.isFinite(pnlPercent)
+        ? ` (${pnlPercent >= 0 ? '+' : ''}${(pnlPercent * 100).toFixed(2)}%)`
+        : '';
+      const lastRecordedAt = latestExecution?.recordedAt || paperTradeExecution.latestRecordedAt;
+      const summaryParts = [
+        sideLabel,
+        quantityLabel !== 'N/A' ? `${quantityLabel} share${quantityLabel === '1' ? '' : 's'}` : null,
+        fillLabel !== 'N/A' ? `fill ${fillLabel}` : null,
+      ].filter(Boolean);
+      paperTradeMarkup = `<div class="outcome-feedback-section" style="margin-top: 10px; padding: 8px; background: rgba(15, 23, 42, 0.55); border-radius: 6px; border-left: 3px solid #22C55E;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+          <span style="font-size: 14px; font-weight: 600;">Paper trade</span>
+          <span class="outcome-status-badge outcome-status-resolved">${paperTradeExecution.count} execution${paperTradeExecution.count === 1 ? '' : 's'}</span>
+        </div>
+        <div style="font-size: 12px; color: #E2E8F0;">${summaryParts.join(' • ') || 'Execution recorded'}</div>
+        <div style="margin-top: 4px; font-size: 12px; color: ${Number.isFinite(unrealizedPnl) && unrealizedPnl < 0 ? '#fca5a5' : '#86efac'};">Unrealized P&amp;L: ${pnlValue}${pnlPercentLabel}</div>
+        ${lastRecordedAt ? `<div style="margin-top: 4px; font-size: 11px; color: #94A3B8;">Recorded ${new Date(lastRecordedAt).toLocaleDateString()}</div>` : ''}
+      </div>`;
+    }
+
     return `
       <div class="alert-item">
         <div class="alert-content">
@@ -3844,6 +3920,7 @@ function renderJudgeDecisionJournal(entries = judgeDecisionJournal) {
           ${rationale}
           ${metaMarkup}
           ${outcomeMarkup}
+          ${paperTradeMarkup}
         </div>
       </div>
     `;
@@ -4025,6 +4102,10 @@ function applyLiveDashboardData(payload = {}) {
       ...data.llmJudgeData
     };
   }
+  copilotDecisionJournal = isObject(data.copilotDecisionJournal)
+    ? data.copilotDecisionJournal
+    : (isObject(window.copilotDecisionJournal) ? window.copilotDecisionJournal : null);
+  window.copilotDecisionJournal = copilotDecisionJournal;
   judgeDecisionJournal = sanitizeJudgeDecisionJournal(
     data.judgeDecisionJournal || window.judgeDecisionJournal || []
   );
@@ -7558,6 +7639,105 @@ function saveLayout() {
   showToast('Layout saved successfully!');
 }
 
+function inferTradeIdeaSide(signalType) {
+  const normalized = toString(signalType, '').trim().toLowerCase();
+  if (normalized.includes('sell') || normalized.includes('short')) {
+    return 'sell';
+  }
+  return 'buy';
+}
+
+function resolveTradeIdeaDecisionId(idea = {}) {
+  const explicitDecisionId = toString(idea.decisionId || idea.decision_id, '').trim();
+  if (explicitDecisionId) {
+    return explicitDecisionId;
+  }
+
+  const journalPayload = isObject(copilotDecisionJournal)
+    ? copilotDecisionJournal
+    : (isObject(window.copilotDecisionJournal) ? window.copilotDecisionJournal : null);
+  const entries = extractArray(journalPayload, ['entries', 'journal', 'decisions', 'history']);
+  const symbol = toString(idea.symbol, '').trim().toUpperCase();
+  if (!symbol || !entries.length) {
+    return '';
+  }
+
+  const matchedEntry = entries.find((entry) => {
+    if (!isObject(entry)) return false;
+    const tickers = toArray(entry.tickers, []).map((item) => toString(item, '').trim().toUpperCase());
+    const entrySymbol = toString(entry.ticker || entry.symbol, '').trim().toUpperCase();
+    return tickers.includes(symbol) || entrySymbol === symbol;
+  });
+
+  return matchedEntry ? toString(matchedEntry.decision_id || matchedEntry.decisionId, '').trim() : '';
+}
+
+function getTradeIdeaExecutionState(idea = {}) {
+  const key = toString(idea.decisionId || idea.decision_id || idea.symbol, '').trim().toUpperCase();
+  return key ? tradeIdeaExecutionState[key] || null : null;
+}
+
+async function executeTradeIdea(symbol) {
+  const ticker = toString(symbol, '').trim().toUpperCase();
+  const idea = tradeIdeas.find((item) => toString(item.symbol, '').trim().toUpperCase() === ticker);
+  if (!idea) {
+    showToast(`Trade idea ${ticker || 'N/A'} unavailable`, 'error');
+    return;
+  }
+
+  const decisionId = resolveTradeIdeaDecisionId(idea);
+  if (!decisionId) {
+    showToast(`No linked decision journal entry for ${ticker}`, 'warning');
+    return;
+  }
+
+  const financeApi = isObject(window.FinanceAPI) ? window.FinanceAPI : null;
+  if (!financeApi || typeof financeApi.executePaperTrade !== 'function') {
+    showToast('Paper trading API unavailable', 'error');
+    return;
+  }
+
+  const stateKey = toString(decisionId || ticker, '').trim().toUpperCase();
+  tradeIdeaExecutionState[stateKey] = { status: 'pending' };
+  renderTradeIdeas();
+
+  const quantity = 1;
+  const referencePrice = Math.max(toFiniteNumber(idea.entry, 0), 0.01);
+
+  try {
+    const result = await financeApi.executePaperTrade({
+      decision_id: decisionId,
+      ticker,
+      side: inferTradeIdeaSide(idea.signalType),
+      quantity,
+      reference_price: referencePrice,
+      market_price: referencePrice,
+      fee_bps: 5,
+      slippage_bps: 10,
+      notes: 'trade_ideas_widget',
+    });
+
+    if (!result || result.ok === false || !isObject(result.data)) {
+      throw new Error(toString(result && result.error, 'paper_trade_execute_failed'));
+    }
+
+    tradeIdeaExecutionState[stateKey] = {
+      status: 'recorded',
+      executionId: toString(result.data.execution_id, ''),
+      unrealizedPnl: toFiniteNumber(result.data.pnl && result.data.pnl.unrealized, 0),
+    };
+    showToast(`Paper trade recorded for ${ticker}`, 'success');
+  } catch (error) {
+    tradeIdeaExecutionState[stateKey] = {
+      status: 'failed',
+      message: error instanceof Error ? error.message : 'paper_trade_execute_failed',
+    };
+    showToast(`Paper trade failed for ${ticker}`, 'error');
+  }
+
+  renderTradeIdeas();
+}
+
 // ============ MOBILE NAVIGATION ============
 function selectTab(button, tab) {
   document.querySelectorAll('.nav-tab').forEach(btn => btn.classList.remove('active'));
@@ -7586,7 +7766,21 @@ function renderTradeIdeas(root = document) {
   const container = getFacetteWidgetSlot(root, 'tradeIdeasGrid');
   if (!container) return;
 
-  container.innerHTML = tradeIdeas.map(idea => `
+  container.innerHTML = tradeIdeas.map((idea) => {
+    const decisionId = resolveTradeIdeaDecisionId(idea);
+    const executionState = getTradeIdeaExecutionState({ ...idea, decisionId });
+    const executionMarkup = executionState && executionState.status === 'recorded'
+      ? `<div class="trade-attribution"><span class="trade-attribution-badge">Paper ${toString(executionState.executionId, '').toUpperCase() || 'RECORDED'}</span><span class="trade-attribution-detail">Unrealized PnL ${toFiniteNumber(executionState.unrealizedPnl, 0) >= 0 ? '+' : ''}$${toFiniteNumber(executionState.unrealizedPnl, 0).toFixed(2)}</span></div>`
+      : executionState && executionState.status === 'failed'
+        ? `<div class="trade-attribution"><span class="trade-attribution-badge">Paper failed</span><span class="trade-attribution-detail">${toString(executionState.message, 'Retry unavailable')}</span></div>`
+        : '';
+    const buttonLabel = executionState && executionState.status === 'pending'
+      ? 'Executing...'
+      : decisionId
+        ? 'Paper Trade'
+        : 'No Journal';
+
+    return `
     <div class="trade-card">
       <div class="trade-main">
         <div class="stock-info">
@@ -7604,16 +7798,18 @@ function renderTradeIdeas(root = document) {
             ${idea.attributionDetail ? `<span class="trade-attribution-detail">${idea.attributionDetail}</span>` : ''}
           </div>
         ` : ''}
+        ${executionMarkup}
       </div>
       <div class="trade-meta">
         <div class="confidence-bar">
           <div class="bar-fill" style="width: ${idea.confidence}%"></div>
           <span class="confidence-text">${idea.confidence}%</span>
         </div>
-        <button class="trade-btn" onclick="showToast('Opening ${idea.symbol} trade...')">Trade</button>
+        <button class="trade-btn" onclick="executeTradeIdea('${idea.symbol}')" ${decisionId ? '' : 'disabled'}>${buttonLabel}</button>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 // V13: Render Market Calendar
@@ -8687,6 +8883,7 @@ window.searchStock = searchStock;
 window.quickNeed = quickNeed;
 
 // V13 Exposed Functions
+window.executeTradeIdea = executeTradeIdea;
 window.renderTradeIdeas = renderTradeIdeas;
 window.renderMarketCalendar = renderMarketCalendar;
 window.renderNewsFeed = renderNewsFeed;

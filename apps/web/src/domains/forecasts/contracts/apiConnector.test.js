@@ -257,6 +257,66 @@ test('getGeopoliticalRiskGraph unwraps region risk graph payloads and preserves 
   assert.equal(payload.stats.alerts_count, 1);
 });
 
+test('getCopilotDecisionJournal unwraps copilot journal payloads and preserves ticker filters', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            entries: [
+              { decision_id: 'dec-aapl-1', tickers: ['AAPL'] },
+            ],
+            returned_count: 1,
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotDecisionJournal({ limit: 5, ticker: 'aapl' });
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/copilot/decision-journal?limit=5&tickers=AAPL']);
+  assert.equal(payload.returned_count, 1);
+  assert.equal(payload.entries[0].decision_id, 'dec-aapl-1');
+});
+
+test('executePaperTrade posts the execution payload and unwraps the response', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url, options = {}) => {
+    calls.push({ url, options });
+    return {
+      ok: true,
+      async json() {
+        return {
+          ok: true,
+          data: {
+            execution_id: 'exec-123',
+            pnl: { unrealized: 2.15 },
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.executePaperTrade({
+    decision_id: 'dec-aapl-1',
+    ticker: 'AAPL',
+    side: 'buy',
+    quantity: 1,
+    reference_price: 195,
+  });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://localhost:8050/api/copilot/paper-trades/execute');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.match(String(calls[0].options.body), /"decision_id":"dec-aapl-1"/);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.execution_id, 'exec-123');
+});
+
 test('getEventImpactHorizonMatrix unwraps matrix payloads and preserves query params', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {
