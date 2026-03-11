@@ -33,7 +33,7 @@
     "bash scripts/fc_status_brief.sh",
     "bash scripts/health_snapshot.sh"
   ],
-  "commit_sha": "pending",
+  "commit_sha": "f0b7a850ffee47a894b55c1bad0f93b71f9aece2",
   "architecture_check": "PASS(batch-scoped runtime repair): change stays inside apps/monitor/server.py monitor endpoint composition; no queue/workboard/planner routing artifacts were edited.",
   "vision_alignment": "PASS(BATCH-46): country/continent/world macro regime delivery chain now has explicit admin-side runtime evidence that the monitor surfaces and diagnostics needed for downstream visibility are healthy again.",
   "recommended_next": "Planner can merge BATCH-46-ADMIN-01 and move to GOV_REVIEW. If monitor cold-start latency regresses again, follow up inside apps/monitor/server.py contract/planner-subagent lookups rather than the BATCH-46 feature surfaces.",
