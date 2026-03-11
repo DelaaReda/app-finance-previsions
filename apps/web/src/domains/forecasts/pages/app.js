@@ -2099,10 +2099,16 @@ function sanitizeAlertTimeline(items) {
     const summary = toString(source.summary || source.description || source.detail || source.message, 'Alerte marché détectée');
     const timestamp = toString(source.timestamp || source.generated_at || source.generatedAt, new Date().toISOString());
     const signature = [toString(source.ticker, 'MARKET'), source.type || 'signal', summary].join('|');
+    const policySignals = isObject(source.signals) ? source.signals : {};
+    const policyStatus = toString(policySignals.status, '').trim().toLowerCase();
+    const policyJurisdiction = toString(policySignals.jurisdiction, '').trim().toUpperCase();
+    const policyLabel = policyJurisdiction && policyStatus
+      ? `${policyJurisdiction} Policy • ${policyStatus.toUpperCase()}`
+      : '';
 
     return {
       id: toString(source.id, 'alert-' + signature.replace(/[^a-z0-9-]/gi, '-')),
-      title: `${toString(source.ticker, 'MARKET').toUpperCase()} ${type === 'risks' ? 'Risk' : type === 'news' ? 'News' : 'Signal'}`,
+      title: policyLabel || `${toString(source.ticker, 'MARKET').toUpperCase()} ${type === 'risks' ? 'Risk' : type === 'news' ? 'News' : 'Signal'}`,
       summary,
       severity,
       severityLabel: toString(severity, 'medium').toUpperCase(),
@@ -2161,6 +2167,7 @@ function renderAlertTimeline(alerts = liveAlerts) {
       <span class="alert-icon">${item.icon}</span>
       <div class="alert-content">
         <h3>${item.title}</h3>
+        <p>${item.summary}</p>
         <p>${item.confidenceLabel} confidence • ${item.timeLabel}</p>
       </div>
       <div class="alert-actions" style="display: none;">

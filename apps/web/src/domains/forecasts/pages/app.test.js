@@ -190,6 +190,49 @@ function loadForecastSlaHelpers() {
   return { sandbox, lineage };
 }
 
+function loadAlertTimelineHelpers() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const helpersSource = extractSection(source, 'const ALERT_SEVERITY_ORDER = {', '\n\nfunction sanitizeMarketCalendar');
+  const timelineContainer = { innerHTML: '' };
+  const sandbox = {
+    console,
+    Date,
+    document: {
+      getElementById(id) {
+        return id === 'timelineContainer' ? timelineContainer : null;
+      },
+    },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return value === null || value === undefined ? fallback : String(value);
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : fallback;
+    },
+    formatRelativeTime() {
+      return '2 minutes ago';
+    },
+    toggleAlertDetails() {},
+    showToast() {},
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${helpersSource}\nthis.sanitizeAlertTimeline = sanitizeAlertTimeline;\nthis.renderAlertTimeline = renderAlertTimeline;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  return { sandbox, timelineContainer };
+}
+
 function loadRenderForecastScenarioWidget() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const functionSource = extractFunction(source, 'renderForecastScenarioWidget', '\n\nfunction renderTopMoversWidget');
@@ -2382,4 +2425,51 @@ test('updateLiveProvenance includes global signal mesh source and license covera
 
   assert.match(lineage.textContent, /mesh: 9 sources \(7 nominal\) across 6 layers/);
   assert.match(lineage.textContent, /licenses: public_open_data:5, public_market_data_terms:2/);
+});
+
+test('sanitizeAlertTimeline surfaces policy status and jurisdiction in alert titles', () => {
+  const { sandbox } = loadAlertTimelineHelpers();
+
+  const rows = sandbox.sanitizeAlertTimeline([
+    {
+      ticker: 'UK',
+      type: 'news',
+      category: 'policy-impact',
+      description: 'Energy oversight rules tighten for utilities.',
+      severity: 'medium',
+      confidence: 0.68,
+      timestamp: '2026-03-10T11:00:00Z',
+      signals: {
+        jurisdiction: 'UK',
+        status: 'adopted',
+      },
+    },
+  ]);
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].title, 'UK Policy • ADOPTED');
+  assert.equal(rows[0].summary, 'Energy oversight rules tighten for utilities.');
+});
+
+test('renderAlertTimeline includes policy summary copy in the visible card body', () => {
+  const { sandbox, timelineContainer } = loadAlertTimelineHelpers();
+
+  sandbox.renderAlertTimeline([
+    {
+      ticker: 'US',
+      type: 'news',
+      category: 'policy-impact',
+      description: 'Disclosure rules proposed for cloud and semiconductor firms.',
+      severity: 'info',
+      confidence: 0.41,
+      timestamp: '2026-03-10T09:00:00Z',
+      signals: {
+        jurisdiction: 'US',
+        status: 'proposed',
+      },
+    },
+  ]);
+
+  assert.match(timelineContainer.innerHTML, /US Policy • PROPOSED/);
+  assert.match(timelineContainer.innerHTML, /Disclosure rules proposed for cloud and semiconductor firms\./);
 });
