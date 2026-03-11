@@ -1245,8 +1245,87 @@ function transformCopilotStart(payload, fallbackPayload = null) {
   return {
     brief_of_day: normalizeBriefOfDayPayload(resolvedBrief),
     ask: normalizedAsk,
-    open: normalizedOpen
+    open: normalizedOpen,
+    regime_detection: extractObject(source, ['regime_detection', 'regimeDetection'])
+      || extractObject(fallbackSource, ['regime_detection', 'regimeDetection']),
+    allocation_drift_alerts: extractObject(source, ['allocation_drift_alerts', 'allocationDriftAlerts'])
+      || extractObject(fallbackSource, ['allocation_drift_alerts', 'allocationDriftAlerts'])
   };
+}
+
+function mapRegimeAlertSeverity(label, confidence) {
+  const normalizedLabel = String(label || '').trim().toLowerCase();
+  const normalizedConfidence = normalizeNumber(confidence, 0);
+  if (
+    normalizedLabel.includes('risk_off')
+    || normalizedLabel.includes('bear')
+    || normalizedLabel.includes('defensive')
+    || normalizedLabel.includes('recession')
+  ) {
+    return 'high';
+  }
+  if (normalizedConfidence >= 0.75 || normalizedConfidence >= 75) {
+    return 'medium';
+  }
+  return 'info';
+}
+
+function buildCopilotContextAlerts(payload) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  const alerts = [];
+  const regimeDetection = extractObject(source, ['regime_detection', 'regimeDetection']);
+  const allocationDrift = extractObject(source, ['allocation_drift_alerts', 'allocationDriftAlerts']);
+
+  if (Object.keys(regimeDetection).length) {
+    const label = String(regimeDetection.label || regimeDetection.regime || '').trim().toUpperCase();
+    const confidence = normalizeNumber(regimeDetection.confidence, 0);
+    const thresholdReason = String(regimeDetection.threshold_reason || regimeDetection.thresholdReason || '').trim();
+    if (label) {
+      alerts.push({
+        id: String(regimeDetection.id || `copilot-regime-${label.toLowerCase()}`),
+        ticker: 'MARKET',
+        type: 'market-alert',
+        category: 'regime-detection',
+        severity: mapRegimeAlertSeverity(label, confidence),
+        confidence,
+        timestamp: regimeDetection.generated_at || regimeDetection.generatedAt || new Date().toISOString(),
+        description: thresholdReason
+          ? `Regime ${label.replace(/_/g, ' ')} detected. ${thresholdReason}`
+          : `Regime ${label.replace(/_/g, ' ')} detected.`,
+        signals: {
+          label,
+          threshold_reason: thresholdReason,
+          source: normalizeConnectorSourceList(regimeDetection.source || regimeDetection.sources),
+        },
+      });
+    }
+  }
+
+  const driftRows = Array.isArray(allocationDrift.alerts) ? allocationDrift.alerts : [];
+  driftRows.forEach((row, index) => {
+    if (!row || typeof row !== 'object') return;
+    const symbol = String(row.symbol || row.ticker || 'PORTFOLIO').trim().toUpperCase() || 'PORTFOLIO';
+    const reason = String(row.reason || row.description || '').trim();
+    if (!reason) return;
+    alerts.push({
+      id: String(row.id || `copilot-drift-${symbol.toLowerCase()}-${index}`),
+      ticker: symbol,
+      type: 'market-alert',
+      category: 'allocation-drift',
+      severity: String(row.severity || 'medium').trim().toLowerCase() || 'medium',
+      confidence: normalizeNumber(row.threshold_pct, 0),
+      timestamp: row.generated_at || row.generatedAt || regimeDetection.generated_at || new Date().toISOString(),
+      description: reason,
+      signals: {
+        basis: row.basis || '',
+        threshold_pct: normalizeNumber(row.threshold_pct, 0),
+        current_weight_pct: normalizeNumber(row.current_weight_pct, 0),
+        reference_weight_pct: normalizeNumber(row.reference_weight_pct, 0),
+      },
+    });
+  });
+
+  return alerts;
 }
 
 function normalizeCopilotOpenTarget(target, id) {
@@ -1627,6 +1706,11 @@ async function populateWindowGlobals() {
     );
     if (copilotStart.brief_of_day || copilotStart.ask.length || copilotStart.open.length) {
       window.copilotStart = copilotStart;
+    }
+    const copilotContextAlerts = buildCopilotContextAlerts(copilotStartPayload);
+    if (copilotContextAlerts.length > 0) {
+      window.alertTimeline = [...copilotContextAlerts, ...window.alertTimeline];
+      console.log('[API] ✅ ' + copilotContextAlerts.length + ' copilot regime/drift alerts hydrated');
     }
 
     if (window.copilotStart && window.copilotStart.brief_of_day) {

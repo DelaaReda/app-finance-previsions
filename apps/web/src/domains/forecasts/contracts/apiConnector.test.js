@@ -1756,3 +1756,93 @@ test('initLiveData merges policy-impact events into the shared alert timeline', 
   assert.equal(sandbox.window.alertTimeline[0].signals.transmission_uncertainty_level, 'low');
   assert.equal(sandbox.window.getLiveDashboardData().sources.includes('forecasts_policy_change_impact'), true);
 });
+
+test('initLiveData hydrates regime detection and allocation drift alerts from copilot context into the shared alert timeline', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url.includes('/api/alerts')) {
+      return {
+        ok: true,
+        async json() {
+          return { ok: true, data: { alerts: [] } };
+        },
+      };
+    }
+
+    if (url.includes('/api/copilot/start')) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              brief_of_day: {
+                title: 'Daily brief',
+                summary: 'Macro remains constructive.',
+                market_regime: 'RISK_ON',
+              },
+              regime_detection: {
+                label: 'RISK_ON',
+                confidence: 0.81,
+                threshold_reason: 'Breadth and earnings revisions are improving.',
+                generated_at: '2026-03-11T08:00:00Z',
+                source: ['copilot_context_regime_detection'],
+              },
+              allocation_drift_alerts: {
+                active: true,
+                alerts: [
+                  {
+                    id: 'largest_position_concentration',
+                    symbol: 'NVDA',
+                    severity: 'high',
+                    threshold_pct: 25,
+                    current_weight_pct: 33,
+                    reason: 'NVDA is 33.00% of saved weights, above the 25.00% playbook concentration proxy.',
+                  },
+                ],
+              },
+            },
+          };
+        },
+      };
+    }
+
+    if (url.includes('/api/forecasts/policy-impact')) {
+      return {
+        ok: true,
+        async json() {
+          return { ok: true, data: { events: [] } };
+        },
+      };
+    }
+
+    if (url.includes('/api/llm/judge/run')) {
+      return {
+        ok: false,
+        async json() {
+          return {};
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, data: {} };
+      },
+    };
+  });
+
+  await sandbox.window.initLiveData();
+
+  assert.equal(Array.isArray(sandbox.window.alertTimeline), true);
+  assert.equal(sandbox.window.alertTimeline.length, 2);
+  assert.equal(sandbox.window.alertTimeline[0].category, 'regime-detection');
+  assert.equal(sandbox.window.alertTimeline[0].severity, 'medium');
+  assert.match(sandbox.window.alertTimeline[0].description, /Breadth and earnings revisions are improving/);
+  assert.equal(sandbox.window.alertTimeline[1].category, 'allocation-drift');
+  assert.equal(sandbox.window.alertTimeline[1].ticker, 'NVDA');
+  assert.equal(sandbox.window.alertTimeline[1].severity, 'high');
+  assert.match(sandbox.window.alertTimeline[1].description, /33\.00% of saved weights/);
+  assert.equal(sandbox.window.copilotStart.regime_detection.label, 'RISK_ON');
+  assert.equal(sandbox.window.copilotStart.allocation_drift_alerts.active, true);
+});
