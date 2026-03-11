@@ -379,6 +379,11 @@ async def get_global_signal_mesh(
                 "nominal_layers": [],
                 "free_nominal_path_only": True,
             },
+            "observability": {
+                "freshness_expected_counts": {},
+                "nominal_coverage_ratio": 0.0,
+                "nominal_sources_without_fallback": [],
+            },
             "warnings": [],
             "provenance": {
                 "source": ["forecasts_global_signal_mesh", "critical_route_error_fallback"],
@@ -506,7 +511,12 @@ async def get_macro_regime_hierarchy(
                 "include_non_nominal": bool(include_non_nominal),
             },
             "levels": [],
-            "consistency": {"has_contradictions": False, "pairs": []},
+            "consistency": {
+                "has_contradictions": False,
+                "pairs": [],
+                "contradiction_count": 0,
+                "alignment_status": "aligned",
+            },
             "narrative": {
                 "summary": "Macro regime hierarchy unavailable, returning never-empty fallback.",
                 "regime_bias": "unknown",
@@ -517,6 +527,7 @@ async def get_macro_regime_hierarchy(
                 "level_count": 0,
                 "news_signal_count": 0,
                 "coverage_source_count": 0,
+                "hierarchy_confidence": 0.0,
             },
             "warnings": ["macro_regime_hierarchy_unavailable"],
             "provenance": {

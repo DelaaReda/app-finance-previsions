@@ -488,9 +488,100 @@ def test_batch46_country_continent_world_forecast_coverage(monkeypatch):
     
     assert "warnings" in data
     assert isinstance(data["warnings"], list)
+
+
+def test_batch46_macro_regime_contradictions_degrade_confidence(monkeypatch):
+    client = _client()
+    _MACRO_REGIME_RESPONSE_CACHE.clear()
+
+    def _contradictory_level(scope, entity):
+        if scope == "world":
+            return {
+                "scope": "world",
+                "entity": "world",
+                "regime": "soft_landing",
+                "confidence": 0.9,
+                "summary": "World baseline stays constructive.",
+                "drivers": ["disinflation"],
+                "risks": ["policy error"],
+                "score": 0.7,
+                "news_signals": [],
+            }
+        if scope == "continent":
+            return {
+                "scope": "continent",
+                "entity": str(entity).lower(),
+                "regime": "contraction_risk",
+                "confidence": 0.8,
+                "summary": "Regional macro impulse weakens materially.",
+                "drivers": ["energy shock"],
+                "risks": ["earnings reset"],
+                "score": 0.1,
+                "news_signals": [],
+            }
+        return {
+            "scope": "country",
+            "entity": entity,
+            "regime": "reacceleration",
+            "confidence": 0.7,
+            "summary": "Country-specific demand reaccelerates.",
+            "drivers": ["domestic demand"],
+            "risks": ["inflation rebound"],
+            "score": 0.75,
+            "news_signals": [],
+        }
+
+    monkeypatch.setattr(global_signal_mesh_service, "_build_level", _contradictory_level)
+    monkeypatch.setattr(
+        global_signal_mesh_service,
+        "_llm_macro_narrative",
+        lambda levels, horizon: {"used": False, "status": "unavailable"},
+    )
+
+    response = client.get("/api/forecasts/macro-regime-hierarchy?country=US&continent=north_america")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert data["consistency"]["has_contradictions"] is True
+    assert data["consistency"]["contradiction_count"] == 2
+    assert data["consistency"]["alignment_status"] == "contradiction"
+    assert data["narrative"]["consistency_call"] == "contradiction"
+    assert "cross_level_regime_contradiction" in data["warnings"]
+    assert data["confidence"] == 0.6
+    assert data["stats"]["hierarchy_confidence"] == 0.6
     assert "llm_narrative_fallback" in data["warnings"]
     
     assert data["cache"]["hit"] is False
+
+
+def test_batch46_macro_regime_hierarchy_fallback_preserves_contract_shape(monkeypatch):
+    from domains.forecasts.api import forecasts as domain_forecasts_api
+
+    client = _client()
+    _MACRO_REGIME_RESPONSE_CACHE.clear()
+
+    def _explode(**_kwargs):
+        raise RuntimeError("forced fallback")
+
+    monkeypatch.setattr(forecasts_api, "build_macro_regime_hierarchy_payload", _explode)
+    monkeypatch.setattr(domain_forecasts_api, "build_macro_regime_hierarchy_payload", _explode)
+
+    response = client.get("/api/forecasts/macro-regime-hierarchy?country=US")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert data["levels"] == []
+    assert data["consistency"] == {
+        "has_contradictions": False,
+        "pairs": [],
+        "contradiction_count": 0,
+        "alignment_status": "aligned",
+    }
+    assert data["stats"]["hierarchy_confidence"] == 0.0
+    assert data["narrative"]["consistency_call"] == "unknown"
+    assert data["message"] == "Macro regime hierarchy unavailable, returning never-empty fallback."
 
 
 def test_batch46_multi_country_forecast_consistency(monkeypatch):
