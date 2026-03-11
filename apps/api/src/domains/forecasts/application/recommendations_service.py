@@ -479,6 +479,7 @@ class RecommendationsService:
         )
         momentum = 0.8 if direction == "up" else 0.2 if direction == "down" else 0.5
         risk_reward = self._normalize(abs(expected_return), 0.0, 0.08)
+        # Keep the layer list aligned with _calculate_ml_score so attribution stays auditable.
         layers = [
             {
                 "layer": "forecast_confidence",
