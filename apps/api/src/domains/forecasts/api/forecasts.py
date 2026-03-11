@@ -73,6 +73,12 @@ try:
 except Exception:  # pragma: no cover
     from src.services import forecasts_service  # type: ignore
 
+try:
+    from domains.forecasts.application.global_signal_mesh_service import (
+        build_global_signal_mesh_payload,
+    )
+except Exception:  # pragma: no cover
+    build_global_signal_mesh_payload = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/forecasts")
@@ -315,6 +321,67 @@ async def get_walk_forward_scoreboard(
                 source=["forecasts_route", "walk_forward_scoreboard", "critical_route_error_fallback"],
                 fallback=True,
             )
+        return ok(fallback_payload)
+
+
+@router.get("/global-signal-mesh")
+async def get_global_signal_mesh(
+    include_non_nominal: bool = Query(
+        False,
+        description="Include fallback-only free sources that are not on the nominal runtime path.",
+    ),
+    debug: bool = Query(False, description="Bypass cache and include debug_pipeline traces."),
+):
+    try:
+        if build_global_signal_mesh_payload is None:
+            raise ModuleNotFoundError("domains.forecasts.application.global_signal_mesh_service")
+        payload = build_global_signal_mesh_payload(
+            include_non_nominal=include_non_nominal,
+            debug=debug,
+        )
+        _apply_decision_contract(payload, route="forecasts_global_signal_mesh")
+        return ok(payload)
+    except Exception as exc:
+        logger.error("Error in get_global_signal_mesh route orchestration: %s", exc, exc_info=True)
+        now_iso = _now_iso()
+        fallback_payload = {
+            "mesh_id": "free_global_signal_mesh",
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "last_update": now_iso,
+            "source": ["forecasts_global_signal_mesh", "critical_route_error_fallback"],
+            "filters_applied": {
+                "include_non_nominal": bool(include_non_nominal),
+            },
+            "sources_catalog": [],
+            "stats": {
+                "source_count": 0,
+                "nominal_source_count": 0,
+                "layer_counts": {},
+                "license_class_counts": {},
+            },
+            "coverage": {
+                "layers": [],
+                "nominal_layers": [],
+                "free_nominal_path_only": True,
+            },
+            "warnings": [],
+            "provenance": {
+                "source": ["forecasts_global_signal_mesh", "critical_route_error_fallback"],
+                "fallback_used": True,
+                "sla": {
+                    "updated_at": now_iso,
+                    "freshness_status": "unknown",
+                    "freshness_age_seconds": 0.0,
+                    "target_max_age_seconds": 0,
+                    "within_target": False,
+                },
+            },
+            "cache": {"hit": False, "age_seconds": 0.0, "ttl_seconds": 0},
+            "error": str(exc),
+            "message": "Global signal mesh unavailable, returning never-empty fallback.",
+        }
+        _apply_decision_contract(fallback_payload, route="forecasts_global_signal_mesh")
         return ok(fallback_payload)
 
 
