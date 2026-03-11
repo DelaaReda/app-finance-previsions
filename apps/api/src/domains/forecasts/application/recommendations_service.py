@@ -518,11 +518,41 @@ class RecommendationsService:
                 "contribution": round(risk_reward * 0.05, 3),
             },
         ]
+        total_contribution = sum(max(float(item["contribution"]), 0.0) for item in layers)
+        for item in layers:
+            contribution = max(float(item["contribution"]), 0.0)
+            normalized_contribution = (contribution / total_contribution) if total_contribution > 0 else 0.0
+            item["normalized_contribution"] = round(normalized_contribution, 3)
+            item["contribution_pct"] = round(normalized_contribution * 100, 1)
+
+        ranked_layers = sorted(layers, key=lambda item: item["contribution"], reverse=True)
         dominant_layer = max(layers, key=lambda item: item["contribution"])
+        runner_up_layer = ranked_layers[1] if len(ranked_layers) > 1 else dominant_layer
+        dominance_gap = max(
+            float(dominant_layer["normalized_contribution"]) - float(runner_up_layer["normalized_contribution"]),
+            0.0,
+        )
+        if dominance_gap >= 0.15:
+            stability = "stable"
+        elif dominance_gap >= 0.05:
+            stability = "watch"
+        else:
+            stability = "fragile"
         return {
             "blended_score": round(score, 3),
             "dominant_layer": dominant_layer["layer"],
             "layers": layers,
+            "contribution_normalization": {
+                "scheme": "layer_contribution_share",
+                "sum": round(sum(float(item["normalized_contribution"]) for item in layers), 3),
+            },
+            "stability": {
+                "status": stability,
+                "dominance_gap": round(dominance_gap, 3),
+                "dominant_share": dominant_layer["normalized_contribution"],
+                "runner_up_layer": runner_up_layer["layer"],
+                "runner_up_share": runner_up_layer["normalized_contribution"],
+            },
             "attribution": {
                 "forecast_direction": direction,
                 "market_regime": market_context.get("regime", "NORMAL"),

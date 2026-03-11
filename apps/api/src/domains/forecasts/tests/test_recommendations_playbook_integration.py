@@ -338,6 +338,10 @@ class TestPlaybookEnrichmentStructure:
         assert rec['forecast_fusion']['dominant_layer'] == 'forecast_confidence'
         assert rec['forecast_fusion']['attribution']['market_regime'] == 'BULL_MARKET'
         assert len(rec['forecast_fusion']['layers']) == 6
+        assert rec['forecast_fusion']['contribution_normalization']['scheme'] == 'layer_contribution_share'
+        assert rec['forecast_fusion']['contribution_normalization']['sum'] == pytest.approx(1.0, abs=1e-3)
+        assert rec['forecast_fusion']['stability']['status'] == 'watch'
+        assert rec['forecast_fusion']['stability']['dominant_share'] > rec['forecast_fusion']['stability']['runner_up_share']
         assert rec['supporting_data']['forecast_fusion'] == rec['forecast_fusion']
 
     def test_forecast_fusion_tracks_macro_dominance_for_safe_haven(self):
@@ -372,6 +376,10 @@ class TestPlaybookEnrichmentStructure:
 
         assert fusion['dominant_layer'] == 'macro_alignment'
         assert fusion['attribution']['macro_alignment'] == pytest.approx(1.0, abs=1e-3)
+        assert fusion['stability']['runner_up_layer'] in {'expected_return', 'news'}
+        assert fusion['stability']['dominant_share'] > fusion['stability']['runner_up_share']
+        assert fusion['contribution_normalization']['sum'] == pytest.approx(1.0, abs=1e-3)
+        assert sum(layer['normalized_contribution'] for layer in fusion['layers']) == pytest.approx(1.0, abs=1e-3)
 
 
 if __name__ == "__main__":
