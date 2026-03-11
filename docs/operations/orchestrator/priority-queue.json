@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-03-11T07:35:21Z",
+  "updated_at": "2026-03-11T07:39:16Z",
   "items": [
     {
       "id": "BATCH-01",
@@ -1115,9 +1115,9 @@
     {
       "id": "BATCH-49",
       "title": "Multi-Layer Forecast Fusion + Attribution",
-      "state": "PLANNED",
+      "state": "IN_PROGRESS",
       "depends_on": [],
-      "updated_at": "2026-03-11T05:54:17Z",
+      "updated_at": "2026-03-11T07:39:16Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -1131,7 +1131,7 @@
           "migrated_from_state": "PLANNED"
         }
       },
-      "next_action": "claim BATCH-49-ADMIN-01 (PLANNED pour admin)",
+      "next_action": "compl\u00e9ter BATCH-49-ADMIN-01 (PLANNED pour admin)",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
       "ready_starvation": true,
