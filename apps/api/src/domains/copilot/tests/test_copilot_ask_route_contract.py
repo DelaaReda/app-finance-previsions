@@ -199,7 +199,10 @@ def test_copilot_ask_route_preserves_event_timing_contract(monkeypatch):
             "judge_event_impact_horizon_matrix_service",
         ],
     }
-    assert data["memo"]["risks"] == ["Sources insuffisantes (moins de 2)."]
+    assert data["memo"]["risks"] == [
+        "Sources insuffisantes (moins de 2).",
+        "Timing risk elevated around earnings (1w).",
+    ]
 
 
 def test_copilot_ask_route_preserves_portfolio_context_markers(monkeypatch):

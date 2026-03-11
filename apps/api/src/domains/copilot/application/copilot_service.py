@@ -343,6 +343,13 @@ def _normalize_memo_risks(
     if not risks:
         risks = _normalize_string_list(payload.get("risk_caveat"))
 
+    event_timing = payload.get("event_timing") if isinstance(payload.get("event_timing"), dict) else {}
+    event_timing_summary = _safe_text(event_timing.get("summary"))
+    if event_timing_summary:
+        existing = {str(item).strip().lower() for item in risks if str(item).strip()}
+        if event_timing_summary.lower() not in existing:
+            risks.append(event_timing_summary)
+
     if insufficient_evidence and not _has_explicit_insufficient_evidence(risks):
         risks = ["Sources insuffisantes (moins de 2).", *risks] if risks else [
             "Sources insuffisantes (moins de 2)."
