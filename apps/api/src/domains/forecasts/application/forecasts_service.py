@@ -1432,39 +1432,58 @@ def get_forecast_detail_payload(
         )
 
         if match is None:
-            return {
+            payload = {
                 "forecast": {},
                 "found": False,
                 "generated_at": now_iso,
                 "freshness": snapshot_generated_at,
                 "last_update": snapshot_last_update,
+                "updated_at": snapshot_last_update,
+                "freshness_age": _freshness_age_seconds(snapshot_last_update, now_iso),
+                "freshness_status": _freshness_status_from_age(
+                    _freshness_age_seconds(snapshot_last_update, now_iso)
+                ),
                 "source": source,
                 "warnings": [],
                 "message": f"Forecast {forecast_id} not found.",
             }
+            payload["provenance"] = _build_payload_provenance(payload=payload, now_iso=now_iso)
+            return payload
 
-        return {
+        payload = {
             "forecast": match,
             "found": True,
             "generated_at": now_iso,
             "freshness": snapshot_generated_at,
             "last_update": snapshot_last_update,
+            "updated_at": snapshot_last_update,
+            "freshness_age": _freshness_age_seconds(snapshot_last_update, now_iso),
+            "freshness_status": _freshness_status_from_age(
+                _freshness_age_seconds(snapshot_last_update, now_iso)
+            ),
             "source": source,
             "warnings": [],
         }
+        payload["provenance"] = _build_payload_provenance(payload=payload, now_iso=now_iso)
+        return payload
     except Exception as exc:
         logger.error("Error in get_forecast_detail_payload: %s", exc, exc_info=True)
-        return {
+        fallback = {
             "forecast": {},
             "found": False,
             "generated_at": now_iso,
             "freshness": now_iso,
             "last_update": now_iso,
+            "updated_at": now_iso,
+            "freshness_age": 0.0,
+            "freshness_status": "fresh",
             "source": [*source, "critical_error_fallback"],
             "warnings": [],
             "error": str(exc),
             "message": "Forecast temporarily unavailable, returning empty response per never-empty pattern.",
         }
+        fallback["provenance"] = _build_payload_provenance(payload=fallback, now_iso=now_iso)
+        return fallback
 
 
 __all__ = [

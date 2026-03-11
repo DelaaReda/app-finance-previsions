@@ -103,7 +103,11 @@ class ForecastDetailDataDto(BaseModel):
     generated_at: str = Field(default="")
     freshness: str = Field(default="")
     last_update: str = Field(default="")
+    updated_at: str = Field(default="")
+    freshness_status: Literal["fresh", "stale", "unknown"] = Field(default="unknown")
+    freshness_age: float = Field(default=-1.0)
     source: List[str] = Field(default_factory=list)
+    provenance: Dict[str, Any] = Field(default_factory=dict)
     warnings: List[str] = Field(default_factory=list)
     message: Optional[str] = None
     error: Optional[str] = None

@@ -567,12 +567,39 @@ def test_forecast_detail_lookup_supports_forecast_id_and_ticker(monkeypatch):
     payload_by_id = by_id.json()["data"]
     assert payload_by_id["found"] is True
     assert payload_by_id["forecast"]["ticker"] == "AAPL"
+    assert payload_by_id["updated_at"] == FRESH_TS
+    assert payload_by_id["provenance"]["source"] == payload_by_id["source"]
+    assert payload_by_id["provenance"]["sla"]["updated_at"] == FRESH_TS
+    assert payload_by_id["provenance"]["sla"]["within_target"] is True
 
     by_ticker = client.get("/forecasts/aapl")
     assert by_ticker.status_code == 200
     payload_by_ticker = by_ticker.json()["data"]
     assert payload_by_ticker["found"] is True
     assert payload_by_ticker["forecast"]["ticker"] == "AAPL"
+
+
+def test_forecast_detail_not_found_keeps_snapshot_provenance(monkeypatch):
+    snapshot = {
+        "generated_at": FRESH_TS,
+        "last_update": FRESH_TS,
+        "source": ["forecasts_job"],
+        "rows": [],
+    }
+
+    monkeypatch.setattr(forecasts_route, "load_json", lambda _key: snapshot)
+    client = _client()
+
+    resp = client.get("/forecasts/missing")
+    assert resp.status_code == 200
+    payload = resp.json()["data"]
+
+    assert payload["found"] is False
+    assert payload["forecast"] == {}
+    assert payload["updated_at"] == FRESH_TS
+    assert payload["provenance"]["source"] == payload["source"]
+    assert payload["provenance"]["sla"]["updated_at"] == FRESH_TS
+    assert payload["provenance"]["fallback_used"] is False
 
 
 def test_forecasts_route_fallback_is_explicit_when_service_fails(monkeypatch):
