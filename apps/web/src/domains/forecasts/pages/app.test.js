@@ -2598,6 +2598,44 @@ test('renderTradeIdeas locks the paper trade CTA after a recorded execution', ()
   assert.match(container.innerHTML, /Unrealized PnL \+\$2\.15/);
 });
 
+test('renderTradeIdeas derives recorded paper-trade state from the decision journal after reload', () => {
+  const { sandbox, container } = loadTradeIdeaHelpers();
+  sandbox.copilotDecisionJournal = {
+    entries: [
+      {
+        decision_id: 'dec-aapl-1',
+        tickers: ['AAPL'],
+        paper_trade_execution: {
+          count: 1,
+          records: [
+            {
+              execution_id: 'exec-aapl-1',
+              unrealized_pnl: 2.15,
+            },
+          ],
+        },
+      },
+    ],
+  };
+  sandbox.window.copilotDecisionJournal = sandbox.copilotDecisionJournal;
+  sandbox.tradeIdeas = [
+    {
+      symbol: 'AAPL',
+      signalType: 'BUY',
+      entry: 195,
+      target: 210,
+      confidence: 82,
+    },
+  ];
+
+  sandbox.renderTradeIdeas();
+
+  assert.match(container.innerHTML, />Recorded</);
+  assert.match(container.innerHTML, /<button class="trade-btn" onclick="executeTradeIdea\('AAPL'\)" disabled>/);
+  assert.match(container.innerHTML, /Paper EXEC-AAPL-1/);
+  assert.match(container.innerHTML, /Unrealized PnL \+\$2\.15/);
+});
+
 test('renderTradeIdeas disables the paper trade CTA while execution is pending', () => {
   const { sandbox, container } = loadTradeIdeaHelpers();
   sandbox.copilotDecisionJournal = {
@@ -2635,6 +2673,15 @@ test('executeTradeIdea refreshes the decision journal after a recorded paper tra
   assert.equal(sandbox.window.copilotDecisionJournal.entries[0].paper_trade_execution.count, 1);
   assert.equal(sandbox.tradeIdeaExecutionState['DEC-AAPL-1'].executionId, 'exec-aapl-1');
   assert.deepEqual(toasts, [{ message: 'Paper trade recorded for AAPL', level: 'success' }]);
+});
+
+test('executeTradeIdea blocks duplicate paper trade submissions for an in-flight execution', async () => {
+  const { sandbox, toasts } = loadPaperTradeExecutionFlowHelpers();
+  sandbox.tradeIdeaExecutionState['DEC-AAPL-1'] = { status: 'pending' };
+
+  await sandbox.executeTradeIdea('AAPL');
+
+  assert.deepEqual(toasts, [{ message: 'Paper trade already executing for AAPL', level: 'warning' }]);
 });
 
 test('renderForecastScenarioWidget prefers threshold_summary over scoreboard rows for hit-rate copy', () => {

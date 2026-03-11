@@ -7674,7 +7674,43 @@ function resolveTradeIdeaDecisionId(idea = {}) {
 
 function getTradeIdeaExecutionState(idea = {}) {
   const key = toString(idea.decisionId || idea.decision_id || idea.symbol, '').trim().toUpperCase();
-  return key ? tradeIdeaExecutionState[key] || null : null;
+  if (!key) {
+    return null;
+  }
+
+  const localState = tradeIdeaExecutionState[key] || null;
+  if (localState) {
+    return localState;
+  }
+
+  const journalPayload = isObject(copilotDecisionJournal)
+    ? copilotDecisionJournal
+    : (isObject(window.copilotDecisionJournal) ? window.copilotDecisionJournal : null);
+  const entries = extractArray(journalPayload, ['entries', 'journal', 'decisions', 'history']);
+  const matchedEntry = entries.find((entry) => {
+    if (!isObject(entry)) return false;
+    const entryDecisionId = toString(entry.decision_id || entry.decisionId, '').trim().toUpperCase();
+    return entryDecisionId === key;
+  });
+  const paperTradeExecution = isObject(matchedEntry?.paper_trade_execution)
+    ? matchedEntry.paper_trade_execution
+    : null;
+  const latestRecord = paperTradeExecution && Array.isArray(paperTradeExecution.records)
+    ? paperTradeExecution.records[0] || null
+    : null;
+
+  if (!paperTradeExecution || !latestRecord) {
+    return null;
+  }
+
+  return {
+    status: 'recorded',
+    executionId: toString(latestRecord.execution_id || latestRecord.executionId, ''),
+    unrealizedPnl: toFiniteNumber(
+      latestRecord.unrealized_pnl ?? latestRecord.unrealizedPnl,
+      0,
+    ),
+  };
 }
 
 async function refreshDecisionJournalAfterPaperTrade(ticker) {
@@ -7725,6 +7761,16 @@ async function executeTradeIdea(symbol) {
   }
 
   const stateKey = toString(decisionId || ticker, '').trim().toUpperCase();
+  const currentExecutionState = tradeIdeaExecutionState[stateKey] || null;
+  if (currentExecutionState && currentExecutionState.status === 'pending') {
+    showToast(`Paper trade already executing for ${ticker}`, 'warning');
+    return;
+  }
+  if (currentExecutionState && currentExecutionState.status === 'recorded') {
+    showToast(`Paper trade already recorded for ${ticker}`, 'warning');
+    return;
+  }
+
   tradeIdeaExecutionState[stateKey] = { status: 'pending' };
   renderTradeIdeas();
 
