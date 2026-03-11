@@ -1148,6 +1148,69 @@ test('getLiveDashboardData aggregates live provenance sources from the active re
   ]));
 });
 
+test('initLiveData folds geopolitical escalation into market drivers without duplicating the factor', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url.includes('/api/dashboard/market-drivers')) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              drivers: [
+                { factor: 'Technical', contribution: 40, color: '#1F40AF' },
+                { factor: 'Macro', contribution: 30, color: '#10B981' },
+              ],
+            },
+          };
+        },
+      };
+    }
+
+    if (url.includes('/api/judge/geopolitical-risk-graph')) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              nodes: [
+                { label: 'Ukraine', escalation_score: 0.87, escalation_band: 'critical' },
+              ],
+              alerts: [
+                { region: 'Ukraine', escalation_score: 0.87, escalation_band: 'critical' },
+              ],
+            },
+          };
+        },
+      };
+    }
+
+    if (url.includes('/api/llm/judge/run')) {
+      return {
+        ok: false,
+        async json() {
+          return {};
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, data: {} };
+      },
+    };
+  });
+
+  await sandbox.window.initLiveData();
+
+  assert.equal(sandbox.window.marketDrivers[0].factor, 'Geopolitical');
+  assert.equal(sandbox.window.marketDrivers[0].contribution, 87);
+  assert.equal(sandbox.window.marketDrivers[1].factor, 'Technical');
+  assert.equal(sandbox.window.getLiveDashboardData().data.marketDrivers[0].factor, 'Geopolitical');
+});
+
 test('initLiveData hydrates judgeDecisionJournal without relying on page globals', async () => {
   const sandbox = loadConnector(async (url) => {
     if (url.includes('/api/judge?limit=5')) {

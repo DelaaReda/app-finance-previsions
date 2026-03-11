@@ -1118,6 +1118,39 @@ function transformMarketDrivers(payload) {
   }));
 }
 
+function normalizeRiskContributionScore(value) {
+  const raw = normalizeNumber(value, 0);
+  const scaled = raw > 1 ? raw : raw * 100;
+  return Math.max(0, Math.min(100, Math.round(scaled)));
+}
+
+function mergeGeopoliticalDriver(drivers, geopoliticalRiskGraph) {
+  const baseDrivers = Array.isArray(drivers) ? drivers.filter((item) => item && typeof item === 'object') : [];
+  const payload = geopoliticalRiskGraph && typeof geopoliticalRiskGraph === 'object' ? geopoliticalRiskGraph : null;
+  if (!payload) return baseDrivers;
+
+  const alerts = Array.isArray(payload.alerts) ? payload.alerts.filter((item) => item && typeof item === 'object') : [];
+  const nodes = Array.isArray(payload.nodes) ? payload.nodes.filter((item) => item && typeof item === 'object') : [];
+  const topRisk = alerts[0] || nodes[0] || null;
+  if (!topRisk) return baseDrivers;
+
+  const contribution = normalizeRiskContributionScore(topRisk.escalation_score);
+  const hasExistingGeopoliticalDriver = baseDrivers.some((item) => {
+    const factor = String(item.factor || '').trim().toLowerCase();
+    return factor.includes('geopolit') || factor.includes('conflict');
+  });
+  if (hasExistingGeopoliticalDriver) return baseDrivers;
+
+  return [
+    {
+      factor: 'Geopolitical',
+      contribution,
+      color: '#B45309',
+    },
+    ...baseDrivers,
+  ].slice(0, Math.max(baseDrivers.length, 4));
+}
+
 function formatCalendarDate(value, fallback) {
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) return fallback || 'TBA';
@@ -1407,8 +1440,9 @@ async function populateWindowGlobals() {
 
     const marketDriversPayload = await getMarketDriversSnapshot();
     const transformedMarketDrivers = marketDriversPayload ? transformMarketDrivers(marketDriversPayload.data || marketDriversPayload) : [];
-    if (transformedMarketDrivers.length > 0) {
-      window.marketDrivers = transformedMarketDrivers;
+    const mergedMarketDrivers = mergeGeopoliticalDriver(transformedMarketDrivers, window.geopoliticalRiskGraph);
+    if (mergedMarketDrivers.length > 0) {
+      window.marketDrivers = mergedMarketDrivers;
     } else {
       contractWarnings.push('marketDrivers-unavailable');
     }
