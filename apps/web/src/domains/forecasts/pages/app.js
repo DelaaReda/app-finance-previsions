@@ -2244,6 +2244,7 @@ function sanitizeInsiderBehavior(payload) {
     return null;
   }
 
+  const warnings = toArray(payload.warnings, []).map((warning) => toString(warning, '')).filter(Boolean);
   const signals = toArray(payload.signals, [])
     .filter((item) => isObject(item))
     .slice(0, 3)
@@ -2257,13 +2258,15 @@ function sanitizeInsiderBehavior(payload) {
       netTrades30d: Math.round(toFiniteNumber(item.activity?.window_30d?.net_trades, 0)),
       reviewNote: toString(item.guardrails?.review_note, ''),
       sources: toArray(item.provenance?.source, []).map((source) => toString(source, '')).filter(Boolean),
+      filingSource: toString(item.provenance?.filing_source, ''),
     }));
 
   return {
     engineId: toString(payload.engine_id, 'insider_behavior_intelligence_v1'),
     fallbackUsed: payload.fallback_used === true,
-    warnings: toArray(payload.warnings, []).map((warning) => toString(warning, '')).filter(Boolean),
+    warnings,
     policy: toString(payload.guardrails?.policy, ''),
+    summaryWarning: warnings.length ? warnings.join(' • ') : '',
     signals,
   };
 }
@@ -6672,6 +6675,7 @@ function renderMarketDrivers(root = document) {
   const container = getFacetteWidgetSlot(root, 'driversBarsVisual');
   if (!container) return;
 
+  const guardrailCopy = insiderBehavior?.summaryWarning || insiderBehavior?.policy || '';
   const insiderMarkup = insiderBehavior && Array.isArray(insiderBehavior.signals) && insiderBehavior.signals.length
     ? `
       <div class="driver-insider-panel" style="margin-top:14px;padding:12px;border-radius:14px;border:1px solid rgba(15,23,42,0.08);background:linear-gradient(135deg, rgba(255,255,255,0.96), rgba(239,246,255,0.92));">
@@ -6679,6 +6683,11 @@ function renderMarketDrivers(root = document) {
           <strong style="font-size:13px;color:#0f172a;">Insider behavior</strong>
           <span style="font-size:11px;color:#475569;">${insiderBehavior.fallbackUsed ? 'Conservative fallback' : 'Form 4 evidence'}</span>
         </div>
+        ${guardrailCopy ? `
+          <div style="margin-bottom:8px;font-size:11px;color:#92400e;background:rgba(251,191,36,0.16);border:1px solid rgba(245,158,11,0.28);border-radius:10px;padding:8px 10px;">
+            ${guardrailCopy}
+          </div>
+        ` : ''}
         ${insiderBehavior.signals.map((signal) => `
           <div style="padding:10px 0;border-top:1px solid rgba(148,163,184,0.2);">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
@@ -6687,6 +6696,12 @@ function renderMarketDrivers(root = document) {
             </div>
             <div style="margin-top:4px;font-size:12px;color:#334155;">${signal.summary}</div>
             <div style="margin-top:6px;font-size:11px;color:#64748b;">30d net trades: ${signal.netTrades30d} • ${signal.reviewNote || insiderBehavior.policy}</div>
+            <div style="margin-top:6px;font-size:11px;color:#64748b;">
+              Provenance: ${signal.filingSource || 'public_form4'}${signal.sources.length ? ` • ${signal.sources.join(', ')}` : ''}
+            </div>
+            ${signal.uncertaintyFactors.length ? `
+              <div style="margin-top:4px;font-size:11px;color:#64748b;">Uncertainty factors: ${signal.uncertaintyFactors.join(', ')}</div>
+            ` : ''}
           </div>
         `).join('')}
       </div>

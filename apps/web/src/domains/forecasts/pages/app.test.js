@@ -358,6 +358,7 @@ function loadRenderMarketDrivers() {
     ],
     insiderBehavior: {
       fallbackUsed: false,
+      summaryWarning: 'Insider activity is evidence with uncertainty, never a standalone directive.',
       policy: 'Insider activity is evidence with uncertainty, never a standalone directive.',
       signals: [
         {
@@ -367,6 +368,9 @@ function loadRenderMarketDrivers() {
           summary: 'Insider activity for NVDA suggests accumulation bias.',
           netTrades30d: 4,
           reviewNote: 'Use insider behavior only as corroborating evidence.',
+          filingSource: 'public_form4',
+          sources: ['forecasts_insider_behavior', 'sec_edgar_form4'],
+          uncertaintyFactors: ['limited_sample_size', 'single_cluster_activity'],
         },
       ],
     },
@@ -1566,6 +1570,7 @@ test('applyLiveDashboardData stores insider behavior payloads for existing widge
   const insiderBehavior = {
     engineId: 'insider_behavior_intelligence_v1',
     fallbackUsed: false,
+    summaryWarning: 'Insider activity is evidence with uncertainty, never a standalone directive.',
     signals: [
       {
         ticker: 'NVDA',
@@ -1573,6 +1578,9 @@ test('applyLiveDashboardData stores insider behavior payloads for existing widge
         uncertaintyLevel: 'medium',
         summary: 'Insider activity suggests accumulation bias.',
         netTrades30d: 4,
+        filingSource: 'public_form4',
+        sources: ['forecasts_insider_behavior', 'sec_edgar_form4'],
+        uncertaintyFactors: ['limited_sample_size'],
       },
     ],
   };
@@ -1599,6 +1607,9 @@ test('renderMarketDrivers appends insider behavior summary to the existing widge
   assert.match(container.innerHTML, /NVDA/);
   assert.match(container.innerHTML, /61% confidence/);
   assert.match(container.innerHTML, /30d net trades: 4/);
+  assert.match(container.innerHTML, /never a standalone directive/);
+  assert.match(container.innerHTML, /Provenance: public_form4/);
+  assert.match(container.innerHTML, /Uncertainty factors: limited_sample_size, single_cluster_activity/);
 });
 
 test('renderForecastScenarioWidget prefers threshold_summary over scoreboard rows for hit-rate copy', () => {
