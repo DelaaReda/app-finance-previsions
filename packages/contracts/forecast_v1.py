@@ -108,3 +108,39 @@ class ForecastDetailDataDto(BaseModel):
 class ForecastDetailResponse(BaseModel):
     ok: bool = True
     data: ForecastDetailDataDto = Field(default_factory=ForecastDetailDataDto)
+
+
+class WalkForwardScoreboardRowDto(BaseModel):
+    metric_key: str
+    label: str
+    scope: str = Field(default="overall")
+    value: float = Field(default=0.0)
+    target: Optional[float] = None
+    comparator: Literal["gte", "lte", "info"] = Field(default="info")
+    status: Literal["pass", "fail", "unknown"] = Field(default="unknown")
+    sample_size: int = Field(default=0)
+
+
+class WalkForwardScoreboardDataDto(BaseModel):
+    rows: List[WalkForwardScoreboardRowDto] = Field(default_factory=list)
+    count: int = Field(default=0)
+    generated_at: str = Field(default="")
+    freshness: str = Field(default="")
+    last_update: str = Field(default="")
+    freshness_status: Literal["fresh", "stale", "unknown"] = Field(default="unknown")
+    freshness_age: float = Field(default=-1.0)
+    source: List[str] = Field(default_factory=list)
+    filters_applied: Dict[str, Any] = Field(default_factory=dict)
+    stats: Dict[str, Any] = Field(default_factory=dict)
+    warnings: List[str] = Field(default_factory=list)
+    cache: Dict[str, Any] = Field(default_factory=dict)
+    threshold_summary: Dict[str, Any] = Field(default_factory=dict)
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    debug_pipeline: Optional[List[Dict[str, Any]]] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+class WalkForwardScoreboardResponse(BaseModel):
+    ok: bool = True
+    data: WalkForwardScoreboardDataDto = Field(default_factory=WalkForwardScoreboardDataDto)

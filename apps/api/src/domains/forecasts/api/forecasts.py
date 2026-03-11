@@ -59,10 +59,12 @@ try:
         ForecastSortBy,
         ForecastSortOrder,
         ForecastsResponse,
+        WalkForwardScoreboardResponse,
     )
 except Exception:  # pragma: no cover
     ForecastsResponse = None  # type: ignore
     ForecastDetailResponse = None  # type: ignore
+    WalkForwardScoreboardResponse = None  # type: ignore
     ForecastSortBy = str  # type: ignore
     ForecastSortOrder = str  # type: ignore
 
@@ -212,6 +214,74 @@ async def get_forecasts(
         _apply_decision_contract(fallback_payload, route="forecasts_route")
         if edge_enabled(EDGE_FORECASTS_FLAG, default=True):
             return edge_forecasts_degraded(fallback_payload, detail=str(route_exc))
+        return ok(fallback_payload)
+
+
+@router.get(
+    "/scoreboard",
+    response_model=WalkForwardScoreboardResponse
+    if WalkForwardScoreboardResponse is not None
+    else None,
+    response_model_exclude_none=True,
+)
+async def get_walk_forward_scoreboard(
+    horizon: str = Query(
+        "all",
+        description="Optional walk-forward horizon filter (all, 1d, 1w, 1m, 3m).",
+    ),
+    debug: bool = Query(False, description="Bypass cache and include debug_pipeline traces."),
+):
+    try:
+        payload = await forecasts_service.get_walk_forward_scoreboard_payload(
+            horizon=horizon,
+            debug=debug,
+            load_json_fn=load_json,
+        )
+        _apply_decision_contract(payload, route="forecasts_route")
+        if edge_enabled(EDGE_FORECASTS_FLAG, default=True):
+            return edge_ok(
+                payload,
+                source=["forecasts_route", "walk_forward_scoreboard"],
+                fallback=bool(payload.get("error")),
+            )
+        return ok(payload)
+    except Exception as route_exc:
+        logger.error(
+            "Error in get_walk_forward_scoreboard route orchestration: %s",
+            route_exc,
+            exc_info=True,
+        )
+        now_iso = _now_iso()
+        fallback_payload = {
+            "rows": [],
+            "count": 0,
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "last_update": now_iso,
+            "freshness_status": "unknown",
+            "freshness_age": -1.0,
+            "source": ["forecasts_route", "walk_forward_scoreboard", "critical_route_error_fallback"],
+            "filters_applied": {"horizon": str(horizon or "all").lower()},
+            "stats": {"overall_rows": 0, "horizon_rows": 0, "asset_rows": 0, "passing_rows": 0, "failing_rows": 0},
+            "threshold_summary": {
+                "walk_forward_direction_hit_rate": {"target": 0.52, "comparator": "gte"}
+            },
+            "summary": {},
+            "warnings": [],
+            "cache": {"hit": False, "age_seconds": 0.0, "ttl_seconds": 0},
+            "error": str(route_exc),
+            "message": "Walk-forward scoreboard route failed critically but returned never-empty fallback.",
+        }
+        _apply_decision_contract(fallback_payload, route="forecasts_route")
+        if edge_enabled(EDGE_FORECASTS_FLAG, default=True):
+            return edge_degraded(
+                fallback_payload,
+                code="walk_forward_scoreboard_unavailable",
+                message="Walk-forward scoreboard unavailable, degraded fallback payload returned.",
+                detail=str(route_exc),
+                source=["forecasts_route", "walk_forward_scoreboard", "critical_route_error_fallback"],
+                fallback=True,
+            )
         return ok(fallback_payload)
 
 

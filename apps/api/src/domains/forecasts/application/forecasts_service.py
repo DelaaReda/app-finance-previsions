@@ -40,6 +40,16 @@ try:
 except Exception:  # pragma: no cover
     ensure_decision_contract = None  # type: ignore
 
+try:
+    from services.prediction_analyzer import prediction_analyzer_service  # type: ignore
+except Exception:  # pragma: no cover
+    try:
+        from domains.forecasts.application.prediction_analyzer import (  # type: ignore
+            prediction_analyzer_service,
+        )
+    except Exception:  # pragma: no cover
+        prediction_analyzer_service = None  # type: ignore
+
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +82,13 @@ FORECASTS_BLOCK_MOCK_NOMINAL = str(
 _FORECASTS_RESPONSE_CACHE: Dict[str, Dict[str, Any]] = {}
 _FORECASTS_INFLIGHT: Dict[str, asyncio.Task] = {}
 _FORECASTS_INFLIGHT_LOCK = asyncio.Lock()
+_FORECASTS_SCOREBOARD_RESPONSE_CACHE: Dict[str, Dict[str, Any]] = {}
+_FORECASTS_SCOREBOARD_INFLIGHT: Dict[str, asyncio.Task] = {}
+_FORECASTS_SCOREBOARD_INFLIGHT_LOCK = asyncio.Lock()
 
 RISK_LEVEL_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 NOMINAL_REFRESH_MARKERS = ("forecasts_simple", "simple_momentum")
+WALK_FORWARD_HIT_RATE_TARGET = 0.52
 
 try:
     from platform.legacy.models.forecast_hybrid_v1 import ForecastHybridV1
@@ -125,6 +139,13 @@ def _safe_bool(value: Any, default: bool = False) -> bool:
     if value is None:
         return default
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except Exception:
+        return int(default)
 
 
 def _contains_mock_marker(values: List[str]) -> bool:
@@ -571,6 +592,304 @@ def _base_forecasts_payload(
             "ttl_seconds": int(FORECASTS_CACHE_TTL_SECONDS),
         },
     }
+
+
+def _scoreboard_status(value: float, *, target: Optional[float], comparator: str) -> str:
+    if target is None:
+        return "unknown"
+    if comparator == "gte":
+        return "pass" if value >= target else "fail"
+    if comparator == "lte":
+        return "pass" if value <= target else "fail"
+    return "unknown"
+
+
+def _base_scoreboard_payload(
+    *,
+    now_iso: str,
+    source: List[str],
+    filters_applied: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "rows": [],
+        "count": 0,
+        "generated_at": now_iso,
+        "freshness": now_iso,
+        "last_update": now_iso,
+        "freshness_status": "unknown",
+        "freshness_age": -1.0,
+        "source": source,
+        "filters_applied": filters_applied,
+        "stats": {
+            "overall_rows": 0,
+            "horizon_rows": 0,
+            "asset_rows": 0,
+            "passing_rows": 0,
+            "failing_rows": 0,
+        },
+        "threshold_summary": {
+            "walk_forward_direction_hit_rate": {
+                "target": WALK_FORWARD_HIT_RATE_TARGET,
+                "comparator": "gte",
+            }
+        },
+        "summary": {},
+        "warnings": [],
+        "cache": {
+            "hit": False,
+            "age_seconds": 0.0,
+            "ttl_seconds": int(FORECASTS_CACHE_TTL_SECONDS),
+        },
+    }
+
+
+async def get_walk_forward_scoreboard_payload(
+    *,
+    horizon: str,
+    debug: bool,
+    load_json_fn: Callable[[str], Any] = load_json,
+) -> Dict[str, Any]:
+    now_iso = utc_now_iso()
+    filters_applied = {"horizon": str(horizon or "all").lower()}
+    cache_key = stable_cache_key(
+        "forecasts_walk_forward_scoreboard_v1",
+        filters_applied,
+    )
+
+    if not debug and FORECASTS_CACHE_TTL_SECONDS > 0:
+        cached = response_cache_get(
+            _FORECASTS_SCOREBOARD_RESPONSE_CACHE,
+            cache_key,
+            ttl_seconds=FORECASTS_CACHE_TTL_SECONDS,
+            hit_source_tag="forecasts_scoreboard_cache_hit",
+            default_source="forecasts_route",
+            copy_mode="deep",
+        )
+        if cached is not None:
+            return cached
+
+    traces: List[Dict[str, Any]] = []
+
+    def add_trace(step: str, **meta: Any) -> None:
+        if debug:
+            traces.append({"step": step, "ts": utc_now_iso(), **meta})
+
+    async def compute_payload() -> Dict[str, Any]:
+        payload = _base_scoreboard_payload(
+            now_iso=now_iso,
+            source=["forecasts_route", "walk_forward_scoreboard"],
+            filters_applied=filters_applied,
+        )
+        try:
+            add_trace("load_snapshot_start")
+            report = (
+                load_json_fn("prediction_accuracy")
+                or load_json_fn("prediction_accuracy.json")
+                or {}
+            )
+            add_trace("load_snapshot_done", has_snapshot=bool(report))
+            if not isinstance(report, dict) or not report:
+                if prediction_analyzer_service is not None:
+                    add_trace("prediction_analyzer_start")
+                    report = prediction_analyzer_service.analyze_predictions(
+                        horizon=filters_applied["horizon"]
+                    )
+                    add_trace(
+                        "prediction_analyzer_done",
+                        total_predictions=(
+                            report.get("accuracy_metrics", {}).get("total_predictions", 0)
+                            if isinstance(report, dict)
+                            else 0
+                        ),
+                    )
+                else:
+                    report = {}
+
+            metrics = report.get("accuracy_metrics", {}) if isinstance(report, dict) else {}
+            summary = report.get("summary", {}) if isinstance(report, dict) else {}
+            by_horizon = report.get("by_horizon", {}) if isinstance(report, dict) else {}
+            by_asset = report.get("by_asset", {}) if isinstance(report, dict) else {}
+            report_generated_at = str(
+                report.get("generated_at")
+                or metrics.get("generated_at")
+                or now_iso
+            )
+            freshness_age = _freshness_age_seconds(report_generated_at, now_iso)
+
+            rows: List[Dict[str, Any]] = []
+            overall_hit_rate = _safe_float(metrics.get("hit_rate", 0.0))
+            rows.append(
+                {
+                    "metric_key": "walk_forward_direction_hit_rate",
+                    "label": "Directional hit rate",
+                    "scope": "overall",
+                    "value": round(overall_hit_rate, 6),
+                    "target": WALK_FORWARD_HIT_RATE_TARGET,
+                    "comparator": "gte",
+                    "status": _scoreboard_status(
+                        overall_hit_rate,
+                        target=WALK_FORWARD_HIT_RATE_TARGET,
+                        comparator="gte",
+                    ),
+                    "sample_size": _safe_int(metrics.get("total_predictions", 0)),
+                }
+            )
+            rows.append(
+                {
+                    "metric_key": "walk_forward_mae",
+                    "label": "Mean absolute error",
+                    "scope": "overall",
+                    "value": round(_safe_float(metrics.get("mae", 0.0)), 6),
+                    "target": None,
+                    "comparator": "info",
+                    "status": "unknown",
+                    "sample_size": _safe_int(metrics.get("total_predictions", 0)),
+                }
+            )
+
+            requested_horizon = filters_applied["horizon"]
+            for hz, hz_metrics in sorted(by_horizon.items()):
+                if requested_horizon != "all" and str(hz).lower() != requested_horizon:
+                    continue
+                hit_rate = _safe_float(hz_metrics.get("hit_rate", 0.0))
+                rows.append(
+                    {
+                        "metric_key": "walk_forward_direction_hit_rate",
+                        "label": f"Directional hit rate ({hz})",
+                        "scope": f"horizon:{hz}",
+                        "value": round(hit_rate, 6),
+                        "target": WALK_FORWARD_HIT_RATE_TARGET,
+                        "comparator": "gte",
+                        "status": _scoreboard_status(
+                            hit_rate,
+                            target=WALK_FORWARD_HIT_RATE_TARGET,
+                            comparator="gte",
+                        ),
+                        "sample_size": _safe_int(hz_metrics.get("count", 0)),
+                    }
+                )
+
+            asset_items = sorted(
+                (
+                    (str(asset), asset_metrics)
+                    for asset, asset_metrics in by_asset.items()
+                    if isinstance(asset_metrics, dict)
+                ),
+                key=lambda item: (
+                    -_safe_int(item[1].get("count", 0)),
+                    item[0],
+                ),
+            )
+            for asset, asset_metrics in asset_items[:10]:
+                hit_rate = _safe_float(asset_metrics.get("hit_rate", 0.0))
+                rows.append(
+                    {
+                        "metric_key": "walk_forward_direction_hit_rate",
+                        "label": f"Directional hit rate ({asset})",
+                        "scope": f"asset:{asset}",
+                        "value": round(hit_rate, 6),
+                        "target": WALK_FORWARD_HIT_RATE_TARGET,
+                        "comparator": "gte",
+                        "status": _scoreboard_status(
+                            hit_rate,
+                            target=WALK_FORWARD_HIT_RATE_TARGET,
+                            comparator="gte",
+                        ),
+                        "sample_size": _safe_int(asset_metrics.get("count", 0)),
+                    }
+                )
+
+            payload.update(
+                {
+                    "rows": rows,
+                    "count": len(rows),
+                    "generated_at": now_iso,
+                    "freshness": report_generated_at,
+                    "last_update": report_generated_at,
+                    "freshness_age": freshness_age,
+                    "freshness_status": _freshness_status_from_age(freshness_age),
+                    "summary": {
+                        "hit_rate_percentage": round(
+                            _safe_float(summary.get("hit_rate_percentage", overall_hit_rate * 100.0)),
+                            3,
+                        ),
+                        "total_predictions_analyzed": _safe_int(
+                            summary.get(
+                                "total_predictions_analyzed",
+                                metrics.get("total_predictions", 0),
+                            )
+                        ),
+                        "average_confidence": round(
+                            _safe_float(
+                                summary.get(
+                                    "average_confidence",
+                                    metrics.get("avg_confidence", 0.0),
+                                )
+                            ),
+                            6,
+                        ),
+                    },
+                    "stats": {
+                        "overall_rows": 2,
+                        "horizon_rows": sum(
+                            1 for row in rows if str(row.get("scope", "")).startswith("horizon:")
+                        ),
+                        "asset_rows": sum(
+                            1 for row in rows if str(row.get("scope", "")).startswith("asset:")
+                        ),
+                        "passing_rows": sum(1 for row in rows if row.get("status") == "pass"),
+                        "failing_rows": sum(1 for row in rows if row.get("status") == "fail"),
+                    },
+                }
+            )
+            if not rows:
+                payload["message"] = "No walk-forward metrics available."
+                payload["warnings"].append("walk_forward_metrics_missing")
+            append_source_tag(
+                payload,
+                "forecasts_scoreboard_live_compute",
+                default_source="forecasts_route",
+            )
+            if debug:
+                payload["debug_pipeline"] = traces
+            return payload
+        except Exception as exc:
+            logger.error("Error in walk-forward scoreboard compute: %s", exc, exc_info=True)
+            payload["error"] = str(exc)
+            payload["message"] = (
+                "Walk-forward scoreboard unavailable, returning never-empty fallback."
+            )
+            payload["warnings"].append("walk_forward_scoreboard_compute_failed")
+            payload["source"] = [
+                "forecasts_route",
+                "walk_forward_scoreboard",
+                "critical_error_fallback",
+            ]
+            if debug:
+                add_trace("compute_exception", error=str(exc))
+                payload["debug_pipeline"] = traces
+            return payload
+
+    payload, is_leader = await compute_singleflight(
+        _FORECASTS_SCOREBOARD_INFLIGHT,
+        _FORECASTS_SCOREBOARD_INFLIGHT_LOCK,
+        cache_key,
+        compute_payload,
+    )
+    if is_leader and not debug and FORECASTS_CACHE_TTL_SECONDS > 0:
+        response_cache_set(
+            _FORECASTS_SCOREBOARD_RESPONSE_CACHE,
+            cache_key,
+            payload,
+            max_entries=FORECASTS_CACHE_MAX_ENTRIES,
+        )
+    elif not is_leader:
+        append_source_tag(
+            payload,
+            "forecasts_scoreboard_singleflight_waiter",
+            default_source="forecasts_route",
+        )
+    return payload
 
 
 async def get_forecasts_payload(
