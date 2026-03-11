@@ -3793,6 +3793,102 @@ def status(lite: int = 0):
         },
     }
 
+    if lite_mode:
+        queue_ready_planner = _int_or_default(queue_state_counts.get("READY_PLANNER"), 0)
+        queue_ready_dev = _int_or_default(queue_state_counts.get("READY_DEV"), 0)
+        queue_ready_legacy = _int_or_default(queue_state_counts.get("READY"), 0)
+        ready_dev_display_count = dev_ready_count_runtime if monitor_ready_dev_from_workboard else queue_ready_dev
+        ready_dev_source = "workboard_runtime" if monitor_ready_dev_from_workboard else "queue_state"
+        queue_ready = queue_ready_planner + queue_ready_legacy + ready_dev_display_count
+        queue_waiting_dep = _int_or_default(queue_state_counts.get("WAITING_DEP"), 0)
+        queue_in_progress = _int_or_default(queue_state_counts.get("IN_PROGRESS"), 0)
+        if queue_total == 0 and isinstance(hs_queue, dict) and hs_queue:
+            queue_ready = _int_or_default(hs_queue.get("ready"), queue_ready)
+            queue_waiting_dep = _int_or_default(hs_queue.get("waiting_dep"), queue_waiting_dep)
+            queue_in_progress = _int_or_default(hs_queue.get("in_progress"), queue_in_progress)
+
+        lite_payload = {
+            "ts_utc": now.isoformat(),
+            "health": health,
+            "instance": INSTANCE_ID,
+            "root": str(ROOT),
+            "state_dir": str(STATE),
+            "monitor_access": _monitor_access_snapshot(ROOT),
+            "runtime_state": runtime_state,
+            "execution_mode": effective_execution_mode,
+            "core_roles": list(CORE_ROLES),
+            "roles": list(CORE_ROLES),
+            "done": workboard_done,
+            "ready": workboard_ready,
+            "batches": {
+                "total": queue_total,
+                "closed": queue_closed,
+                "ready": queue_ready,
+                "waiting_dep": queue_waiting_dep,
+                "in_progress": queue_in_progress,
+                "display_total": queue_display_total,
+                "display_closed": queue_display_closed,
+            },
+            "queue": {
+                "total": queue_total,
+                "closed": queue_closed,
+                "ready": queue_ready,
+                "ready_planner_count": queue_ready_planner + queue_ready_legacy,
+                "ready_dev_count": ready_dev_display_count,
+                "dev_ready_task_count": dev_ready_count_runtime,
+                "dev_claimable_ready_count": dev_claimable_ready_count_runtime,
+                "ready_dev_source": ready_dev_source,
+                "waiting_dep": queue_waiting_dep,
+                "in_progress": queue_in_progress,
+                "active": queue_active_rows,
+                "display_total": queue_display_total,
+                "display_closed": queue_display_closed,
+                "display_batches": queue_display_rows,
+                "state_counts": queue_state_counts,
+                "mismatch_count": len(mismatches),
+                "mismatches": mismatches[:8],
+            },
+            "workboard": {
+                "total": workboard_total,
+                "done": workboard_done,
+                "ready": workboard_ready,
+                "in_progress": workboard_in_progress,
+                "ready_tasks": ready_t,
+                "in_progress_tasks": ip_t,
+                "state_counts": workboard_state_counts,
+            },
+            "agents": agents,
+            "planner_subagents": planner_subagents,
+            "queue_workboard_integrity": queue_workboard_integrity,
+            "planner_evidence_quality_score": planner_evidence_quality_score,
+            "health_breakdown": health_breakdown,
+            "issues_recent_by_role": issues_recent_by_role,
+            "critical_open_count": critical_count,
+            "issue_publication_gap_roles": issue_publication_gap_roles,
+            "last_issue_by_role": last_issue_by_role,
+            "runtime_freshness": {"seconds": data_freshness_s, "state": freshness_state},
+            "data_freshness_s": data_freshness_s,
+            "data_source": data_source,
+            "agents_incomplete": incomplete_roles,
+            "sources": {
+                "queue": str(queue_path),
+                "workboard": str(workboard_path),
+                "kpi": str(kpi_path),
+                "iteration_issues_events": str(ITERATION_ISSUES_EVENTS_FILE),
+                "iteration_issues_latest": str(ITERATION_ISSUES_LATEST_FILE),
+                "planner_guardian_latest": str(orchestrator_file("planner-guardian-latest.json")),
+                "planner_guardian_events": str(orchestrator_file("planner-guardian-events.jsonl")),
+                "runtime_state": str(resolve_orchestrator_write_path(ROOT, "runtime-state.json")),
+            },
+        }
+        try:
+            from apps.monitor.services.status_service import build_status_snapshot
+
+            lite_payload = build_status_snapshot(ROOT, lambda: lite_payload, include_layers=False)
+        except Exception:
+            pass
+        return lite_payload
+
     queue_ready_planner = _int_or_default(queue_state_counts.get("READY_PLANNER"), 0)
     queue_ready_dev = _int_or_default(queue_state_counts.get("READY_DEV"), 0)
     queue_ready_legacy = _int_or_default(queue_state_counts.get("READY"), 0)

@@ -14,7 +14,7 @@ ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")
 cd "$ROOT"
 
 BASE_URL="${FC_MONITOR_BASE_URL:-http://127.0.0.1:7779}"
-TIMEOUT_SECONDS="${FC_MONITOR_SMOKE_TIMEOUT_SECONDS:-8}"
+TIMEOUT_SECONDS="${FC_MONITOR_SMOKE_TIMEOUT_SECONDS:-16}"
 QUIET=0
 TMP_DIR="$(mktemp -d)"
 

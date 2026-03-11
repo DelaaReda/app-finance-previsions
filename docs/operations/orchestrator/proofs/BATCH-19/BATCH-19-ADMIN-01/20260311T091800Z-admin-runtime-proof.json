@@ -1,0 +1,23 @@
+{
+  "task_id": "BATCH-19-ADMIN-01",
+  "stream_id": "BATCH-19",
+  "generated_at": "2026-03-11T09:18:00Z",
+  "status": "unblocked_with_shared_observability_debt",
+  "root_cause": {
+    "primary": "Monitor `/api/status?lite=1` exceeded the operator timeout on cold calls, which made `fc_status_brief.sh` report `monitor_unreachable` even while the monitor process and `/api/runtime-diagnostics` were otherwise healthy.",
+    "secondary": "The monitor wrapper self-probe could abort restart attempts on transient connection resets."
+  },
+  "fix_applied": [
+    "Added a lite-mode fast path in `apps/monitor/server.py` so `/api/status?lite=1` returns the operator contract without waiting for heavy activity/delivery payload assembly.",
+    "Raised the default monitor-facing operator timeouts to match observed cold-start latency in `scripts/fc_status_brief.sh` and `scripts/monitor_contract_smoke.sh`.",
+    "Kept monitor wrapper restarts resilient by treating self-probe socket resets as non-fatal in `scripts/monitor_server.py`."
+  ],
+  "verification": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "fc_status_brief": "PASS health=OK mode=planner_experimental freshness=fresh/4s",
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=3 workboard_ready=0 admin_timeouts_recent=0 issues_records=4",
+    "fc_doctor": "DEGRADED(shared) providers=ok scheduler=ok sessions=ok queue_workboard=ok delivery_integrity_future_status=degraded planner_subagents.latest_failure_mode=timeout",
+    "syntax": "PASS bash -n scripts/fc_status_brief.sh scripts/monitor_contract_smoke.sh; python3 -m py_compile apps/monitor/server.py scripts/monitor_server.py"
+  },
+  "blocking_issue": "Shared observability debt remains outside this lane: `fc_doctor.sh --json` is still degraded because of unrelated delivery-integrity history (`VB-04-ADMIN-01` missing browser proof) and stale failed planner-admin capability records for this task. Those signals do not block BATCH-19 runtime health after the monitor fix."
+}
