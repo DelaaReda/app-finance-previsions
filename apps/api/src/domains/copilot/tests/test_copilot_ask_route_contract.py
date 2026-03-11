@@ -140,6 +140,117 @@ def test_copilot_ask_route_keeps_insufficient_evidence_explicit(monkeypatch):
     assert data["requirements_met"]["min_sources_2"] is False
 
 
+def test_copilot_ask_route_preserves_portfolio_context_markers(monkeypatch):
+    async def fake_build_ask_payload(**_kwargs):
+        return {
+            "answer": "Focus the memo on the saved core holdings.",
+            "action": "hold",
+            "confidence": 0.63,
+            "reasoning": ["Saved holdings are concentrated in quality mega-cap tech."],
+            "freshness": "2026-03-10T12:00:00Z",
+            "generated_at": "2026-03-10T12:00:00Z",
+            "sources": [{"type": "portfolio_state", "label": "saved_portfolio"}],
+            "quality_status": "sufficient_sources",
+            "requirements_met": {"min_sources_2": True, "quality_threshold": True},
+            "context_influence": {
+                "mode": "portfolio_aware",
+                "portfolio_applied": True,
+                "source": "saved_portfolio_default",
+                "requested_tickers": [],
+                "effective_tickers": ["AAPL", "MSFT"],
+                "portfolio_id": "portfolio-123",
+            },
+            "portfolio_context": {
+                "portfolio": {
+                    "id": "portfolio-123",
+                    "name": "Core",
+                    "tickers": ["AAPL", "MSFT"],
+                    "state": {
+                        "horizon": "1y",
+                        "conviction": "high",
+                        "risk_tolerance": "moderate",
+                    },
+                },
+                "risk_profile": "balanced",
+                "risk_level": "medium",
+            },
+        }
+
+    monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", fake_build_ask_payload)
+
+    client = _client()
+    response = client.post(
+        "/api/copilot/ask",
+        json={"question": "How does my saved portfolio change today's memo?", "max_sources": 3},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+
+    data = payload["data"]
+    assert data["context_influence"] == {
+        "mode": "portfolio_aware",
+        "portfolio_applied": True,
+        "source": "saved_portfolio_default",
+        "requested_tickers": [],
+        "effective_tickers": ["AAPL", "MSFT"],
+        "portfolio_id": "portfolio-123",
+    }
+    assert data["portfolio_context"]["portfolio"]["id"] == "portfolio-123"
+    assert data["portfolio_context"]["portfolio"]["state"] == {
+        "horizon": "1y",
+        "conviction": "high",
+        "risk_tolerance": "moderate",
+    }
+    assert data["memo"]["why"] == ["Saved holdings are concentrated in quality mega-cap tech."]
+
+
+def test_copilot_ask_route_keeps_market_wide_context_explicit_when_no_saved_portfolio_applies(monkeypatch):
+    async def fake_build_ask_payload(**_kwargs):
+        return {
+            "answer": "No saved portfolio was applied, so this stays market-wide.",
+            "action": "watch",
+            "confidence": 0.52,
+            "reasoning": ["No saved scope or explicit tickers were available."],
+            "freshness": "2026-03-10T12:05:00Z",
+            "generated_at": "2026-03-10T12:05:00Z",
+            "sources": [{"type": "market_context", "label": "brief_daily"}],
+            "quality_status": "sufficient_sources",
+            "requirements_met": {"min_sources_2": True, "quality_threshold": True},
+            "context_influence": {
+                "mode": "market_wide",
+                "portfolio_applied": False,
+                "source": "market_context_only",
+                "requested_tickers": [],
+                "effective_tickers": [],
+            },
+        }
+
+    monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", fake_build_ask_payload)
+
+    client = _client()
+    response = client.post(
+        "/api/copilot/ask",
+        json={"question": "What matters if I have no saved portfolio?", "max_sources": 3},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+
+    data = payload["data"]
+    assert data["context_influence"] == {
+        "mode": "market_wide",
+        "portfolio_applied": False,
+        "source": "market_context_only",
+        "requested_tickers": [],
+        "effective_tickers": [],
+    }
+    assert "portfolio_context" not in data
+    assert data["memo"]["why"] == ["No saved scope or explicit tickers were available."]
+
+
 def test_copilot_start_route_propagates_context_influence_and_portfolio_context(monkeypatch):
     async def fake_build_context_payload(**_kwargs):
         return {
