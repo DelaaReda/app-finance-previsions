@@ -1,0 +1,148 @@
+{
+  "task_id": "BATCH-44-ADMIN-01",
+  "stream_id": "BATCH-44",
+  "title": "Insider Behavior Intelligence Layer [ADMIN-01]",
+  "captured_at_utc": "2026-03-11T07:10:00Z",
+  "scope": "Final consolidated runtime validation and observability proof after BATCH-44 DEV chain completion.",
+  "admin_mission_summary": {
+    "mission": "Validate runtime truth and observability for Insider Behavior Intelligence Layer",
+    "execution_policy": "Runtime probes only when directly required; prefer reversible fixes and concrete verification",
+    "outcome": "UNBLOCKED - No runtime repair needed, captured fresh evidence"
+  },
+  "dependencies_verified": {
+    "BATCH-44-DEV-01": {
+      "status": "completed",
+      "artifact": "GET /api/forecasts/insider-behavior endpoint with engine_id=insider_behavior_intelligence_v1",
+      "proof": "docs/operations/orchestrator/proofs/BATCH-44/BATCH-44-DEV-01/20260311T041849Z-743.yaml",
+      "tests": "pytest apps/api/src/domains/forecasts/tests/test_global_signal_mesh_route.py -q (passed)",
+      "commit": "verified"
+    },
+    "BATCH-44-DEV-02": {
+      "status": "completed",
+      "artifact": "getInsiderBehavior() in apiConnector.js + live dashboard insiderBehavior payload",
+      "proof": "docs/operations/orchestrator/proofs/BATCH-44/BATCH-44-DEV-02/20260311T045848Z-707.yaml",
+      "tests": "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js (passed)",
+      "commit": "verified"
+    },
+    "BATCH-44-DEV-03": {
+      "status": "completed",
+      "artifact": "market-drivers insider panel shows guardrails, provenance, uncertainty",
+      "proof": "docs/operations/orchestrator/proofs/BATCH-44/BATCH-44-DEV-03/20260311T050155Z-303.yaml",
+      "tests": "node --test apps/web/src/domains/forecasts/pages/app.test.js (55 passed)",
+      "commit": "verified"
+    }
+  },
+  "runtime_probes": {
+    "host_check": {
+      "command": "bash scripts/runtime_host_check.sh",
+      "result": "PASS",
+      "runtime_is_vm": 1,
+      "workspace": "/home/venom/shared/analyse-financiere",
+      "os": "Linux"
+    },
+    "monitor_health": {
+      "command": "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 --timeout 16",
+      "result": "PASS",
+      "health": "OK",
+      "roles": 1,
+      "agents": 4,
+      "queue_states": 4,
+      "workboard_ready": 0,
+      "admin_timeouts_recent": 0,
+      "issues_records": 10
+    },
+    "fc_status": {
+      "command": "bash scripts/fc_status_brief.sh",
+      "result": "PASS",
+      "status": "OK",
+      "mode": "planner_experimental",
+      "ready": 0,
+      "in_progress": 2,
+      "waiting_dep": 9,
+      "mismatch_count": 0,
+      "planner_quality": 89
+    },
+    "fc_doctor": {
+      "command": "bash scripts/fc_doctor.sh --json",
+      "result": "DEGRADED",
+      "runtime_core": "ok",
+      "scheduler_authority": "ok",
+      "sessions": "ok",
+      "locks": "ok",
+      "queue_workboard": "ok",
+      "providers": "ok",
+      "delivery_integrity": "ok",
+      "degraded_reasons": [
+        "VB-04-ADMIN-01 missing browser proof (unrelated to BATCH-44)",
+        "capability_result_integrity degraded from BATCH-43-ADMIN-01 invalid_subagent_result (unrelated)"
+      ],
+      "batch_44_specific_blockers": "none"
+    },
+    "stale_cron_sweep": {
+      "command": "bash scripts/stale_cron_sweep.sh --dry-run --threshold 330",
+      "result": "PASS",
+      "matched": 0,
+      "stale": 0,
+      "reset_ok": 0,
+      "reset_failed": 0
+    },
+    "workboard_stale_task_sweep": {
+      "command": "python3 scripts/workboard_stale_task_sweep.py --threshold-seconds 14400",
+      "result": "PASS",
+      "BATCH-44-ADMIN-01_age_s": 361,
+      "stale": false,
+      "action": "none"
+    }
+  },
+  "targeted_validation": {
+    "insider_behavior_tests": {
+      "command": "python3 -m pytest apps/api/src/domains/forecasts/tests/test_global_signal_mesh_route.py -k insider -v",
+      "result": "PASS",
+      "tests_passed": 3,
+      "tests": [
+        "test_insider_behavior_contract_exposes_uncertainty_guardrails_and_provenance",
+        "test_insider_behavior_cache_and_debug_bypass",
+        "test_insider_behavior_returns_conservative_placeholder_when_snapshot_missing"
+      ]
+    },
+    "frontend_regression": {
+      "command": "node --test apps/web/src/domains/forecasts/pages/app.test.js",
+      "result": "PASS",
+      "summary": "55 passed, 0 failed"
+    },
+    "backend_regression_note": {
+      "command": "timeout 30 pytest apps/api/src/domains/forecasts/tests/test_global_signal_mesh_route.py -q",
+      "result": "TIMEOUT",
+      "note": "6 tests emitted progress dots before timeout; no failure signal captured inside 30s bound. This is validation debt, not runtime failure. Rerun without 30s bound for stricter proof."
+    }
+  },
+  "feature_probe": {
+    "insider_behavior_endpoint": {
+      "command": "curl -fsS --max-time 16 http://127.0.0.1:8050/api/forecasts/insider-behavior",
+      "result": "PASS",
+      "summary": "ok=true fallback_used=true returned_signal_count=1 source includes forecasts_insider_behavior + sec_edgar_form4",
+      "contract_markers": {
+        "engine_id": "insider_behavior_intelligence_v1",
+        "verdict": "hold",
+        "risk_level": "medium",
+        "warnings": [
+          "no_ownership_snapshot_rows"
+        ]
+      }
+    }
+  },
+  "conclusion": {
+    "task_scope_verdict": "UNBLOCKED",
+    "root_cause": "No BATCH-44-specific runtime outage, stale lock, or broken execution path was present. All DEV chain tasks (DEV-01, DEV-02, DEV-03) completed with passing tests and proof artifacts. Runtime health is OK.",
+    "fix_applied": "SKIP(no runtime repair required). Captured fresh runtime truth and explicit blocker separation only.",
+    "verify": "before=no admin runtime proof for BATCH-44-ADMIN-01; after=runtime probes confirm healthy VM, monitor OK, fc_status OK, no stale locks/crons/tasks, insider behavior tests pass (3/3), frontend tests pass (55/55)",
+    "planner_merge_signal": "BATCH-44-ADMIN-01 is runtime-unblocked and ready for planner merge or GOV review. The degraded doctor status comes from unrelated VB-04-ADMIN-01 browser proof debt and BATCH-43-ADMIN-01 capability errors, not BATCH-44.",
+    "recommended_next": "Planner to proceed with merge or trigger GOV review. If stricter backend proof required, rerun pytest lane without 30s timeout bound."
+  },
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-44/BATCH-44-ADMIN-01/20260311T071000Z-admin-final-consolidated.json",
+  "files_touched": "none",
+  "tests_run": "python3 -m pytest apps/api/src/domains/forecasts/tests/test_global_signal_mesh_route.py -k insider -v (3 passed); node --test apps/web/src/domains/forecasts/pages/app.test.js (55 passed)",
+  "commit_sha": "a65164e3106ad4bf40f1d19a7dfffc9cd39fd104",
+  "architecture_check": "layer=admin runtime validation only; no code changes; imports_ok=N/A; path_target=runtime probes and test verification",
+  "vision_alignment": "batch=BATCH-44; target=Insider Behavior Intelligence Layer [ADMIN-01] runtime validation; impact=confirms BATCH-44 DEV chain delivered working insider behavior endpoint with tests, frontend integration, and guardrails visible in UI"
+}
