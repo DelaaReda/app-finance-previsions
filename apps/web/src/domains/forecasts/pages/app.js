@@ -2621,9 +2621,27 @@ function updateLiveProvenance(meta = {}) {
   const forecastSlaText = forecastSla
     ? ` | forecast SLA: ${forecastSla.withinTargetCount}/${forecastSla.totalCount} within ${forecastSla.targetLabel}`
     : '';
+  const signalMesh = isObject(meta.globalSignalMesh) ? meta.globalSignalMesh : null;
+  const signalMeshStats = isObject(signalMesh && signalMesh.stats) ? signalMesh.stats : null;
+  const signalMeshCoverage = isObject(signalMesh && signalMesh.coverage) ? signalMesh.coverage : null;
+  const signalMeshSourceCount = toFiniteNumber(signalMeshStats && signalMeshStats.source_count, 0);
+  const signalMeshNominalCount = toFiniteNumber(signalMeshStats && signalMeshStats.nominal_source_count, 0);
+  const signalMeshLayerCount = Array.isArray(signalMeshCoverage && signalMeshCoverage.layers)
+    ? signalMeshCoverage.layers.length
+    : 0;
+  const signalMeshLicenseCounts = isObject(signalMeshStats && signalMeshStats.license_class_counts)
+    ? signalMeshStats.license_class_counts
+    : {};
+  const signalMeshLicenseLabels = Object.keys(signalMeshLicenseCounts)
+    .sort((left, right) => toFiniteNumber(signalMeshLicenseCounts[right], 0) - toFiniteNumber(signalMeshLicenseCounts[left], 0))
+    .slice(0, 2)
+    .map((licenseClass) => `${licenseClass}:${toFiniteNumber(signalMeshLicenseCounts[licenseClass], 0)}`);
+  const signalMeshText = signalMeshSourceCount > 0
+    ? ` | mesh: ${signalMeshSourceCount} sources (${signalMeshNominalCount} nominal) across ${signalMeshLayerCount} layers${signalMeshLicenseLabels.length ? ` | licenses: ${signalMeshLicenseLabels.join(', ')}` : ''}`
+    : '';
   const warningText = warnings.length ? ` | warnings: ${warnings.join(', ')}` : '';
   const freshness = formatRelativeTime(meta.generatedAt);
-  lineage.textContent = `Source: ${sources.join(', ')} | model: ${models.join(', ')} | updated: ${freshness}${contractText}${forecastSlaText}${warningText}`;
+  lineage.textContent = `Source: ${sources.join(', ')} | model: ${models.join(', ')} | updated: ${freshness}${contractText}${forecastSlaText}${signalMeshText}${warningText}`;
 }
 
 function summarizeForecastSla(rows) {
@@ -2794,12 +2812,15 @@ function renderForecastScenarioWidget() {
   const scenarioContext = scenarioWidget.querySelector('.scenario-context');
   if (scenarioContext) {
     const liveTickers = rows.slice(0, 4).map((row) => row.ticker).join(', ');
+    const hitRateSummary = liveForecastScoreboard?.threshold_summary?.walk_forward_direction_hit_rate || null;
     const hitRateRow = scoreRows.find((row) => row && row.metric_key === 'walk_forward_direction_hit_rate' && row.scope === 'overall')
       || scoreRows.find((row) => row && row.metric_key === 'walk_forward_direction_hit_rate')
       || null;
-    if (hitRateRow) {
-      const hitRate = Math.round(toFiniteNumber(hitRateRow.value, 0) * 1000) / 10;
-      const target = hitRateRow.target != null ? Math.round(toFiniteNumber(hitRateRow.target, 0) * 1000) / 10 : null;
+    const hitRateValue = hitRateSummary?.value != null ? hitRateSummary.value : hitRateRow?.value;
+    const hitRateTarget = hitRateSummary?.target != null ? hitRateSummary.target : hitRateRow?.target;
+    if (hitRateValue != null) {
+      const hitRate = Math.round(toFiniteNumber(hitRateValue, 0) * 1000) / 10;
+      const target = hitRateTarget != null ? Math.round(toFiniteNumber(hitRateTarget, 0) * 1000) / 10 : null;
       scenarioContext.textContent = target != null
         ? `Top live forecasts: ${liveTickers} • Walk-forward hit rate ${hitRate}% vs ${target}% target`
         : `Top live forecasts: ${liveTickers} • Walk-forward hit rate ${hitRate}%`;
@@ -3009,7 +3030,10 @@ function applyLiveDashboardData(payload = {}) {
     contractState: toString(payload.contractState || payloadMeta.contractState || '', '').toLowerCase() || 'unknown',
     ingestionHealth: isObject(payload.ingestionHealth)
       ? payload.ingestionHealth
-      : (isObject(payloadMeta.ingestionHealth) ? payloadMeta.ingestionHealth : null)
+      : (isObject(payloadMeta.ingestionHealth) ? payloadMeta.ingestionHealth : null),
+    globalSignalMesh: isObject(payload.globalSignalMesh)
+      ? payload.globalSignalMesh
+      : (isObject(payloadMeta.globalSignalMesh) ? payloadMeta.globalSignalMesh : null)
   };
 
   tradeIdeas = sanitizeTradeIdeas(data.tradeIdeas);

@@ -190,6 +190,69 @@ function loadForecastSlaHelpers() {
   return { sandbox, lineage };
 }
 
+function loadRenderForecastScenarioWidget() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractFunction(source, 'renderForecastScenarioWidget', '\n\nfunction renderTopMoversWidget');
+  const scenarioContext = createElementStub();
+  const widgetTimestamp = createElementStub();
+  const bars = Array.from({ length: 3 }, () => {
+    const fill = createElementStub();
+    const label = createElementStub();
+    return {
+      fill,
+      label,
+      querySelector(selector) {
+        if (selector === '.scenario-bar-fill') return fill;
+        if (selector === '.scenario-label') return label;
+        return null;
+      },
+    };
+  });
+  const scenarioWidget = {
+    querySelector(selector) {
+      if (selector === '.scenario-context') return scenarioContext;
+      if (selector === '.widget-timestamp') return widgetTimestamp;
+      return null;
+    },
+    querySelectorAll(selector) {
+      if (selector === '.scenario-bar-item') return bars;
+      return [];
+    },
+  };
+  const sandbox = {
+    console,
+    document: {
+      querySelector(selector) {
+        if (selector === '.forecast-scenarios-widget') return scenarioWidget;
+        return null;
+      },
+    },
+    sanitizeForecastRows(value) {
+      return Array.isArray(value) ? value : [];
+    },
+    liveForecastRows: [],
+    liveForecastScoreboard: null,
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : fallback;
+    },
+    formatRelativeTime() {
+      return '2 minutes ago';
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.renderForecastScenarioWidget = renderForecastScenarioWidget;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return { sandbox, bars, scenarioContext, widgetTimestamp };
+}
+
 function createElementStub() {
   return {
     textContent: '',
@@ -1366,6 +1429,41 @@ test('applyLiveDashboardData stores walk-forward scoreboard payloads for forecas
   assert.equal(sandbox.rendered, true);
 });
 
+test('renderForecastScenarioWidget prefers threshold_summary over scoreboard rows for hit-rate copy', () => {
+  const { sandbox, scenarioContext, widgetTimestamp } = loadRenderForecastScenarioWidget();
+  sandbox.liveForecastRows = [
+    { ticker: 'NVDA', direction: 'up', expectedReturn: 4.5 },
+    { ticker: 'MSFT', direction: 'neutral', expectedReturn: 1.2 },
+    { ticker: 'AAPL', direction: 'down', expectedReturn: -2.3 },
+  ];
+  sandbox.liveForecastScoreboard = {
+    rows: [
+      {
+        metric_key: 'walk_forward_mae',
+        scope: 'overall',
+        value: 0.07,
+        status: 'unknown',
+      },
+    ],
+    updated_at: '2026-03-10T10:00:00Z',
+    threshold_summary: {
+      walk_forward_direction_hit_rate: {
+        value: 0.61,
+        target: 0.52,
+        status: 'pass',
+      },
+    },
+  };
+
+  sandbox.renderForecastScenarioWidget();
+
+  assert.equal(
+    scenarioContext.textContent,
+    'Top live forecasts: NVDA, MSFT, AAPL • Walk-forward hit rate 61% vs 52% target'
+  );
+  assert.equal(widgetTimestamp.textContent, 'On target • Walk-forward 2 minutes ago');
+});
+
 test('runCopilotStartPrompt opens the overlay before sending a hero starter prompt', () => {
   const { sandbox, overlay, input, calls } = loadRunCopilotStartPrompt();
 
@@ -2188,4 +2286,32 @@ test('updateLiveProvenance surfaces aggregated forecast SLA compliance', () => {
 
   assert.match(lineage.textContent, /freshness: DEGRADED/);
   assert.match(lineage.textContent, /forecast SLA: 1\/2 within 10m/);
+});
+
+test('updateLiveProvenance includes global signal mesh source and license coverage', () => {
+  const { sandbox, lineage } = loadForecastSlaHelpers();
+
+  sandbox.updateLiveProvenance({
+    generatedAt: '2026-03-10T10:02:00Z',
+    sources: ['api-connector'],
+    modelVersions: ['live'],
+    contractState: 'ok',
+    globalSignalMesh: {
+      stats: {
+        source_count: 9,
+        nominal_source_count: 7,
+        license_class_counts: {
+          public_open_data: 5,
+          public_market_data_terms: 2,
+          publisher_terms_via_rss: 2,
+        },
+      },
+      coverage: {
+        layers: ['macro', 'market', 'news', 'policy', 'insider', 'geopolitical'],
+      },
+    },
+  });
+
+  assert.match(lineage.textContent, /mesh: 9 sources \(7 nominal\) across 6 layers/);
+  assert.match(lineage.textContent, /licenses: public_open_data:5, public_market_data_terms:2/);
 });

@@ -302,6 +302,11 @@ async function getIngestionHealth() {
   return payload && typeof payload === 'object' ? payload : null;
 }
 
+async function getGlobalSignalMesh() {
+  const payload = getResponseData(await fetchWithCache('/forecasts/global-signal-mesh', 'global-signal-mesh'));
+  return payload && typeof payload === 'object' ? payload : null;
+}
+
 async function getDashboardKPIs() {
   const payload = await fetchWithCache('/dashboard/kpis', 'kpis');
   if (!payload) return null;
@@ -1181,6 +1186,8 @@ async function populateWindowGlobals() {
     const scoreboard = await getWalkForwardScoreboard();
     if (scoreboard && typeof scoreboard === 'object' && Array.isArray(scoreboard.rows)) {
       window.liveForecastScoreboard = scoreboard;
+    } else {
+      window.liveForecastScoreboard = null;
     }
 
     // Stocks - build top movers with real % change from price history
@@ -1316,6 +1323,11 @@ async function populateWindowGlobals() {
       window.ingestionHealth = ingestionHealth;
     }
 
+    const globalSignalMesh = await getGlobalSignalMesh();
+    if (globalSignalMesh) {
+      window.globalSignalMesh = globalSignalMesh;
+    }
+
     // Health
     const status = await getStatus();
     if (status) {
@@ -1408,7 +1420,8 @@ async function populateWindowGlobals() {
         freshness: liveFreshnessContract.freshness,
         cache: liveFreshnessContract.freshness,
         contractState: liveFreshnessContract.contractState,
-        ingestionHealth: window.ingestionHealth || null
+        ingestionHealth: window.ingestionHealth || null,
+        globalSignalMesh: window.globalSignalMesh || null
       }
     });
     window.dispatchEvent(liveEvent);
@@ -1439,6 +1452,7 @@ function startAutoRefresh(intervalMs) {
     ].forEach((key) => clearCacheEntry(key));
     clearCacheEntriesWithPrefix('copilot_context:');
     clearCacheEntriesWithPrefix('copilot_start:');
+    clearCacheEntriesWithPrefix('forecasts_scoreboard:');
     clearCacheEntriesWithPrefix('portfolio-risk-profile-');
     await populateWindowGlobals();
   }, intervalMs);
@@ -1455,6 +1469,7 @@ window.FinanceAPI = {
   getAlerts,
   getStatus,
   getHealth,
+  getGlobalSignalMesh,
   getJudgeAnalysis,
   getCopilotStart,
   getCopilotContext,
@@ -1506,7 +1521,8 @@ window.getLiveDashboardData = () => ({
     ? window.liveFreshnessContract.freshness
     : { lastFetchedAt: Date.now(), ttlMs: cache.TTL },
   contractState: window.liveFreshnessContract ? window.liveFreshnessContract.contractState : 'unknown',
-  ingestionHealth: window.ingestionHealth || null
+  ingestionHealth: window.ingestionHealth || null,
+  globalSignalMesh: window.globalSignalMesh || null
 });
 
 async function getStrategyPlaybooks(params = {}) {

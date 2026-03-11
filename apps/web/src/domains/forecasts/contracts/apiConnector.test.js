@@ -960,6 +960,37 @@ test('buildLiveFreshnessContract folds portfolio risk profile status into the sh
   assert.equal(degradedContract.freshness.ttlMs, 180000);
 });
 
+test('getGlobalSignalMesh unwraps the free source mesh contract', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            mesh_id: 'free_global_signal_mesh',
+            stats: {
+              source_count: 9,
+              nominal_source_count: 7,
+            },
+            coverage: {
+              layers: ['macro', 'news', 'market'],
+            },
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getGlobalSignalMesh();
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/forecasts/global-signal-mesh']);
+  assert.equal(payload.mesh_id, 'free_global_signal_mesh');
+  assert.equal(payload.stats.source_count, 9);
+  assert.equal(payload.coverage.layers.length, 3);
+});
+
 test('getLiveDashboardData preserves portfolio risk profile freshness and status for downstream UI mapping', async () => {
   const sandbox = loadConnector(async () => ({
     async json() {
@@ -1032,4 +1063,51 @@ test('initLiveData hydrates judgeDecisionJournal without relying on page globals
       note: 'Leadership is intact.',
     },
   ]));
+});
+
+test('initLiveData clears stale walk-forward scoreboard state when the contract returns no rows', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url.includes('/api/forecasts/scoreboard')) {
+      return {
+        async json() {
+          return {
+            ok: true,
+            data: {},
+          };
+        },
+      };
+    }
+
+    if (url.includes('/api/llm/judge/run')) {
+      return {
+        ok: false,
+        async json() {
+          return {};
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, data: {} };
+      },
+    };
+  });
+
+  sandbox.window.liveForecastScoreboard = {
+    rows: [
+      {
+        metric_key: 'walk_forward_direction_hit_rate',
+        scope: 'overall',
+        value: 0.61,
+      },
+    ],
+    updated_at: '2026-03-10T10:00:00Z',
+  };
+
+  await sandbox.window.initLiveData();
+
+  assert.equal(sandbox.window.liveForecastScoreboard, null);
+  assert.equal(sandbox.window.getLiveDashboardData().data.forecastScoreboard, null);
 });
