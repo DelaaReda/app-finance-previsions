@@ -181,6 +181,38 @@ test('getWalkForwardScoreboard unwraps scoreboard payloads and preserves query p
   assert.equal(payload.threshold_summary.walk_forward_direction_hit_rate.target, 0.52);
 });
 
+test('getGeopoliticalRiskGraph unwraps region risk graph payloads and preserves query params', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            nodes: [
+              { label: 'Ukraine', escalation_score: 87, escalation_band: 'critical' },
+            ],
+            alerts: [
+              { region: 'Ukraine', escalation_band: 'critical', escalation_score: 87 },
+            ],
+            stats: {
+              alerts_count: 1,
+            },
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getGeopoliticalRiskGraph({ region: 'ukraine', limit: 3 });
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/judge/geopolitical-risk-graph?region=ukraine&limit=3']);
+  assert.equal(payload.nodes[0].label, 'Ukraine');
+  assert.equal(payload.alerts[0].escalation_band, 'critical');
+  assert.equal(payload.stats.alerts_count, 1);
+});
+
 test('getCopilotContext normalizes brief-first entry points into ask/open starters', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {
@@ -991,6 +1023,38 @@ test('getGlobalSignalMesh unwraps the free source mesh contract', async () => {
   assert.equal(payload.coverage.layers.length, 3);
 });
 
+test('getGlobalSignalMesh normalizes freshness status from mesh provenance SLA', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          mesh_id: 'free_global_signal_mesh',
+          generated_at: '2026-03-11T04:00:00Z',
+          cache: {
+            hit: true,
+            ttl_seconds: 300,
+          },
+          provenance: {
+            sla: {
+              updated_at: '2026-03-11T03:55:00Z',
+              freshness_status: 'stale',
+              target_max_age_seconds: 900,
+              within_target: false,
+            },
+          },
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getGlobalSignalMesh();
+
+  assert.equal(payload.status, 'stale');
+  assert.equal(payload.freshness.updated_at, '2026-03-11T03:55:00Z');
+  assert.equal(payload.freshness.ttl_seconds, 900);
+});
+
 test('getLiveDashboardData preserves portfolio risk profile freshness and status for downstream UI mapping', async () => {
   const sandbox = loadConnector(async () => ({
     async json() {
@@ -1148,4 +1212,51 @@ test('initLiveData clears stale walk-forward scoreboard state when the contract 
 
   assert.equal(sandbox.window.liveForecastScoreboard, null);
   assert.equal(sandbox.window.getLiveDashboardData().data.forecastScoreboard, null);
+});
+
+test('initLiveData folds global signal mesh freshness into the live contract state', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url.includes('/api/forecasts/global-signal-mesh')) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              mesh_id: 'free_global_signal_mesh',
+              generated_at: '2026-03-11T04:00:00Z',
+              provenance: {
+                sla: {
+                  updated_at: '2026-03-11T03:55:00Z',
+                  freshness_status: 'stale',
+                  target_max_age_seconds: 900,
+                  within_target: false,
+                },
+              },
+            },
+          };
+        },
+      };
+    }
+
+    if (url.includes('/api/llm/judge/run')) {
+      return {
+        ok: false,
+        async json() {
+          return {};
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, data: {} };
+      },
+    };
+  });
+
+  await sandbox.window.initLiveData();
+
+  assert.equal(sandbox.window.liveFreshnessContract.contractState, 'stale');
 });

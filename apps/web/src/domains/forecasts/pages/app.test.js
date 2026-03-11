@@ -195,6 +195,10 @@ function loadRenderForecastScenarioWidget() {
   const functionSource = extractFunction(source, 'renderForecastScenarioWidget', '\n\nfunction renderTopMoversWidget');
   const scenarioContext = createElementStub();
   const widgetTimestamp = createElementStub();
+  const geopoliticalRisk = createElementStub();
+  const geopoliticalGraph = createElementStub();
+  const geopoliticalAlertCopy = createElementStub();
+  const geopoliticalAlertBand = createElementStub();
   const bars = Array.from({ length: 3 }, () => {
     const fill = createElementStub();
     const label = createElementStub();
@@ -212,6 +216,10 @@ function loadRenderForecastScenarioWidget() {
     querySelector(selector) {
       if (selector === '.scenario-context') return scenarioContext;
       if (selector === '.widget-timestamp') return widgetTimestamp;
+      if (selector === '[data-role="geopolitical-risk"]') return geopoliticalRisk;
+      if (selector === '[data-role="geo-graph"]') return geopoliticalGraph;
+      if (selector === '[data-role="geo-alert-copy"]') return geopoliticalAlertCopy;
+      if (selector === '[data-role="geo-alert-band"]') return geopoliticalAlertBand;
       return null;
     },
     querySelectorAll(selector) {
@@ -230,14 +238,27 @@ function loadRenderForecastScenarioWidget() {
     sanitizeForecastRows(value) {
       return Array.isArray(value) ? value : [];
     },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
     liveForecastRows: [],
     liveForecastScoreboard: null,
+    liveDataMeta: null,
+    window: {},
     toString(value, fallback = '') {
-      return typeof value === 'string' ? value : fallback;
+      return value === null || value === undefined ? fallback : String(value);
     },
     toFiniteNumber(value, fallback = 0) {
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : fallback;
+    },
+    escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     },
     formatRelativeTime() {
       return '2 minutes ago';
@@ -250,7 +271,16 @@ function loadRenderForecastScenarioWidget() {
     filename: 'app.js',
   });
 
-  return { sandbox, bars, scenarioContext, widgetTimestamp };
+  return {
+    sandbox,
+    bars,
+    scenarioContext,
+    widgetTimestamp,
+    geopoliticalRisk,
+    geopoliticalGraph,
+    geopoliticalAlertCopy,
+    geopoliticalAlertBand,
+  };
 }
 
 function createElementStub() {
@@ -1462,6 +1492,44 @@ test('renderForecastScenarioWidget prefers threshold_summary over scoreboard row
     'Top live forecasts: NVDA, MSFT, AAPL • Walk-forward hit rate 61% vs 52% target'
   );
   assert.equal(widgetTimestamp.textContent, 'On target • Walk-forward 2 minutes ago');
+});
+
+test('renderForecastScenarioWidget surfaces geopolitical conflict escalation from live payload', () => {
+  const {
+    sandbox,
+    geopoliticalRisk,
+    geopoliticalGraph,
+    geopoliticalAlertCopy,
+    geopoliticalAlertBand,
+  } = loadRenderForecastScenarioWidget();
+  sandbox.liveForecastRows = [
+    { ticker: 'NVDA', direction: 'up', expectedReturn: 4.5 },
+    { ticker: 'MSFT', direction: 'neutral', expectedReturn: 1.2 },
+    { ticker: 'AAPL', direction: 'down', expectedReturn: -2.3 },
+  ];
+  sandbox.liveDataMeta = {
+    geopoliticalRiskGraph: {
+      nodes: [
+        { label: 'Ukraine', escalation_score: 87, escalation_band: 'critical', latest_at: '2026-03-10T10:00:00Z' },
+        { label: 'Taiwan', escalation_score: 58, escalation_band: 'high', latest_at: '2026-03-10T09:30:00Z' },
+      ],
+      alerts: [
+        { region: 'Ukraine', escalation_band: 'critical', escalation_score: 87, timestamp: '2026-03-10T10:00:00Z' },
+      ],
+    },
+  };
+
+  sandbox.renderForecastScenarioWidget();
+
+  assert.equal(geopoliticalRisk.hidden, false);
+  assert.match(geopoliticalGraph.innerHTML, /Ukraine/);
+  assert.match(geopoliticalGraph.innerHTML, /width: 87%/);
+  assert.equal(geopoliticalAlertBand.textContent, 'Critical');
+  assert.equal(geopoliticalAlertBand.className, 'scenario-geopolitical-badge band-critical');
+  assert.equal(
+    geopoliticalAlertCopy.textContent,
+    'Conflict escalation critical in Ukraine (87/100) • refreshed 2 minutes ago'
+  );
 });
 
 test('runCopilotStartPrompt opens the overlay before sending a hero starter prompt', () => {

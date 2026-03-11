@@ -163,6 +163,26 @@ async function getWalkForwardScoreboard(params = {}) {
   return payload && typeof payload === 'object' ? payload : {};
 }
 
+async function getGeopoliticalRiskGraph(params = {}) {
+  const safeParams = params && typeof params === 'object' ? params : {};
+  const search = new URLSearchParams();
+  const limit = Number(safeParams.limit);
+  const region = String(safeParams.region || '').trim();
+
+  if (region) {
+    search.set('region', region);
+  }
+  if (Number.isFinite(limit) && limit > 0) {
+    search.set('limit', String(Math.min(20, Math.max(1, Math.floor(limit)))));
+  }
+
+  const query = search.toString();
+  const endpoint = `/judge/geopolitical-risk-graph${query ? `?${query}` : ''}`;
+  const cacheKey = `judge_geopolitical_risk_graph:${query || 'default'}`;
+  const payload = getResponseData(await fetchWithCache(endpoint, cacheKey));
+  return payload && typeof payload === 'object' ? payload : {};
+}
+
 async function getStockPrices() {
   const payload = getResponseData(await fetchWithCache('/stocks/prices?tickers=NVDA,META,AAPL,MSFT,GOOGL', 'stocks'));
   return extractObject(payload, ['prices', 'tickers', 'data']) || {};
@@ -304,7 +324,31 @@ async function getIngestionHealth() {
 
 async function getGlobalSignalMesh() {
   const payload = getResponseData(await fetchWithCache('/forecasts/global-signal-mesh', 'global-signal-mesh'));
-  return payload && typeof payload === 'object' ? payload : null;
+  if (!payload || typeof payload !== 'object') return null;
+
+  const provenance = isObject(payload.provenance) ? payload.provenance : {};
+  const sla = isObject(provenance.sla) ? provenance.sla : {};
+  const cacheMeta = isObject(payload.cache) ? payload.cache : {};
+  const ttlSeconds = normalizeNumber(sla.target_max_age_seconds || cacheMeta.ttl_seconds, 0);
+  const normalizedStatus = normalizeFreshnessStatus(
+    payload.status
+      || sla.freshness_status
+      || sla.status
+      || (isObject(payload.freshness) ? payload.freshness.status : '')
+  );
+  const updatedAt = String(
+    sla.updated_at || payload.freshness || payload.generated_at || payload.generatedAt || '',
+  ).trim();
+
+  return {
+    ...payload,
+    status: normalizedStatus,
+    freshness: {
+      ...sla,
+      updated_at: updatedAt,
+      ttl_seconds: ttlSeconds > 0 ? ttlSeconds : 0,
+    },
+  };
 }
 
 async function getDashboardKPIs() {
@@ -1211,6 +1255,11 @@ async function populateWindowGlobals() {
       window.liveForecastScoreboard = null;
     }
 
+    const geopoliticalRiskGraph = await getGeopoliticalRiskGraph({ limit: 4 });
+    window.geopoliticalRiskGraph = geopoliticalRiskGraph && typeof geopoliticalRiskGraph === 'object'
+      ? geopoliticalRiskGraph
+      : null;
+
     // Stocks - build top movers with real % change from price history
     const rawStocks = await getStockPrices();
     const tickers = Object.keys(rawStocks);
@@ -1381,7 +1430,7 @@ async function populateWindowGlobals() {
     const liveFreshnessContract = buildLiveFreshnessContract(
       window.ingestionHealth || null,
       window.apiHealth || null,
-      portfolioRiskFreshnessSource,
+      [portfolioRiskFreshnessSource, window.globalSignalMesh].filter(Boolean),
     );
     window.liveFreshnessContract = liveFreshnessContract;
     if (liveFreshnessContract.contractState === 'stale') {
@@ -1412,6 +1461,7 @@ async function populateWindowGlobals() {
           newsItems: window.newsItems || [],
           forecasts: window.liveForecasts || [],
           forecastScoreboard: window.liveForecastScoreboard || null,
+          geopoliticalRiskGraph: window.geopoliticalRiskGraph || null,
           tradeIdeas: window.tradeIdeas || [],
           alerts: window.alertTimeline || [],
           topMovers: window.topMovers || [],
@@ -1485,6 +1535,7 @@ window.FinanceAPI = {
   getNewsFeed,
   getForecasts,
   getWalkForwardScoreboard,
+  getGeopoliticalRiskGraph,
   getStockPrices,
   getTopMovers,
   getAlerts,
@@ -1511,6 +1562,7 @@ window.getLiveDashboardData = () => ({
     newsItems: window.newsItems || [],
     forecasts: window.liveForecasts || [],
     forecastScoreboard: window.liveForecastScoreboard || null,
+    geopoliticalRiskGraph: window.geopoliticalRiskGraph || null,
     tradeIdeas: window.tradeIdeas || [],
     alerts: window.alertTimeline || [],
     topMovers: window.topMovers || [],

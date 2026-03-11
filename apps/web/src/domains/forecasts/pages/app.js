@@ -2841,6 +2841,67 @@ function renderForecastScenarioWidget() {
       : (scoreStatus === 'fail' ? 'Below target' : 'Monitoring');
     widgetTimestamp.textContent = `${statusLabel} • Walk-forward ${formatRelativeTime(liveForecastScoreboard.updated_at)}`;
   }
+
+  const geopoliticalRiskSection = scenarioWidget.querySelector('[data-role="geopolitical-risk"]');
+  const geopoliticalGraph = scenarioWidget.querySelector('[data-role="geo-graph"]');
+  const geopoliticalAlertCopy = scenarioWidget.querySelector('[data-role="geo-alert-copy"]');
+  const geopoliticalAlertBand = scenarioWidget.querySelector('[data-role="geo-alert-band"]');
+  const geopoliticalPayload = isObject(liveDataMeta?.geopoliticalRiskGraph)
+    ? liveDataMeta.geopoliticalRiskGraph
+    : (isObject(window.geopoliticalRiskGraph) ? window.geopoliticalRiskGraph : null);
+  const geopoliticalNodes = Array.isArray(geopoliticalPayload?.nodes)
+    ? geopoliticalPayload.nodes.filter((node) => isObject(node)).slice(0, 3)
+    : [];
+  const geopoliticalAlerts = Array.isArray(geopoliticalPayload?.alerts)
+    ? geopoliticalPayload.alerts.filter((alert) => isObject(alert))
+    : [];
+
+  if (geopoliticalRiskSection) {
+    geopoliticalRiskSection.hidden = geopoliticalNodes.length === 0;
+  }
+
+  if (geopoliticalGraph) {
+    geopoliticalGraph.innerHTML = geopoliticalNodes.map((node) => {
+      const label = escapeHtml(toString(node.label, toString(node.id, 'Region')));
+      const score = Math.max(0, Math.min(100, Math.round(toFiniteNumber(node.escalation_score, 0))));
+      return `
+        <div class="scenario-geopolitical-node">
+          <span class="scenario-geopolitical-node-label">${label}</span>
+          <div class="scenario-geopolitical-node-bar" aria-hidden="true">
+            <div class="scenario-geopolitical-node-fill" style="width: ${score}%"></div>
+          </div>
+          <span class="scenario-geopolitical-node-score">${score}</span>
+        </div>
+      `;
+    }).join('');
+  }
+
+  const topGeopoliticalAlert = geopoliticalAlerts[0] || (geopoliticalNodes[0]
+    ? {
+      region: geopoliticalNodes[0].label,
+      escalation_band: geopoliticalNodes[0].escalation_band,
+      escalation_score: geopoliticalNodes[0].escalation_score,
+      timestamp: geopoliticalNodes[0].latest_at
+    }
+    : null);
+  const alertBand = toString(topGeopoliticalAlert?.escalation_band, 'monitoring').toLowerCase() || 'monitoring';
+  const alertBandLabel = `${alertBand.charAt(0).toUpperCase()}${alertBand.slice(1)}`;
+
+  if (geopoliticalAlertBand) {
+    geopoliticalAlertBand.textContent = alertBandLabel;
+    geopoliticalAlertBand.className = `scenario-geopolitical-badge band-${alertBand}`;
+  }
+
+  if (geopoliticalAlertCopy) {
+    if (topGeopoliticalAlert) {
+      const region = toString(topGeopoliticalAlert.region, toString(geopoliticalNodes[0]?.label, 'region'));
+      const score = Math.max(0, Math.min(100, Math.round(toFiniteNumber(topGeopoliticalAlert.escalation_score, 0))));
+      const relativeTime = topGeopoliticalAlert.timestamp ? formatRelativeTime(topGeopoliticalAlert.timestamp) : 'recently';
+      geopoliticalAlertCopy.textContent = `Conflict escalation ${alertBandLabel.toLowerCase()} in ${region} (${score}/100) • refreshed ${relativeTime}`;
+    } else {
+      geopoliticalAlertCopy.textContent = 'Conflict escalation signals will appear here.';
+    }
+  }
 }
 
 function renderTopMoversWidget(stocks = liveTopMovers) {
@@ -3033,7 +3094,12 @@ function applyLiveDashboardData(payload = {}) {
       : (isObject(payloadMeta.ingestionHealth) ? payloadMeta.ingestionHealth : null),
     globalSignalMesh: isObject(payload.globalSignalMesh)
       ? payload.globalSignalMesh
-      : (isObject(payloadMeta.globalSignalMesh) ? payloadMeta.globalSignalMesh : null)
+      : (isObject(payloadMeta.globalSignalMesh) ? payloadMeta.globalSignalMesh : null),
+    geopoliticalRiskGraph: isObject(data.geopoliticalRiskGraph)
+      ? data.geopoliticalRiskGraph
+      : (isObject(payload.geopoliticalRiskGraph)
+        ? payload.geopoliticalRiskGraph
+        : (isObject(payloadMeta.geopoliticalRiskGraph) ? payloadMeta.geopoliticalRiskGraph : null))
   };
 
   tradeIdeas = sanitizeTradeIdeas(data.tradeIdeas);

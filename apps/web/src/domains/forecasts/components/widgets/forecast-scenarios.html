@@ -66,9 +66,108 @@
             </div>
         </div>
         <p class="scenario-context">Based on 10,000+ market signals</p>
+        <div class="scenario-geopolitical-risk" data-role="geopolitical-risk" hidden>
+            <div class="scenario-geopolitical-header">
+                <span class="scenario-geopolitical-title">Geopolitical Risk Graph</span>
+                <span class="scenario-geopolitical-badge" data-role="geo-alert-band">Monitoring</span>
+            </div>
+            <div class="scenario-geopolitical-graph" data-role="geo-graph"></div>
+            <p class="scenario-geopolitical-alert" data-role="geo-alert-copy">Conflict escalation signals will appear here.</p>
+        </div>
     </div>
     <div class="widget-footer">
         <span class="widget-timestamp">Updated 5 minutes ago</span>
         <button class="widget-action-btn" onclick="showToast('Customizing scenarios...')">Customize Scenarios</button>
     </div>
 </section>
+
+<style>
+    .scenario-geopolitical-risk {
+        margin-top: 14px;
+        padding: 14px;
+        border-radius: 14px;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0.38));
+        border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+    .scenario-geopolitical-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+    .scenario-geopolitical-title {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-text-secondary, #94a3b8);
+    }
+    .scenario-geopolitical-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        background: rgba(148, 163, 184, 0.18);
+        color: var(--color-text, #e2e8f0);
+    }
+    .scenario-geopolitical-badge.band-low {
+        background: rgba(74, 222, 128, 0.16);
+        color: #4ade80;
+    }
+    .scenario-geopolitical-badge.band-medium {
+        background: rgba(250, 204, 21, 0.18);
+        color: #facc15;
+    }
+    .scenario-geopolitical-badge.band-high {
+        background: rgba(251, 146, 60, 0.18);
+        color: #fb923c;
+    }
+    .scenario-geopolitical-badge.band-critical {
+        background: rgba(248, 113, 113, 0.2);
+        color: #f87171;
+    }
+    .scenario-geopolitical-graph {
+        display: grid;
+        gap: 8px;
+    }
+    .scenario-geopolitical-node {
+        display: grid;
+        grid-template-columns: minmax(0, 88px) 1fr auto;
+        gap: 10px;
+        align-items: center;
+    }
+    .scenario-geopolitical-node-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-text, #e2e8f0);
+    }
+    .scenario-geopolitical-node-bar {
+        position: relative;
+        overflow: hidden;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.16);
+    }
+    .scenario-geopolitical-node-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #facc15, #f87171);
+    }
+    .scenario-geopolitical-node-score {
+        font-size: 11px;
+        color: var(--color-text-secondary, #94a3b8);
+    }
+    .scenario-geopolitical-alert {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--color-text-secondary, #94a3b8);
+    }
+    @media (max-width: 720px) {
+        .scenario-geopolitical-node {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
