@@ -381,6 +381,192 @@ class TestPlaybookEnrichmentStructure:
         assert fusion['contribution_normalization']['sum'] == pytest.approx(1.0, abs=1e-3)
         assert sum(layer['normalized_contribution'] for layer in fusion['layers']) == pytest.approx(1.0, abs=1e-3)
 
+    def test_forecast_fusion_normalized_contributions_sum_to_one_after_rounding(self):
+        """Rounded attribution shares should still close exactly to 1.0."""
+        service = RecommendationsService()
+
+        fusion = service._build_forecast_fusion(
+            ticker='AAPL',
+            score=0.63,
+            forecast={
+                'direction': 'up',
+                'confidence': 0.71,
+                'expected_return': 0.013,
+                'market_context': {
+                    'news_sentiment': 0.11,
+                    'news_volume_zscore': 0.4,
+                },
+            },
+            market_context={'regime': 'NORMAL'},
+        )
+
+        assert fusion['contribution_normalization']['sum'] == 1.0
+        assert sum(layer['normalized_contribution'] for layer in fusion['layers']) == 1.0
+
+    def test_attribution_stability_under_small_perturbation(self):
+        """E49.2: Attribution should remain stable under small input perturbations."""
+        service = RecommendationsService()
+
+        base_forecast = {
+            'direction': 'up',
+            'confidence': 0.70,
+            'expected_return': 0.02,
+            'market_context': {
+                'news_sentiment': 0.15,
+                'news_volume_zscore': 0.5,
+            },
+        }
+        market_context = {'regime': 'NORMAL'}
+
+        base_fusion = service._build_forecast_fusion(
+            ticker='AAPL',
+            score=0.65,
+            forecast=base_forecast,
+            market_context=market_context,
+        )
+
+        perturbed_forecast = {
+            'direction': 'up',
+            'confidence': 0.72,
+            'expected_return': 0.022,
+            'market_context': {
+                'news_sentiment': 0.17,
+                'news_volume_zscore': 0.55,
+            },
+        }
+
+        perturbed_fusion = service._build_forecast_fusion(
+            ticker='AAPL',
+            score=0.67,
+            forecast=perturbed_forecast,
+            market_context=market_context,
+        )
+
+        base_dominant = base_fusion['dominant_layer']
+        perturbed_dominant = perturbed_fusion['dominant_layer']
+
+        assert base_dominant == perturbed_dominant, (
+            f"Dominant layer should be stable under small perturbations: "
+            f"{base_dominant} vs {perturbed_dominant}"
+        )
+
+        base_stability = base_fusion['stability']['status']
+        perturbed_stability = perturbed_fusion['stability']['status']
+
+        assert base_stability == perturbed_stability, (
+            f"Stability status should not flip under small perturbations: "
+            f"{base_stability} vs {perturbed_stability}"
+        )
+
+        base_top3 = sorted(
+            [(l['layer'], l['normalized_contribution']) for l in base_fusion['layers']],
+            key=lambda x: x[1],
+            reverse=True
+        )[:3]
+        perturbed_top3 = sorted(
+            [(l['layer'], l['normalized_contribution']) for l in perturbed_fusion['layers']],
+            key=lambda x: x[1],
+            reverse=True
+        )[:3]
+
+        base_top3_layers = [l[0] for l in base_top3]
+        perturbed_top3_layers = [l[0] for l in perturbed_top3]
+
+        assert base_top3_layers == perturbed_top3_layers, (
+            f"Top-3 contributing layers should be stable: "
+            f"{base_top3_layers} vs {perturbed_top3_layers}"
+        )
+
+    def test_attribution_fragile_detection_under_large_perturbation(self):
+        """E49.2: Large perturbations should correctly trigger fragile status when dominance gap shrinks."""
+        service = RecommendationsService()
+
+        base_forecast = {
+            'direction': 'up',
+            'confidence': 0.80,
+            'expected_return': 0.01,
+            'market_context': {
+                'news_sentiment': 0.10,
+                'news_volume_zscore': 0.3,
+            },
+        }
+        market_context = {'regime': 'NORMAL'}
+
+        base_fusion = service._build_forecast_fusion(
+            ticker='AAPL',
+            score=0.70,
+            forecast=base_forecast,
+            market_context=market_context,
+        )
+
+        perturbed_forecast = {
+            'direction': 'up',
+            'confidence': 0.50,
+            'expected_return': 0.015,
+            'market_context': {
+                'news_sentiment': 0.25,
+                'news_volume_zscore': 0.8,
+            },
+        }
+
+        perturbed_fusion = service._build_forecast_fusion(
+            ticker='AAPL',
+            score=0.60,
+            forecast=perturbed_forecast,
+            market_context=market_context,
+        )
+
+        base_dominance_gap = base_fusion['stability']['dominance_gap']
+        perturbed_dominance_gap = perturbed_fusion['stability']['dominance_gap']
+
+        assert perturbed_dominance_gap < base_dominance_gap, (
+            f"Large perturbation should reduce dominance gap: "
+            f"{base_dominance_gap} vs {perturbed_dominance_gap}"
+        )
+
+        assert perturbed_fusion['stability']['status'] in {'watch', 'fragile'}, (
+            f"Large perturbation should degrade stability: {perturbed_fusion['stability']['status']}"
+        )
+
+    def test_attribution_stability_across_regime_changes(self):
+        """E49.2: Attribution should track regime changes explicitly."""
+        service = RecommendationsService()
+
+        base_forecast = {
+            'direction': 'down',
+            'confidence': 0.60,
+            'expected_return': -0.03,
+            'market_context': {
+                'news_sentiment': -0.20,
+                'news_volume_zscore': 0.8,
+            },
+        }
+
+        risk_off_fusion = service._build_forecast_fusion(
+            ticker='GLD',
+            score=0.55,
+            forecast=base_forecast,
+            market_context={'regime': 'RISK_OFF'},
+        )
+
+        risk_on_fusion = service._build_forecast_fusion(
+            ticker='AAPL',
+            score=0.55,
+            forecast=base_forecast,
+            market_context={'regime': 'RISK_ON'},
+        )
+
+        assert risk_off_fusion['attribution']['market_regime'] == 'RISK_OFF'
+        assert risk_on_fusion['attribution']['market_regime'] == 'RISK_ON'
+
+        risk_off_macro = risk_off_fusion['attribution']['macro_alignment']
+        risk_on_macro = risk_on_fusion['attribution']['macro_alignment']
+
+        assert risk_off_macro > risk_on_macro, (
+            f"Macro alignment should be higher in RISK_OFF for down forecast: "
+            f"{risk_off_macro} vs {risk_on_macro}"
+        )
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
