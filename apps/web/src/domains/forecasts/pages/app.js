@@ -1742,6 +1742,9 @@ function buildCopilotJudgePayload(raw) {
   const rawEventTiming = isObject(data.event_timing || data.eventTiming)
     ? (data.event_timing || data.eventTiming)
     : null;
+  const rawExplainability = isObject(data.explainability)
+    ? data.explainability
+    : null;
   const contextInfluence = rawContextInfluence
     ? {
       mode: toString(rawContextInfluence.mode, 'market_wide'),
@@ -1806,6 +1809,43 @@ function buildCopilotJudgePayload(raw) {
         .slice(0, 2),
     }
     : null;
+  const explainability = rawExplainability
+    ? {
+      schemaVersion: toString(rawExplainability.schema_version || rawExplainability.schemaVersion, '').trim(),
+      generatedAt: toString(rawExplainability.generated_at || rawExplainability.generatedAt, '').trim(),
+      stats: isObject(rawExplainability.stats)
+        ? {
+          verdictCount: Math.max(0, Math.round(toFiniteNumber(rawExplainability.stats.verdict_count, 0))),
+          sourceCount: Math.max(0, Math.round(toFiniteNumber(rawExplainability.stats.source_count, 0))),
+          edgeCount: Math.max(0, Math.round(toFiniteNumber(rawExplainability.stats.edge_count, 0))),
+          avgSourceWeight: Math.max(0, Math.round(toFiniteNumber(rawExplainability.stats.avg_source_weight, 0) * 100) / 100),
+        }
+        : null,
+      sourceTraceability: toArray(rawExplainability.source_traceability || rawExplainability.sourceTraceability, [])
+        .filter(isObject)
+        .map((trace) => ({
+          ticker: toString(trace.ticker, '').trim().toUpperCase(),
+          verdictId: toString(trace.verdict_id || trace.verdictId, '').trim(),
+          primarySourceCount: Math.max(0, Math.round(toFiniteNumber(trace.primary_source_count || trace.primarySourceCount, 0))),
+          supportingSources: toArray(trace.supporting_sources || trace.supportingSources, [])
+            .filter(isObject)
+            .map((source) => ({
+              sourceId: toString(source.source_id || source.sourceId, '').trim(),
+              label: toString(source.label, '').trim(),
+              kind: toString(source.kind, '').replace(/_/g, ' ').trim(),
+              weight: Math.max(0, Math.round(toFiniteNumber(source.weight, 0) * 100) / 100),
+              freshnessAgeHours: Math.max(0, Math.round(toFiniteNumber(
+                isObject(source.freshness) ? source.freshness.age_hours || source.freshness.ageHours : 0,
+                0
+              ) * 10) / 10),
+            }))
+            .filter((source) => source.label || source.kind || source.sourceId)
+            .slice(0, 2),
+        }))
+        .filter((trace) => trace.ticker || trace.verdictId || trace.primarySourceCount > 0 || trace.supportingSources.length)
+        .slice(0, 2),
+    }
+    : null;
 
   return {
     question: toString(data.question, 'Que faire avec votre portefeuille ?'),
@@ -1863,6 +1903,7 @@ function buildCopilotJudgePayload(raw) {
     regimeDetection,
     allocationDriftAlerts,
     eventTiming,
+    explainability,
     memo: {
       summary: memoSummary,
       regime: memoRegime,
@@ -4535,8 +4576,53 @@ function buildCopilotChatResponseHtml(payload) {
   const eventTimingFreshness = eventTiming
     ? toString(eventTiming.freshness, '').trim()
     : '';
+  const explainability = payload.explainability && typeof payload.explainability === 'object'
+    ? payload.explainability
+    : null;
+  const explainabilityStats = explainability && isObject(explainability.stats)
+    ? explainability.stats
+    : null;
+  const explainabilitySchema = explainability
+    ? escapeHtml(toString(explainability.schemaVersion || explainability.schema_version, '').trim())
+    : '';
+  const explainabilityRows = explainability
+    ? toArray(explainability.sourceTraceability || explainability.source_traceability, [])
+      .map((trace) => {
+        const ticker = escapeHtml(toString(trace.ticker, '').trim().toUpperCase());
+        const primarySourceCount = Math.max(0, Math.round(toFiniteNumber(trace.primarySourceCount || trace.primary_source_count, 0)));
+        const supportingSources = toArray(trace.supportingSources || trace.supporting_sources, [])
+          .map((source) => {
+            const label = escapeHtml(toString(source.label, '').trim());
+            const kind = escapeHtml(toString(source.kind, '').replace(/_/g, ' ').trim());
+            const weight = Math.max(0, Math.round(toFiniteNumber(source.weight, 0) * 100) / 100);
+            const freshnessAgeHours = Math.max(0, Math.round(toFiniteNumber(
+              source.freshnessAgeHours || source.freshness_age_hours || (isObject(source.freshness) ? source.freshness.age_hours || source.freshness.ageHours : 0),
+              0
+            ) * 10) / 10);
+            const details = [
+              kind || '',
+              weight > 0 ? `weight ${weight}` : '',
+              freshnessAgeHours > 0 ? `${freshnessAgeHours}h old` : '',
+            ].filter(Boolean).join(', ');
+            return label
+              ? `${label}${details ? ` (${details})` : ''}`
+              : '';
+          })
+          .filter(Boolean)
+          .slice(0, 2)
+          .join(' • ');
+        if (!ticker && !primarySourceCount && !supportingSources) {
+          return '';
+        }
+        return `<li><strong>${ticker || 'Traceability'}</strong>${primarySourceCount ? ` • ${primarySourceCount} primary source${primarySourceCount > 1 ? 's' : ''}` : ''}${supportingSources ? ` • ${supportingSources}` : ''}</li>`;
+      })
+      .filter(Boolean)
+      .slice(0, 2)
+    : [];
   const traceabilitySources = [
-    ...toArray(payload.dataSources || payload.sources || payload.source, []),
+    ...toArray(payload.dataSources || payload.sources || payload.source, [])
+      .map((source) => toString(isObject(source) ? (source.label || source.source || source.ticker || source.type || source.name) : source, '').trim())
+      .filter(Boolean),
     ...toArray(regimeDetection && regimeDetection.sources, []),
     ...toArray(eventTiming && (eventTiming.sourceLabels || eventTiming.sources || eventTiming.source), []),
   ]
@@ -4589,12 +4675,25 @@ function buildCopilotChatResponseHtml(payload) {
         ].filter(Boolean).join(' • ')}</p>` : ''}
       </div>`
     : '';
-  const explainabilityGraphHtml = explainabilityNodes.length > 1
+  const explainabilityGraphHtml = explainabilityStats || explainabilityRows.length || explainabilityNodes.length > 1
     ? `<div style="margin-top: 8px;">
-        <p><strong>Explainability graph:</strong> ${explainabilityNodes.join(' -> ')}</p>
+        <p><strong>Explainability graph:</strong> ${explainabilityStats
+          ? [
+            `${Math.max(0, Math.round(toFiniteNumber(explainabilityStats.verdictCount || explainabilityStats.verdict_count, 0)))} verdict${Math.max(0, Math.round(toFiniteNumber(explainabilityStats.verdictCount || explainabilityStats.verdict_count, 0))) === 1 ? '' : 's'}`,
+            `${Math.max(0, Math.round(toFiniteNumber(explainabilityStats.sourceCount || explainabilityStats.source_count, 0)))} source${Math.max(0, Math.round(toFiniteNumber(explainabilityStats.sourceCount || explainabilityStats.source_count, 0))) === 1 ? '' : 's'}`,
+            `${Math.max(0, Math.round(toFiniteNumber(explainabilityStats.edgeCount || explainabilityStats.edge_count, 0)))} link${Math.max(0, Math.round(toFiniteNumber(explainabilityStats.edgeCount || explainabilityStats.edge_count, 0))) === 1 ? '' : 's'}`,
+            Math.max(0, Math.round(toFiniteNumber(explainabilityStats.avgSourceWeight || explainabilityStats.avg_source_weight, 0) * 100) / 100) > 0
+              ? `avg weight ${Math.max(0, Math.round(toFiniteNumber(explainabilityStats.avgSourceWeight || explainabilityStats.avg_source_weight, 0) * 100) / 100)}`
+              : '',
+            explainabilitySchema || '',
+          ].filter(Boolean).join(' • ')
+          : explainabilityNodes.join(' -> ')}</p>
+        ${explainabilityRows.length ? `<ul style="margin: 6px 0 0 18px;">${explainabilityRows.join('')}</ul>` : ''}
       </div>`
     : '';
-  const sourceTraceabilityHtml = traceabilitySources.length
+  const sourceTraceabilityHtml = explainabilityRows.length
+    ? ''
+    : traceabilitySources.length
     ? `<p style="margin-top: 8px; font-size: 12px; color: #94A3B8;"><strong>Source traceability:</strong> ${traceabilitySources.join(' -> ')}</p>`
     : '';
   const metadataBadges = [
@@ -5181,9 +5280,11 @@ function renderHeroCopilotBrief(state) {
   const timestampEl = document.getElementById('heroBriefTimestamp') || document.querySelector('.hero-daily-brief .ai-timestamp');
   const signalsEl = document.getElementById('heroBriefSignals');
   const risksEl = document.getElementById('heroBriefRisks');
+  const explainabilityEl = document.getElementById('heroBriefExplainability');
+  const traceabilityEl = document.getElementById('heroBriefTraceability');
   const actionsRoot = document.getElementById('heroBriefActions') || document.querySelector('.hero-daily-brief .hero-brief-actions');
   const suggestionRoot = document.getElementById('heroSuggestionChips');
-  if (!titleEl && !leadEl && !summaryEl && !timestampEl && !actionsRoot && !suggestionRoot) return;
+  if (!titleEl && !leadEl && !summaryEl && !timestampEl && !explainabilityEl && !traceabilityEl && !actionsRoot && !suggestionRoot) return;
 
   const fallbackState = buildDefaultCopilotStartState();
   const resolvedState = resolveCopilotStartState(state);
@@ -5219,6 +5320,10 @@ function renderHeroCopilotBrief(state) {
     || normalizedBriefStatus === 'degraded'
     || normalizedBriefStatus === 'stale'
     || normalizedBriefStatus === 'api_unavailable';
+  const briefSources = normalizeCopilotSourceLabels(brief.sources || brief.source);
+  const briefTopSignals = normalizeCopilotStartList(brief.topSignals || brief.top_signals);
+  const briefTopOpportunities = normalizeCopilotStartList(brief.topOpportunities || brief.top_opportunities);
+  const briefTopRisks = normalizeCopilotStartList(brief.topRisks || brief.top_risks);
 
   if (titleEl) {
     titleEl.textContent = toString(brief.title, fallbackState.brief.title);
@@ -5247,8 +5352,8 @@ function renderHeroCopilotBrief(state) {
   if (timestampEl) {
     const freshness = toString(brief.freshness || brief.generated_at || brief.generatedAt, '');
     const timestampParts = [`Updated ${freshness ? formatRelativeTime(freshness) : 'just now'}`];
-    if (brief.sources.length) {
-      timestampParts.push(`${brief.sources.length} source${brief.sources.length > 1 ? 's' : ''}`);
+    if (briefSources.length) {
+      timestampParts.push(`${briefSources.length} source${briefSources.length > 1 ? 's' : ''}`);
     }
     if (briefDegraded) {
       timestampParts.push('degraded');
@@ -5257,10 +5362,10 @@ function renderHeroCopilotBrief(state) {
   }
 
   if (signalsEl) {
-    const signalItems = brief.topSignals.length
-      ? brief.topSignals
-      : normalizeCopilotStartList(brief.topOpportunities || brief.top_opportunities);
-    const signalLabel = brief.topSignals.length ? 'Signals' : 'Opportunities';
+    const signalItems = briefTopSignals.length
+      ? briefTopSignals
+      : briefTopOpportunities;
+    const signalLabel = briefTopSignals.length ? 'Signals' : 'Opportunities';
     const text = signalItems.length ? `${signalLabel}: ${signalItems.join(' • ')}` : '';
     signalsEl.textContent = text;
     signalsEl.style.display = text ? 'block' : 'none';
@@ -5275,11 +5380,54 @@ function renderHeroCopilotBrief(state) {
         .join(' • ')
       : '';
     const text = [
-      brief.topRisks.length ? `Risks: ${brief.topRisks.join(' • ')}` : '',
+      briefTopRisks.length ? `Risks: ${briefTopRisks.join(' • ')}` : '',
       eventTimingSummary ? `Upcoming events: ${eventTimingSummary}` : ''
     ].filter(Boolean).join(' | ');
     risksEl.textContent = text;
     risksEl.style.display = text ? 'block' : 'none';
+  }
+
+  const eventTiming = normalizeCopilotStartEventTiming(brief.eventTiming || brief.event_timing);
+  const regimeLabel = toString(brief.marketRegime || brief.marketSentiment, fallbackState.brief.marketRegime).replace(/_/g, ' ').trim();
+  const explainabilityParts = [
+    contextInfluence
+      ? `Context ${toString(contextInfluence.mode, 'market_wide').replace(/_/g, ' ').trim()}${contextInfluence.portfolioApplied ? ' -> saved portfolio' : ''}${contextInfluence.effectiveTickers.length ? ` -> ${contextInfluence.effectiveTickers.join(', ')}` : ''}`
+      : '',
+    regimeLabel && regimeLabel !== 'UNKNOWN' ? `Regime ${regimeLabel}` : '',
+    briefTopSignals.length ? `Signals ${briefTopSignals.slice(0, 2).join(' • ')}` : '',
+    !briefTopSignals.length && briefTopOpportunities.length ? `Opportunities ${briefTopOpportunities.slice(0, 2).join(' • ')}` : '',
+    briefTopRisks.length ? `Risks ${briefTopRisks.slice(0, 2).join(' • ')}` : '',
+    eventTiming && eventTiming.summary ? `Event timing ${eventTiming.summary}` : '',
+  ].filter(Boolean).slice(0, 4);
+  if (explainabilityEl) {
+    const explainabilityText = explainabilityParts.length > 1
+      ? `Explainability graph: ${explainabilityParts.join(' -> ')}`
+      : '';
+    explainabilityEl.textContent = explainabilityText;
+    explainabilityEl.style.display = explainabilityText ? 'block' : 'none';
+  }
+
+  if (traceabilityEl) {
+    const traceabilitySources = [
+      ...normalizeCopilotSourceLabels(brief.sources || brief.source),
+      ...(eventTiming ? eventTiming.sourceLabels : []),
+      contextInfluence ? toString(contextInfluence.source, '').replace(/_/g, ' ').trim() : '',
+    ]
+      .map((item) => toString(item, '').trim())
+      .filter(Boolean)
+      .filter((item, index, items) => items.indexOf(item) === index)
+      .slice(0, 5);
+    const freshnessLabel = toString(brief.freshness || brief.generatedAt || brief.generated_at, '').trim();
+    const traceabilityParts = [
+      traceabilitySources.length ? traceabilitySources.join(' -> ') : '',
+      freshnessLabel ? `freshness ${formatRelativeTime(freshnessLabel)}` : '',
+      briefDegraded ? 'status degraded' : ''
+    ].filter(Boolean);
+    const traceabilityText = traceabilityParts.length
+      ? `Source traceability: ${traceabilityParts.join(' • ')}`
+      : '';
+    traceabilityEl.textContent = traceabilityText;
+    traceabilityEl.style.display = traceabilityText ? 'block' : 'none';
   }
 
   if (actionsRoot) {

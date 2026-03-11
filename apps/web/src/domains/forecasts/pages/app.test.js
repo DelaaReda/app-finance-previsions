@@ -789,6 +789,8 @@ function loadRenderHeroCopilotBriefWithHeroIds(resolvedState) {
     heroBriefTimestamp: createInteractiveElementStub(),
     heroBriefSignals: createInteractiveElementStub(),
     heroBriefRisks: createInteractiveElementStub(),
+    heroBriefExplainability: createInteractiveElementStub(),
+    heroBriefTraceability: createInteractiveElementStub(),
     heroBriefActions: createInteractiveElementStub(),
     heroSuggestionChips: createInteractiveElementStub(),
   };
@@ -1228,6 +1230,17 @@ function loadBuildCopilotChatResponseHtml() {
     toArray(value, fallback = []) {
       return Array.isArray(value) ? value : fallback;
     },
+    normalizeCopilotSourceLabels(value) {
+      const sources = Array.isArray(value) ? value : (value ? [value] : []);
+      return sources
+        .map((source) => {
+          if (source && typeof source === 'object' && !Array.isArray(source)) {
+            return String(source.label || source.source || source.ticker || source.type || source.name || '').trim();
+          }
+          return String(source || '').trim();
+        })
+        .filter(Boolean);
+    },
     isObject(value) {
       return !!value && typeof value === 'object' && !Array.isArray(value);
     },
@@ -1266,6 +1279,17 @@ function loadBuildCopilotJudgePayload() {
     },
     toArray(value, fallback = []) {
       return Array.isArray(value) ? value : fallback;
+    },
+    normalizeCopilotSourceLabels(value) {
+      const sources = Array.isArray(value) ? value : (value ? [value] : []);
+      return sources
+        .map((source) => {
+          if (source && typeof source === 'object' && !Array.isArray(source)) {
+            return String(source.label || source.source || source.ticker || source.type || source.name || '').trim();
+          }
+          return String(source || '').trim();
+        })
+        .filter(Boolean);
     },
     isObject(value) {
       return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -3231,6 +3255,47 @@ test('renderHeroCopilotBrief surfaces critical upcoming events from the normaliz
   assert.equal(elements.heroBriefRisks.style.display, 'block');
 });
 
+test('renderHeroCopilotBrief renders explainability graph and source traceability from hero brief state', () => {
+  const state = {
+    brief: {
+      title: 'Daily Brief',
+      summary: 'Stay selective around catalysts.',
+      marketSentiment: 'NEUTRAL',
+      topSignals: ['Semis leadership intact'],
+      topRisks: ['Headline volatility'],
+      freshness: '2026-03-09T08:00:00Z',
+      sources: ['brief_daily', 'forecasts'],
+      event_timing: {
+        summary: 'Critical events are clustered into the next 48h.',
+        source: ['brief_calendar'],
+        events: [],
+      },
+    },
+    contextInfluence: {
+      mode: 'portfolio_aware',
+      portfolioApplied: true,
+      source: 'saved_portfolio',
+      effectiveTickers: ['NVDA', 'MSFT'],
+    },
+    ask: [],
+    open: [],
+  };
+  const { sandbox, elements } = loadRenderHeroCopilotBriefWithHeroIds(state);
+
+  sandbox.renderHeroCopilotBrief(state);
+
+  assert.equal(
+    elements.heroBriefExplainability.textContent,
+    'Explainability graph: Context portfolio aware -> saved portfolio -> NVDA, MSFT -> Regime NEUTRAL -> Signals Semis leadership intact -> Risks Headline volatility'
+  );
+  assert.equal(elements.heroBriefExplainability.style.display, 'block');
+  assert.equal(
+    elements.heroBriefTraceability.textContent,
+    'Source traceability: brief_daily -> forecasts -> brief_calendar -> saved portfolio • freshness 2 minutes ago'
+  );
+  assert.equal(elements.heroBriefTraceability.style.display, 'block');
+});
+
 test('renderHeroCopilotBrief treats stale normalized brief status as degraded metadata', () => {
   const state = {
     brief: {
@@ -3382,6 +3447,67 @@ test('buildCopilotJudgePayload normalizes event timing details from the copilot 
   });
 });
 
+test('buildCopilotJudgePayload normalizes explainability graph traceability details from the judge contract', () => {
+  const sandbox = loadBuildCopilotJudgePayload();
+
+  const payload = sandbox.buildCopilotJudgePayload({
+    verdict: 'buy',
+    explainability: {
+      schema_version: 'judge_explainability_graph_v1',
+      generated_at: '2026-03-10T10:00:00Z',
+      source_traceability: [
+        {
+          verdict_id: 'verdict:judge_demo_nvda',
+          ticker: 'NVDA',
+          primary_source_count: 1,
+          supporting_sources: [
+            {
+              source_id: 'news:reuters',
+              label: 'NVIDIA demand accelerates',
+              kind: 'news_item',
+              weight: 0.91,
+              freshness: { age_hours: 4.0 },
+            },
+          ],
+        },
+      ],
+      stats: {
+        verdict_count: 1,
+        source_count: 1,
+        edge_count: 1,
+        avg_source_weight: 0.91,
+      },
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.explainability)), {
+    schemaVersion: 'judge_explainability_graph_v1',
+    generatedAt: '2026-03-10T10:00:00Z',
+    stats: {
+      verdictCount: 1,
+      sourceCount: 1,
+      edgeCount: 1,
+      avgSourceWeight: 0.91,
+    },
+    sourceTraceability: [
+      {
+        ticker: 'NVDA',
+        verdictId: 'verdict:judge_demo_nvda',
+        primarySourceCount: 1,
+        supportingSources: [
+          {
+            sourceId: 'news:reuters',
+            label: 'NVIDIA demand accelerates',
+            kind: 'news item',
+            weight: 0.91,
+            freshnessAgeHours: 4,
+          },
+        ],
+      },
+    ],
+  });
+});
+
 test('buildCopilotChatResponseHtml renders regime detection and allocation drift alert details', () => {
   const sandbox = loadBuildCopilotChatResponseHtml();
 
@@ -3503,6 +3629,101 @@ test('buildCopilotChatResponseHtml renders event timing notes when the copilot c
   assert.match(html, /Sources copilot_event_timing, judge_event_matrix • Updated 2 minutes ago/);
 });
 
+test('buildCopilotChatResponseHtml renders explainability graph stats and source traceability from the judge contract', () => {
+  const sandbox = loadBuildCopilotChatResponseHtml();
+
+  const html = sandbox.buildCopilotChatResponseHtml({
+    consensus: 'BUY',
+    confidence: 71,
+    risk: { level: 'medium', caveat: 'CPI is the main near-term risk.' },
+    model: 'Copilot',
+    qualityStatus: 'ok',
+    generatedAt: '2026-03-10T10:00:00Z',
+    why: ['Semis leadership remains intact.'],
+    dataSources: [{ label: 'judge_live' }],
+    explainability: {
+      schemaVersion: 'judge_explainability_graph_v1',
+      stats: {
+        verdictCount: 1,
+        sourceCount: 1,
+        edgeCount: 1,
+        avgSourceWeight: 0.91,
+      },
+      sourceTraceability: [
+        {
+          ticker: 'NVDA',
+          primarySourceCount: 1,
+          supportingSources: [
+            {
+              label: 'NVIDIA demand accelerates',
+              kind: 'news item',
+              weight: 0.91,
+              freshnessAgeHours: 4,
+            },
+          ],
+        },
+      ],
+    },
+    memo: {
+      summary: 'Leadership remains intact while breadth improves.',
+      regime: 'risk_on',
+      freshness: '2026-03-10T10:00:00Z',
+    },
+  });
+
+  assert.match(html, /Explainability graph:<\/strong> 1 verdict • 1 source • 1 link • avg weight 0\.91 • judge_explainability_graph_v1/);
+  assert.match(html, /<strong>NVDA<\/strong> • 1 primary source • NVIDIA demand accelerates \(news item, weight 0\.91, 4h old\)/);
+  assert.doesNotMatch(html, /Source traceability:<\/strong>/);
+});
+
+test('buildCopilotChatResponseHtml renders explainability graph and source traceability from normalized memo inputs', () => {
+  const sandbox = loadBuildCopilotChatResponseHtml();
+
+  const html = sandbox.buildCopilotChatResponseHtml({
+    consensus: 'BUY',
+    confidence: 71,
+    risk: { level: 'medium', caveat: 'CPI is the main near-term risk.' },
+    model: 'Copilot',
+    qualityStatus: 'ok',
+    generatedAt: '2026-03-10T10:00:00Z',
+    why: ['Semis leadership remains intact.'],
+    dataSources: [{ label: 'judge_live' }, { label: 'news_stream' }],
+    contextInfluence: {
+      mode: 'portfolio_aware',
+      portfolioApplied: true,
+      effectiveTickers: ['NVDA', 'MSFT'],
+      source: 'saved_portfolio',
+    },
+    regimeDetection: {
+      label: 'BULL MARKET',
+      confidencePct: 73,
+      thresholdReason: 'vix bas',
+      sources: ['forecasts', 'macro'],
+    },
+    eventTiming: {
+      summary: 'Timing risk elevated around earnings (1w).',
+      freshness: '2026-03-10T10:00:00Z',
+      sourceLabels: ['copilot_event_timing', 'judge_event_matrix'],
+      events: [
+        {
+          eventType: 'earnings',
+          dominantHorizon: '1w',
+          interpretation: 'High earnings density over the next week.',
+        },
+      ],
+    },
+    memo: {
+      summary: 'Leadership remains intact while breadth improves.',
+      regime: 'risk_on',
+      freshness: '2026-03-10T10:00:00Z',
+    },
+  });
+
+  assert.match(html, /Explainability graph:<\/strong> Context portfolio aware -> saved portfolio -> NVDA, MSFT -> Regime BULL MARKET -> 73% confidence -> Event timing -> Timing risk elevated around earnings \(1w\)\. -> Reasoning -> Semis leadership remains intact\. -> Verdict -> BUY/);
+  assert.match(html, /Source traceability:<\/strong> judge_live -> news_stream -> forecasts -> macro -> copilot_event_timing/);
+  assert.doesNotMatch(html, /\[object Object\]/);
+});
+
 test('app.js exposes runCopilotStartOpen for the static landing brief CTA', () => {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
@@ -3521,6 +3742,8 @@ test('index.html exposes the hero brief slots required by the copilot starter', 
     'id="heroBriefSummary"',
     'id="heroBriefSignals"',
     'id="heroBriefRisks"',
+    'id="heroBriefExplainability"',
+    'id="heroBriefTraceability"',
     'id="heroBriefTimestamp"',
     'id="heroBriefActions"',
     'id="heroSuggestionChips"',
