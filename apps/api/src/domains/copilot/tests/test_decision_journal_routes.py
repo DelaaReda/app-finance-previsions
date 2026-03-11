@@ -237,6 +237,59 @@ class TestOutcomeFeedbackRoute:
         assert response.status_code == 422
 
 
+class TestPaperTradeExecuteRoute:
+    """Tests for POST /api/copilot/paper-trades/execute"""
+
+    def test_execute_paper_trade_success(self):
+        client = _client()
+
+        with patch('domains.copilot.application.decision_journal.execute_paper_trade') as mock_execute:
+            mock_execute.return_value = {
+                "status": "recorded",
+                "execution_id": "exec123",
+                "decision_id": "abc123",
+                "ticker": "AAPL",
+                "side": "buy",
+                "fill_assumptions": {"assumed_fill_price": 100.25},
+                "pnl": {"unrealized": 16.49},
+            }
+
+            response = client.post(
+                "/api/copilot/paper-trades/execute",
+                json={
+                    "decision_id": "abc123",
+                    "ticker": "AAPL",
+                    "side": "buy",
+                    "quantity": 10,
+                    "reference_price": 100,
+                    "fee_bps": 10,
+                    "slippage_bps": 25,
+                    "market_price": 102,
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["ok"] is True
+            assert data["data"]["execution_id"] == "exec123"
+            call_kwargs = mock_execute.call_args[1]
+            assert call_kwargs["decision_id"] == "abc123"
+            assert call_kwargs["fee_bps"] == 10
+
+    def test_execute_paper_trade_requires_core_fields(self):
+        client = _client()
+
+        response = client.post(
+            "/api/copilot/paper-trades/execute",
+            json={
+                "decision_id": "abc123",
+                "ticker": "AAPL",
+            },
+        )
+
+        assert response.status_code == 422
+
+
 class TestGetDecisionJournalRoute:
     """Tests for GET /api/copilot/decision-journal"""
 

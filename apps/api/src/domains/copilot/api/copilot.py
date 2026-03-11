@@ -397,6 +397,19 @@ class CopilotOutcomeFeedbackRequest(BaseModel):
     notes: Optional[str] = None
 
 
+class CopilotPaperTradeExecuteRequest(BaseModel):
+    decision_id: str
+    ticker: str
+    side: str
+    quantity: float
+    reference_price: float
+    fee_bps: Optional[float] = 0.0
+    slippage_bps: Optional[float] = 0.0
+    market_price: Optional[float] = None
+    executed_at: Optional[str] = None
+    notes: Optional[str] = None
+
+
 @router.post("/copilot/decision-journal/outcomes")
 async def copilot_decision_outcome_feedback(req: CopilotOutcomeFeedbackRequest):
     """Record outcome feedback for a decision."""
@@ -408,6 +421,26 @@ async def copilot_decision_outcome_feedback(req: CopilotOutcomeFeedbackRequest):
         status=req.status,
         actual_return=req.actual_return,
         predicted_return=req.predicted_return,
+        notes=req.notes,
+    )
+    return {"ok": result.get("status") == "recorded", "data": result}
+
+
+@router.post("/copilot/paper-trades/execute")
+async def copilot_paper_trade_execute(req: CopilotPaperTradeExecuteRequest):
+    """Execute and journal one paper trade with fill assumptions."""
+    from domains.copilot.application.decision_journal import execute_paper_trade
+
+    result = execute_paper_trade(
+        decision_id=req.decision_id,
+        ticker=req.ticker,
+        side=req.side,
+        quantity=req.quantity,
+        reference_price=req.reference_price,
+        fee_bps=req.fee_bps or 0.0,
+        slippage_bps=req.slippage_bps or 0.0,
+        market_price=req.market_price,
+        executed_at=req.executed_at,
         notes=req.notes,
     )
     return {"ok": result.get("status") == "recorded", "data": result}

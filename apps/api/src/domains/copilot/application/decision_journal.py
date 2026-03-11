@@ -43,6 +43,8 @@ DECISION_JOURNAL_STORAGE_KEY = "copilot_decision_journal"
 DECISION_JOURNAL_SCHEMA_VERSION = "copilot_decision_journal_v1"
 DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY = "copilot_outcome_feedback_records"
 DECISION_OUTCOME_FEEDBACK_SCHEMA_VERSION = "copilot_outcome_feedback_v1"
+PAPER_TRADE_EXECUTION_RECORDS_STORAGE_KEY = "copilot_paper_trade_execution_records"
+PAPER_TRADE_EXECUTION_SCHEMA_VERSION = "copilot_paper_trade_execution_v1"
 
 # Feedback horizons
 FEEDBACK_HORIZONS = ("1d", "1w", "1m")
@@ -105,6 +107,21 @@ def _coerce_horizon(horizon: Any) -> str:
     return value if value in FEEDBACK_HORIZONS else "1d"
 
 
+def _coerce_trade_side(side: Any) -> str:
+    value = str(side or "buy").strip().lower()
+    return value if value in {"buy", "sell"} else "buy"
+
+
+def _coerce_float(value: Any, *, default: float = 0.0, minimum: Optional[float] = None) -> float:
+    try:
+        parsed = float(value)
+    except Exception:
+        parsed = default
+    if minimum is not None:
+        parsed = max(minimum, parsed)
+    return parsed
+
+
 def _load_outcome_feedback_records() -> List[Dict[str, Any]]:
     """Load all outcome feedback records."""
     try:
@@ -130,6 +147,43 @@ def _save_outcome_feedback_records(records: List[Dict[str, Any]], freshness: str
         source=["copilot_decision_journal_service", "append_only_record"],
         version=DECISION_OUTCOME_FEEDBACK_SCHEMA_VERSION,
     )
+
+
+def _load_paper_trade_execution_records() -> List[Dict[str, Any]]:
+    try:
+        store = load_json(PAPER_TRADE_EXECUTION_RECORDS_STORAGE_KEY) or {}
+        return list(store.get("records", []))
+    except Exception:
+        return []
+
+
+def _save_paper_trade_execution_records(records: List[Dict[str, Any]], freshness: str) -> Optional[Path]:
+    payload = {
+        "schema_version": PAPER_TRADE_EXECUTION_SCHEMA_VERSION,
+        "record_mode": "append_only",
+        "count": len(records),
+        "records": records,
+        "freshness": freshness,
+        "source": ["copilot_paper_trade_execution_service"],
+    }
+    return save_json(
+        PAPER_TRADE_EXECUTION_RECORDS_STORAGE_KEY,
+        payload,
+        source=["copilot_paper_trade_execution_service", "append_only_record"],
+        version=PAPER_TRADE_EXECUTION_SCHEMA_VERSION,
+    )
+
+
+def _index_records_by_decision(records: List[Dict[str, Any]], key: str = "decision_id") -> Dict[str, List[Dict[str, Any]]]:
+    index: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        record_key = str(record.get(key) or "").strip()
+        if not record_key:
+            continue
+        index[record_key].append(record)
+    for items in index.values():
+        items.sort(key=lambda r: str(r.get("recorded_at", "")), reverse=True)
+    return index
 
 
 def _index_feedback_by_decision(records: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
@@ -304,6 +358,106 @@ def record_outcome_feedback(
     }
 
 
+def execute_paper_trade(
+    *,
+    decision_id: str,
+    ticker: str,
+    side: str,
+    quantity: float,
+    reference_price: float,
+    fee_bps: float = 0.0,
+    slippage_bps: float = 0.0,
+    market_price: Optional[float] = None,
+    executed_at: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> Dict[str, Any]:
+    now_iso = str(executed_at or utc_now_iso()).strip() or utc_now_iso()
+    normalized_ticker = _normalize_tickers([ticker])
+    if not decision_id.strip():
+        raise ValueError("decision_id is required")
+    if not normalized_ticker:
+        raise ValueError("ticker is required")
+
+    normalized_side = _coerce_trade_side(side)
+    normalized_quantity = _coerce_float(quantity, minimum=0.000001)
+    normalized_reference_price = _coerce_float(reference_price, minimum=0.0)
+    normalized_market_price = _coerce_float(
+        market_price if market_price is not None else normalized_reference_price,
+        minimum=0.0,
+    )
+    normalized_fee_bps = _coerce_float(fee_bps, minimum=0.0)
+    normalized_slippage_bps = _coerce_float(slippage_bps, minimum=0.0)
+
+    signed_direction = 1.0 if normalized_side == "buy" else -1.0
+    slippage_per_share = normalized_reference_price * (normalized_slippage_bps / 10_000.0)
+    assumed_fill_price = normalized_reference_price + (signed_direction * slippage_per_share)
+    gross_notional = normalized_quantity * assumed_fill_price
+    fee_amount = gross_notional * (normalized_fee_bps / 10_000.0)
+    mark_notional = normalized_quantity * normalized_market_price
+    unrealized_pnl = ((normalized_market_price - assumed_fill_price) * normalized_quantity * signed_direction) - fee_amount
+    unrealized_pnl_percent = (unrealized_pnl / gross_notional) if gross_notional > 0 else 0.0
+    execution_id = sha1(f"{decision_id}|{normalized_ticker[0]}|{normalized_side}|{now_iso}".encode()).hexdigest()[:12]
+
+    record = {
+        "execution_id": execution_id,
+        "decision_id": decision_id.strip(),
+        "ticker": normalized_ticker[0],
+        "side": normalized_side,
+        "quantity": normalized_quantity,
+        "reference_price": normalized_reference_price,
+        "assumed_fill_price": assumed_fill_price,
+        "market_price": normalized_market_price,
+        "gross_notional": gross_notional,
+        "mark_notional": mark_notional,
+        "fee_bps": normalized_fee_bps,
+        "slippage_bps": normalized_slippage_bps,
+        "fee_amount": fee_amount,
+        "unrealized_pnl": unrealized_pnl,
+        "unrealized_pnl_percent": unrealized_pnl_percent,
+        "recorded_at": now_iso,
+        "notes": notes or "",
+        "source": ["copilot_paper_trade_execution_service"],
+    }
+
+    records = _load_paper_trade_execution_records()
+    records.append(record)
+    saved_path = _save_paper_trade_execution_records(records, now_iso)
+    if not saved_path:
+        raise RuntimeError("Failed to persist paper trade execution record")
+
+    return {
+        "status": "recorded",
+        "execution_id": execution_id,
+        "decision_id": record["decision_id"],
+        "ticker": record["ticker"],
+        "side": record["side"],
+        "recorded_at": now_iso,
+        "fill_assumptions": {
+            "reference_price": normalized_reference_price,
+            "assumed_fill_price": assumed_fill_price,
+            "fee_bps": normalized_fee_bps,
+            "slippage_bps": normalized_slippage_bps,
+            "fee_amount": fee_amount,
+        },
+        "position": {
+            "quantity": normalized_quantity,
+            "gross_notional": gross_notional,
+            "mark_notional": mark_notional,
+            "market_price": normalized_market_price,
+        },
+        "pnl": {
+            "unrealized": unrealized_pnl,
+            "unrealized_percent": unrealized_pnl_percent,
+        },
+        "store": {
+            "storage_key": PAPER_TRADE_EXECUTION_RECORDS_STORAGE_KEY,
+            "path": str(saved_path),
+            "status": "persisted",
+        },
+        "source": ["copilot_paper_trade_execution_service"],
+    }
+
+
 def get_decision_journal(
     *,
     limit: int = 50,
@@ -327,6 +481,8 @@ def get_decision_journal(
     entries_dir = _decision_entries_dir()
     feedback_records = _load_outcome_feedback_records()
     feedback_by_decision = _index_feedback_by_decision(feedback_records)
+    execution_records = _load_paper_trade_execution_records()
+    executions_by_decision = _index_records_by_decision(execution_records)
     
     if not entries_dir.exists():
         return {
@@ -372,6 +528,16 @@ def get_decision_journal(
         if entry_feedback:
             entry = dict(entry)
             entry["outcome_feedback"] = entry_feedback
+        entry_executions = executions_by_decision.get(decision_id, [])
+        if entry_executions:
+            entry = dict(entry)
+            entry["paper_trade_execution"] = {
+                "schema_version": PAPER_TRADE_EXECUTION_SCHEMA_VERSION,
+                "record_mode": "append_only",
+                "count": len(entry_executions),
+                "latest_recorded_at": entry_executions[0].get("recorded_at"),
+                "records": entry_executions,
+            }
         enriched_entries.append(entry)
 
     return {
@@ -487,10 +653,12 @@ def compute_metrics() -> Dict[str, Any]:
 __all__ = [
     "log_copilot_decision",
     "record_outcome_feedback",
+    "execute_paper_trade",
     "get_decision_journal",
     "get_outcome_feedback",
     "compute_metrics",
     "DECISION_JOURNAL_STORAGE_KEY",
     "DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY",
+    "PAPER_TRADE_EXECUTION_RECORDS_STORAGE_KEY",
     "FEEDBACK_HORIZONS",
 ]

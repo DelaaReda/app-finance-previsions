@@ -18,6 +18,7 @@ if str(SRC_ROOT) not in sys.path:
 from domains.copilot.application.decision_journal import (
     log_copilot_decision,
     record_outcome_feedback,
+    execute_paper_trade,
     get_decision_journal,
     get_outcome_feedback,
     compute_metrics,
@@ -26,6 +27,7 @@ from domains.copilot.application.decision_journal import (
     _generate_decision_id,
     DECISION_JOURNAL_STORAGE_KEY,
     DECISION_OUTCOME_FEEDBACK_RECORDS_STORAGE_KEY,
+    PAPER_TRADE_EXECUTION_RECORDS_STORAGE_KEY,
 )
 
 
@@ -145,6 +147,69 @@ class TestRecordOutcomeFeedback:
         assert result["decision_id"] == "abc123"
         assert result["horizon"] == "1d"
         assert result["stored_records"] == 1
+
+
+class TestExecutePaperTrade:
+    @patch('domains.copilot.application.decision_journal._load_paper_trade_execution_records')
+    @patch('domains.copilot.application.decision_journal._save_paper_trade_execution_records')
+    def test_execute_paper_trade_records_fill_and_pnl(self, mock_save, mock_load, tmp_path):
+        mock_load.return_value = []
+        mock_save.return_value = tmp_path / "paper_trade_records.json"
+
+        result = execute_paper_trade(
+            decision_id="abc123",
+            ticker="aapl",
+            side="buy",
+            quantity=10,
+            reference_price=100,
+            fee_bps=10,
+            slippage_bps=25,
+            market_price=102,
+        )
+
+        assert result["status"] == "recorded"
+        assert result["ticker"] == "AAPL"
+        assert result["fill_assumptions"]["assumed_fill_price"] == pytest.approx(100.25)
+        assert result["fill_assumptions"]["fee_amount"] == pytest.approx(1.0025)
+        assert result["pnl"]["unrealized"] == pytest.approx(16.4975)
+        assert result["store"]["storage_key"] == PAPER_TRADE_EXECUTION_RECORDS_STORAGE_KEY
+
+    @patch('domains.copilot.application.decision_journal._load_outcome_feedback_records')
+    @patch('domains.copilot.application.decision_journal._load_paper_trade_execution_records')
+    def test_get_journal_attaches_paper_trade_execution(self, mock_trade_load, mock_feedback_load, tmp_path):
+        entries_dir = tmp_path / "entries"
+        entries_dir.mkdir(parents=True, exist_ok=True)
+        mock_feedback_load.return_value = []
+        mock_trade_load.return_value = [
+            {
+                "execution_id": "exec1",
+                "decision_id": "d1",
+                "ticker": "AAPL",
+                "side": "buy",
+                "quantity": 5,
+                "recorded_at": "2026-03-11T12:00:00Z",
+            }
+        ]
+
+        with open(entries_dir / "d1.json", "w") as f:
+            json.dump(
+                {
+                    "decision_id": "d1",
+                    "recorded_at": "2026-03-09T00:00:00Z",
+                    "verdict": "buy",
+                    "horizon": "1d",
+                    "tickers": ["AAPL"],
+                },
+                f,
+            )
+
+        with patch('domains.copilot.application.decision_journal._decision_entries_dir') as mock_dir:
+            mock_dir.return_value = entries_dir
+            result = get_decision_journal(limit=50)
+
+        execution = result["entries"][0]["paper_trade_execution"]
+        assert execution["count"] == 1
+        assert execution["records"][0]["execution_id"] == "exec1"
 
 
 class TestGetDecisionJournal:
