@@ -324,6 +324,50 @@ function loadSanitizeInsiderBehavior() {
   return sandbox;
 }
 
+function loadJudgeDecisionJournalHelpers() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const sanitizeSource = extractFunction(source, 'sanitizeJudgeDecisionJournal', '\n\nfunction sanitizeSectorPerformance');
+  const renderSource = extractFunction(source, 'renderJudgeDecisionJournal', '\n\nfunction applyLiveDashboardData');
+  const container = { innerHTML: '' };
+  const sandbox = {
+    console,
+    document: {
+      getElementById(id) {
+        return id === 'judgeDecisionJournal' ? container : null;
+      },
+    },
+    extractArray(payload, keys) {
+      if (Array.isArray(payload)) return payload;
+      if (!payload || typeof payload !== 'object') return [];
+      for (const key of keys) {
+        if (Array.isArray(payload[key])) return payload[key];
+      }
+      return [];
+    },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return value === null || value === undefined ? fallback : String(value);
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : fallback;
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(`${sanitizeSource}\n${renderSource}\nthis.sanitizeJudgeDecisionJournal = sanitizeJudgeDecisionJournal;\nthis.renderJudgeDecisionJournal = renderJudgeDecisionJournal;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return { sandbox, container };
+}
+
 function loadAlertTimelineHelpers() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const helpersSource = extractSection(source, 'const ALERT_SEVERITY_ORDER = {', '\n\nfunction sanitizeMarketCalendar');
@@ -2115,6 +2159,36 @@ test('sanitizeInsiderBehavior preserves already-normalized guardrail and provena
   });
 });
 
+test('sanitizeJudgeDecisionJournal preserves policy guardrail details for violating recommendations', () => {
+  const { sandbox } = loadJudgeDecisionJournalHelpers();
+  const rows = JSON.parse(JSON.stringify(sandbox.sanitizeJudgeDecisionJournal({
+    verdicts: [
+      {
+        ticker: 'TSLA',
+        verdict: 'hold',
+        confidence: 0.78,
+        policy_override_reason: 'TSLA is excluded by your personal policy.',
+        policy_guardrails: {
+          status: 'violated',
+          original_action: 'buy',
+          effective_action: 'hold',
+          violations: [
+            { code: 'ticker_excluded', message: 'Ticker is excluded by policy.' },
+            { code: 'risk_above_limit', message: 'Risk exceeds your configured ceiling.' },
+          ],
+        },
+      },
+    ],
+  })));
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].note, 'TSLA is excluded by your personal policy.');
+  assert.equal(rows[0].policy_guardrails.status, 'violated');
+  assert.equal(rows[0].policy_guardrails.originalAction, 'buy');
+  assert.equal(rows[0].policy_guardrails.effectiveAction, 'hold');
+  assert.deepEqual(rows[0].policy_guardrails.violations.map((item) => item.code), ['ticker_excluded', 'risk_above_limit']);
+});
+
 test('renderMarketDrivers appends insider behavior summary to the existing widget', () => {
   const { sandbox, container } = loadRenderMarketDrivers();
 
@@ -2128,6 +2202,30 @@ test('renderMarketDrivers appends insider behavior summary to the existing widge
   assert.match(container.innerHTML, /never a standalone directive/);
   assert.match(container.innerHTML, /Provenance: public_form4/);
   assert.match(container.innerHTML, /Uncertainty factors: limited_sample_size, single_cluster_activity/);
+});
+
+test('renderJudgeDecisionJournal surfaces the policy downgrade badge inside the existing journal widget', () => {
+  const { sandbox, container } = loadJudgeDecisionJournalHelpers();
+
+  sandbox.renderJudgeDecisionJournal([
+    {
+      symbol: 'TSLA',
+      decision: 'HOLD',
+      note: 'TSLA is excluded by your personal policy.',
+      confidence: 0.78,
+      policy_guardrails: {
+        status: 'violated',
+        violations: [
+          { message: 'Ticker is excluded by policy.' },
+          { message: 'Risk exceeds your configured ceiling.' },
+        ],
+      },
+    },
+  ]);
+
+  assert.match(container.innerHTML, /Policy downgrade/);
+  assert.match(container.innerHTML, /Ticker is excluded by policy\./);
+  assert.match(container.innerHTML, /Risk exceeds your configured ceiling\./);
 });
 
 test('buildTradeIdeasFromForecasts prefers recommendation forecast fusion attribution', () => {

@@ -2484,6 +2484,34 @@ function sanitizeJudgeDecisionJournal(entries) {
           '',
         ''
       ).trim();
+      const rawPolicyGuardrails = isObject(entry.policy_guardrails)
+        ? entry.policy_guardrails
+        : {};
+      const policyViolations = toArray(rawPolicyGuardrails.violations, [])
+        .filter((violation) => isObject(violation))
+        .map((violation) => ({
+          code: toString(violation.code, ''),
+          message: toString(violation.message, ''),
+        }))
+        .filter((violation) => violation.code || violation.message);
+      const policyGuardrails = rawPolicyGuardrails.status
+        || rawPolicyGuardrails.effective_action
+        || rawPolicyGuardrails.original_action
+        || policyViolations.length
+        ? {
+            status: toString(rawPolicyGuardrails.status, 'ok').toLowerCase(),
+            effectiveAction: toString(rawPolicyGuardrails.effective_action, ''),
+            originalAction: toString(rawPolicyGuardrails.original_action, ''),
+            overrideReason: toString(
+              entry.policy_override_reason || rawPolicyGuardrails.override_reason,
+              '',
+            ),
+            violations: policyViolations,
+          }
+        : null;
+      const normalizedNote = note || (policyGuardrails && policyGuardrails.overrideReason)
+        ? (note || (policyGuardrails ? policyGuardrails.overrideReason : ''))
+        : '';
 
       // V17: Preserve outcome_feedback for DecisionJournalOutcomeFeedback rendering
       const outcomeFeedback = isObject(entry.outcome_feedback)
@@ -2522,10 +2550,11 @@ function sanitizeJudgeDecisionJournal(entries) {
       return {
         symbol,
         decision,
-        note,
+        note: normalizedNote,
         rationale,
         confidence,
         timestamp: timeText || null,
+        policy_guardrails: policyGuardrails,
         outcome_feedback: outcomeFeedback
       };
     })
@@ -3632,9 +3661,19 @@ function renderJudgeDecisionJournal(entries = judgeDecisionJournal) {
     const confidence = Number.isFinite(entry.confidence)
       ? `${Math.max(0, Math.min(100, Math.round(entry.confidence * 100)))}%`
       : null;
+    const policyGuardrails = isObject(entry.policy_guardrails) ? entry.policy_guardrails : null;
+    const policyStatus = toString(policyGuardrails?.status, '').toLowerCase();
+    const policyViolations = toArray(policyGuardrails?.violations, []);
+    const hasPolicyViolation = policyStatus === 'violated' || policyViolations.length > 0;
+    const policyBadge = hasPolicyViolation
+      ? `<span style="margin-left:8px;padding:2px 8px;border-radius:999px;background:rgba(217,119,6,0.14);border:1px solid rgba(217,119,6,0.28);color:#fbbf24;font-size:11px;font-weight:600;letter-spacing:0.02em;">Policy downgrade</span>`
+      : '';
 
     const note = entry.note ? `<div class="alert-subtitle">${entry.note}</div>` : '';
     const rationale = entry.rationale ? `<p style="margin-top: 8px; color: #94A3B8;">${entry.rationale}</p>` : '';
+    const policyDetail = hasPolicyViolation
+      ? `<div style="margin-top:8px;font-size:12px;color:#fbbf24;">${policyViolations.map((violation) => toString(violation.message, '')).filter(Boolean).join(' • ') || 'Recommendation downgraded to respect your personal policy.'}</div>`
+      : '';
     const meta = [entry.timestamp, confidence ? `Confiance: ${confidence}` : null]
       .filter(Boolean)
       .join(' • ');
@@ -3686,8 +3725,9 @@ function renderJudgeDecisionJournal(entries = judgeDecisionJournal) {
     return `
       <div class="alert-item">
         <div class="alert-content">
-          <div class="alert-title">${toString(entry.symbol, 'Décision')} • ${toString(entry.decision, 'N/A')}</div>
+          <div class="alert-title">${toString(entry.symbol, 'Décision')} • ${toString(entry.decision, 'N/A')}${policyBadge}</div>
           ${note}
+          ${policyDetail}
           ${rationale}
           ${metaMarkup}
           ${outcomeMarkup}
