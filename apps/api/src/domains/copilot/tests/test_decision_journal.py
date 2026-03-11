@@ -174,6 +174,31 @@ class TestExecutePaperTrade:
         assert result["pnl"]["unrealized"] == pytest.approx(16.4975)
         assert result["store"]["storage_key"] == PAPER_TRADE_EXECUTION_RECORDS_STORAGE_KEY
 
+    @patch('domains.copilot.application.decision_journal._load_paper_trade_execution_records')
+    @patch('domains.copilot.application.decision_journal._save_paper_trade_execution_records')
+    def test_execute_paper_trade_rejects_invalid_numeric_inputs(self, mock_save, mock_load):
+        mock_load.return_value = []
+
+        with pytest.raises(ValueError, match="quantity must be greater than 0"):
+            execute_paper_trade(
+                decision_id="abc123",
+                ticker="AAPL",
+                side="buy",
+                quantity=-10,
+                reference_price=100,
+            )
+
+        with pytest.raises(ValueError, match="reference_price must be greater than 0"):
+            execute_paper_trade(
+                decision_id="abc123",
+                ticker="AAPL",
+                side="buy",
+                quantity=10,
+                reference_price=0,
+            )
+
+        mock_save.assert_not_called()
+
     @patch('domains.copilot.application.decision_journal._load_outcome_feedback_records')
     @patch('domains.copilot.application.decision_journal._load_paper_trade_execution_records')
     def test_get_journal_attaches_paper_trade_execution(self, mock_trade_load, mock_feedback_load, tmp_path):
@@ -210,6 +235,8 @@ class TestExecutePaperTrade:
         execution = result["entries"][0]["paper_trade_execution"]
         assert execution["count"] == 1
         assert execution["records"][0]["execution_id"] == "exec1"
+        assert execution["execution_quality"]["total_records"] == 1
+        assert execution["execution_quality"]["buy_count"] == 1
 
 
 class TestGetDecisionJournal:
@@ -352,18 +379,23 @@ class TestGetOutcomeFeedback:
 
 
 class TestComputeMetrics:
+    @patch('domains.copilot.application.decision_journal._load_paper_trade_execution_records')
     @patch('domains.copilot.application.decision_journal._load_outcome_feedback_records')
-    def test_compute_metrics_empty(self, mock_load):
-        mock_load.return_value = []
+    def test_compute_metrics_empty(self, mock_feedback_load, mock_trade_load):
+        mock_feedback_load.return_value = []
+        mock_trade_load.return_value = []
         
         result = compute_metrics()
         
         assert "metrics" in result
         assert result["total_feedback_records"] == 0
+        assert result["total_paper_trade_records"] == 0
+        assert result["paper_trade_execution"]["total_records"] == 0
 
+    @patch('domains.copilot.application.decision_journal._load_paper_trade_execution_records')
     @patch('domains.copilot.application.decision_journal._load_outcome_feedback_records')
-    def test_compute_metrics_with_data(self, mock_load):
-        mock_load.return_value = [
+    def test_compute_metrics_with_data(self, mock_feedback_load, mock_trade_load):
+        mock_feedback_load.return_value = [
             {
                 "decision_id": "dec1",
                 "horizon": "1d",
@@ -379,6 +411,26 @@ class TestComputeMetrics:
                 "predicted_return": 0.01,
             },
         ]
+        mock_trade_load.return_value = [
+            {
+                "decision_id": "dec1",
+                "side": "buy",
+                "fee_amount": 1.0,
+                "gross_notional": 1000.0,
+                "slippage_bps": 20.0,
+                "unrealized_pnl": 50.0,
+                "unrealized_pnl_percent": 0.05,
+            },
+            {
+                "decision_id": "dec2",
+                "side": "sell",
+                "fee_amount": 1.5,
+                "gross_notional": 500.0,
+                "slippage_bps": 10.0,
+                "unrealized_pnl": -10.0,
+                "unrealized_pnl_percent": -0.02,
+            },
+        ]
         
         result = compute_metrics()
         
@@ -387,6 +439,12 @@ class TestComputeMetrics:
         assert metrics_1d["resolved_count"] == 2
         # First is hit (both positive), second is miss (different signs)
         assert metrics_1d["hit_rate"] == 0.5
+        assert result["paper_trade_execution"]["total_records"] == 2
+        assert result["paper_trade_execution"]["buy_count"] == 1
+        assert result["paper_trade_execution"]["sell_count"] == 1
+        assert result["paper_trade_execution"]["win_rate"] == 0.5
+        assert result["paper_trade_execution"]["avg_slippage_bps"] == pytest.approx(15.0)
+        assert result["paper_trade_execution"]["total_fees"] == pytest.approx(2.5)
 
 
 if __name__ == "__main__":

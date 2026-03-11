@@ -204,6 +204,51 @@ def _index_feedback_by_decision(records: List[Dict[str, Any]]) -> Dict[str, List
     return index
 
 
+def _build_execution_quality_metrics(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    total_records = len(records)
+    total_fees = 0.0
+    total_gross_notional = 0.0
+    total_slippage_bps = 0.0
+    total_unrealized_pnl = 0.0
+    total_unrealized_pnl_percent = 0.0
+    profitable_count = 0
+    buy_count = 0
+    sell_count = 0
+
+    for record in records:
+        side = _coerce_trade_side(record.get("side"))
+        if side == "buy":
+            buy_count += 1
+        else:
+            sell_count += 1
+
+        fee_amount = _coerce_float(record.get("fee_amount"), minimum=0.0)
+        gross_notional = _coerce_float(record.get("gross_notional"), minimum=0.0)
+        slippage_bps = _coerce_float(record.get("slippage_bps"), minimum=0.0)
+        unrealized_pnl = _coerce_float(record.get("unrealized_pnl"))
+        unrealized_pnl_percent = _coerce_float(record.get("unrealized_pnl_percent"))
+
+        total_fees += fee_amount
+        total_gross_notional += gross_notional
+        total_slippage_bps += slippage_bps
+        total_unrealized_pnl += unrealized_pnl
+        total_unrealized_pnl_percent += unrealized_pnl_percent
+        if unrealized_pnl > 0:
+            profitable_count += 1
+
+    return {
+        "total_records": total_records,
+        "buy_count": buy_count,
+        "sell_count": sell_count,
+        "win_rate": profitable_count / total_records if total_records > 0 else None,
+        "avg_slippage_bps": total_slippage_bps / total_records if total_records > 0 else None,
+        "avg_unrealized_pnl": total_unrealized_pnl / total_records if total_records > 0 else None,
+        "avg_unrealized_pnl_percent": total_unrealized_pnl_percent / total_records if total_records > 0 else None,
+        "total_fees": total_fees,
+        "total_gross_notional": total_gross_notional,
+    }
+
+
 def log_copilot_decision(
     *,
     question: str,
@@ -377,6 +422,16 @@ def execute_paper_trade(
         raise ValueError("decision_id is required")
     if not normalized_ticker:
         raise ValueError("ticker is required")
+    if _coerce_float(quantity, default=-1.0) <= 0:
+        raise ValueError("quantity must be greater than 0")
+    if _coerce_float(reference_price, default=-1.0) <= 0:
+        raise ValueError("reference_price must be greater than 0")
+    if market_price is not None and _coerce_float(market_price, default=-1.0) <= 0:
+        raise ValueError("market_price must be greater than 0")
+    if _coerce_float(fee_bps, default=-1.0) < 0:
+        raise ValueError("fee_bps must be greater than or equal to 0")
+    if _coerce_float(slippage_bps, default=-1.0) < 0:
+        raise ValueError("slippage_bps must be greater than or equal to 0")
 
     normalized_side = _coerce_trade_side(side)
     normalized_quantity = _coerce_float(quantity, minimum=0.000001)
@@ -536,6 +591,7 @@ def get_decision_journal(
                 "record_mode": "append_only",
                 "count": len(entry_executions),
                 "latest_recorded_at": entry_executions[0].get("recorded_at"),
+                "execution_quality": _build_execution_quality_metrics(entry_executions),
                 "records": entry_executions,
             }
         enriched_entries.append(entry)
@@ -609,6 +665,7 @@ def compute_metrics() -> Dict[str, Any]:
     """
     now_iso = utc_now_iso()
     records = _load_outcome_feedback_records()
+    execution_records = _load_paper_trade_execution_records()
     
     # Group by horizon
     by_horizon: Dict[str, List[Dict]] = defaultdict(list)
@@ -643,7 +700,9 @@ def compute_metrics() -> Dict[str, Any]:
     return {
         "schema_version": DECISION_OUTCOME_FEEDBACK_SCHEMA_VERSION,
         "metrics": metrics,
+        "paper_trade_execution": _build_execution_quality_metrics(execution_records),
         "total_feedback_records": len(records),
+        "total_paper_trade_records": len(execution_records),
         "freshness": now_iso,
         "source": ["copilot_outcome_feedback_service"],
     }
