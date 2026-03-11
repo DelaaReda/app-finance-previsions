@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-20-BATCH-20-DEV-02-20260311T094041Z-768"
+stream_id: "BATCH-20"
+task_id: "BATCH-20-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T09:40:41Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope personal policy guardrails [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_personal_policy_guardrails_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T09:40:41Z"
+      ended_at_utc: "2026-03-11T09:40:41Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node apps/web/src/domains/forecasts/tests/test-strategy-playbooks-widget.js; node apps/web/src/domains/forecasts/tests/test-playbook-integration.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=3937d1c85319b804bad9dd0eb808a8cb87e40519; widget=apps/web/src/domains/forecasts/components/widgets/strategy-playbooks.html; evidence=policy guardrail panel now surfaces BUY/HOLD-style downgrade copy plus compact v"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-20-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-20-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The widget already consumed `policy_guardrails`, but the UI only showed a generic status/count. It did not expose the concrete downgrade path or the specific violated rules, which left the Personal Policy Guardrails slic | fix_applied=Updated `apps/web/src/domains/forecasts/components/widgets/strategy-playbooks.html` to render downgrade copy (`original_action` -> `effective_action`) and up to three violation tags from `policy_guardrails.violations`, w | verify=before=policy guardrail UI only showed generic status/count/version copy and hid the concrete downgrade path plus violated rules; after=existing playbook cards render downgrade copy and violation tags from the backend `p | architecture_check=layer=web widget presentation on existing forecasts component; imports_ok=yes (reused existing widget + shared `window.getStrategyPlaybooks` wiring, no new module paths); path_target=apps/web/src/domains/forecasts/compon | vision_alignment=batch=BATCH-20; target=Personal Policy Guardrails [DEV-02]; impact=advances the frontend violation-badge slice by making policy downgrades and triggered rules visible without creating new components or widening scope"

@@ -1,0 +1,93 @@
+ok: true
+task_id: BATCH-20-DEV-02
+task_title: Personal Policy Guardrails [DEV-02]
+stream: BATCH-20
+priority: P1
+status: DONE
+generated_at: 2026-03-11T09:51:46Z
+
+delivery:
+  commit_sha: e962b6a745122f9dfb45b35caf4d3ad06d8394e9
+  files_changed: 4
+  insertions: 1798
+  deletions: 6
+  artifacts:
+    - path: apps/web/src/domains/forecasts/components/widgets/personal-policy-editor.html
+      type: frontend_widget
+      description: Policy editor widget with quick settings and custom rules
+    - path: apps/web/src/domains/forecasts/components/widgets/violation-badge.html
+      type: frontend_component
+      description: Reusable violation badge with severity levels
+    - path: apps/api/src/domains/forecasts/api/forecasts.py
+      type: backend_api
+      description: Added user-policy load/save endpoints
+    - path: apps/api/src/domains/forecasts/tests/test_policy_validator_api.py
+      type: integration_tests
+      description: 12 passing integration tests
+
+verification:
+  tests_run:
+    file: apps/api/src/domains/forecasts/tests/test_policy_validator_api.py
+    total: 12
+    passed: 12
+    failed: 0
+    duration_seconds: 1.09
+  test_cases:
+    - name: test_list_policy_types
+      status: passed
+    - name: test_get_policy_template_sector_exclusion
+      status: passed
+    - name: test_get_policy_template_risk_concentration
+      status: passed
+    - name: test_get_user_policy_empty
+      status: passed
+    - name: test_save_and_get_user_policy
+      status: passed
+    - name: test_validate_recommendation_no_violations
+      status: passed
+    - name: test_validate_recommendation_sector_violation
+      status: passed
+    - name: test_validate_recommendation_risk_violation
+      status: passed
+    - name: test_validate_recommendation_multiple_violations
+      status: passed
+    - name: test_validate_recommendation_excluded_ticker
+      status: passed
+    - name: test_validate_recommendation_error_handling
+      status: passed
+    - name: test_save_invalid_policy_format
+      status: passed
+
+acceptance_criteria:
+  - criterion: Policy violating recommendation never appears as plain BUY
+    status: MET
+    evidence: Validation downgrades BUY to HOLD with violation_badge
+  - criterion: Policy revisions are versioned with timestamp
+    status: MET
+    evidence: updated_at field and schema_version in policy payload
+
+architecture_check:
+  layer: Application + API + UI
+  imports_ok: true
+  path_target: apps/api/src/domains/forecasts/, apps/web/src/domains/forecasts/components/widgets/
+  reuse_strategy: Reused existing forecast widget patterns + settings modal fields
+
+vision_alignment:
+  batch: BATCH-20
+  target: Personal Policy Guardrails [DEV-02]
+  impact: Frontend UI for policy configuration with violation badges
+
+dependencies:
+  - task_id: BATCH-20-DEV-01
+    status: SATISFIED
+    note: Policy validator service exists
+
+next_steps:
+  - B20-T3 (QA): Hard stop and downgrade tests - partially covered
+  - B20-T4 (Planner): Override decision workflow - UI override button exists
+
+metadata:
+  schema_version: delivery_proof_v1
+  agent: dev
+  role_session: dev-20260311
+  evidence_path: docs/operations/orchestrator/proofs/BATCH-20/BATCH-20-DEV-02/delivery-evidence.md
