@@ -7804,9 +7804,12 @@ function renderTradeIdeas(root = document) {
         : '';
     const buttonLabel = executionState && executionState.status === 'pending'
       ? 'Executing...'
-      : decisionId
-        ? 'Paper Trade'
-        : 'No Journal';
+      : executionState && executionState.status === 'recorded'
+        ? 'Recorded'
+        : decisionId
+          ? 'Paper Trade'
+          : 'No Journal';
+    const buttonDisabled = !decisionId || (executionState && executionState.status === 'recorded');
 
     return `
     <div class="trade-card">
@@ -7833,7 +7836,7 @@ function renderTradeIdeas(root = document) {
           <div class="bar-fill" style="width: ${idea.confidence}%"></div>
           <span class="confidence-text">${idea.confidence}%</span>
         </div>
-        <button class="trade-btn" onclick="executeTradeIdea('${idea.symbol}')" ${decisionId ? '' : 'disabled'}>${buttonLabel}</button>
+        <button class="trade-btn" onclick="executeTradeIdea('${idea.symbol}')" ${buttonDisabled ? 'disabled' : ''}>${buttonLabel}</button>
       </div>
     </div>
   `;

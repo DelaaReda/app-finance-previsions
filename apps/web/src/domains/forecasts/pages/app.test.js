@@ -2568,6 +2568,36 @@ test('renderTradeIdeas enables paper trade CTA when a linked decision journal en
   assert.match(container.innerHTML, /executeTradeIdea\('AAPL'\)/);
 });
 
+test('renderTradeIdeas locks the paper trade CTA after a recorded execution', () => {
+  const { sandbox, container } = loadTradeIdeaHelpers();
+  sandbox.copilotDecisionJournal = {
+    entries: [
+      { decision_id: 'dec-aapl-1', tickers: ['AAPL'] },
+    ],
+  };
+  sandbox.window.copilotDecisionJournal = sandbox.copilotDecisionJournal;
+  sandbox.tradeIdeas = [
+    {
+      symbol: 'AAPL',
+      signalType: 'BUY',
+      entry: 195,
+      target: 210,
+      confidence: 82,
+    },
+  ];
+  sandbox.tradeIdeaExecutionState['DEC-AAPL-1'] = {
+    status: 'recorded',
+    executionId: 'exec-aapl-1',
+    unrealizedPnl: 2.15,
+  };
+
+  sandbox.renderTradeIdeas();
+
+  assert.match(container.innerHTML, />Recorded</);
+  assert.match(container.innerHTML, /<button class="trade-btn" onclick="executeTradeIdea\('AAPL'\)" disabled>/);
+  assert.match(container.innerHTML, /Unrealized PnL \+\$2\.15/);
+});
+
 test('executeTradeIdea refreshes the decision journal after a recorded paper trade', async () => {
   const { sandbox, journalRenders, toasts } = loadPaperTradeExecutionFlowHelpers();
 
