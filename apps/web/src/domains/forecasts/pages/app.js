@@ -7809,7 +7809,10 @@ function renderTradeIdeas(root = document) {
         : decisionId
           ? 'Paper Trade'
           : 'No Journal';
-    const buttonDisabled = !decisionId || (executionState && executionState.status === 'recorded');
+    const buttonDisabled = !decisionId || (
+      executionState
+      && (executionState.status === 'pending' || executionState.status === 'recorded')
+    );
 
     return `
     <div class="trade-card">
