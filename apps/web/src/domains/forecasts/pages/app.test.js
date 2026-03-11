@@ -197,6 +197,69 @@ function loadForecastSlaHelpers() {
   return { sandbox, lineage };
 }
 
+function loadPersonalPolicySettingsHelpers() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const sectionSource = extractSection(
+    source,
+    "const PERSONAL_POLICY_STORAGE_KEY = 'financeCopilot.personalPolicyDraft';",
+    '\n\nconst FALLBACK_TRADE_IDEAS = ['
+  );
+  const sandbox = {
+    console,
+    document: {
+      summaryNode: { textContent: '' },
+      getElementById(id) {
+        return id === 'policySettingsSummary' ? this.summaryNode : null;
+      },
+    },
+    window: {
+      localStorage: {
+        storage: new Map(),
+        getItem(key) {
+          return this.storage.has(key) ? this.storage.get(key) : null;
+        },
+        setItem(key, value) {
+          this.storage.set(key, String(value));
+        },
+      },
+    },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    normalizeTicker(value) {
+      return typeof value === 'string'
+        ? value.trim().toUpperCase().replace(/[^A-Z0-9.-]/g, '')
+        : '';
+    },
+    utcNowIso() {
+      return '2026-03-11T10:00:00Z';
+    },
+    formatRelativeTime(value) {
+      return value === '2026-03-11T10:00:00Z' ? 'just now' : 'earlier';
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${sectionSource}
+    this.normalizePersonalPolicySettings = normalizePersonalPolicySettings;
+    this.loadStoredPersonalPolicySettings = loadStoredPersonalPolicySettings;
+    this.storePersonalPolicySettings = storePersonalPolicySettings;
+    this.renderPersonalPolicySettingsSummary = renderPersonalPolicySettingsSummary;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  return sandbox;
+}
+
 function loadMacroRegimeCardsRenderer() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const functionSource = extractFunction(source, 'renderMacroRegimeCardsWidget', '\n\nfunction renderForecastScenarioWidget');
@@ -3646,6 +3709,55 @@ test('buildCopilotJudgePayload normalizes event timing details from the copilot 
       },
     ],
   });
+});
+
+test('personal policy settings normalize and persist a local editor draft', () => {
+  const sandbox = loadPersonalPolicySettingsHelpers();
+
+  const normalized = sandbox.normalizePersonalPolicySettings({
+    excludedTickers: [' tsla ', 'TSLA', ' nvda '],
+    blockedActions: ['BUY', 'invalid', 'sell'],
+    maxRiskLevel: 'high',
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(normalized)), {
+    excludedTickers: ['TSLA', 'NVDA'],
+    blockedActions: ['buy', 'sell'],
+    maxRiskLevel: 'high',
+    updatedAt: '',
+  });
+
+  const stored = sandbox.storePersonalPolicySettings({
+    excludedTickers: ['msft'],
+    blockedActions: ['hold'],
+    maxRiskLevel: 'medium',
+  });
+
+  assert.equal(stored.updatedAt, '2026-03-11T10:00:00Z');
+
+  const loaded = sandbox.loadStoredPersonalPolicySettings();
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded)), {
+    excludedTickers: ['MSFT'],
+    blockedActions: ['hold'],
+    maxRiskLevel: 'medium',
+    updatedAt: '2026-03-11T10:00:00Z',
+  });
+});
+
+test('personal policy settings summary renders the saved draft state', () => {
+  const sandbox = loadPersonalPolicySettingsHelpers();
+
+  sandbox.renderPersonalPolicySettingsSummary({
+    excludedTickers: ['TSLA', 'QQQ'],
+    blockedActions: ['buy'],
+    maxRiskLevel: 'medium',
+    updatedAt: '2026-03-11T10:00:00Z',
+  });
+
+  assert.equal(
+    sandbox.document.summaryNode.textContent,
+    'Excluded: TSLA, QQQ • Blocked: BUY • Max risk: MEDIUM • Updated just now'
+  );
 });
 
 test('buildCopilotJudgePayload normalizes explainability graph traceability details from the judge contract', () => {

@@ -33,6 +33,39 @@
                     <span class="toggle-switch"></span>
                 </label>
             </div>
+            <div class="setting-group">
+                <label class="setting-label" for="policyExcludedTickers">Personal policy excluded tickers</label>
+                <input
+                    type="text"
+                    id="policyExcludedTickers"
+                    class="setting-input"
+                    placeholder="TSLA, GME"
+                >
+                <p class="setting-help">Comma-separated tickers to downgrade automatically.</p>
+            </div>
+            <div class="setting-group">
+                <label class="setting-label" for="policyBlockedActions">Blocked actions</label>
+                <select class="setting-select" id="policyBlockedActions" multiple size="3" aria-label="Blocked actions">
+                    <option value="buy">Buy</option>
+                    <option value="sell">Sell</option>
+                    <option value="hold">Hold</option>
+                </select>
+                <p class="setting-help">Use Ctrl/Cmd + click to select more than one action.</p>
+            </div>
+            <div class="setting-group">
+                <label class="setting-label" for="policyMaxRiskLevel">Maximum risk level</label>
+                <select class="setting-select" id="policyMaxRiskLevel">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical" selected>Critical</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <div class="setting-summary-card" id="policySettingsSummary" aria-live="polite">
+                    Local draft policy not configured yet.
+                </div>
+            </div>
         </div>
         <div class="modal-footer">
             <button class="modal-btn primary" onclick="saveSettings()">Save preferences</button>

@@ -1276,6 +1276,111 @@ function storeForecastProfile(profile) {
   return normalizedProfile;
 }
 
+const PERSONAL_POLICY_STORAGE_KEY = 'financeCopilot.personalPolicyDraft';
+const PERSONAL_POLICY_RISK_LEVELS = new Set(['low', 'medium', 'high', 'critical']);
+const PERSONAL_POLICY_ACTIONS = new Set(['buy', 'sell', 'hold']);
+const DEFAULT_PERSONAL_POLICY_SETTINGS = Object.freeze({
+  excludedTickers: [],
+  blockedActions: [],
+  maxRiskLevel: 'critical',
+  updatedAt: ''
+});
+
+function normalizePersonalPolicySettings(policy) {
+  const source = isObject(policy) ? policy : {};
+  const excludedTickers = toArray(source.excludedTickers || source.excluded_tickers, [])
+    .map((ticker) => normalizeTicker(ticker))
+    .filter(Boolean)
+    .filter((ticker, index, rows) => rows.indexOf(ticker) === index)
+    .slice(0, 12);
+  const blockedActions = toArray(source.blockedActions || source.blocked_actions, [])
+    .map((action) => toString(action, '').trim().toLowerCase())
+    .filter((action) => PERSONAL_POLICY_ACTIONS.has(action))
+    .filter((action, index, rows) => rows.indexOf(action) === index);
+  const maxRiskLevel = toString(source.maxRiskLevel || source.max_risk_level, DEFAULT_PERSONAL_POLICY_SETTINGS.maxRiskLevel)
+    .trim()
+    .toLowerCase();
+  const updatedAt = toString(source.updatedAt || source.updated_at, '').trim();
+
+  return {
+    excludedTickers,
+    blockedActions,
+    maxRiskLevel: PERSONAL_POLICY_RISK_LEVELS.has(maxRiskLevel)
+      ? maxRiskLevel
+      : DEFAULT_PERSONAL_POLICY_SETTINGS.maxRiskLevel,
+    updatedAt,
+  };
+}
+
+function loadStoredPersonalPolicySettings() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return normalizePersonalPolicySettings(DEFAULT_PERSONAL_POLICY_SETTINGS);
+  }
+  try {
+    const raw = window.localStorage.getItem(PERSONAL_POLICY_STORAGE_KEY);
+    return normalizePersonalPolicySettings(raw ? JSON.parse(raw) : DEFAULT_PERSONAL_POLICY_SETTINGS);
+  } catch (error) {
+    console.warn('Unable to read stored personal policy settings:', error?.message || error);
+    return normalizePersonalPolicySettings(DEFAULT_PERSONAL_POLICY_SETTINGS);
+  }
+}
+
+function storePersonalPolicySettings(policy) {
+  const normalizedPolicy = normalizePersonalPolicySettings({
+    ...policy,
+    updatedAt: utcNowIso(),
+  });
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem(PERSONAL_POLICY_STORAGE_KEY, JSON.stringify(normalizedPolicy));
+    } catch (error) {
+      console.warn('Unable to persist personal policy settings:', error?.message || error);
+    }
+  }
+  return normalizedPolicy;
+}
+
+function renderPersonalPolicySettingsSummary(policy) {
+  const summaryNode = typeof document !== 'undefined'
+    ? document.getElementById('policySettingsSummary')
+    : null;
+  if (!summaryNode) {
+    return;
+  }
+  const normalizedPolicy = normalizePersonalPolicySettings(policy);
+  const parts = [
+    normalizedPolicy.excludedTickers.length
+      ? `Excluded: ${normalizedPolicy.excludedTickers.join(', ')}`
+      : 'Excluded: none',
+    normalizedPolicy.blockedActions.length
+      ? `Blocked: ${normalizedPolicy.blockedActions.map((action) => action.toUpperCase()).join(', ')}`
+      : 'Blocked: none',
+    `Max risk: ${normalizedPolicy.maxRiskLevel.toUpperCase()}`,
+  ];
+  if (normalizedPolicy.updatedAt) {
+    parts.push(`Updated ${formatRelativeTime(normalizedPolicy.updatedAt)}`);
+  }
+  summaryNode.textContent = parts.join(' • ');
+}
+
+function hydratePersonalPolicySettingsForm() {
+  const excludedTickersInput = document.getElementById('policyExcludedTickers');
+  const blockedActionsSelect = document.getElementById('policyBlockedActions');
+  const maxRiskLevelSelect = document.getElementById('policyMaxRiskLevel');
+  if (!excludedTickersInput || !blockedActionsSelect || !maxRiskLevelSelect) {
+    return normalizePersonalPolicySettings(DEFAULT_PERSONAL_POLICY_SETTINGS);
+  }
+
+  const policy = loadStoredPersonalPolicySettings();
+  excludedTickersInput.value = policy.excludedTickers.join(', ');
+  Array.from(blockedActionsSelect.options).forEach((option) => {
+    option.selected = policy.blockedActions.includes(toString(option.value, '').toLowerCase());
+  });
+  maxRiskLevelSelect.value = policy.maxRiskLevel;
+  renderPersonalPolicySettingsSummary(policy);
+  return policy;
+}
+
 const FALLBACK_TRADE_IDEAS = [
   { symbol: 'NVDA', signalType: 'Breakout', entry: 875, target: 980, confidence: 92 },
   { symbol: 'META', signalType: 'Reversal', entry: 520, target: 565, confidence: 85 }
@@ -6073,6 +6178,7 @@ function openExportModal() {
 function openSettings() {
   const modal = document.getElementById('settingsModal');
   if (modal) {
+    hydratePersonalPolicySettingsForm();
     modal.classList.add('active');
   }
 }
@@ -6087,9 +6193,21 @@ function closeSettings() {
 function saveSettings() {
   const autoRefresh = document.getElementById('autoRefresh').checked;
   const theme = document.getElementById('themeSelect').value;
+  const blockedActionsSelect = document.getElementById('policyBlockedActions');
+  const personalPolicySettings = storePersonalPolicySettings({
+    excludedTickers: toString(document.getElementById('policyExcludedTickers')?.value, '')
+      .split(',')
+      .map((ticker) => normalizeTicker(ticker))
+      .filter(Boolean),
+    blockedActions: blockedActionsSelect
+      ? Array.from(blockedActionsSelect.selectedOptions).map((option) => toString(option.value, '').trim().toLowerCase())
+      : [],
+    maxRiskLevel: toString(document.getElementById('policyMaxRiskLevel')?.value, DEFAULT_PERSONAL_POLICY_SETTINGS.maxRiskLevel),
+  });
 
   appState.autoRefresh = autoRefresh;
   appState.darkMode = theme === 'dark';
+  renderPersonalPolicySettingsSummary(personalPolicySettings);
 
   closeSettings();
   showToast('Settings saved successfully');
