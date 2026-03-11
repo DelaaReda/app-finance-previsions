@@ -1178,6 +1178,57 @@ function loadBuildCopilotChatResponseHtml() {
   return sandbox;
 }
 
+function loadBuildCopilotJudgePayload() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractFunction(source, 'buildCopilotJudgePayload', '\n\nfunction sanitizeTradeIdeas(');
+  const sandbox = {
+    console,
+    FALLBACK_LLM_JUDGE_DATA: { suggestedActions: [] },
+    normalizeVerdict(value, fallback = 'hold') {
+      const normalized = String(value || '').trim().toLowerCase();
+      return normalized || fallback;
+    },
+    formatConfidence(value, fallback = 0) {
+      const number = Number(value);
+      return Number.isFinite(number) ? Math.round(number) : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : fallback;
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    normalizeReasoning(value) {
+      return Array.isArray(value) ? value : (typeof value === 'string' && value ? [value] : []);
+    },
+    normalizeCopilotSources(value) {
+      return Array.isArray(value) ? value : [];
+    },
+    normalizeCopilotStarterTickers(value) {
+      return Array.isArray(value) ? value : [];
+    },
+    normalizeCopilotStartList(value) {
+      return Array.isArray(value) ? value : [];
+    },
+    normalizeCopilotSourceLabels(value) {
+      return Array.isArray(value) ? value : [];
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.buildCopilotJudgePayload = buildCopilotJudgePayload;`, sandbox, {
+    filename: 'app.js',
+  });
+  return sandbox;
+}
+
 function loadHydrateCopilotOverlayStart({
   getCopilotStart,
   getCopilotContext,
@@ -2954,6 +3005,100 @@ test('buildCopilotChatResponseHtml renders freshness, source, and degraded badge
   assert.match(html, /<span class="source-badge">Degraded<\/span>/);
   assert.match(html, /Context:<\/strong> portfolio aware • saved portfolio applied • focus NVDA, MSFT • source saved portfolio/);
   assert.match(html, /Degraded:<\/strong> partial context/i);
+});
+
+test('buildCopilotJudgePayload normalizes regime detection and allocation drift alerts from the copilot contract', () => {
+  const sandbox = loadBuildCopilotJudgePayload();
+
+  const payload = sandbox.buildCopilotJudgePayload({
+    verdict: 'buy',
+    confidence: 71,
+    answer: 'Stay constructive but trim concentration.',
+    regime_detection: {
+      label: 'bull_market',
+      confidence_pct: 73,
+      threshold_reason: 'vix_bas',
+      source: ['forecasts', 'macro'],
+      generated_at: '2026-03-10T10:00:00Z',
+    },
+    allocation_drift_alerts: {
+      active: true,
+      alerts: [
+        {
+          id: 'largest_position_concentration',
+          reason: 'guardrail_proxy_triggered',
+          threshold_pct: 20,
+          actual_pct: 72,
+          basis: 'position_weight_proxy',
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.regimeDetection)), {
+    label: 'BULL_MARKET',
+    confidencePct: 73,
+    thresholdReason: 'vix bas',
+    sources: ['forecasts', 'macro'],
+    generatedAt: '2026-03-10T10:00:00Z',
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.allocationDriftAlerts)), {
+    active: true,
+    alerts: [
+      {
+        id: 'largest_position_concentration',
+        title: 'largest position concentration',
+        reason: 'guardrail proxy triggered',
+        thresholdPct: 20,
+        actualPct: 72,
+        basis: 'position weight proxy',
+      },
+    ],
+  });
+});
+
+test('buildCopilotChatResponseHtml renders regime detection and allocation drift alert details', () => {
+  const sandbox = loadBuildCopilotChatResponseHtml();
+
+  const html = sandbox.buildCopilotChatResponseHtml({
+    consensus: 'BUY',
+    confidence: 71,
+    risk: { level: 'medium', caveat: 'CPI is the main near-term risk.' },
+    model: 'Copilot',
+    qualityStatus: 'ok',
+    generatedAt: '2026-03-10T10:00:00Z',
+    why: ['Semis leadership remains intact.'],
+    dataSources: [{ label: 'judge_live' }],
+    regimeDetection: {
+      label: 'BULL MARKET',
+      confidencePct: 73,
+      thresholdReason: 'vix bas',
+      sources: ['forecasts', 'macro'],
+    },
+    allocationDriftAlerts: {
+      active: true,
+      alerts: [
+        {
+          title: 'largest position concentration',
+          reason: 'guardrail proxy triggered',
+          thresholdPct: 20,
+          actualPct: 72,
+          basis: 'position weight proxy',
+        },
+      ],
+    },
+    memo: {
+      summary: 'Leadership remains intact while breadth improves.',
+      regime: 'risk_on',
+      freshness: '2026-03-10T10:00:00Z',
+    },
+  });
+
+  assert.match(html, /Regime engine:<\/strong> BULL MARKET • 73% confidence • vix bas • sources forecasts, macro/);
+  assert.match(html, /Allocation drift alerts:/);
+  assert.match(html, /largest position concentration/);
+  assert.match(html, /actual 72% vs threshold 20%/);
+  assert.match(html, /basis position weight proxy/);
 });
 
 test('app.js exposes runCopilotStartOpen for the static landing brief CTA', () => {

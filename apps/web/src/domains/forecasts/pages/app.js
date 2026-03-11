@@ -1731,6 +1731,12 @@ function buildCopilotJudgePayload(raw) {
   const rawContextInfluence = isObject(data.context_influence || data.contextInfluence)
     ? (data.context_influence || data.contextInfluence)
     : null;
+  const rawRegimeDetection = isObject(data.regime_detection || data.regimeDetection)
+    ? (data.regime_detection || data.regimeDetection)
+    : null;
+  const rawAllocationDriftAlerts = isObject(data.allocation_drift_alerts || data.allocationDriftAlerts)
+    ? (data.allocation_drift_alerts || data.allocationDriftAlerts)
+    : null;
   const contextInfluence = rawContextInfluence
     ? {
       mode: toString(rawContextInfluence.mode, 'market_wide'),
@@ -1743,6 +1749,40 @@ function buildCopilotJudgePayload(raw) {
         rawContextInfluence.effective_tickers || rawContextInfluence.effectiveTickers
       ),
       portfolioId: toString(rawContextInfluence.portfolio_id || rawContextInfluence.portfolioId, '')
+    }
+    : null;
+  const regimeDetection = rawRegimeDetection
+    ? {
+      label: toString(rawRegimeDetection.label, '').trim().toUpperCase(),
+      confidencePct: Math.max(0, Math.min(100, Math.round(toFiniteNumber(
+        rawRegimeDetection.confidence_pct,
+        toFiniteNumber(rawRegimeDetection.confidence, 0) * 100,
+      )))),
+      thresholdReason: toString(
+        rawRegimeDetection.threshold_reason || rawRegimeDetection.thresholdReason,
+        '',
+      ).replace(/_/g, ' ').trim(),
+      sources: normalizeCopilotSourceLabels(rawRegimeDetection.source || rawRegimeDetection.sources).slice(0, 3),
+      generatedAt: toString(
+        rawRegimeDetection.generated_at || rawRegimeDetection.generatedAt,
+        '',
+      ).trim(),
+    }
+    : null;
+  const allocationDriftAlerts = rawAllocationDriftAlerts
+    ? {
+      active: !!rawAllocationDriftAlerts.active,
+      alerts: toArray(rawAllocationDriftAlerts.alerts, [])
+        .filter(isObject)
+        .map((alert) => ({
+          id: toString(alert.id, ''),
+          title: toString(alert.title || alert.label || alert.id, '').replace(/_/g, ' ').trim(),
+          reason: toString(alert.reason, '').replace(/_/g, ' ').trim(),
+          thresholdPct: Math.max(0, Math.round(toFiniteNumber(alert.threshold_pct || alert.thresholdPct, 0) * 10) / 10),
+          actualPct: Math.max(0, Math.round(toFiniteNumber(alert.actual_pct || alert.actualPct, 0) * 10) / 10),
+          basis: toString(alert.basis, '').replace(/_/g, ' ').trim(),
+        }))
+        .slice(0, 2),
     }
     : null;
 
@@ -1799,6 +1839,8 @@ function buildCopilotJudgePayload(raw) {
       }
       : null,
     contextInfluence,
+    regimeDetection,
+    allocationDriftAlerts,
     memo: {
       summary: memoSummary,
       regime: memoRegime,
@@ -4352,6 +4394,46 @@ function buildCopilotChatResponseHtml(payload) {
   const contextSource = contextInfluence
     ? escapeHtml(toString(contextInfluence.source, '').replace(/_/g, ' ').trim())
     : '';
+  const regimeDetection = payload.regimeDetection && typeof payload.regimeDetection === 'object'
+    ? payload.regimeDetection
+    : null;
+  const regimeDetectionLabel = regimeDetection
+    ? escapeHtml(toString(regimeDetection.label, '').replace(/_/g, ' ').trim())
+    : '';
+  const regimeDetectionConfidence = regimeDetection
+    ? Math.max(0, Math.min(100, Math.round(toFiniteNumber(regimeDetection.confidencePct, 0))))
+    : 0;
+  const regimeDetectionReason = regimeDetection
+    ? escapeHtml(toString(regimeDetection.thresholdReason, '').replace(/_/g, ' ').trim())
+    : '';
+  const regimeDetectionSources = regimeDetection
+    ? toArray(regimeDetection.sources, [])
+      .map((source) => escapeHtml(toString(source, '').trim()))
+      .filter(Boolean)
+      .join(', ')
+    : '';
+  const allocationDriftAlerts = payload.allocationDriftAlerts && typeof payload.allocationDriftAlerts === 'object'
+    ? payload.allocationDriftAlerts
+    : null;
+  const allocationDriftRows = allocationDriftAlerts
+    ? toArray(allocationDriftAlerts.alerts, [])
+      .map((alert) => {
+        const title = escapeHtml(toString(alert.title, '').replace(/_/g, ' ').trim());
+        const reason = escapeHtml(toString(alert.reason, '').replace(/_/g, ' ').trim());
+        const thresholdPct = Math.max(0, Math.min(100, Math.round(toFiniteNumber(alert.thresholdPct, 0) * 10) / 10));
+        const actualPct = Math.max(0, Math.min(100, Math.round(toFiniteNumber(alert.actualPct, 0) * 10) / 10));
+        const basis = escapeHtml(toString(alert.basis, '').replace(/_/g, ' ').trim());
+        const parts = [];
+        if (reason) parts.push(reason);
+        if (actualPct > 0 || thresholdPct > 0) parts.push(`actual ${actualPct}% vs threshold ${thresholdPct}%`);
+        if (basis) parts.push(`basis ${basis}`);
+        return title
+          ? `<li><strong>${title}</strong>${parts.length ? `: ${parts.join(' • ')}` : ''}</li>`
+          : '';
+      })
+      .filter(Boolean)
+      .slice(0, 2)
+    : [];
 
   const playbookHtml = playbookId
     ? `<div style="margin-top: 8px;">
@@ -4365,6 +4447,12 @@ function buildCopilotChatResponseHtml(payload) {
     : '';
   const contextHtml = contextInfluence
     ? `<p style="margin-top: 8px; font-size: 12px; color: #94A3B8;"><strong>Context:</strong> ${contextMode}${contextInfluence.portfolioApplied ? ' • saved portfolio applied' : ''}${contextTickers ? ` • focus ${contextTickers}` : ''}${contextSource ? ` • source ${contextSource}` : ''}</p>`
+    : '';
+  const regimeDetectionHtml = regimeDetectionLabel
+    ? `<p style="margin-top: 8px;"><strong>Regime engine:</strong> ${regimeDetectionLabel}${regimeDetectionConfidence ? ` • ${regimeDetectionConfidence}% confidence` : ''}${regimeDetectionReason ? ` • ${regimeDetectionReason}` : ''}${regimeDetectionSources ? ` • sources ${regimeDetectionSources}` : ''}</p>`
+    : '';
+  const allocationDriftHtml = allocationDriftRows.length
+    ? `<div style="margin-top: 8px;"><p><strong>Allocation drift alerts:</strong></p><ul style="margin: 6px 0 0 18px;">${allocationDriftRows.join('')}</ul></div>`
     : '';
   const metadataBadges = [
     updatedAt ? `Freshness: ${updated}` : '',
@@ -4395,6 +4483,8 @@ function buildCopilotChatResponseHtml(payload) {
     ${riskHtml}
     ${degradedHtml}
     ${contextHtml}
+    ${regimeDetectionHtml}
+    ${allocationDriftHtml}
     ${metadataBadgesHtml}
     ${playbookHtml}
     ${conflictHtml}
