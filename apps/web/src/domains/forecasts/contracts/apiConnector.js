@@ -351,6 +351,30 @@ async function getGlobalSignalMesh() {
   };
 }
 
+async function getPolicyImpact(params = {}) {
+  const safeParams = params && typeof params === 'object' ? params : {};
+  const search = new URLSearchParams();
+  const jurisdiction = String(safeParams.jurisdiction || '').trim();
+  const status = String(safeParams.status || '').trim();
+  const sector = String(safeParams.sector || '').trim();
+  const limit = Number(safeParams.limit);
+  const debug = safeParams.debug === true;
+
+  if (jurisdiction) search.set('jurisdiction', jurisdiction);
+  if (status) search.set('status', status);
+  if (sector) search.set('sector', sector);
+  if (Number.isFinite(limit) && limit > 0) {
+    search.set('limit', String(Math.min(25, Math.max(1, Math.floor(limit)))));
+  }
+  if (debug) search.set('debug', 'true');
+
+  const query = search.toString();
+  const endpoint = `/forecasts/policy-impact${query ? `?${query}` : ''}`;
+  const cacheKey = `policy-impact:${query || 'default'}`;
+  const payload = getResponseData(await fetchWithCache(endpoint, cacheKey));
+  return payload && typeof payload === 'object' ? payload : null;
+}
+
 async function getDashboardKPIs() {
   const payload = await fetchWithCache('/dashboard/kpis', 'kpis');
   if (!payload) return null;
@@ -806,6 +830,56 @@ function transformAlert(payload) {
   };
 }
 
+function policyStatusSeverity(status) {
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+  if (normalizedStatus === 'effective') return 'high';
+  if (normalizedStatus === 'adopted') return 'medium';
+  return 'info';
+}
+
+function transformPolicyImpactEvent(event) {
+  const raw = event && typeof event === 'object' && !Array.isArray(event) ? event : {};
+  const companies = Array.isArray(raw.companies)
+    ? raw.companies.map((item) => String(item || '').trim().toUpperCase()).filter(Boolean)
+    : [];
+  const sectors = Array.isArray(raw.sectors)
+    ? raw.sectors.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  const jurisdiction = String(raw.jurisdiction || 'global').trim().toUpperCase() || 'GLOBAL';
+  const status = String(raw.status || 'monitoring').trim().toLowerCase() || 'monitoring';
+  const effectiveDate = String(raw.effective_date || '').trim();
+  const primaryTicker = companies[0] || jurisdiction;
+  const summaryParts = [
+    String(raw.summary || raw.title || `${jurisdiction} policy change detected`).trim(),
+    `${jurisdiction} ${status}`,
+  ];
+  if (effectiveDate) {
+    summaryParts.push(`effective ${effectiveDate}`);
+  }
+  if (sectors.length > 0) {
+    summaryParts.push(`sectors: ${sectors.slice(0, 2).join(', ')}`);
+  }
+
+  return {
+    id: raw.event_id || `policy-impact-${primaryTicker}-${status}-${effectiveDate || 'na'}`,
+    type: 'news',
+    ticker: primaryTicker,
+    severity: policyStatusSeverity(status),
+    confidence: Math.max(0, Math.min(100, Math.round(normalizeNumber(raw.impact_score, 0) * 100))),
+    timestamp: raw.evidence && raw.evidence.published_at ? raw.evidence.published_at : new Date().toISOString(),
+    category: 'policy-impact',
+    description: summaryParts.filter(Boolean).join(' • '),
+    detail: String(raw.title || raw.summary || '').trim(),
+    signals: {
+      jurisdiction,
+      status,
+      effective_date: effectiveDate || null,
+      sectors,
+      companies,
+    },
+  };
+}
+
 function transformOpportunities(payload) {
   const opportunities = extractArray(payload, ['opportunities']) || [];
   return opportunities.map((row) => {
@@ -882,6 +956,7 @@ function collectLiveDashboardSources() {
   appendUniqueSourceEntries(sources, window.storyData && window.storyData.sources);
   appendUniqueSourceEntries(sources, window.liveForecastScoreboard && window.liveForecastScoreboard.source);
   appendUniqueSourceEntries(sources, window.globalSignalMesh && window.globalSignalMesh.source);
+  appendUniqueSourceEntries(sources, window.policyImpact && window.policyImpact.source);
   appendUniqueSourceEntries(sources, window.apiHealth && window.apiHealth.source);
   appendUniqueSourceEntries(sources, window.livePortfolioRiskProfile && window.livePortfolioRiskProfile.source);
   appendUniqueSourceEntries(sources, window.liveKpis && window.liveKpis.source);
@@ -1235,6 +1310,14 @@ async function populateWindowGlobals() {
       console.log('[API] ✅ ' + window.alertTimeline.length + ' alerts chargées depuis l\'API');
     }
 
+    const policyImpact = await getPolicyImpact({ limit: 5 });
+    window.policyImpact = policyImpact;
+    const policyEvents = extractArray(policyImpact, ['events']).map(transformPolicyImpactEvent);
+    if (policyEvents.length > 0) {
+      window.alertTimeline = [...policyEvents, ...window.alertTimeline];
+      console.log('[API] ✅ ' + policyEvents.length + ' policy impact alerts hydrated');
+    }
+
     // Forecasts
     const rawForecasts = await getForecasts(20);
     if (rawForecasts.length > 0) {
@@ -1542,6 +1625,7 @@ window.FinanceAPI = {
   getStatus,
   getHealth,
   getGlobalSignalMesh,
+  getPolicyImpact,
   getJudgeAnalysis,
   getCopilotStart,
   getCopilotContext,

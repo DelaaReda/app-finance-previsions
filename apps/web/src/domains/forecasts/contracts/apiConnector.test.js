@@ -1055,6 +1055,37 @@ test('getGlobalSignalMesh normalizes freshness status from mesh provenance SLA',
   assert.equal(payload.freshness.ttl_seconds, 900);
 });
 
+test('getPolicyImpact unwraps the policy engine contract', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            engine_id: 'policy_change_impact_v1',
+            events: [
+              {
+                event_id: 'policy-1',
+                jurisdiction: 'US',
+                status: 'effective',
+              },
+            ],
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getPolicyImpact({ jurisdiction: 'US', limit: 3 });
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/forecasts/policy-impact?jurisdiction=US&limit=3']);
+  assert.equal(payload.engine_id, 'policy_change_impact_v1');
+  assert.equal(payload.events.length, 1);
+  assert.equal(payload.events[0].status, 'effective');
+});
+
 test('getLiveDashboardData preserves portfolio risk profile freshness and status for downstream UI mapping', async () => {
   const sandbox = loadConnector(async () => ({
     async json() {
@@ -1259,4 +1290,85 @@ test('initLiveData folds global signal mesh freshness into the live contract sta
   await sandbox.window.initLiveData();
 
   assert.equal(sandbox.window.liveFreshnessContract.contractState, 'stale');
+});
+
+test('initLiveData merges policy-impact events into the shared alert timeline', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url.includes('/api/alerts')) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              alerts: [
+                {
+                  id: 'market-alert-1',
+                  ticker: 'SPY',
+                  type: 'market-alert',
+                  severity: 'info',
+                  description: 'Baseline market alert',
+                },
+              ],
+            },
+          };
+        },
+      };
+    }
+
+    if (url.includes('/api/forecasts/policy-impact')) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              source: ['forecasts_policy_change_impact', 'news_feed_snapshot'],
+              events: [
+                {
+                  event_id: 'policy-1',
+                  title: 'US AI disclosure bill enters force',
+                  summary: 'Cloud and semiconductor disclosure requirements tighten.',
+                  jurisdiction: 'US',
+                  status: 'effective',
+                  effective_date: '2026-06-01',
+                  sectors: ['technology'],
+                  companies: ['NVDA', 'MSFT'],
+                  impact_score: 0.82,
+                  evidence: {
+                    published_at: '2026-03-11T04:00:00Z',
+                  },
+                },
+              ],
+            },
+          };
+        },
+      };
+    }
+
+    if (url.includes('/api/llm/judge/run')) {
+      return {
+        ok: false,
+        async json() {
+          return {};
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, data: {} };
+      },
+    };
+  });
+
+  await sandbox.window.initLiveData();
+
+  assert.equal(Array.isArray(sandbox.window.alertTimeline), true);
+  assert.equal(sandbox.window.alertTimeline.length, 2);
+  assert.equal(sandbox.window.alertTimeline[0].category, 'policy-impact');
+  assert.equal(sandbox.window.alertTimeline[0].ticker, 'NVDA');
+  assert.equal(sandbox.window.alertTimeline[0].severity, 'high');
+  assert.equal(sandbox.window.getLiveDashboardData().sources.includes('forecasts_policy_change_impact'), true);
 });
