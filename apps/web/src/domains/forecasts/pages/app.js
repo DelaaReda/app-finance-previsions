@@ -3095,6 +3095,8 @@ function renderForecastScenarioWidget() {
   const shockChainUpstream = scenarioWidget.querySelector('[data-role="shock-chain-upstream"]');
   const shockChainTransmission = scenarioWidget.querySelector('[data-role="shock-chain-transmission"]');
   const shockChainWatchlist = scenarioWidget.querySelector('[data-role="shock-chain-watchlist"]');
+  const shockChainAssumptionVersion = scenarioWidget.querySelector('[data-role="shock-chain-assumption-version"]');
+  const shockChainAssumptionCopy = scenarioWidget.querySelector('[data-role="shock-chain-assumption-copy"]');
   const shockChainCopy = scenarioWidget.querySelector('[data-role="shock-chain-copy"]');
   const geopoliticalPayload = isObject(liveDataMeta?.geopoliticalRiskGraph)
     ? liveDataMeta.geopoliticalRiskGraph
@@ -3188,6 +3190,19 @@ function renderForecastScenarioWidget() {
   const shockBandToken = toString(topGeopoliticalAlert?.escalation_band, '').trim().toLowerCase();
   const shockBand = shockBandToken || (supplyChainEvent ? 'monitoring' : '');
   const shockBandLabel = shockBand ? `${shockBand.charAt(0).toUpperCase()}${shockBand.slice(1)}` : 'Monitoring';
+  const assumptionTimestamp = toString(
+    topGeopoliticalAlert?.timestamp,
+    toString(geopoliticalNodes[0]?.latest_at, '')
+  ).trim();
+  const assumptionVersionParts = [
+    shockRegion.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    shockBand || 'monitoring',
+    toString(supplyChainEvent?.status, 'pending').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    assumptionTimestamp
+      ? `v${assumptionTimestamp.toLowerCase().replace(/[^0-9tz]+/g, '')}`
+      : 'v-pending',
+  ].filter(Boolean);
+  const assumptionVersion = assumptionVersionParts.join(':');
   const hasShockChain = Boolean((shockRegion && watchlistTickers.length) || (transmissionSectors.length && watchlistTickers.length));
 
   if (shockChainSection) {
@@ -3216,6 +3231,24 @@ function renderForecastScenarioWidget() {
     shockChainWatchlist.textContent = watchlistTickers.length
       ? watchlistTickers.join(' -> ')
       : 'Awaiting forecast coverage';
+  }
+  if (shockChainAssumptionVersion) {
+    shockChainAssumptionVersion.textContent = hasShockChain
+      ? assumptionVersion
+      : 'Awaiting auditable assumption set';
+  }
+  if (shockChainAssumptionCopy) {
+    if (hasShockChain) {
+      const auditInputs = [
+        shockRegion ? `geo ${shockRegion}` : '',
+        transmissionSectors.length ? `sectors ${transmissionSectors.join(', ')}` : '',
+        meshLayers.length ? `mesh ${meshLayers.join('/')}` : '',
+        watchlistTickers.length ? `watchlist ${watchlistTickers.join(', ')}` : '',
+      ].filter(Boolean);
+      shockChainAssumptionCopy.textContent = `Audit trail: ${auditInputs.join(' • ')}.`;
+    } else {
+      shockChainAssumptionCopy.textContent = 'Assumption audit trail will appear here.';
+    }
   }
   if (shockChainCopy) {
     if (hasShockChain) {

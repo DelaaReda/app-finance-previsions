@@ -377,6 +377,8 @@ function loadRenderForecastScenarioWidget() {
   const shockChainUpstream = createElementStub();
   const shockChainTransmission = createElementStub();
   const shockChainWatchlist = createElementStub();
+  const shockChainAssumptionVersion = createElementStub();
+  const shockChainAssumptionCopy = createElementStub();
   const shockChainCopy = createElementStub();
   const bars = Array.from({ length: 3 }, () => {
     const fill = createElementStub();
@@ -404,6 +406,8 @@ function loadRenderForecastScenarioWidget() {
       if (selector === '[data-role="shock-chain-upstream"]') return shockChainUpstream;
       if (selector === '[data-role="shock-chain-transmission"]') return shockChainTransmission;
       if (selector === '[data-role="shock-chain-watchlist"]') return shockChainWatchlist;
+      if (selector === '[data-role="shock-chain-assumption-version"]') return shockChainAssumptionVersion;
+      if (selector === '[data-role="shock-chain-assumption-copy"]') return shockChainAssumptionCopy;
       if (selector === '[data-role="shock-chain-copy"]') return shockChainCopy;
       return null;
     },
@@ -470,6 +474,8 @@ function loadRenderForecastScenarioWidget() {
     shockChainUpstream,
     shockChainTransmission,
     shockChainWatchlist,
+    shockChainAssumptionVersion,
+    shockChainAssumptionCopy,
     shockChainCopy,
   };
 }
@@ -1861,6 +1867,8 @@ test('renderForecastScenarioWidget surfaces a supply-chain shock propagation cha
     shockChainUpstream,
     shockChainTransmission,
     shockChainWatchlist,
+    shockChainAssumptionVersion,
+    shockChainAssumptionCopy,
     shockChainCopy,
   } = loadRenderForecastScenarioWidget();
   sandbox.liveForecastRows = [
@@ -1900,6 +1908,11 @@ test('renderForecastScenarioWidget surfaces a supply-chain shock propagation cha
   assert.equal(shockChainUpstream.textContent, 'Taiwan high shock (73/100)');
   assert.equal(shockChainTransmission.textContent, 'technology -> industrials -> energy • mesh macro / policy / geopolitical');
   assert.equal(shockChainWatchlist.textContent, 'NVDA -> CAT -> XOM');
+  assert.equal(shockChainAssumptionVersion.textContent, 'taiwan:high:effective:v20260310t100000z');
+  assert.equal(
+    shockChainAssumptionCopy.textContent,
+    'Audit trail: geo Taiwan • sectors technology, industrials, energy • mesh macro/policy/geopolitical • watchlist NVDA, CAT, XOM.'
+  );
   assert.equal(
     shockChainCopy.textContent,
     'Taiwan shock is the active upstream driver; transmission is being watched through technology, industrials, energy before it reaches NVDA, CAT, XOM forecasts • policy status effective.'
