@@ -268,6 +268,66 @@ def _normalize_string_list(value: Any) -> List[str]:
     return [token] if token else []
 
 
+def _normalize_brief_event_timing(brief: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    event_timing = brief.get("event_timing") if isinstance(brief.get("event_timing"), dict) else {}
+    raw_events = event_timing.get("events") if isinstance(event_timing.get("events"), list) else []
+    if not raw_events:
+        raw_events = brief.get("key_events") if isinstance(brief.get("key_events"), list) else []
+
+    events: List[Dict[str, Any]] = []
+    for index, item in enumerate(raw_events):
+        row = item if isinstance(item, dict) else {"label": item}
+        label = _safe_text(
+            row.get("event_type")
+            or row.get("label")
+            or row.get("title")
+            or row.get("name")
+            or row.get("event")
+            or row.get("ticker")
+            or row.get("stock"),
+        )
+        if not label:
+            continue
+        normalized_row = {
+            "event_type": label,
+            "dominant_horizon": _safe_text(
+                row.get("dominant_horizon") or row.get("window") or row.get("horizon"),
+                "24h" if index == 0 else "48h",
+            ),
+            "interpretation": _safe_text(
+                row.get("interpretation") or row.get("summary") or row.get("thesis"),
+                f"{label} is inside the near-term event window.",
+            ),
+        }
+        if row.get("impact_score") is not None:
+            normalized_row["impact_score"] = _to_float(row.get("impact_score"), 0.0)
+        events.append(normalized_row)
+        if len(events) >= 2:
+            break
+
+    if not events:
+        return None
+
+    summary = _safe_text(event_timing.get("summary"))
+    if not summary:
+        summary = "Critical events are clustered into the next 48h."
+    sources = _normalize_source_list(
+        event_timing.get("source") or event_timing.get("sources") or brief.get("source") or brief.get("sources"),
+        "brief_daily_snapshot",
+    )
+    freshness = _safe_text(
+        event_timing.get("freshness") or brief.get("freshness") or brief.get("generated_at"),
+        utc_now_iso(),
+    )
+    return {
+        "summary": summary,
+        "events": events,
+        "freshness": freshness,
+        "source": sources,
+        "sources": sources,
+    }
+
+
 def _normalize_memo_horizon(payload: Dict[str, Any]) -> str:
     memo_payload = payload.get("memo") if isinstance(payload.get("memo"), dict) else {}
     return _safe_text(
@@ -1032,6 +1092,7 @@ def _load_daily_brief_payload() -> Dict[str, Any]:
         normalized.get("source") or normalized.get("sources"),
         "brief_daily_snapshot",
     )
+    normalized["event_timing"] = _normalize_brief_event_timing(normalized)
     return normalized
 
 
@@ -1149,6 +1210,13 @@ def _build_copilot_start_payload(
                 payload = build_fn(resolved_brief, context_timestamp=context_timestamp)
                 if isinstance(payload, dict) and payload:
                     normalized = dict(payload)
+                    brief_of_day = normalized.get("brief_of_day") if isinstance(normalized.get("brief_of_day"), dict) else {}
+                    if brief_of_day:
+                        event_timing = _normalize_brief_event_timing(resolved_brief)
+                        if event_timing and not isinstance(brief_of_day.get("event_timing"), dict):
+                            brief_of_day = dict(brief_of_day)
+                            brief_of_day["event_timing"] = event_timing
+                            normalized["brief_of_day"] = brief_of_day
                     if isinstance(legacy_payload.get("brief_of_day"), dict) and not normalized.get("brief_of_day"):
                         normalized["brief_of_day"] = dict(legacy_payload.get("brief_of_day") or {})
                     return _with_scope_tickers(normalized, scope=scope)

@@ -442,6 +442,52 @@ test('getCopilotContext normalizes brief-first entry points into ask/open starte
   );
 });
 
+test('getCopilotContext preserves brief event timing metadata for the hero starter flow', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          daily_brief: {
+            title: 'Brief of the day',
+            summary: 'Event density is rising into the next two sessions.',
+            market_regime: 'NEUTRAL',
+            freshness: '2026-03-11T10:00:00Z',
+            source: ['brief_daily_generator'],
+            event_timing: {
+              summary: 'Critical events are clustered into the next 48h.',
+              freshness: '2026-03-11T10:00:00Z',
+              source: ['brief_daily_generator'],
+              events: [
+                {
+                  event_type: 'NVDA earnings',
+                  dominant_horizon: '24h',
+                  interpretation: 'Guidance risk is concentrated in the next session.',
+                },
+              ],
+            },
+          },
+          entry_points: [],
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotContext();
+  const eventTiming = payload.copilot_start?.brief_of_day?.event_timing || {};
+
+  assert.equal(eventTiming.summary, 'Critical events are clustered into the next 48h.');
+  assert.equal(eventTiming.freshness, '2026-03-11T10:00:00Z');
+  assert.deepEqual(eventTiming.source, ['brief_daily_generator']);
+  assert.deepEqual(eventTiming.events, [
+    {
+      event_type: 'NVDA earnings',
+      dominant_horizon: '24h',
+      interpretation: 'Guidance risk is concentrated in the next session.',
+    },
+  ]);
+});
+
 test('getCopilotContext normalizes direct copilot_start open targets for the existing tabs', async () => {
   const sandbox = loadConnector(async () => ({
     async json() {
