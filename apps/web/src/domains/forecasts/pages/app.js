@@ -7677,6 +7677,33 @@ function getTradeIdeaExecutionState(idea = {}) {
   return key ? tradeIdeaExecutionState[key] || null : null;
 }
 
+async function refreshDecisionJournalAfterPaperTrade(ticker) {
+  const financeApi = isObject(window.FinanceAPI) ? window.FinanceAPI : null;
+  if (!financeApi || typeof financeApi.getCopilotDecisionJournal !== 'function') {
+    return null;
+  }
+
+  try {
+    const journalPayload = await financeApi.getCopilotDecisionJournal({
+      limit: 8,
+      ticker,
+    });
+    if (!isObject(journalPayload)) {
+      return null;
+    }
+
+    copilotDecisionJournal = journalPayload;
+    window.copilotDecisionJournal = journalPayload;
+    judgeDecisionJournal = sanitizeJudgeDecisionJournal(journalPayload);
+    window.judgeDecisionJournal = judgeDecisionJournal;
+    renderJudgeDecisionJournal(judgeDecisionJournal);
+    return journalPayload;
+  } catch (error) {
+    console.warn('[TradeIdeas] Failed to refresh decision journal after paper trade:', error.message);
+    return null;
+  }
+}
+
 async function executeTradeIdea(symbol) {
   const ticker = toString(symbol, '').trim().toUpperCase();
   const idea = tradeIdeas.find((item) => toString(item.symbol, '').trim().toUpperCase() === ticker);
@@ -7726,6 +7753,7 @@ async function executeTradeIdea(symbol) {
       executionId: toString(result.data.execution_id, ''),
       unrealizedPnl: toFiniteNumber(result.data.pnl && result.data.pnl.unrealized, 0),
     };
+    await refreshDecisionJournalAfterPaperTrade(ticker);
     showToast(`Paper trade recorded for ${ticker}`, 'success');
   } catch (error) {
     tradeIdeaExecutionState[stateKey] = {

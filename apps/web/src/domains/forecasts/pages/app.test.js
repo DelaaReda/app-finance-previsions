@@ -702,6 +702,120 @@ function loadTradeIdeaHelpers() {
   return { sandbox, container };
 }
 
+function loadPaperTradeExecutionFlowHelpers() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const inferTradeIdeaSideSource = extractFunction(source, 'inferTradeIdeaSide', '\n\nfunction resolveTradeIdeaDecisionId');
+  const resolveTradeIdeaDecisionIdSource = extractFunction(source, 'resolveTradeIdeaDecisionId', '\n\nfunction getTradeIdeaExecutionState');
+  const getTradeIdeaExecutionStateSource = extractFunction(source, 'getTradeIdeaExecutionState', '\n\nasync function refreshDecisionJournalAfterPaperTrade');
+  const refreshDecisionJournalSource = extractSection(
+    source,
+    'async function refreshDecisionJournalAfterPaperTrade(',
+    '\n\nasync function executeTradeIdea'
+  );
+  const executeTradeIdeaSource = extractSection(
+    source,
+    'async function executeTradeIdea(',
+    '\n\n// ============ MOBILE NAVIGATION ============'
+  );
+  const journalRenders = [];
+  const toasts = [];
+  const sandbox = {
+    console,
+    window: {
+      FinanceAPI: {
+        async executePaperTrade() {
+          return {
+            ok: true,
+            data: {
+              execution_id: 'exec-aapl-1',
+              pnl: { unrealized: 2.15 },
+            },
+          };
+        },
+        async getCopilotDecisionJournal() {
+          return {
+            entries: [
+              {
+                decision_id: 'dec-aapl-1',
+                tickers: ['AAPL'],
+                paper_trade_execution: {
+                  count: 1,
+                  records: [
+                    {
+                      execution_id: 'exec-aapl-1',
+                      ticker: 'AAPL',
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+        },
+      },
+      copilotDecisionJournal: null,
+      judgeDecisionJournal: null,
+    },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    extractArray(payload, keys) {
+      if (!payload || typeof payload !== 'object') return [];
+      for (const key of keys) {
+        const value = payload[key];
+        if (Array.isArray(value)) return value;
+      }
+      return [];
+    },
+    toString(value, fallback = '') {
+      return value === null || value === undefined ? fallback : String(value);
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : fallback;
+    },
+    sanitizeJudgeDecisionJournal(value) {
+      return Array.isArray(value?.entries) ? value.entries : [];
+    },
+    renderJudgeDecisionJournal(entries) {
+      journalRenders.push(entries);
+    },
+    showToast(message, level) {
+      toasts.push({ message, level });
+    },
+    renderTradeIdeas() {},
+    tradeIdeas: [
+      {
+        symbol: 'AAPL',
+        signalType: 'BUY',
+        entry: 195,
+        decisionId: 'dec-aapl-1',
+      },
+    ],
+    tradeIdeaExecutionState: Object.create(null),
+    copilotDecisionJournal: {
+      entries: [
+        { decision_id: 'dec-aapl-1', tickers: ['AAPL'] },
+      ],
+    },
+    judgeDecisionJournal: [],
+    document: {},
+  };
+  sandbox.window.window = sandbox.window;
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${inferTradeIdeaSideSource}\n${resolveTradeIdeaDecisionIdSource}\n${getTradeIdeaExecutionStateSource}\n${refreshDecisionJournalSource}\n${executeTradeIdeaSource}\nthis.executeTradeIdea = executeTradeIdea;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  return { sandbox, journalRenders, toasts };
+}
+
 function loadRenderMarketDrivers() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const functionSource = extractFunction(source, 'renderMarketDrivers', '\n\n// V13: Ask LLM Judge');
@@ -2452,6 +2566,18 @@ test('renderTradeIdeas enables paper trade CTA when a linked decision journal en
   assert.match(container.innerHTML, /Paper Trade/);
   assert.doesNotMatch(container.innerHTML, /No Journal/);
   assert.match(container.innerHTML, /executeTradeIdea\('AAPL'\)/);
+});
+
+test('executeTradeIdea refreshes the decision journal after a recorded paper trade', async () => {
+  const { sandbox, journalRenders, toasts } = loadPaperTradeExecutionFlowHelpers();
+
+  await sandbox.executeTradeIdea('AAPL');
+
+  assert.equal(journalRenders.length, 1);
+  assert.equal(journalRenders[0][0].paper_trade_execution.count, 1);
+  assert.equal(sandbox.window.copilotDecisionJournal.entries[0].paper_trade_execution.count, 1);
+  assert.equal(sandbox.tradeIdeaExecutionState['DEC-AAPL-1'].executionId, 'exec-aapl-1');
+  assert.deepEqual(toasts, [{ message: 'Paper trade recorded for AAPL', level: 'success' }]);
 });
 
 test('renderForecastScenarioWidget prefers threshold_summary over scoreboard rows for hit-rate copy', () => {
