@@ -1,0 +1,85 @@
+{
+  "task_id": "BATCH-20-ADMIN-01",
+  "task_title": "Personal Policy Guardrails [ADMIN-01]",
+  "execution_timestamp": "2026-03-11T10:07:00Z",
+  "runtime_health": {
+    "monitor_api": {
+      "status": "OK",
+      "endpoint_vm_local": "http://127.0.0.1:7779/api/status",
+      "endpoint_lan": "http://192.168.64.9:7780/api/status",
+      "health_check": "PASS",
+      "lifecycle": "running",
+      "execution_mode": "planner_experimental"
+    },
+    "backend_api": {
+      "status": "OK",
+      "endpoint": "http://localhost:8050/api/health",
+      "health_check": "PASS",
+      "service_status": "ok"
+    },
+    "cron_infrastructure": {
+      "status": "ACTIVE",
+      "profile": "full",
+      "core_roles_installed": ["planner", "dev", "admin"],
+      "last_verified": "2026-03-11T10:05:32Z"
+    },
+    "tmux_sessions": {
+      "active_sessions": ["codex_planner_cron"],
+      "orphaned_sessions": "NONE"
+    },
+    "runtime_processes": {
+      "monitor_server": "RUNNING (PID 2922624)",
+      "monitor_lan_proxy": "RUNNING (PID 763556)",
+      "planner_subagent_manager": "RUNNING",
+      "codex_planner": "RUNNING"
+    }
+  },
+  "stale_lock_cleanup": {
+    "removed": [
+      {
+        "file": "/home/venom/.openclaw/cron/role-state/iteration-issues.lock",
+        "age_days": 5,
+        "reason": "Empty file, last modified 2026-03-06, no active holder"
+      }
+    ],
+    "retained": [
+      {
+        "file": "/home/venom/.openclaw/cron/role-state/planner.run.lock",
+        "age_hours": 0.33,
+        "reason": "Active lock, held by current planner tick"
+      },
+      {
+        "file": "/home/venom/.openclaw/cron/role-state/planner_autonomy_state.json.lock",
+        "reason": "Active lock protecting state file"
+      }
+    ]
+  },
+  "blocker_analysis": {
+    "current_blockers": [],
+    "stale_blockers_removed": [],
+    "planner_autonomy_state": {
+      "active": true,
+      "last_outcome": "deferred",
+      "reason": "planner_runway_not_empty",
+      "issue_code": "planner_control_bridge_missing"
+    }
+  },
+  "integration_app_engineer_recommendations": {
+    "monitor_health": "VERIFIED_OK",
+    "cron_health": "VERIFIED_OK", 
+    "runtime_health": "VERIFIED_OK",
+    "unblock_status": "UNBLOCKED",
+    "evidence": {
+      "monitor_lite_response": "health=OK",
+      "backend_health_response": "ok=true",
+      "no_stale_locks": true,
+      "cron_profile_active": true
+    }
+  },
+  "policy_guardrails_validated": {
+    "vm_only_runtime": "ENFORCED",
+    "command_safety_gate": "USED",
+    "no_destructive_commands": true,
+    "reversible_fixes_only": true
+  }
+}
