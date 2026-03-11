@@ -4250,6 +4250,14 @@ function renderHeroCopilotBrief(state) {
       )
     }
     : null;
+  const normalizedBriefStatus = toString(
+    brief.status || brief.freshnessStatus || brief.freshness_status || brief.qualityStatus || brief.quality_status,
+    ''
+  ).trim().toLowerCase();
+  const briefDegraded = brief.degraded === true
+    || normalizedBriefStatus === 'degraded'
+    || normalizedBriefStatus === 'stale'
+    || normalizedBriefStatus === 'api_unavailable';
 
   if (titleEl) {
     titleEl.textContent = toString(brief.title, fallbackState.brief.title);
@@ -4262,7 +4270,7 @@ function renderHeroCopilotBrief(state) {
     if (regime !== 'UNKNOWN') {
       leadParts.push(`Regime: ${regime.toLowerCase()}.`);
     }
-    if (brief.degraded === true) {
+    if (briefDegraded) {
       leadParts.push(`Fallback context${degradedReason ? `: ${degradedReason.toLowerCase()}` : ''}.`);
     }
     if (contextInfluence && contextInfluence.portfolioApplied) {
@@ -4281,7 +4289,7 @@ function renderHeroCopilotBrief(state) {
     if (brief.sources.length) {
       timestampParts.push(`${brief.sources.length} source${brief.sources.length > 1 ? 's' : ''}`);
     }
-    if (brief.degraded === true) {
+    if (briefDegraded) {
       timestampParts.push('degraded');
     }
     timestampEl.textContent = timestampParts.join(' • ');
@@ -4332,16 +4340,19 @@ function renderHeroCopilotBrief(state) {
     const contextMode = contextInfluence
       ? toString(contextInfluence.mode, 'market_wide').replace(/_/g, ' ').trim()
       : '';
+    const contextSource = contextInfluence
+      ? toString(contextInfluence.source, '').replace(/_/g, ' ').trim()
+      : '';
     const focusTickers = contextInfluence && contextInfluence.effectiveTickers.length
       ? contextInfluence.effectiveTickers.slice(0, 2).join(', ')
       : '';
     const metadataLabels = [
       regime !== 'UNKNOWN' ? `Regime: ${regime}` : '',
       contextInfluence
-        ? `Context: ${contextMode || 'market wide'}${contextInfluence.portfolioApplied ? ' portfolio' : ''}${focusTickers ? ` • ${focusTickers}` : ''}`
+        ? `Context: ${contextMode || 'market wide'}${contextInfluence.portfolioApplied ? ' portfolio' : ''}${focusTickers ? ` • ${focusTickers}` : ''}${contextSource ? ` • ${contextSource}` : ''}`
         : '',
       brief.sources.length ? `Sources: ${brief.sources.slice(0, 2).join(', ')}` : '',
-      brief.degraded === true ? 'Degraded' : ''
+      briefDegraded ? 'Degraded' : ''
     ].filter(Boolean).slice(0, 3);
 
     metadataLabels.forEach((label) => {

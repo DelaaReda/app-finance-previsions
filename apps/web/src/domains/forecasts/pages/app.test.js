@@ -1885,6 +1885,7 @@ test('renderHeroCopilotBrief surfaces saved portfolio context in hero metadata',
     contextInfluence: {
       mode: 'portfolio_aware',
       portfolioApplied: true,
+      source: 'saved_portfolio',
       effectiveTickers: ['AAPL', 'MSFT'],
     },
     ask: [],
@@ -1900,8 +1901,39 @@ test('renderHeroCopilotBrief surfaces saved portfolio context in hero metadata',
   );
   assert.equal(elements.heroSuggestionChips.children.length, 3);
   assert.equal(elements.heroSuggestionChips.children[0].textContent, 'Regime: NEUTRAL');
-  assert.equal(elements.heroSuggestionChips.children[1].textContent, 'Context: portfolio aware portfolio • AAPL, MSFT');
+  assert.equal(elements.heroSuggestionChips.children[1].textContent, 'Context: portfolio aware portfolio • AAPL, MSFT • saved portfolio');
   assert.equal(elements.heroSuggestionChips.children[2].textContent, 'Sources: copilot_start_test');
+});
+
+test('renderHeroCopilotBrief treats stale normalized brief status as degraded metadata', () => {
+  const state = {
+    brief: {
+      title: 'Daily Brief',
+      summary: 'Macro inputs are delayed but the live shell still has a fallback view.',
+      marketSentiment: 'NEUTRAL',
+      topSignals: [],
+      topRisks: [],
+      freshness: '2026-03-09T08:00:00Z',
+      sources: ['brief_daily'],
+      status: 'stale',
+      degradedReason: 'market_data_delayed',
+    },
+    ask: [],
+    open: [],
+  };
+  const { sandbox, elements } = loadRenderHeroCopilotBriefWithHeroIds(state);
+
+  sandbox.renderHeroCopilotBrief(state);
+
+  assert.equal(
+    elements.heroBriefLead.textContent,
+    'A 30-second portfolio memo before you dive deeper. Regime: neutral. Fallback context: market data delayed.'
+  );
+  assert.equal(elements.heroBriefTimestamp.textContent, 'Updated 2 minutes ago • 1 source • degraded');
+  assert.equal(elements.heroSuggestionChips.children.length, 3);
+  assert.equal(elements.heroSuggestionChips.children[0].textContent, 'Regime: NEUTRAL');
+  assert.equal(elements.heroSuggestionChips.children[1].textContent, 'Sources: brief_daily');
+  assert.equal(elements.heroSuggestionChips.children[2].textContent, 'Degraded');
 });
 
 test('app.js exposes runCopilotStartOpen for the static landing brief CTA', () => {
