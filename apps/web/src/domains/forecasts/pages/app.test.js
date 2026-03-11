@@ -3220,6 +3220,37 @@ test('renderHeroCopilotBrief surfaces saved portfolio context in hero metadata',
   assert.equal(elements.heroSuggestionChips.children[2].textContent, 'Sources: copilot_start_test');
 });
 
+test('renderHeroCopilotBrief tolerates missing context effective tickers in explainability metadata', () => {
+  const state = {
+    brief: {
+      title: 'Daily Brief',
+      summary: 'Leadership remains intact while event risk rises.',
+      marketSentiment: 'RISK_ON',
+      freshness: '2026-03-09T08:00:00Z',
+      sources: ['brief_daily'],
+    },
+    contextInfluence: {
+      mode: 'portfolio_aware',
+      portfolioApplied: true,
+      source: 'saved_portfolio',
+    },
+    ask: [],
+    open: [],
+  };
+  const { sandbox, elements } = loadRenderHeroCopilotBriefWithHeroIds(state);
+
+  sandbox.renderHeroCopilotBrief(state);
+
+  assert.equal(
+    elements.heroBriefExplainability.textContent,
+    'Explainability graph: Context portfolio aware -> saved portfolio -> Regime RISK ON'
+  );
+  assert.equal(
+    elements.heroBriefTraceability.textContent,
+    'Source traceability: brief_daily -> saved portfolio • freshness 2 minutes ago'
+  );
+});
+
 test('renderHeroCopilotBrief surfaces critical upcoming events from the normalized brief contract', () => {
   const state = {
     brief: {
