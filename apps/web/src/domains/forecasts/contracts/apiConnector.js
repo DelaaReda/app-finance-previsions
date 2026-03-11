@@ -143,6 +143,12 @@ async function getForecasts(limit) {
   return extractArray(payload, ['rows', 'forecasts', 'data']) || [];
 }
 
+async function getDailyRecommendations(limit) {
+  const safeLimit = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Math.min(6, Math.floor(Number(limit))) : 3;
+  const payload = getResponseData(await fetchWithCache(`/recommendations/daily?limit=${safeLimit}`, `recommendations_daily:${safeLimit}`));
+  return payload && typeof payload === 'object' ? payload : {};
+}
+
 async function getWalkForwardScoreboard(params = {}) {
   const safeParams = params && typeof params === 'object' ? params : {};
   const search = new URLSearchParams();
@@ -345,6 +351,60 @@ async function getGlobalSignalMesh() {
     status: normalizedStatus,
     freshness: {
       ...sla,
+      updated_at: updatedAt,
+      ttl_seconds: ttlSeconds > 0 ? ttlSeconds : 0,
+    },
+  };
+}
+
+async function getFinalGlobalForecastGate(params = {}) {
+  const safeParams = params && typeof params === 'object' ? params : {};
+  const search = new URLSearchParams();
+  const country = String(safeParams.country || '').trim();
+  const horizon = String(safeParams.horizon || '').trim();
+  const debug = safeParams.debug === true;
+
+  if (country) search.set('country', country);
+  if (horizon) search.set('horizon', horizon);
+  if (debug) search.set('debug', 'true');
+
+  const query = search.toString();
+  const payload = getResponseData(
+    await fetchWithCache(
+      `/forecasts/final-global-gate${query ? `?${query}` : ''}`,
+      `final-global-forecast-gate:${query || 'default'}`
+    )
+  );
+  if (!payload || typeof payload !== 'object') return null;
+
+  const proofs = isObject(payload.proofs) ? payload.proofs : {};
+  const finalGateProof = isObject(proofs.FINAL_GLOBAL_FORECAST_GATE_PROOF)
+    ? proofs.FINAL_GLOBAL_FORECAST_GATE_PROOF
+    : {};
+  const cacheMeta = isObject(payload.cache) ? payload.cache : {};
+  const freshnessSource = isObject(payload.freshness) ? payload.freshness : {};
+  const ttlSeconds = normalizeNumber(
+    freshnessSource.ttl_seconds || finalGateProof.ttl_seconds || cacheMeta.ttl_seconds,
+    0,
+  );
+  const normalizedStatus = normalizeFreshnessStatus(
+    payload.status
+      || finalGateProof.status
+      || freshnessSource.status
+  );
+  const updatedAt = String(
+    finalGateProof.updated_at
+      || payload.generated_at
+      || payload.freshness
+      || payload.generatedAt
+      || '',
+  ).trim();
+
+  return {
+    ...payload,
+    status: normalizedStatus || String(payload.status || '').trim().toLowerCase(),
+    freshness: {
+      ...freshnessSource,
       updated_at: updatedAt,
       ttl_seconds: ttlSeconds > 0 ? ttlSeconds : 0,
     },
@@ -807,6 +867,9 @@ function transformNewsItem(item) {
 function transformForecast(row) {
   const dir = row.direction === 'up' ? '↑' : row.direction === 'down' ? '↓' : '→';
   const confidence = row.confidence != null ? Math.round(row.confidence * 100) : 0;
+  const forecastFusion = row && typeof row.forecast_fusion === 'object' && !Array.isArray(row.forecast_fusion)
+    ? row.forecast_fusion
+    : (row && typeof row.forecastFusion === 'object' && !Array.isArray(row.forecastFusion) ? row.forecastFusion : null);
   return {
     ticker: row.ticker,
     direction: row.direction,
@@ -819,7 +882,9 @@ function transformForecast(row) {
     reasoning: row.reasoning || row.why || '',
     action: row.action || 'hold',
     riskLevel: row.risk_level || 'medium',
-    generatedAt: row.generated_at || row.timestamp || ''
+    generatedAt: row.generated_at || row.timestamp || '',
+    forecast_fusion: forecastFusion,
+    forecastFusion,
   };
 }
 
@@ -1493,6 +1558,17 @@ async function populateWindowGlobals() {
       contractWarnings.push('tradeIdeas-unavailable');
     }
 
+    const recommendationsPayload = await getDailyRecommendations(3);
+    if (Array.isArray(recommendationsPayload.recommendations) && recommendationsPayload.recommendations.length > 0) {
+      window.liveRecommendations = recommendationsPayload.recommendations;
+      window.tradeIdeas = buildTradeIdeasFromForecasts(
+        window.liveForecasts || [],
+        window.liveRecommendations
+      );
+    } else {
+      window.liveRecommendations = [];
+    }
+
     const scoreboard = await getWalkForwardScoreboard();
     if (scoreboard && typeof scoreboard === 'object' && Array.isArray(scoreboard.rows)) {
       window.liveForecastScoreboard = scoreboard;
@@ -1656,6 +1732,14 @@ async function populateWindowGlobals() {
       window.globalSignalMesh = globalSignalMesh;
     }
 
+    const finalGlobalForecastGate = await getFinalGlobalForecastGate({ country: 'US', horizon: '3m' });
+    window.finalGlobalForecastGate = finalGlobalForecastGate && typeof finalGlobalForecastGate === 'object'
+      ? finalGlobalForecastGate
+      : null;
+    if (window.finalGlobalForecastGate && window.finalGlobalForecastGate.status && window.finalGlobalForecastGate.status !== 'fresh') {
+      contractWarnings.push(`final-global-gate-${window.finalGlobalForecastGate.status}`);
+    }
+
     const macroRegimeHierarchy = await getMacroRegimeHierarchy();
     window.macroRegimeHierarchy = macroRegimeHierarchy && typeof macroRegimeHierarchy === 'object'
       ? macroRegimeHierarchy
@@ -1740,6 +1824,7 @@ async function populateWindowGlobals() {
           insiderBehavior: window.insiderBehavior || null,
           llmJudgeData: window.llmJudgeData || null,
           judgeDecisionJournal: window.judgeDecisionJournal || null,
+          finalGlobalForecastGate: window.finalGlobalForecastGate || null,
           kpis: window.liveKpis || null,
           portfolioSummary: window.livePortfolioSummary || null,
           portfolioRiskProfile: window.livePortfolioRiskProfile || null,
@@ -1758,6 +1843,7 @@ async function populateWindowGlobals() {
         contractState: liveFreshnessContract.contractState,
         ingestionHealth: window.ingestionHealth || null,
         globalSignalMesh: window.globalSignalMesh || null,
+        finalGlobalForecastGate: window.finalGlobalForecastGate || null,
         macroRegimeHierarchy: window.macroRegimeHierarchy || null
       }
     });
@@ -1786,6 +1872,7 @@ function startAutoRefresh(intervalMs) {
       'dashboard_allocation',
       'movers',
       'portfolios',
+      'final-global-forecast-gate:country=US&horizon=3m',
     ].forEach((key) => clearCacheEntry(key));
     clearCacheEntriesWithPrefix('copilot_context:');
     clearCacheEntriesWithPrefix('copilot_start:');
@@ -1809,6 +1896,7 @@ window.FinanceAPI = {
   getStatus,
   getHealth,
   getGlobalSignalMesh,
+  getFinalGlobalForecastGate,
   getMacroRegimeHierarchy,
   getPolicyImpact,
   getInsiderBehavior,
@@ -1854,6 +1942,7 @@ window.getLiveDashboardData = () => ({
     portfolioHealth: window.livePortfolioHealth || null,
     llmJudgeData: window.llmJudgeData || null,
     judgeDecisionJournal: window.judgeDecisionJournal || null,
+    finalGlobalForecastGate: window.finalGlobalForecastGate || null,
     macroRegimeHierarchy: window.macroRegimeHierarchy || null
   },
   generatedAt: window.FinanceAPI && window.FinanceAPI.getCacheStats ? new Date().toISOString() : new Date().toISOString(),
@@ -1869,6 +1958,7 @@ window.getLiveDashboardData = () => ({
   contractState: window.liveFreshnessContract ? window.liveFreshnessContract.contractState : 'unknown',
   ingestionHealth: window.ingestionHealth || null,
   globalSignalMesh: window.globalSignalMesh || null,
+  finalGlobalForecastGate: window.finalGlobalForecastGate || null,
   macroRegimeHierarchy: window.macroRegimeHierarchy || null
 });
 
