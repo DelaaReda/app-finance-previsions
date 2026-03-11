@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from api.main import create_app
+from domains.forecasts.api import forecasts as forecasts_api
 from domains.forecasts.application.global_signal_mesh_service import (
     _GLOBAL_SIGNAL_MESH_RESPONSE_CACHE,
     _INSIDER_BEHAVIOR_RESPONSE_CACHE,
@@ -58,6 +59,28 @@ def test_global_signal_mesh_debug_bypasses_cache_and_can_include_non_nominal_sou
     assert data["cache"]["hit"] is False
     assert data["debug_pipeline"]["cache_bypassed"] is True
     assert data["stats"]["source_count"] > data["stats"]["nominal_source_count"]
+
+
+def test_global_signal_mesh_fallback_keeps_observability_contract(monkeypatch):
+    client = _client()
+    _GLOBAL_SIGNAL_MESH_RESPONSE_CACHE.clear()
+
+    monkeypatch.setattr(
+        forecasts_api,
+        "build_global_signal_mesh_payload",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    response = client.get("/api/forecasts/global-signal-mesh")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["provenance"]["fallback_used"] is True
+    assert data["observability"] == {
+        "freshness_expected_counts": {},
+        "nominal_coverage_ratio": 0.0,
+        "nominal_sources_without_fallback": [],
+    }
 
 
 def test_global_signal_mesh_repeated_calls_return_cache_hit_for_same_params():
@@ -248,6 +271,25 @@ def test_insider_behavior_cache_and_debug_bypass(monkeypatch):
     assert debug.json()["data"]["debug_pipeline"]["cache_bypassed"] is True
 
 
+def test_insider_behavior_returns_conservative_placeholder_when_snapshot_missing(monkeypatch):
+    client = _client()
+    _INSIDER_BEHAVIOR_RESPONSE_CACHE.clear()
+
+    monkeypatch.setattr(global_signal_mesh_service, "load_json", lambda _key: {})
+
+    response = client.get("/api/forecasts/insider-behavior?tickers=NVDA&limit=5")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["stats"]["snapshot_row_count"] == 0
+    assert data["stats"]["returned_signal_count"] == 1
+    assert data["provenance"]["fallback_used"] is True
+    assert "no_ownership_snapshot_rows" in data["warnings"]
+    assert data["signals"][0]["ticker"] == "NVDA"
+    assert data["signals"][0]["stance"] == "insufficient_evidence"
+    assert data["signals"][0]["uncertainty"]["level"] == "high"
+
+
 def test_macro_regime_hierarchy_contract_exposes_world_continent_country(monkeypatch):
     client = _client()
     _MACRO_REGIME_RESPONSE_CACHE.clear()
@@ -333,3 +375,157 @@ def test_macro_regime_hierarchy_cache_and_debug_pipeline(monkeypatch):
     assert debug.json()["data"]["cache"]["hit"] is False
     assert debug.json()["data"]["debug_pipeline"]["cache_bypassed"] is True
     assert debug.json()["data"]["debug_pipeline"]["llm_status"] == "ok"
+
+
+def test_batch46_country_continent_world_forecast_coverage(monkeypatch):
+    """BATCH-46-DEV-01: Validate hierarchical macro regime forecasts at all levels.
+    
+    Acceptance criteria:
+    - Country, continent, world forecasts available with confidence
+    - Contradictions flagged with consistency diagnostics
+    - Free data source provenance attached
+    """
+    client = _client()
+    _MACRO_REGIME_RESPONSE_CACHE.clear()
+
+    news_snapshot = {
+        "articles": [
+            {
+                "title": "Global growth stabilizes with disinflation progress",
+                "summary": "World economy shows resilience despite geopolitical risks.",
+                "source": "macro_wire",
+                "timestamp": "2026-03-10T08:00:00Z",
+            },
+            {
+                "title": "European recovery remains fragile amid energy concerns",
+                "summary": "EU economy stabilizing from weak base with ECB policy support.",
+                "source": "regional_wire",
+                "timestamp": "2026-03-10T09:00:00Z",
+            },
+            {
+                "title": "Germany industrial output shows soft patch",
+                "summary": "German manufacturing faces headwinds from energy costs.",
+                "source": "country_wire",
+                "timestamp": "2026-03-10T10:00:00Z",
+            },
+        ]
+    }
+
+    monkeypatch.setattr(global_signal_mesh_service, "load_json", lambda _key: news_snapshot)
+    monkeypatch.setattr(
+        global_signal_mesh_service,
+        "_llm_macro_narrative",
+        lambda levels, horizon: {"used": False, "status": "unavailable"},
+    )
+
+    response = client.get("/api/forecasts/macro-regime-hierarchy?country=Germany&continent=europe")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    
+    assert data["forecast_id"] == "macro_regime_hierarchy_v1"
+    
+    levels = data["levels"]
+    assert len(levels) == 3
+    
+    scopes = [level["scope"] for level in levels]
+    assert scopes == ["world", "continent", "country"]
+    
+    entities = [level["entity"] for level in levels]
+    assert entities[0] == "world"
+    assert entities[1] == "europe"
+    assert entities[2] == "GERMANY"
+    
+    for level in levels:
+        assert "regime" in level
+        assert "confidence" in level
+        assert isinstance(level["confidence"], float)
+        assert 0.0 <= level["confidence"] <= 1.0
+        assert "summary" in level
+        assert "drivers" in level
+        assert isinstance(level["drivers"], list)
+        assert "risks" in level
+        assert isinstance(level["risks"], list)
+        assert "score" in level
+        assert isinstance(level["score"], (int, float))
+    
+    consistency = data["consistency"]
+    assert "has_contradictions" in consistency
+    assert isinstance(consistency["has_contradictions"], bool)
+    assert "pairs" in consistency
+    assert isinstance(consistency["pairs"], list)
+    
+    narrative = data["narrative"]
+    assert "summary" in narrative
+    assert "regime_bias" in narrative
+    assert "key_risks" in narrative
+    assert "consistency_call" in narrative
+    assert narrative["consistency_call"] in {"aligned", "contradiction"}
+    
+    assert data["stats"]["level_count"] == 3
+    assert "news_signal_count" in data["stats"]
+    assert "coverage_source_count" in data["stats"]
+    
+    provenance = data["provenance"]
+    assert "source" in provenance
+    assert "forecasts_macro_regime_hierarchy" in provenance["source"]
+    assert "free_data_source_registry" in provenance["source"]
+    assert "llm_used" in provenance
+    assert "fallback_used" in provenance
+    assert "sla" in provenance
+    
+    assert "warnings" in data
+    assert isinstance(data["warnings"], list)
+    assert "llm_narrative_fallback" in data["warnings"]
+    
+    assert data["cache"]["hit"] is False
+
+
+def test_batch46_multi_country_forecast_consistency(monkeypatch):
+    """BATCH-46-DEV-01: Verify forecasts work across multiple countries/continents."""
+    client = _client()
+    _MACRO_REGIME_RESPONSE_CACHE.clear()
+
+    monkeypatch.setattr(global_signal_mesh_service, "load_json", lambda _key: {"articles": []})
+    monkeypatch.setattr(
+        global_signal_mesh_service,
+        "_llm_macro_narrative",
+        lambda levels, horizon: {"used": False, "status": "unavailable"},
+    )
+
+    test_cases = [
+        ("US", "north_america", "United States"),
+        ("CHINA", "asia", "China"),
+        ("GERMANY", "europe", "Germany"),
+        ("BRAZIL", "latin_america", "Brazil"),
+        ("SOUTH AFRICA", "africa", "South Africa"),
+    ]
+
+    for country_code, expected_continent, country_name in test_cases:
+        _MACRO_REGIME_RESPONSE_CACHE.clear()
+        
+        response = client.get(f"/api/forecasts/macro-regime-hierarchy?country={country_code}")
+        
+        assert response.status_code == 200, f"Failed for {country_name}"
+        data = response.json()["data"]
+        
+        assert data["forecast_id"] == "macro_regime_hierarchy_v1"
+        assert len(data["levels"]) == 3
+        
+        country_level = data["levels"][2]
+        assert country_level["scope"] == "country"
+        assert country_level["entity"] == country_code
+        assert "regime" in country_level
+        assert "confidence" in country_level
+        assert 0.0 <= country_level["confidence"] <= 1.0
+        
+        continent_level = data["levels"][1]
+        assert continent_level["scope"] == "continent"
+        assert continent_level["entity"] == expected_continent
+        
+        world_level = data["levels"][0]
+        assert world_level["scope"] == "world"
+        assert world_level["entity"] == "world"
+        
+        assert "consistency" in data
+        assert "has_contradictions" in data["consistency"]
