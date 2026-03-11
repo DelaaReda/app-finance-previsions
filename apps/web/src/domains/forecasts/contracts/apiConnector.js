@@ -926,6 +926,36 @@ function summarizePolicyTransmission(raw, sectors, companies) {
   return `transmission: ${sectorCopy} -> ${companyCopy}`;
 }
 
+function getPolicyTransmissionConfidence(raw, sectors, companies) {
+  const baseConfidence = Math.max(0, Math.min(100, Math.round(normalizeNumber(raw.impact_score, 0) * 100)));
+  const transmission = isObject(raw.transmission) ? raw.transmission : {};
+  const transmissionCompanies = Array.isArray(transmission.companies) ? transmission.companies : [];
+  const primarySectors = normalizeConnectorStringList(transmission.primary_sectors || sectors);
+  const uncertaintyFactors = [];
+  let penalty = 0;
+
+  if (!transmissionCompanies.length && !companies.length) {
+    uncertaintyFactors.push('no_company_mapping');
+    penalty += 24;
+  }
+  if (primarySectors.length !== 1) {
+    uncertaintyFactors.push('multi_sector_transmission');
+    penalty += 12;
+  }
+  if (transmissionCompanies.some((row) => isObject(row) && String(row.transmission_path || '').trim() === 'policy_watchlist_indirect')) {
+    uncertaintyFactors.push('indirect_company_mapping');
+    penalty += 10;
+  }
+
+  const adjustedConfidence = Math.max(15, Math.min(100, baseConfidence - penalty));
+  const uncertaintyLevel = penalty >= 22 ? 'high' : penalty >= 10 ? 'medium' : 'low';
+  return {
+    value: adjustedConfidence,
+    level: uncertaintyLevel,
+    factors: uncertaintyFactors,
+  };
+}
+
 function transformPolicyImpactEvent(event) {
   const raw = event && typeof event === 'object' && !Array.isArray(event) ? event : {};
   const companies = Array.isArray(raw.companies)
@@ -952,13 +982,14 @@ function transformPolicyImpactEvent(event) {
   if (transmissionSummary) {
     summaryParts.push(transmissionSummary);
   }
+  const transmissionConfidence = getPolicyTransmissionConfidence(raw, sectors, companies);
 
   return {
     id: raw.event_id || `policy-impact-${primaryTicker}-${status}-${effectiveDate || 'na'}`,
     type: 'news',
     ticker: primaryTicker,
     severity: policyStatusSeverity(status),
-    confidence: Math.max(0, Math.min(100, Math.round(normalizeNumber(raw.impact_score, 0) * 100))),
+    confidence: transmissionConfidence.value,
     timestamp: raw.evidence && raw.evidence.published_at ? raw.evidence.published_at : new Date().toISOString(),
     category: 'policy-impact',
     description: summaryParts.filter(Boolean).join(' • '),
@@ -972,6 +1003,8 @@ function transformPolicyImpactEvent(event) {
       transmission_path: String(raw.transmission?.path || '').trim() || null,
       transmission_summary: transmissionSummary || null,
       transmission_company_count: Number(raw.transmission?.company_count) || companies.length || 0,
+      transmission_uncertainty_level: transmissionConfidence.level,
+      transmission_uncertainty_factors: transmissionConfidence.factors,
     },
   };
 }

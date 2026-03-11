@@ -1242,6 +1242,82 @@ test('getPolicyImpact unwraps the policy engine contract', async () => {
   assert.deepEqual(payload.events[0].transmission.primary_sectors, ['technology']);
 });
 
+test('initLiveData degrades policy-impact confidence when transmission mapping is broad or indirect', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url.includes('/api/alerts')) {
+      return {
+        ok: true,
+        async json() {
+          return { ok: true, data: { alerts: [] } };
+        },
+      };
+    }
+    if (url.includes('/api/forecasts/policy-impact')) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              events: [
+                {
+                  event_id: 'policy-direct',
+                  jurisdiction: 'US',
+                  status: 'effective',
+                  impact_score: 0.82,
+                  sectors: ['technology'],
+                  companies: ['NVDA'],
+                  evidence: { published_at: '2026-03-11T05:00:00Z' },
+                  transmission: {
+                    path: 'sector_to_company',
+                    primary_sectors: ['technology'],
+                    company_count: 1,
+                    companies: [{ ticker: 'NVDA', transmission_path: 'sector_policy_direct' }],
+                  },
+                },
+                {
+                  event_id: 'policy-indirect',
+                  jurisdiction: 'US',
+                  status: 'proposed',
+                  impact_score: 0.82,
+                  sectors: ['technology', 'industrials'],
+                  companies: ['CAT'],
+                  evidence: { published_at: '2026-03-11T04:00:00Z' },
+                  transmission: {
+                    path: 'sector_to_company',
+                    primary_sectors: ['technology', 'industrials'],
+                    company_count: 1,
+                    companies: [{ ticker: 'CAT', transmission_path: 'policy_watchlist_indirect' }],
+                  },
+                },
+              ],
+            },
+          };
+        },
+      };
+    }
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, data: {} };
+      },
+    };
+  });
+
+  await sandbox.window.initLiveData();
+  const [direct, indirect] = sandbox.window.alertTimeline;
+
+  assert.equal(direct.confidence, 82);
+  assert.equal(direct.signals.transmission_uncertainty_level, 'low');
+  assert.deepEqual(Array.from(direct.signals.transmission_uncertainty_factors), []);
+  assert.equal(indirect.confidence, 60);
+  assert.equal(indirect.signals.transmission_uncertainty_level, 'high');
+  assert.deepEqual(Array.from(indirect.signals.transmission_uncertainty_factors), [
+    'multi_sector_transmission',
+    'indirect_company_mapping',
+  ]);
+});
+
 test('getLiveDashboardData preserves portfolio risk profile freshness and status for downstream UI mapping', async () => {
   const sandbox = loadConnector(async () => ({
     async json() {
@@ -1595,7 +1671,9 @@ test('initLiveData merges policy-impact events into the shared alert timeline', 
   assert.equal(sandbox.window.alertTimeline[0].category, 'policy-impact');
   assert.equal(sandbox.window.alertTimeline[0].ticker, 'NVDA');
   assert.equal(sandbox.window.alertTimeline[0].severity, 'high');
+  assert.equal(sandbox.window.alertTimeline[0].confidence, 82);
   assert.match(sandbox.window.alertTimeline[0].description, /transmission: technology -> NVDA, MSFT/i);
   assert.equal(sandbox.window.alertTimeline[0].signals.transmission_company_count, 2);
+  assert.equal(sandbox.window.alertTimeline[0].signals.transmission_uncertainty_level, 'low');
   assert.equal(sandbox.window.getLiveDashboardData().sources.includes('forecasts_policy_change_impact'), true);
 });
