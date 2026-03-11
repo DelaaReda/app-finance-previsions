@@ -8093,3 +8093,226 @@ function drawReturnsChart() {
     }
   });
 }
+
+// ============================================================================
+// GLOBAL FORECAST BOARD FINAL GATE [BATCH-50-DEV-03]
+// ============================================================================
+
+let forecastBoardState = {
+  loading: false,
+  error: null,
+  data: null,
+  country: 'US',
+  horizon: '3m'
+};
+
+function showForecastLoading() {
+  const loading = document.getElementById('forecastLoading');
+  const error = document.getElementById('forecastError');
+  const grid = document.getElementById('forecastGrid');
+  if (loading) loading.style.display = 'flex';
+  if (error) error.style.display = 'none';
+  if (grid) grid.style.display = 'none';
+}
+
+function showForecastError() {
+  const loading = document.getElementById('forecastLoading');
+  const error = document.getElementById('forecastError');
+  const grid = document.getElementById('forecastGrid');
+  if (loading) loading.style.display = 'none';
+  if (error) error.style.display = 'flex';
+  if (grid) grid.style.display = 'none';
+}
+
+function showForecastData() {
+  const loading = document.getElementById('forecastLoading');
+  const error = document.getElementById('forecastError');
+  const grid = document.getElementById('forecastGrid');
+  if (loading) loading.style.display = 'none';
+  if (error) error.style.display = 'none';
+  if (grid) grid.style.display = 'grid';
+}
+
+function renderGateStatus(data) {
+  const statusBadge = document.getElementById('gateStatusBadge');
+  const layerTags = document.getElementById('layerTags');
+  const qualityValue = document.getElementById('qualityValue');
+  const complianceValue = document.getElementById('complianceValue');
+
+  if (!statusBadge || !layerTags || !qualityValue || !complianceValue) return;
+
+  const status = (data.status || 'unknown').toLowerCase();
+  statusBadge.textContent = status;
+  statusBadge.className = 'status-badge ' + status;
+
+  const summary = data.summary || {};
+  const layers = summary.required_layers_active || [];
+  layerTags.innerHTML = layers.map(layer => 
+    '<span class="layer-tag">' + layer + '</span>'
+  ).join('');
+
+  qualityValue.textContent = summary.quality_non_regressing === true ? '✓ Non-Regressing' : 
+                             summary.quality_non_regressing === false ? '⚠ Regressing' : '-';
+  qualityValue.style.color = summary.quality_non_regressing === true ? '#059669' :
+                             summary.quality_non_regressing === false ? '#d97706' : 'var(--color-text)';
+
+  complianceValue.textContent = summary.free_data_compliant === true ? '✓ Compliant' : 
+                                summary.free_data_compliant === false ? '⚠ Non-Compliant' : '-';
+  complianceValue.style.color = summary.free_data_compliant === true ? '#059669' :
+                                summary.free_data_compliant === false ? '#d97706' : 'var(--color-text)';
+}
+
+function renderQualityMetrics(data) {
+  const proofs = data.proofs || {};
+  const gateProof = proofs.FINAL_GLOBAL_FORECAST_GATE_PROOF || {};
+
+  const sampleSize = document.getElementById('qualitySampleSize');
+  const nonRegressing = document.getElementById('qualityNonRegressing');
+  const status = document.getElementById('qualityStatus');
+
+  if (sampleSize) sampleSize.textContent = (gateProof.quality_sample_size || 0).toLocaleString();
+  if (nonRegressing) nonRegressing.textContent = gateProof.quality_status === 'pass' ? '✓ Yes' : gateProof.quality_status === 'fail' ? '✗ No' : '-';
+  if (status) status.textContent = gateProof.quality_status || '-';
+}
+
+function renderSignalMesh(data) {
+  const components = data.components || {};
+  const mesh = components.global_signal_mesh || {};
+  const stats = mesh.stats || {};
+
+  const sourceCount = document.getElementById('meshSourceCount');
+  const layerCount = document.getElementById('meshLayerCount');
+  const licenses = document.getElementById('meshLicenses');
+
+  if (sourceCount) sourceCount.textContent = (stats.source_count || 0).toLocaleString();
+  if (layerCount) layerCount.textContent = (stats.layer_count || 0).toLocaleString();
+  
+  const licenseCounts = stats.license_class_counts || {};
+  const licenseLabels = Object.entries(licenseCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(function(entry) { return entry[0] + ':' + entry[1]; });
+  
+  if (licenses) licenses.textContent = licenseLabels.length ? licenseLabels.join(', ') : '-';
+}
+
+function renderComponents(data) {
+  const components = data.components || {};
+  const componentList = document.getElementById('componentList');
+  if (!componentList) return;
+  
+  const componentNames = {
+    'global_signal_mesh': 'Signal Mesh',
+    'macro_regime_hierarchy': 'Macro Regime',
+    'policy_change_impact': 'Policy Impact',
+    'insider_behavior': 'Insider Behavior',
+    'quality_trend': 'Quality Trend'
+  };
+
+  const items = Object.keys(components).map(function(key) {
+    const value = components[key];
+    const name = componentNames[key] || key;
+    const stats = value.stats || {};
+    const isActive = stats && Object.keys(stats).length > 0;
+    return '<div class="component-item">' +
+      '<span class="component-name">' + name + '</span>' +
+      '<span class="component-status ' + (isActive ? 'active' : 'inactive') + '">' +
+        (isActive ? '✓ Active' : '○ Inactive') +
+      '</span>' +
+    '</div>';
+  });
+
+  componentList.innerHTML = items.join('');
+}
+
+function renderFooter(data) {
+  const freshness = data.freshness || data.generated_at || data.generatedAt;
+  const sources = data.source || [];
+
+  const freshnessText = document.getElementById('freshnessText');
+  const freshnessDot = document.querySelector('.freshness-dot');
+  const sourceAttr = document.getElementById('sourceAttribution');
+
+  if (freshnessText) {
+    const relative = formatRelativeTime(freshness);
+    freshnessText.textContent = 'Last updated: ' + (relative || 'Unknown');
+  }
+
+  if (freshnessDot) {
+    const status = (data.status || 'unknown').toLowerCase();
+    freshnessDot.className = 'freshness-dot ' + (status === 'fresh' ? '' : status);
+  }
+
+  if (sourceAttr) {
+    sourceAttr.textContent = 'Sources: ' + (sources.length ? sources.join(', ') : 'Unknown');
+  }
+}
+
+function renderForecastBoard(data) {
+  if (!data) {
+    showForecastError();
+    return;
+  }
+
+  renderGateStatus(data);
+  renderQualityMetrics(data);
+  renderSignalMesh(data);
+  renderComponents(data);
+  renderFooter(data);
+  
+  showForecastData();
+}
+
+async function refreshForecastBoard() {
+  if (forecastBoardState.loading) return;
+
+  const countryEl = document.getElementById('forecastCountry');
+  const horizonEl = document.getElementById('forecastHorizon');
+  const country = countryEl ? countryEl.value : 'US';
+  const horizon = horizonEl ? horizonEl.value : '3m';
+
+  forecastBoardState = {
+    loading: true,
+    error: null,
+    data: null,
+    country: country,
+    horizon: horizon
+  };
+
+  showForecastLoading();
+
+  try {
+    if (typeof window !== 'undefined' && window.FinanceAPI && window.FinanceAPI.getFinalGlobalForecastGate) {
+      const data = await window.FinanceAPI.getFinalGlobalForecastGate({ country: country, horizon: horizon });
+      forecastBoardState.data = data;
+      renderForecastBoard(data);
+    } else {
+      throw new Error('FinanceAPI not available');
+    }
+  } catch (error) {
+    console.error('[Forecast Board] Error loading data:', error);
+    forecastBoardState.error = error;
+    showForecastError();
+  } finally {
+    forecastBoardState.loading = false;
+  }
+}
+
+function initForecastBoard() {
+  setTimeout(function() {
+    refreshForecastBoard();
+  }, 1000);
+}
+
+// Expose forecast board functions globally
+window.refreshForecastBoard = refreshForecastBoard;
+window.initForecastBoard = initForecastBoard;
+
+// Auto-initialize forecast board when DOM is ready
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initForecastBoard);
+  } else {
+    setTimeout(initForecastBoard, 1500);
+  }
+}

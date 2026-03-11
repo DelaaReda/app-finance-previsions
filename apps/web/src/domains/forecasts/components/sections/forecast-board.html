@@ -1,0 +1,679 @@
+<section class="forecast-board-section" id="forecastBoardSection" aria-label="Global Forecast Board">
+    <div class="forecast-board-header">
+        <h2>🔮 Global Forecast Board</h2>
+        <div class="forecast-board-controls">
+            <select id="forecastCountry" class="forecast-select" onchange="refreshForecastBoard()">
+                <option value="US">United States</option>
+                <option value="EU">European Union</option>
+                <option value="UK">United Kingdom</option>
+                <option value="CN">China</option>
+                <option value="JP">Japan</option>
+            </select>
+            <select id="forecastHorizon" class="forecast-select" onchange="refreshForecastBoard()">
+                <option value="1m">1 Month</option>
+                <option value="3m" selected>3 Months</option>
+                <option value="6m">6 Months</option>
+                <option value="1y">1 Year</option>
+            </select>
+            <button class="forecast-refresh-btn" onclick="refreshForecastBoard()" aria-label="Refresh">🔄</button>
+        </div>
+    </div>
+
+    <div class="forecast-board-content" id="forecastBoardContent">
+        <!-- Loading state -->
+        <div class="forecast-loading" id="forecastLoading">
+            <div class="loading-spinner"></div>
+            <p>Loading forecast data...</p>
+        </div>
+
+        <!-- Error state -->
+        <div class="forecast-error" id="forecastError" style="display: none;">
+            <span class="error-icon">⚠️</span>
+            <p>Unable to load forecast board. Please try again.</p>
+        </div>
+
+        <!-- Data display -->
+        <div class="forecast-grid" id="forecastGrid" style="display: none;">
+            <!-- Gate Status Card -->
+            <div class="forecast-card gate-status-card">
+                <div class="card-header">
+                    <span class="card-icon">🚦</span>
+                    <h3>Gate Status</h3>
+                </div>
+                <div class="card-body">
+                    <div class="gate-status-indicator" id="gateStatusIndicator">
+                        <span class="status-badge" id="gateStatusBadge">UNKNOWN</span>
+                    </div>
+                    <div class="gate-layers" id="gateLayers">
+                        <p class="layers-label">Active Layers:</p>
+                        <div class="layer-tags" id="layerTags"></div>
+                    </div>
+                    <div class="gate-quality" id="gateQuality">
+                        <span class="quality-label">Quality:</span>
+                        <span class="quality-value" id="qualityValue">-</span>
+                    </div>
+                    <div class="gate-compliance" id="gateCompliance">
+                        <span class="compliance-label">Free Data:</span>
+                        <span class="compliance-value" id="complianceValue">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quality Metrics Card -->
+            <div class="forecast-card quality-card">
+                <div class="card-header">
+                    <span class="card-icon">📊</span>
+                    <h3>Quality Metrics</h3>
+                </div>
+                <div class="card-body">
+                    <div class="metric-row">
+                        <span class="metric-label">Sample Size:</span>
+                        <span class="metric-value" id="qualitySampleSize">0</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Non-Regressing:</span>
+                        <span class="metric-value" id="qualityNonRegressing">-</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Status:</span>
+                        <span class="metric-value" id="qualityStatus">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Signal Mesh Card -->
+            <div class="forecast-card mesh-card">
+                <div class="card-header">
+                    <span class="card-icon">🕸️</span>
+                    <h3>Signal Mesh</h3>
+                </div>
+                <div class="card-body">
+                    <div class="metric-row">
+                        <span class="metric-label">Sources:</span>
+                        <span class="metric-value" id="meshSourceCount">0</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Layers:</span>
+                        <span class="metric-value" id="meshLayerCount">0</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Licenses:</span>
+                        <span class="metric-value" id="meshLicenses">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Components Status Card -->
+            <div class="forecast-card components-card">
+                <div class="card-header">
+                    <span class="card-icon">🧩</span>
+                    <h3>Component Status</h3>
+                </div>
+                <div class="card-body">
+                    <div class="component-list" id="componentList">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="forecast-board-footer" id="forecastBoardFooter">
+        <span class="freshness-indicator" id="freshnessIndicator">
+            <span class="freshness-dot"></span>
+            <span id="freshnessText">Last updated: --</span>
+        </span>
+        <span class="source-attribution" id="sourceAttribution">Sources: --</span>
+    </div>
+</section>
+
+<style>
+/* Forecast Board Section Styles */
+.forecast-board-section {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+    border-radius: 16px;
+    padding: 24px;
+    margin: 20px 0;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    backdrop-filter: blur(10px);
+}
+
+.forecast-board-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.forecast-board-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--color-text, #1f2937);
+    margin: 0;
+}
+
+.forecast-board-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.forecast-select {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border, #e5e7eb);
+    background: var(--color-bg, #ffffff);
+    color: var(--color-text, #1f2937);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.forecast-select:hover {
+    border-color: var(--color-primary, #6366f1);
+}
+
+.forecast-refresh-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border, #e5e7eb);
+    background: var(--color-bg, #ffffff);
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+}
+
+.forecast-refresh-btn:hover {
+    background: var(--color-primary, #6366f1);
+    color: white;
+    transform: rotate(90deg);
+}
+
+/* Loading & Error States */
+.forecast-loading,
+.forecast-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    text-align: center;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--color-border, #e5e7eb);
+    border-top-color: var(--color-primary, #6366f1);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.forecast-error {
+    color: var(--color-error, #ef4444);
+}
+
+.error-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+}
+
+/* Forecast Grid */
+.forecast-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+.forecast-card {
+    background: var(--color-bg, #ffffff);
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid var(--color-border, #e5e7eb);
+    transition: all 0.2s;
+}
+
+.forecast-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--color-border, #e5e7eb);
+}
+
+.card-icon {
+    font-size: 20px;
+}
+
+.card-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text, #1f2937);
+    margin: 0;
+}
+
+.card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Gate Status */
+.gate-status-indicator {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.status-badge {
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-badge.fresh {
+    background: rgba(52, 211, 153, 0.2);
+    color: #059669;
+}
+
+.status-badge.stale {
+    background: rgba(251, 191, 36, 0.2);
+    color: #d97706;
+}
+
+.status-badge.degraded {
+    background: rgba(239, 68, 68, 0.2);
+    color: #dc2626;
+}
+
+.status-badge.unknown {
+    background: rgba(156, 163, 175, 0.2);
+    color: #6b7280;
+}
+
+.gate-layers,
+.gate-quality,
+.gate-compliance {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.layers-label,
+.quality-label,
+.compliance-label {
+    font-size: 12px;
+    color: var(--color-text-secondary, #6b7280);
+    font-weight: 500;
+}
+
+.layer-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.layer-tag {
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--color-primary, #6366f1);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.quality-value,
+.compliance-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text, #1f2937);
+}
+
+/* Metric Rows */
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--color-border-light, #f3f4f6);
+}
+
+.metric-row:last-child {
+    border-bottom: none;
+}
+
+.metric-label {
+    font-size: 13px;
+    color: var(--color-text-secondary, #6b7280);
+}
+
+.metric-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text, #1f2937);
+}
+
+/* Component List */
+.component-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.component-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(243, 244, 246, 0.5);
+}
+
+.component-name {
+    font-size: 13px;
+    color: var(--color-text, #1f2937);
+    font-weight: 500;
+}
+
+.component-status {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+}
+
+.component-status.active {
+    background: rgba(52, 211, 153, 0.2);
+    color: #059669;
+}
+
+.component-status.inactive {
+    background: rgba(156, 163, 175, 0.2);
+    color: #6b7280;
+}
+
+/* Footer */
+.forecast-board-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border, #e5e7eb);
+    font-size: 12px;
+    color: var(--color-text-secondary, #6b7280);
+}
+
+.freshness-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.freshness-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+}
+
+.freshness-dot.stale {
+    background: #f59e0b;
+}
+
+.freshness-dot.degraded {
+    background: #ef4444;
+}
+
+.source-attribution {
+    font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .forecast-board-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .forecast-board-controls {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .forecast-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .forecast-board-footer {
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+}
+</style>
+
+<script>
+/**
+ * Forecast Board Controller
+ * Handles loading and rendering of the Global Forecast Board
+ */
+
+let forecastBoardState = {
+    loading: false,
+    error: null,
+    data: null,
+    country: 'US',
+    horizon: '3m'
+};
+
+function showForecastLoading() {
+    document.getElementById('forecastLoading').style.display = 'flex';
+    document.getElementById('forecastError').style.display = 'none';
+    document.getElementById('forecastGrid').style.display = 'none';
+}
+
+function showForecastError() {
+    document.getElementById('forecastLoading').style.display = 'none';
+    document.getElementById('forecastError').style.display = 'flex';
+    document.getElementById('forecastGrid').style.display = 'none';
+}
+
+function showForecastData() {
+    document.getElementById('forecastLoading').style.display = 'none';
+    document.getElementById('forecastError').style.display = 'none';
+    document.getElementById('forecastGrid').style.display = 'grid';
+}
+
+function renderGateStatus(data) {
+    const statusBadge = document.getElementById('gateStatusBadge');
+    const layerTags = document.getElementById('layerTags');
+    const qualityValue = document.getElementById('qualityValue');
+    const complianceValue = document.getElementById('complianceValue');
+
+    // Status
+    const status = (data.status || 'unknown').toLowerCase();
+    statusBadge.textContent = status;
+    statusBadge.className = 'status-badge ' + status;
+
+    // Layers
+    const summary = data.summary || {};
+    const layers = summary.required_layers_active || [];
+    layerTags.innerHTML = layers.map(layer => 
+        `<span class="layer-tag">${layer}</span>`
+    ).join('');
+
+    // Quality
+    qualityValue.textContent = summary.quality_non_regressing === true ? '✓ Non-Regressing' : 
+                               summary.quality_non_regressing === false ? '⚠ Regressing' : '-';
+    qualityValue.style.color = summary.quality_non_regressing === true ? '#059669' :
+                               summary.quality_non_regressing === false ? '#d97706' : 'var(--color-text)';
+
+    // Compliance
+    complianceValue.textContent = summary.free_data_compliant === true ? '✓ Compliant' : 
+                                  summary.free_data_compliant === false ? '⚠ Non-Compliant' : '-';
+    complianceValue.style.color = summary.free_data_compliant === true ? '#059669' :
+                                  summary.free_data_compliant === false ? '#d97706' : 'var(--color-text)';
+}
+
+function renderQualityMetrics(data) {
+    const proofs = data.proofs || {};
+    const gateProof = proofs.FINAL_GLOBAL_FORECAST_GATE_PROOF || {};
+
+    document.getElementById('qualitySampleSize').textContent = 
+        (gateProof.quality_sample_size || 0).toLocaleString();
+    
+    document.getElementById('qualityNonRegressing').textContent = 
+        gateProof.quality_status === 'pass' ? '✓ Yes' : 
+        gateProof.quality_status === 'fail' ? '✗ No' : '-';
+    
+    document.getElementById('qualityStatus').textContent = 
+        gateProof.quality_status || '-';
+}
+
+function renderSignalMesh(data) {
+    const components = data.components || {};
+    const mesh = components.global_signal_mesh || {};
+    const stats = mesh.stats || {};
+
+    document.getElementById('meshSourceCount').textContent = 
+        (stats.source_count || 0).toLocaleString();
+    
+    document.getElementById('meshLayerCount').textContent = 
+        (stats.layer_count || 0).toLocaleString();
+    
+    const licenseCounts = stats.license_class_counts || {};
+    const licenseLabels = Object.entries(licenseCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 2)
+        .map(([license, count]) => `${license}:${count}`);
+    
+    document.getElementById('meshLicenses').textContent = 
+        licenseLabels.length ? licenseLabels.join(', ') : '-';
+}
+
+function renderComponents(data) {
+    const components = data.components || {};
+    const componentList = document.getElementById('componentList');
+    
+    const componentNames = {
+        'global_signal_mesh': 'Signal Mesh',
+        'macro_regime_hierarchy': 'Macro Regime',
+        'policy_change_impact': 'Policy Impact',
+        'insider_behavior': 'Insider Behavior',
+        'quality_trend': 'Quality Trend'
+    };
+
+    const items = Object.entries(components).map(([key, value]) => {
+        const name = componentNames[key] || key;
+        const stats = value.stats || {};
+        const isActive = stats && Object.keys(stats).length > 0;
+        return `
+            <div class="component-item">
+                <span class="component-name">${name}</span>
+                <span class="component-status ${isActive ? 'active' : 'inactive'}">
+                    ${isActive ? '✓ Active' : '○ Inactive'}
+                </span>
+            </div>
+        `;
+    });
+
+    componentList.innerHTML = items.join('');
+}
+
+function renderFooter(data) {
+    const freshness = data.freshness || data.generated_at || data.generatedAt;
+    const sources = data.source || [];
+
+    const freshnessText = freshness ? formatRelativeTime(freshness) : 'Unknown';
+    document.getElementById('freshnessText').textContent = `Last updated: ${freshnessText}`;
+
+    const freshnessDot = document.querySelector('.freshness-dot');
+    const status = (data.status || 'unknown').toLowerCase();
+    freshnessDot.className = 'freshness-dot ' + (status === 'fresh' ? '' : status);
+
+    document.getElementById('sourceAttribution').textContent = 
+        `Sources: ${sources.length ? sources.join(', ') : 'Unknown'}`;
+}
+
+function renderForecastBoard(data) {
+    if (!data) {
+        showForecastError();
+        return;
+    }
+
+    renderGateStatus(data);
+    renderQualityMetrics(data);
+    renderSignalMesh(data);
+    renderComponents(data);
+    renderFooter(data);
+    
+    showForecastData();
+}
+
+async function refreshForecastBoard() {
+    if (forecastBoardState.loading) return;
+
+    const country = document.getElementById('forecastCountry').value;
+    const horizon = document.getElementById('forecastHorizon').value;
+
+    forecastBoardState = {
+        ...forecastBoardState,
+        loading: true,
+        error: null,
+        country,
+        horizon
+    };
+
+    showForecastLoading();
+
+    try {
+        if (typeof window !== 'undefined' && window.FinanceAPI && window.FinanceAPI.getFinalGlobalForecastGate) {
+            const data = await window.FinanceAPI.getFinalGlobalForecastGate({ country, horizon });
+            forecastBoardState.data = data;
+            renderForecastBoard(data);
+        } else {
+            throw new Error('FinanceAPI not available');
+        }
+    } catch (error) {
+        console.error('[Forecast Board] Error loading data:', error);
+        forecastBoardState.error = error;
+        showForecastError();
+    } finally {
+        forecastBoardState.loading = false;
+    }
+}
+
+function initForecastBoard() {
+    // Auto-load on initialization
+    setTimeout(() => {
+        refreshForecastBoard();
+    }, 500);
+}
+
+// Initialize when DOM is ready
+if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initForecastBoard);
+    } else {
+        initForecastBoard();
+    }
+}
+</script>
