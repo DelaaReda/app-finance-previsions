@@ -929,6 +929,11 @@ def _selected_registry(include_non_nominal: bool) -> List[Dict[str, Any]]:
             continue
         row = dict(source)
         row["fallback_source_ids"] = list(source.get("fallback_source_ids") or [])
+        row["health"] = {
+            "nominal_status": "nominal" if bool(row.get("nominal_usage")) else "fallback_only",
+            "has_fallback": bool(row["fallback_source_ids"]),
+            "freshness_expected": row.get("freshness_expected") or "unknown",
+        }
         row["provenance"] = {
             "registry_source": "FREE_DATA_SOURCE_KEY_MATRIX",
             "license_url": row["license_or_terms_url"],
@@ -1142,16 +1147,24 @@ def build_global_signal_mesh_payload(
     nominal_sources = [item for item in sources if item.get("nominal_usage")]
     layer_counts: Dict[str, int] = {}
     license_counts: Dict[str, int] = {}
+    freshness_counts: Dict[str, int] = {}
     for item in sources:
         layer = str(item.get("layer") or "unknown")
         layer_counts[layer] = layer_counts.get(layer, 0) + 1
         license_class = str(item.get("license_class") or "unknown")
         license_counts[license_class] = license_counts.get(license_class, 0) + 1
+        freshness_expected = str(item.get("freshness_expected") or "unknown")
+        freshness_counts[freshness_expected] = freshness_counts.get(freshness_expected, 0) + 1
+    nominal_sources_without_fallback = [
+        str(item.get("source_id") or "")
+        for item in nominal_sources
+        if not item.get("fallback_source_ids")
+    ]
 
     warnings: List[str] = []
     if not nominal_sources:
         warnings.append("no_nominal_free_sources_configured")
-    if any(not item.get("fallback_source_ids") for item in nominal_sources):
+    if nominal_sources_without_fallback:
         warnings.append("some_nominal_sources_have_no_fallback")
 
     payload = {
@@ -1174,6 +1187,11 @@ def build_global_signal_mesh_payload(
             "layers": sorted(layer_counts.keys()),
             "nominal_layers": sorted({str(item.get("layer")) for item in nominal_sources}),
             "free_nominal_path_only": True,
+        },
+        "observability": {
+            "freshness_expected_counts": freshness_counts,
+            "nominal_coverage_ratio": round(len(nominal_sources) / max(len(sources), 1), 3),
+            "nominal_sources_without_fallback": nominal_sources_without_fallback,
         },
         "warnings": warnings,
         "provenance": {

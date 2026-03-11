@@ -30,6 +30,8 @@ def test_global_signal_mesh_contract_exposes_provenance_and_license_metadata():
     assert data["stats"]["nominal_source_count"] >= 1
     assert "license_class_counts" in data["stats"]
     assert data["coverage"]["free_nominal_path_only"] is True
+    assert "freshness_expected_counts" in data["observability"]
+    assert data["observability"]["nominal_coverage_ratio"] > 0
     assert data["provenance"]["source"] == data["source"]
     assert data["provenance"]["fallback_used"] is False
 
@@ -39,6 +41,9 @@ def test_global_signal_mesh_contract_exposes_provenance_and_license_metadata():
     assert first["license_class"]
     assert first["license_or_terms_url"].startswith("https://")
     assert isinstance(first["fallback_source_ids"], list)
+    assert first["health"]["nominal_status"] in {"nominal", "fallback_only"}
+    assert first["health"]["has_fallback"] == bool(first["fallback_source_ids"])
+    assert first["health"]["freshness_expected"] == first["freshness_expected"]
     assert first["provenance"]["registry_source"] == "FREE_DATA_SOURCE_KEY_MATRIX"
 
 
