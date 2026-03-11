@@ -823,3 +823,53 @@ test('getLiveDashboardData preserves portfolio risk profile freshness and status
   assert.equal(payload.data.portfolioRiskProfileStatus, 'degraded');
   assert.equal(payload.data.portfolioRiskProfileFreshness, '2026-03-09T06:30:00Z');
 });
+
+test('initLiveData hydrates judgeDecisionJournal without relying on page globals', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url.includes('/api/judge?limit=5')) {
+      return {
+        async json() {
+          return {
+            ok: true,
+            data: {
+              decision_journal: [
+                {
+                  symbol: 'NVDA',
+                  decision: 'HOLD',
+                  note: 'Leadership is intact.',
+                },
+              ],
+            },
+          };
+        },
+      };
+    }
+
+    if (url.includes('/api/llm/judge/run')) {
+      return {
+        ok: false,
+        async json() {
+          return {};
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, data: {} };
+      },
+    };
+  });
+
+  await sandbox.window.initLiveData();
+
+  assert.equal(Array.isArray(sandbox.window.judgeDecisionJournal), true);
+  assert.equal(JSON.stringify(sandbox.window.judgeDecisionJournal), JSON.stringify([
+    {
+      symbol: 'NVDA',
+      decision: 'HOLD',
+      note: 'Leadership is intact.',
+    },
+  ]));
+});

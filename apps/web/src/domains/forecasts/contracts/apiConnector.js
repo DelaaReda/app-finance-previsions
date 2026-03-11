@@ -74,6 +74,10 @@ function extractObject(payload, keys) {
   return {};
 }
 
+function isObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
 async function fetchWithCache(endpoint, key) {
   const now = Date.now();
   if (cache.data[key] && (now - cache.timestamps[key]) < cache.TTL) {
