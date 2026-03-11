@@ -5309,9 +5309,10 @@ function renderHeroCopilotBrief(state) {
       source: toString(rawContextInfluence.source, ''),
       effectiveTickers: normalizeCopilotStarterTickers(
         rawContextInfluence.effective_tickers || rawContextInfluence.effectiveTickers
-      )
+      ) || []
     }
     : null;
+  const contextEffectiveTickers = contextInfluence ? normalizeCopilotStarterTickers(contextInfluence.effectiveTickers) : [];
   const normalizedBriefStatus = toString(
     brief.status || brief.freshnessStatus || brief.freshness_status || brief.qualityStatus || brief.quality_status,
     ''
@@ -5391,7 +5392,7 @@ function renderHeroCopilotBrief(state) {
   const regimeLabel = toString(brief.marketRegime || brief.marketSentiment, fallbackState.brief.marketRegime).replace(/_/g, ' ').trim();
   const explainabilityParts = [
     contextInfluence
-      ? `Context ${toString(contextInfluence.mode, 'market_wide').replace(/_/g, ' ').trim()}${contextInfluence.portfolioApplied ? ' -> saved portfolio' : ''}${contextInfluence.effectiveTickers.length ? ` -> ${contextInfluence.effectiveTickers.join(', ')}` : ''}`
+      ? `Context ${toString(contextInfluence.mode, 'market_wide').replace(/_/g, ' ').trim()}${contextInfluence.portfolioApplied ? ' -> saved portfolio' : ''}${contextEffectiveTickers.length ? ` -> ${contextEffectiveTickers.join(', ')}` : ''}`
       : '',
     regimeLabel && regimeLabel !== 'UNKNOWN' ? `Regime ${regimeLabel}` : '',
     briefTopSignals.length ? `Signals ${briefTopSignals.slice(0, 2).join(' • ')}` : '',
@@ -5462,15 +5463,15 @@ function renderHeroCopilotBrief(state) {
     const contextSource = contextInfluence
       ? toString(contextInfluence.source, '').replace(/_/g, ' ').trim()
       : '';
-    const focusTickers = contextInfluence && contextInfluence.effectiveTickers.length
-      ? contextInfluence.effectiveTickers.slice(0, 2).join(', ')
+    const focusTickers = contextEffectiveTickers.length
+      ? contextEffectiveTickers.slice(0, 2).join(', ')
       : '';
     const metadataLabels = [
       regime !== 'UNKNOWN' ? `Regime: ${regime}` : '',
       contextInfluence
         ? `Context: ${contextMode || 'market wide'}${contextInfluence.portfolioApplied ? ' portfolio' : ''}${focusTickers ? ` • ${focusTickers}` : ''}${contextSource ? ` • ${contextSource}` : ''}`
         : '',
-      brief.sources.length ? `Sources: ${brief.sources.slice(0, 2).join(', ')}` : '',
+      briefSources.length ? `Sources: ${briefSources.slice(0, 2).join(', ')}` : '',
       briefDegraded ? 'Degraded' : ''
     ].filter(Boolean).slice(0, 3);
 
