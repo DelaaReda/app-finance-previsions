@@ -50,13 +50,15 @@ if ! [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
+STATUS_ENDPOINT="${FC_MONITOR_STATUS_ENDPOINT:-/api/status?lite=1}"
+DIAG_ENDPOINT="${FC_MONITOR_DIAG_ENDPOINT:-/api/runtime-diagnostics?lite=1}"
 STATUS_PATH="${TMP_DIR}/status.json"
 DIAG_PATH="${TMP_DIR}/runtime_diagnostics.json"
 ISSUES_FEED_PATH="${TMP_DIR}/issues_feed.json"
 ISSUES_SUMMARY_PATH="${TMP_DIR}/issues_summary.json"
 
-curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/status" -o "$STATUS_PATH"
-curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/runtime-diagnostics" -o "$DIAG_PATH"
+curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}${STATUS_ENDPOINT}" -o "$STATUS_PATH"
+curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}${DIAG_ENDPOINT}" -o "$DIAG_PATH"
 curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/issues/feed?n=40&window_min=120" -o "$ISSUES_FEED_PATH"
 curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/issues/summary?window_min=60" -o "$ISSUES_SUMMARY_PATH"
 

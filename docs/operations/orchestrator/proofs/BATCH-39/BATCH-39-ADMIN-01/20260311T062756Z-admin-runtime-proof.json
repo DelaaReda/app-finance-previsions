@@ -1,0 +1,38 @@
+{
+  "task_id": "BATCH-39-ADMIN-01",
+  "stream_id": "BATCH-39",
+  "role": "admin",
+  "produced_at_utc": "2026-03-11T06:27:56Z",
+  "status": "unblocked",
+  "summary": "BATCH-39 runtime validation is unblocked. Forecast SLA/provenance remains live on the backend API, and the monitor contract smoke now follows the canonical lightweight monitor endpoints instead of timing out on the heavy status surfaces.",
+  "root_cause": "The batch-scoped observability blocker was probe-path drift in `scripts/monitor_contract_smoke.sh`: it still called full `/api/status` and `/api/runtime-diagnostics`, while the canonical runtime truth for the monitor uses `/api/status?lite=1` and `/api/runtime-diagnostics?lite=1`.",
+  "fix_applied": "Patched `scripts/monitor_contract_smoke.sh` to default to the lightweight monitor endpoints via `FC_MONITOR_STATUS_ENDPOINT=/api/status?lite=1` and `FC_MONITOR_DIAG_ENDPOINT=/api/runtime-diagnostics?lite=1`.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-39/BATCH-39-ADMIN-01/20260311T062756Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "monitor_status_lite": "PASS GET /api/status?lite=1 => health=OK",
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=4 workboard_ready=0 admin_timeouts_recent=0 issues_records=8",
+    "health_snapshot": "PASS health=OK blocked=[] critical_widgets=ok",
+    "forecast_api_contract": "PASS GET /api/forecasts?limit=1 => payload and row both expose provenance.sla with updated_at/freshness_age_seconds/freshness_status/target_max_age_seconds/within_target",
+    "forecast_tests": "PASS 3 tests in apps/api/src/domains/forecasts/tests/test_forecasts_template_parity.py (-k 'provenance or forecast_detail')",
+    "doctor_note": "fc_doctor remains globally degraded from unrelated planner capability history (`invalid_subagent_result:missing_result_payload` on prior BATCH-39 admin attempt), not from current BATCH-39 runtime truth"
+  },
+  "files_touched": [
+    "scripts/monitor_contract_smoke.sh",
+    "docs/operations/orchestrator/proofs/BATCH-39/BATCH-39-ADMIN-01/20260311T062756Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "platform/policies/exec_safe.sh --force-confirm --workdir /home/venom/analyse-financiere -- \"curl -sS --max-time 8 http://127.0.0.1:7779/api/status?lite=1\"",
+    "bash scripts/monitor_contract_smoke.sh",
+    "bash scripts/health_snapshot.sh",
+    "platform/policies/exec_safe.sh --force-confirm --workdir /home/venom/analyse-financiere -- \"curl -sS --max-time 8 http://127.0.0.1:8050/api/forecasts?limit=1\"",
+    "PYTHONPATH=apps/api/src python3 -m pytest apps/api/src/domains/forecasts/tests/test_forecasts_template_parity.py -q -k 'provenance or forecast_detail'",
+    "bash scripts/fc_doctor.sh --json"
+  ],
+  "commit_sha": "pending_commit",
+  "architecture_check": "PASS(batch-scoped runtime fix only): no forecast domain logic changed; observability probe now matches the canonical lite monitor contract documented for VM/LAN access.",
+  "vision_alignment": "PASS(BATCH-39): admin validation now proves both halves of the batch contract in runtime truth: forecast provenance/SLA is live and the monitor surface can verify it without false blocker timeouts.",
+  "recommended_next": "Planner can merge/complete BATCH-39-ADMIN-01. If desired later, clean the unrelated planner capability-history debt so `fc_doctor` loses its global degraded flag.",
+  "blocking_issue": "none_for_batch_scope"
+}
