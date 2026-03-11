@@ -235,6 +235,76 @@ def test_judge_strategy_playbooks_marks_signal_divergence(monkeypatch):
     assert payload["data"]["playbooks"][0]["conflicts"] == ["signal_divergence"]
 
 
+def test_judge_strategy_playbooks_projects_policy_guardrail_override(monkeypatch):
+    now_iso = "2026-03-11T10:00:00Z"
+
+    async def fake_get_judge_verdicts_payload(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "TSLA",
+                        "horizon": "1w",
+                        "expected_return": 0.12,
+                        "risk_level": "high",
+                        "confidence": 0.84,
+                        "summary": ["Strong momentum but blocked by personal policy."],
+                        "scenarios": [],
+                        "risks": ["valuation"],
+                        "impacts": {},
+                        "actions": ["buy incrementally"],
+                        "phase_scores": {},
+                        "data_needed": [],
+                        "attachments": [],
+                        "policy_guardrails": {
+                            "status": "violated",
+                            "policy_id": "personal-default",
+                            "policy_version": "2026-03-11T09:00:00Z",
+                            "effective_action": "hold",
+                            "violations": [
+                                {"code": "ticker_excluded"},
+                                {"code": "action_blocked"},
+                            ],
+                        },
+                        "meta": {
+                            "generated_at": now_iso,
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "stats": {"total_verdicts": 1},
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_verdicts_payload",
+        fake_get_judge_verdicts_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge/strategy-playbooks?limit=1&ticker=TSLA")
+    assert resp.status_code == 200
+    payload = resp.json()
+
+    playbook = payload["data"]["playbooks"][0]
+    assert playbook["ticker"] == "TSLA"
+    assert playbook["decision"] == "hold"
+    assert "policy_guardrail_violation" in playbook["conflicts"]
+    assert playbook["policy_guardrails"] == {
+        "status": "violated",
+        "policy_id": "personal-default",
+        "policy_version": "2026-03-11T09:00:00Z",
+        "effective_action": "hold",
+        "violation_count": 2,
+    }
+
+
 def test_judge_sector_company_transmission_route_delegates_to_service(monkeypatch):
     captured = {}
     now_iso = "2026-03-11T05:00:00Z"

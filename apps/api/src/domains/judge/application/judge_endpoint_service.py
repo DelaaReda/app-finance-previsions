@@ -1106,6 +1106,11 @@ def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> D
 def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[str, Any]:
     """Project a Judge verdict into a minimal strategy playbook payload."""
     ticker = normalize_ticker(str(verdict.get("ticker") or "").strip()) or "UNKNOWN"
+    policy_guardrails = (
+        verdict.get("policy_guardrails")
+        if isinstance(verdict.get("policy_guardrails"), dict)
+        else {}
+    )
 
     go_no_go = verdict.get("go_no_go") or {}
     decision = str(go_no_go.get("decision") or "").strip().lower() if isinstance(go_no_go, dict) else ""
@@ -1135,7 +1140,6 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
     if risk_level not in {"low", "medium", "high", "critical"}:
         risk_level = "medium"
     horizon = str(verdict.get("horizon") or "1w").strip() or "1w"
-    playbook_id = f"{ticker}:{horizon}:{decision}:{profile}"
     reasons = _coerce_text_list((go_no_go or {}).get("reasons", [])) if isinstance(go_no_go, dict) else []
     raw_impacts = verdict.get("impacts") if isinstance(verdict.get("impacts"), dict) else {}
     scenarios = verdict.get("scenarios") if isinstance(verdict.get("scenarios"), list) else []
@@ -1161,6 +1165,18 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
     if signal_signal != decision:
         conflicts.append("signal_divergence")
 
+    guardrail_status = str(policy_guardrails.get("status") or "").strip().lower()
+    effective_action = coerce_verdict(
+        policy_guardrails.get("effective_action"),
+        default="",
+    )
+    if guardrail_status == "violated":
+        conflicts.append("policy_guardrail_violation")
+        if effective_action in {"hold"}:
+            decision = "hold"
+        elif effective_action in {"sell"}:
+            decision = "no_go"
+
     # Preserve upstream conflict hints and keep response stable/deterministic.
     seen_conflicts = set()
     normalized_conflicts: List[str] = []
@@ -1175,6 +1191,8 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
             continue
         seen_conflicts.add(key)
         normalized_conflicts.append(normalized)
+
+    playbook_id = f"{ticker}:{horizon}:{decision}:{profile}"
 
     return {
         "playbook_id": playbook_id,
@@ -1197,6 +1215,19 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
         "reasons": reasons,
         "conflicts": normalized_conflicts,
         "decision_id": verdict.get("decision_id"),
+        "policy_guardrails": {
+            "status": guardrail_status or "ok",
+            "policy_id": policy_guardrails.get("policy_id"),
+            "policy_version": policy_guardrails.get("policy_version"),
+            "effective_action": effective_action or None,
+            "violation_count": len(
+                [
+                    violation
+                    for violation in policy_guardrails.get("violations", [])
+                    if isinstance(violation, dict)
+                ]
+            ),
+        },
     }
 
 
