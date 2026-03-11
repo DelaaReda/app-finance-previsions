@@ -21,3 +21,16 @@ def test_load_profile_uses_canonical_runtime_data_path(monkeypatch, tmp_path):
     assert "SPY" in profile.tickers
     assert "AAPL" in profile.tickers
     assert "investisseur particulier prudent" in profile.prompt_template
+
+
+def test_load_profile_supports_supply_chain_commodity_shock_profile(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    profile = load_profile("supply_chain_commodity_shock")
+
+    assert profile.name == "supply_chain_commodity_shock"
+    assert profile.horizon == "1m"
+    assert profile.focus == "macro"
+    assert "XLE" in profile.tickers
+    assert "DBA" in profile.tickers
+    assert "shock propagation" in profile.prompt_template.lower()

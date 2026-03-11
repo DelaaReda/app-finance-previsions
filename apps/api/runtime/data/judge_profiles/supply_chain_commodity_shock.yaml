@@ -1,0 +1,24 @@
+name: supply_chain_commodity_shock
+horizon: 1m
+tickers:
+  - XLE
+  - XLB
+  - XLI
+  - XME
+  - DBA
+  - DBC
+  - BDRY
+  - GLD
+focus: macro
+sources_weights:
+  macro: 0.35
+  news: 0.25
+  sentiment: 0.15
+  technical: 0.15
+  fundamental: 0.10
+prompt_template: |
+  Analyze {ticker} for a 1-month horizon under a supply-chain and commodity shock regime.
+  Focus on shock propagation from energy, freight, metals, and agricultural inputs into downstream sectors.
+  Highlight transmission channels, second-order effects, and what would invalidate the thesis.
+  Keep response under 450 tokens.
+max_tokens: 1100
