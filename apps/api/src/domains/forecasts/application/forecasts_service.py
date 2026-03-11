@@ -191,6 +191,60 @@ def _freshness_status_from_age(age_seconds: float) -> str:
     return "stale"
 
 
+def _build_sla_block(*, updated_at: Any, now_iso: str) -> Dict[str, Any]:
+    age_seconds = _freshness_age_seconds(updated_at, now_iso)
+    status = _freshness_status_from_age(age_seconds)
+    return {
+        "updated_at": str(updated_at or now_iso),
+        "freshness_age_seconds": float(age_seconds),
+        "freshness_status": status,
+        "target_max_age_seconds": int(FORECASTS_STALE_SECONDS),
+        "within_target": bool(age_seconds >= 0 and age_seconds <= FORECASTS_STALE_SECONDS),
+    }
+
+
+def _build_row_provenance(
+    *,
+    normalized: Dict[str, Any],
+    now_iso: str,
+) -> Dict[str, Any]:
+    updated_at = str(normalized.get("generated_at") or normalized.get("timestamp") or now_iso)
+    model_version = str(
+        normalized.get("model_version")
+        or normalized.get("model")
+        or normalized.get("provider")
+        or ""
+    ).strip()
+    source = _normalize_source(normalized.get("source"))
+    return {
+        "source": source,
+        "provider_chain": list(normalized.get("provider_chain") or []),
+        "model_version": model_version or None,
+        "fallback_used": bool(normalized.get("fallback_used")),
+        "sla": _build_sla_block(updated_at=updated_at, now_iso=now_iso),
+    }
+
+
+def _build_payload_provenance(
+    *,
+    payload: Dict[str, Any],
+    now_iso: str,
+) -> Dict[str, Any]:
+    updated_at = str(
+        payload.get("last_update")
+        or payload.get("freshness")
+        or payload.get("generated_at")
+        or now_iso
+    )
+    return {
+        "source": _normalize_source(payload.get("source")),
+        "provider_chain": list(payload.get("provider_chain") or []),
+        "model_version": None,
+        "fallback_used": bool(payload.get("fallback_used")),
+        "sla": _build_sla_block(updated_at=updated_at, now_iso=now_iso),
+    }
+
+
 def _normalize_provider_chain(
     *,
     provider_chain: Any,
@@ -201,8 +255,8 @@ def _normalize_provider_chain(
     chain: List[str] = []
     if isinstance(provider_chain, list):
         chain.extend(str(item).strip() for item in provider_chain if str(item).strip())
-    provider_v = str(provider).strip()
-    model_v = str(model).strip()
+    provider_v = str(provider).strip() if provider is not None else ""
+    model_v = str(model).strip() if model is not None else ""
     if provider_v:
         chain.append(provider_v)
     if model_v:
@@ -317,6 +371,7 @@ def _normalize_forecast_row(
     if freshness_status not in {"fresh", "stale", "unknown"}:
         freshness_status = _freshness_status_from_age(freshness_age)
     normalized["freshness_status"] = freshness_status
+    normalized["updated_at"] = str(normalized.get("updated_at") or normalized["generated_at"])
 
     forecast_id = str(
         normalized.get("forecast_id")
@@ -325,6 +380,7 @@ def _normalize_forecast_row(
     ).strip()
     normalized["forecast_id"] = forecast_id
     normalized["id"] = forecast_id
+    normalized["provenance"] = _build_row_provenance(normalized=normalized, now_iso=now_iso)
     return normalized
 
 
@@ -566,6 +622,7 @@ def _base_forecasts_payload(
         "freshness_status": "unknown",
         "freshness_age": -1.0,
         "last_update": now_iso,
+        "updated_at": now_iso,
         "source": source,
         "provider_chain": [],
         "fallback_used": False,
@@ -590,6 +647,13 @@ def _base_forecasts_payload(
             "hit": False,
             "age_seconds": 0.0,
             "ttl_seconds": int(FORECASTS_CACHE_TTL_SECONDS),
+        },
+        "provenance": {
+            "source": source,
+            "provider_chain": [],
+            "model_version": None,
+            "fallback_used": False,
+            "sla": _build_sla_block(updated_at=now_iso, now_iso=now_iso),
         },
     }
 
@@ -1166,6 +1230,7 @@ async def get_forecasts_payload(
             payload["provider_chain"] = provider_chain
             payload["fallback_used"] = bool(fallback_used)
             payload["latency_ms"] = round(avg_latency_ms, 3)
+            payload["updated_at"] = snapshot_last_update
             payload["freshness_status"] = _freshness_status_from_age(snapshot_age)
             payload["observability"] = {
                 "provider_chain": provider_chain,
@@ -1218,6 +1283,7 @@ async def get_forecasts_payload(
             )
             if debug:
                 payload["debug_pipeline"] = traces
+            payload["provenance"] = _build_payload_provenance(payload=payload, now_iso=now_iso)
             return payload
         except Exception as compute_exc:
             logger.error("Error in forecasts compute: %s", compute_exc, exc_info=True)
@@ -1243,6 +1309,7 @@ async def get_forecasts_payload(
             if debug:
                 add_trace("compute_exception", error=str(compute_exc))
                 fallback["debug_pipeline"] = traces
+            fallback["provenance"] = _build_payload_provenance(payload=fallback, now_iso=now_iso)
             return fallback
 
     try:
@@ -1292,6 +1359,7 @@ async def get_forecasts_payload(
         }
         if debug:
             fallback["debug_pipeline"] = traces
+        fallback["provenance"] = _build_payload_provenance(payload=fallback, now_iso=now_iso)
         return fallback
 
 

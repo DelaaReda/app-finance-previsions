@@ -52,12 +52,14 @@ def test_forecasts_openapi_exposes_enum_params_and_response_schema():
         "why",
         "risk_flag",
         "generated_at",
+        "updated_at",
         "freshness_status",
         "forecast_id",
         "provider_chain",
         "fallback_used",
         "latency_ms",
         "freshness_age",
+        "provenance",
     }
     assert required_keys.issubset(set(row_props.keys()))
 
@@ -150,17 +152,28 @@ def test_forecasts_contract_rows_include_required_keys(monkeypatch):
         "why",
         "risk_flag",
         "generated_at",
+        "updated_at",
         "freshness_status",
         "forecast_id",
         "provider_chain",
         "fallback_used",
         "latency_ms",
         "freshness_age",
+        "provenance",
     }
     assert required_keys.issubset(set(row.keys()))
     assert row["forecast_id"]
     assert isinstance(row["provider_chain"], list)
     assert row["freshness_status"] in {"fresh", "stale", "unknown"}
+    assert row["updated_at"] == row["generated_at"]
+    assert row["provenance"]["source"] == row["source"]
+    assert row["provenance"]["sla"]["updated_at"] == row["updated_at"]
+    assert row["provenance"]["sla"]["target_max_age_seconds"] > 0
+
+    assert payload["updated_at"] == payload["last_update"]
+    assert payload["provenance"]["source"] == payload["source"]
+    assert payload["provenance"]["fallback_used"] is False
+    assert payload["provenance"]["sla"]["updated_at"] == payload["updated_at"]
 
 
 def test_forecasts_refreshes_simple_snapshot_into_nominal_hybrid_payload(monkeypatch):
@@ -471,6 +484,8 @@ def test_forecasts_marks_stale_snapshot_when_too_old(monkeypatch):
     assert payload["freshness_age"] > 0
     assert rows[0]["freshness_status"] == "stale"
     assert rows[0]["freshness_age"] > 0
+    assert payload["provenance"]["sla"]["within_target"] is False
+    assert rows[0]["provenance"]["sla"]["within_target"] is False
 
 
 def test_forecasts_observability_aggregates_provider_chain_and_fallback(monkeypatch):

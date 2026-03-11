@@ -45,6 +45,7 @@ class ForecastContractDto(BaseModel):
     why: str = Field(default="")
     risk_flag: bool = Field(default=False)
     generated_at: str = Field(default="")
+    updated_at: str = Field(default="")
     freshness_status: Literal["fresh", "stale", "unknown"] = Field(default="unknown")
 
     # Additional forecasting fields used by UI/ranking.
@@ -61,6 +62,7 @@ class ForecastContractDto(BaseModel):
     fallback_used: bool = Field(default=False)
     latency_ms: float = Field(default=0.0)
     freshness_age: float = Field(default=-1.0)
+    provenance: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ForecastsDataDto(BaseModel):
@@ -74,6 +76,7 @@ class ForecastsDataDto(BaseModel):
     freshness_status: Literal["fresh", "stale", "unknown"] = Field(default="unknown")
     freshness_age: float = Field(default=-1.0)
     last_update: str = Field(default="")
+    updated_at: str = Field(default="")
     source: List[str] = Field(default_factory=list)
     filters_applied: Dict[str, Any] = Field(default_factory=dict)
     stats: Dict[str, Any] = Field(default_factory=dict)
@@ -83,6 +86,7 @@ class ForecastsDataDto(BaseModel):
     fallback_used: bool = Field(default=False)
     latency_ms: float = Field(default=0.0)
     observability: Dict[str, Any] = Field(default_factory=dict)
+    provenance: Dict[str, Any] = Field(default_factory=dict)
     debug_pipeline: Optional[List[Dict[str, Any]]] = None
     message: Optional[str] = None
     error: Optional[str] = None
