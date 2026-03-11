@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha1
 from pathlib import Path
 import sys
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from storage.io import load_json, save_json
 
@@ -55,6 +55,18 @@ except Exception:  # pragma: no cover
         normalize_ticker,
         normalize_tickers,
     )
+
+try:
+    from platform.legacy.taxonomy.news_taxonomy import (  # type: ignore
+        classify_event,
+        tag_geopolitics,
+    )
+except Exception:  # pragma: no cover
+    def classify_event(_text: str) -> List[str]:
+        return []
+
+    def tag_geopolitics(_text: str) -> List[str]:
+        return []
 
 try:
     from platform.legacy.research.versioned_notes import VersionedNotesStore  # type: ignore
@@ -169,6 +181,222 @@ def _coerce_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return default
+
+
+def _parse_datetime(value: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(value), tz=timezone.utc)
+        except Exception:
+            return None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(text)
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+def _article_geopolitical_tags(article: Dict[str, Any]) -> List[str]:
+    seeded = _coerce_text_list(article.get("geopolitics"), article.get("regions"))
+    if seeded:
+        return seeded
+    text = " ".join(
+        str(article.get(field) or "").strip()
+        for field in ("title", "headline", "summary", "description", "raw_text")
+    ).strip()
+    return _coerce_text_list(tag_geopolitics(text))
+
+
+def _article_event_tags(article: Dict[str, Any]) -> List[str]:
+    seeded = _coerce_text_list(article.get("event_types"), article.get("events"))
+    if seeded:
+        return seeded
+    text = " ".join(
+        str(article.get(field) or "").strip()
+        for field in ("title", "headline", "summary", "description", "raw_text")
+    ).strip()
+    return _coerce_text_list(classify_event(text))
+
+
+def _compute_escalation_score(*, article_count: int, event_count: int, recent_count: int) -> float:
+    raw = min(1.0, (article_count * 0.18) + (event_count * 0.12) + (recent_count * 0.22))
+    return round(raw, 4)
+
+
+def _escalation_band(score: float) -> str:
+    if score >= 0.85:
+        return "critical"
+    if score >= 0.6:
+        return "high"
+    if score >= 0.35:
+        return "medium"
+    return "low"
+
+
+def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    articles_payload = load_json("news_feed") or {}
+    articles = articles_payload.get("articles") if isinstance(articles_payload, dict) else []
+    articles = articles if isinstance(articles, list) else []
+    region_filter = str(region or "").strip().lower()
+
+    regions: Dict[str, Dict[str, Any]] = {}
+    event_pairs: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    warnings: List[str] = []
+
+    for article in articles:
+        if not isinstance(article, dict):
+            continue
+        geo_tags = _article_geopolitical_tags(article)
+        if not geo_tags:
+            continue
+        if region_filter and region_filter not in {tag.lower() for tag in geo_tags}:
+            continue
+
+        event_tags = _article_event_tags(article)
+        published_at = _parse_datetime(
+            article.get("published_at")
+            or article.get("timestamp")
+            or article.get("ts")
+            or article.get("date")
+        )
+        is_recent = False
+        if published_at is None:
+            warnings.append("missing_article_timestamp")
+        else:
+            is_recent = (now - published_at) <= timedelta(hours=24)
+        article_title = str(article.get("title") or article.get("headline") or "").strip()
+
+        for geo_tag in geo_tags:
+            key = geo_tag.lower()
+            region_state = regions.setdefault(
+                key,
+                {
+                    "id": key,
+                    "label": geo_tag,
+                    "article_count": 0,
+                    "recent_count": 0,
+                    "event_count": 0,
+                    "latest_at": None,
+                    "sample_headlines": [],
+                },
+            )
+            region_state["article_count"] += 1
+            region_state["event_count"] += len(event_tags)
+            if is_recent:
+                region_state["recent_count"] += 1
+            if article_title and len(region_state["sample_headlines"]) < 3:
+                region_state["sample_headlines"].append(article_title)
+            if published_at is not None:
+                latest_at = region_state.get("latest_at")
+                if latest_at is None or published_at > latest_at:
+                    region_state["latest_at"] = published_at
+
+            for event_tag in event_tags or ["general_tension"]:
+                pair_key = (key, str(event_tag).strip().lower())
+                pair_state = event_pairs.setdefault(
+                    pair_key,
+                    {
+                        "source": key,
+                        "target": str(event_tag).strip().lower(),
+                        "article_count": 0,
+                        "recent_count": 0,
+                    },
+                )
+                pair_state["article_count"] += 1
+                if is_recent:
+                    pair_state["recent_count"] += 1
+
+    nodes = []
+    alerts = []
+    for state in regions.values():
+        escalation_score = _compute_escalation_score(
+            article_count=state["article_count"],
+            event_count=state["event_count"],
+            recent_count=state["recent_count"],
+        )
+        latest_at = state["latest_at"]
+        node = {
+            "id": state["id"],
+            "label": state["label"],
+            "kind": "region",
+            "article_count": state["article_count"],
+            "recent_count": state["recent_count"],
+            "event_count": state["event_count"],
+            "escalation_score": escalation_score,
+            "escalation_band": _escalation_band(escalation_score),
+            "latest_at": latest_at.isoformat() if isinstance(latest_at, datetime) else None,
+            "sample_headlines": state["sample_headlines"],
+        }
+        nodes.append(node)
+        if node["escalation_band"] in {"high", "critical"}:
+            alerts.append(
+                {
+                    "region": node["label"],
+                    "escalation_band": node["escalation_band"],
+                    "escalation_score": node["escalation_score"],
+                    "timestamp": node["latest_at"] or now_iso,
+                }
+            )
+
+    nodes.sort(key=lambda item: (-float(item["escalation_score"]), str(item["label"])))
+    nodes = nodes[:limit]
+    allowed_ids = {node["id"] for node in nodes}
+
+    edges = [
+        {
+            "source": pair["source"],
+            "target": pair["target"],
+            "kind": "region_to_event",
+            "weight": pair["article_count"],
+            "recent_weight": pair["recent_count"],
+        }
+        for pair in event_pairs.values()
+        if pair["source"] in allowed_ids
+    ]
+    edges.sort(key=lambda item: (-int(item["weight"]), item["source"], item["target"]))
+
+    dedup_warnings = []
+    seen_warnings = set()
+    for warning in warnings:
+        if warning in seen_warnings:
+            continue
+        seen_warnings.add(warning)
+        dedup_warnings.append(warning)
+
+    source = ["judge_geopolitical_risk_graph_service", "news_feed_snapshot"]
+    if not articles:
+        source.append("news_feed_fallback")
+
+    return {
+        "generated_at": now_iso,
+        "freshness": now_iso,
+        "source": source,
+        "filters_applied": {
+            "region": region_filter or None,
+            "limit": limit,
+        },
+        "stats": {
+            "article_count": len(articles),
+            "regions_detected": len(regions),
+            "edges_returned": len(edges),
+            "alerts_count": len(alerts),
+        },
+        "nodes": nodes,
+        "edges": edges,
+        "alerts": alerts,
+        "warnings": dedup_warnings,
+    }
 
 
 def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[str, Any]:
@@ -1641,12 +1869,60 @@ async def get_judge_options_payload(
         )
 
 
+async def get_judge_geopolitical_risk_graph_payload(
+    *,
+    region: Optional[str],
+    limit: int,
+) -> Dict[str, Any]:
+    """Build a stable geopolitical risk graph from persisted news snapshots."""
+    now_iso = utc_now_iso()
+    try:
+        payload = _build_geopolitical_graph_payload(region=region, limit=limit)
+        return service_response_with_metadata(
+            payload,
+            default_source="judge_geopolitical_risk_graph_service",
+            freshness=payload.get("freshness") or now_iso,
+        )
+    except Exception as exc:
+        return service_response_with_metadata(
+            {
+                "generated_at": now_iso,
+                "freshness": now_iso,
+                "source": [
+                    "judge_geopolitical_risk_graph_service",
+                    "geopolitical_risk_graph_fallback",
+                ],
+                "filters_applied": {
+                    "region": str(region or "").strip().lower() or None,
+                    "limit": limit,
+                },
+                "stats": {
+                    "article_count": 0,
+                    "regions_detected": 0,
+                    "edges_returned": 0,
+                    "alerts_count": 0,
+                },
+                "nodes": [],
+                "edges": [],
+                "alerts": [],
+                "warnings": [],
+                "error": str(exc),
+                "message": "Geopolitical risk graph unavailable; fallback returned.",
+            },
+            default_source="judge_geopolitical_risk_graph_service",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
+        )
+
+
 __all__ = [
     "JudgeVerdictsComputeFn",
     "get_judge_verdicts_payload",
     "get_judge_quality_payload",
     "get_judge_quality_history_payload",
     "get_judge_options_payload",
+    "get_judge_geopolitical_risk_graph_payload",
     "get_judge_decision_journal_payload",
     "append_judge_decision_outcome_feedback",
     "get_judge_decision_outcome_feedback",

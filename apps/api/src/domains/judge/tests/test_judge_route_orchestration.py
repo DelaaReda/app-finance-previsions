@@ -856,3 +856,73 @@ def test_judge_decision_journal_route_delegates_to_service(monkeypatch):
     assert payload["data"]["count"] == 1
     assert captured["decision_id"] == "judge_demo_aapl"
     assert captured["status_filter"] == "in_progress"
+
+
+def test_judge_geopolitical_risk_graph_route_delegates_to_service(monkeypatch):
+    captured = {}
+    now_iso = "2026-03-10T00:00:00Z"
+
+    async def fake_geopolitical_graph(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "data": {
+                "generated_at": now_iso,
+                "freshness": now_iso,
+                "source": ["judge_geopolitical_risk_graph_service", "tests"],
+                "filters_applied": {"region": "ukraine", "limit": 2},
+                "stats": {
+                    "article_count": 3,
+                    "regions_detected": 1,
+                    "edges_returned": 1,
+                    "alerts_count": 1,
+                },
+                "nodes": [
+                    {
+                        "id": "ukraine",
+                        "label": "ukraine",
+                        "kind": "region",
+                        "article_count": 3,
+                        "recent_count": 2,
+                        "event_count": 2,
+                        "escalation_score": 0.8,
+                        "escalation_band": "high",
+                        "latest_at": now_iso,
+                        "sample_headlines": ["Synthetic conflict update"],
+                    }
+                ],
+                "edges": [
+                    {
+                        "source": "ukraine",
+                        "target": "sanctions",
+                        "kind": "region_to_event",
+                        "weight": 2,
+                        "recent_weight": 1,
+                    }
+                ],
+                "alerts": [
+                    {
+                        "region": "ukraine",
+                        "escalation_band": "high",
+                        "escalation_score": 0.8,
+                        "timestamp": now_iso,
+                    }
+                ],
+                "warnings": [],
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_geopolitical_risk_graph_payload",
+        fake_geopolitical_graph,
+    )
+    client = _client()
+    resp = client.get("/api/judge/geopolitical-risk-graph?region=ukraine&limit=2")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["data"]["stats"]["alerts_count"] == 1
+    assert payload["data"]["nodes"][0]["id"] == "ukraine"
+    assert captured == {"region": "ukraine", "limit": 2}

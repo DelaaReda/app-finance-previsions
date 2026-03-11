@@ -3724,6 +3724,23 @@ async def get_judge_strategy_playbooks(
     )
 
 
+@router.get("/geopolitical-risk-graph")
+async def get_judge_geopolitical_risk_graph(
+    region: Optional[str] = Query(
+        None,
+        description="Optional geopolitical tag filter (ex: ukraine, taiwan, iran).",
+    ),
+    limit: int = Query(10, ge=1, le=50, description="Maximum number of regions returned."),
+):
+    """Expose a stable geopolitical conflict-escalation graph from persisted news snapshots."""
+    from services.judge_endpoint_service import get_judge_geopolitical_risk_graph_payload
+
+    return await get_judge_geopolitical_risk_graph_payload(
+        region=region,
+        limit=limit,
+    )
+
+
 @router.get("/quality")
 async def get_judge_quality(
     horizon_days: int = Query(
