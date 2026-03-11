@@ -52,6 +52,8 @@ def test_event_impact_horizon_matrix_builds_cross_horizon_rows(monkeypatch):
     assert {"1d", "1w", "1m"} == set(first_row["horizons"].keys())
     assert first_row["horizons"]["1d"]["impact_score"] > 0
     assert first_row["horizons"]["1w"]["impact_band"] in {"minimal", "low", "medium", "high"}
+    assert first_row["dominant_horizon"] in {"1d", "1w", "1m"}
+    assert "signal" in first_row["interpretation"]
     assert data["templates"]["cross_horizon_divergence"]
 
 
@@ -89,6 +91,7 @@ def test_event_impact_horizon_matrix_filters_event_type(monkeypatch):
     assert data["filters_applied"]["event_type"] == "merger"
     assert len(data["matrix"]) == 1
     assert data["matrix"][0]["event_type"] == "merger"
+    assert data["matrix"][0]["interpretation"].startswith("merger has its strongest")
 
 
 def test_event_impact_horizon_matrix_returns_never_empty_fallback(monkeypatch):

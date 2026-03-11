@@ -295,6 +295,39 @@ def _resolve_event_horizon_prior(event_tag: str) -> Dict[str, Dict[str, Any]]:
     )
 
 
+def _build_event_horizon_interpretation(
+    *,
+    event_type: str,
+    horizons: Dict[str, Dict[str, Any]],
+    divergence: float,
+) -> Dict[str, Any]:
+    dominant_horizon = max(
+        _EVENT_HORIZON_KEYS,
+        key=lambda horizon_key: float(horizons[horizon_key]["impact_score"]),
+    )
+    shortest_score = float(horizons["1d"]["impact_score"])
+    longest_score = float(horizons["1m"]["impact_score"])
+    if divergence >= 0.2:
+        outlook = "Immediate repricing and slower confirmation are diverging."
+    elif longest_score > shortest_score:
+        outlook = "The setup looks more durable than the day-one reaction."
+    elif shortest_score > longest_score:
+        outlook = "The move looks front-loaded and may fade over longer horizons."
+    else:
+        outlook = "The event path stays aligned across short and longer horizons."
+
+    band = horizons[dominant_horizon]["impact_band"]
+    bias = str(horizons[dominant_horizon]["bias"] or "").replace("_", " ").strip()
+    summary = (
+        f"{str(event_type or 'event').replace('_', ' ')} has its strongest "
+        f"{dominant_horizon} signal with {band} conviction and a {bias or 'neutral'} bias. {outlook}"
+    )
+    return {
+        "dominant_horizon": dominant_horizon,
+        "summary": summary.strip(),
+    }
+
+
 def _build_event_impact_horizon_matrix_payload(
     *,
     event_type: Optional[str],
@@ -382,6 +415,11 @@ def _build_event_impact_horizon_matrix_payload(
             }
 
         divergence = round(max(impact_curve) - min(impact_curve), 4) if impact_curve else 0.0
+        interpretation = _build_event_horizon_interpretation(
+            event_type=event_key,
+            horizons=horizons,
+            divergence=divergence,
+        )
         matrix.append(
             {
                 "event_type": event_key,
@@ -389,6 +427,8 @@ def _build_event_impact_horizon_matrix_payload(
                 "recent_count": state["recent_count"],
                 "sentiment_bias": sentiment_bias,
                 "cross_horizon_divergence": divergence,
+                "dominant_horizon": interpretation["dominant_horizon"],
+                "interpretation": interpretation["summary"],
                 "horizons": horizons,
                 "sample_headlines": state["sample_headlines"],
             }
