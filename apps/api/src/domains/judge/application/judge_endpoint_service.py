@@ -494,6 +494,27 @@ def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> D
     event_pairs: Dict[Tuple[str, str], Dict[str, Any]] = {}
     warnings: List[str] = []
 
+    def _trace_article(
+        *,
+        article: Dict[str, Any],
+        published_at: Optional[datetime],
+        region_tag: str,
+        event_tag: Optional[str],
+    ) -> Dict[str, Any]:
+        freshness_hours = None
+        if isinstance(published_at, datetime):
+            freshness_hours = round(max(0.0, (now - published_at).total_seconds() / 3600.0), 2)
+        return {
+            "title": str(article.get("title") or article.get("headline") or "").strip() or "untitled",
+            "publisher": str(article.get("source") or article.get("publisher") or "unknown").strip() or "unknown",
+            "published_at": published_at.isoformat() if isinstance(published_at, datetime) else None,
+            "freshness_hours": freshness_hours,
+            "region": region_tag,
+            "event": event_tag,
+            "url": str(article.get("url") or article.get("link") or "").strip() or None,
+            "weight": 1.0 if freshness_hours is None else round(max(0.1, 1.0 - min(freshness_hours, 72.0) / 72.0), 3),
+        }
+
     for article in articles:
         if not isinstance(article, dict):
             continue
@@ -529,6 +550,7 @@ def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> D
                     "event_count": 0,
                     "latest_at": None,
                     "sample_headlines": [],
+                    "source_trace": [],
                 },
             )
             region_state["article_count"] += 1
@@ -541,6 +563,15 @@ def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> D
                 latest_at = region_state.get("latest_at")
                 if latest_at is None or published_at > latest_at:
                     region_state["latest_at"] = published_at
+            if len(region_state["source_trace"]) < 3:
+                region_state["source_trace"].append(
+                    _trace_article(
+                        article=article,
+                        published_at=published_at,
+                        region_tag=geo_tag,
+                        event_tag=None,
+                    )
+                )
 
             for event_tag in event_tags or ["general_tension"]:
                 pair_key = (key, str(event_tag).strip().lower())
@@ -551,11 +582,21 @@ def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> D
                         "target": str(event_tag).strip().lower(),
                         "article_count": 0,
                         "recent_count": 0,
+                        "source_trace": [],
                     },
                 )
                 pair_state["article_count"] += 1
                 if is_recent:
                     pair_state["recent_count"] += 1
+                if len(pair_state["source_trace"]) < 3:
+                    pair_state["source_trace"].append(
+                        _trace_article(
+                            article=article,
+                            published_at=published_at,
+                            region_tag=geo_tag,
+                            event_tag=str(event_tag).strip().lower(),
+                        )
+                    )
 
     nodes = []
     alerts_by_region: Dict[str, Dict[str, Any]] = {}
@@ -577,6 +618,7 @@ def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> D
             "escalation_band": _escalation_band(escalation_score),
             "latest_at": latest_at.isoformat() if isinstance(latest_at, datetime) else None,
             "sample_headlines": state["sample_headlines"],
+            "source_trace": state["source_trace"],
         }
         nodes.append(node)
         if node["escalation_band"] in {"high", "critical"}:
@@ -600,6 +642,7 @@ def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> D
             "kind": "region_to_event",
             "weight": pair["article_count"],
             "recent_weight": pair["recent_count"],
+            "source_trace": pair["source_trace"],
         }
         for pair in event_pairs.values()
         if pair["source"] in allowed_ids
@@ -631,6 +674,12 @@ def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> D
             "regions_detected": len(regions),
             "edges_returned": len(edges),
             "alerts_count": len(alerts),
+        },
+        "traceability": {
+            "schema_version": "judge_source_trace_v1",
+            "weighted_by": "freshness_decay",
+            "freshness_unit": "hours",
+            "source_trace_count": sum(len(node.get("source_trace") or []) for node in nodes),
         },
         "nodes": nodes,
         "edges": edges,
