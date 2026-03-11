@@ -49,6 +49,14 @@ def test_policy_impact_contract_extracts_status_jurisdiction_and_sector(monkeypa
     assert {event["jurisdiction"] for event in data["events"]} == {"US", "EU"}
     assert all(event["status"] in {"proposed", "adopted", "effective", "monitoring"} for event in data["events"])
     assert all(isinstance(event["sectors"], list) and event["sectors"] for event in data["events"])
+    assert data["transmission"]["path"] == "sector_to_company"
+    assert data["transmission"]["event_count"] == 2
+    assert data["events"][0]["transmission"]["path"] == "sector_to_company"
+    assert data["events"][0]["transmission"]["company_count"] >= 1
+    assert all(
+        row["transmission_path"] in {"sector_policy_direct", "policy_watchlist_indirect"}
+        for row in data["events"][0]["transmission"]["companies"]
+    )
     assert data["provenance"]["fallback_used"] is False
 
 
@@ -81,3 +89,26 @@ def test_policy_impact_cache_and_debug_bypass(monkeypatch):
     assert second.json()["data"]["cache"]["hit"] is True
     assert debug.json()["data"]["cache"]["hit"] is False
     assert debug.json()["data"]["debug_pipeline"]["cache_bypassed"] is True
+
+
+def test_policy_impact_route_fallback_keeps_transmission_contract(monkeypatch):
+    app = FastAPI()
+    app.include_router(forecasts_route.router)
+    client = TestClient(app)
+
+    monkeypatch.setattr(
+        forecasts_route,
+        "build_policy_change_impact_payload",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    response = client.get("/forecasts/policy-impact")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["provenance"]["fallback_used"] is True
+    assert data["transmission"] == {
+        "path": "sector_to_company",
+        "event_count": 0,
+        "matrix": [],
+    }

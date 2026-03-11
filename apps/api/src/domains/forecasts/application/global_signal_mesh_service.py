@@ -422,6 +422,28 @@ _POLICY_SECTOR_KEYWORDS: Tuple[Tuple[str, Tuple[str, ...]], ...] = (
     ("industrials", ("tariff", "manufacturing", "industrial", "aerospace", "supply chain")),
 )
 
+_POLICY_TICKER_METADATA: Dict[str, Dict[str, str]] = {
+    "NVDA": {"name": "NVIDIA Corporation", "sector": "technology"},
+    "MSFT": {"name": "Microsoft Corporation", "sector": "technology"},
+    "AAPL": {"name": "Apple Inc.", "sector": "technology"},
+    "GOOGL": {"name": "Alphabet Inc.", "sector": "technology"},
+    "GOOG": {"name": "Alphabet Inc. (Class C)", "sector": "technology"},
+    "AMD": {"name": "Advanced Micro Devices", "sector": "technology"},
+    "JPM": {"name": "JPMorgan Chase & Co.", "sector": "financials"},
+    "BAC": {"name": "Bank of America", "sector": "financials"},
+    "GS": {"name": "Goldman Sachs", "sector": "financials"},
+    "MS": {"name": "Morgan Stanley", "sector": "financials"},
+    "SAN": {"name": "Banco Santander", "sector": "financials"},
+    "BNP": {"name": "BNP Paribas", "sector": "financials"},
+    "SHEL": {"name": "Shell plc", "sector": "energy"},
+    "XOM": {"name": "Exxon Mobil", "sector": "energy"},
+    "CVX": {"name": "Chevron Corporation", "sector": "energy"},
+    "PFE": {"name": "Pfizer Inc.", "sector": "healthcare"},
+    "JNJ": {"name": "Johnson & Johnson", "sector": "healthcare"},
+    "CAT": {"name": "Caterpillar Inc.", "sector": "industrials"},
+    "BA": {"name": "Boeing Company", "sector": "industrials"},
+}
+
 _POLICY_TRIGGER_KEYWORDS = (
     "regulation",
     "regulatory",
@@ -705,6 +727,63 @@ def _is_policy_article(article: Dict[str, Any]) -> bool:
     return any(keyword in text for keyword in _POLICY_TRIGGER_KEYWORDS)
 
 
+def _normalize_companies(raw_companies: Any) -> List[str]:
+    companies: List[str] = []
+    seen = set()
+    for value in raw_companies or []:
+        ticker = _coerce_text(value).upper()
+        if not ticker or ticker in seen:
+            continue
+        seen.add(ticker)
+        companies.append(ticker)
+    return companies
+
+
+def _build_company_transmission(
+    *,
+    companies: List[str],
+    sectors: List[str],
+) -> List[Dict[str, Any]]:
+    primary_sector = sectors[0] if len(sectors) == 1 else None
+    transmission_rows: List[Dict[str, Any]] = []
+    for ticker in companies:
+        metadata = _POLICY_TICKER_METADATA.get(ticker, {})
+        inferred_sector = _coerce_text(metadata.get("sector")).lower() or primary_sector or "broad_market"
+        transmission_rows.append(
+            {
+                "ticker": ticker,
+                "company_name": _coerce_text(metadata.get("name")) or ticker,
+                "sector": inferred_sector,
+                "transmission_path": "sector_policy_direct" if inferred_sector in sectors else "policy_watchlist_indirect",
+            }
+        )
+    return transmission_rows
+
+
+def _build_sector_company_transmission(events: List[Dict[str, Any]]) -> Dict[str, Any]:
+    matrix: List[Dict[str, Any]] = []
+    for event in events:
+        sectors = [item for item in (event.get("sectors") or []) if _coerce_text(item)]
+        companies = [item for item in (event.get("companies") or []) if _coerce_text(item)]
+        if not sectors and not companies:
+            continue
+        matrix.append(
+            {
+                "event_id": _coerce_text(event.get("event_id")),
+                "title": _coerce_text(event.get("title")),
+                "sectors": sectors or ["broad_market"],
+                "companies": companies,
+                "company_count": len(companies),
+            }
+        )
+
+    return {
+        "path": "sector_to_company",
+        "event_count": len(matrix),
+        "matrix": matrix,
+    }
+
+
 def build_policy_change_impact_payload(
     *,
     jurisdiction: str = "all",
@@ -749,7 +828,7 @@ def build_policy_change_impact_payload(
         event_jurisdiction = _extract_jurisdiction(body_text)
         event_status = _extract_policy_status(body_text)
         sectors = _extract_sector_tags(body_text)
-        companies = list(article.get("tickers") or article.get("symbols") or [])
+        companies = _normalize_companies(article.get("tickers") or article.get("symbols") or [])
         if normalized_jurisdiction != "ALL" and event_jurisdiction != normalized_jurisdiction:
             continue
         if normalized_status != "all" and event_status != normalized_status:
@@ -757,6 +836,7 @@ def build_policy_change_impact_payload(
         if normalized_sector != "all" and normalized_sector not in sectors:
             continue
         ranked = candidate_by_title.get(title, {})
+        company_transmission = _build_company_transmission(companies=companies, sectors=sectors)
         event = {
             "event_id": _coerce_text(article.get("id")) or title.lower().replace(" ", "-")[:80],
             "title": title,
@@ -772,6 +852,12 @@ def build_policy_change_impact_payload(
                 "source": _coerce_text(article.get("source")) or "news_feed",
                 "age_hours": ranked.get("age_hours"),
                 "judge_ranked": bool(ranked),
+            },
+            "transmission": {
+                "path": "sector_to_company",
+                "primary_sectors": sectors,
+                "company_count": len(company_transmission),
+                "companies": company_transmission,
             },
         }
         events.append(event)
@@ -830,6 +916,7 @@ def build_policy_change_impact_payload(
             "proposed_count": sum(1 for event in events if event.get("status") == "proposed"),
             "adopted_count": sum(1 for event in events if event.get("status") == "adopted"),
         },
+        "transmission": _build_sector_company_transmission(events),
         "warnings": warnings,
         "provenance": {
             "source": ["forecasts_policy_change_impact", "news_feed_snapshot", "judge_score_news"],

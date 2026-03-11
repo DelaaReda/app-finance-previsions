@@ -158,6 +158,8 @@ def test_policy_impact_contract_extracts_status_jurisdiction_and_sector(monkeypa
     assert data["events"][0]["jurisdiction"] in {"US", "EU"}
     assert data["events"][0]["status"] in {"proposed", "adopted", "effective", "monitoring"}
     assert isinstance(data["events"][0]["sectors"], list)
+    assert data["transmission"]["path"] == "sector_to_company"
+    assert data["events"][0]["transmission"]["company_count"] >= 1
     assert data["provenance"]["fallback_used"] is False
 
 

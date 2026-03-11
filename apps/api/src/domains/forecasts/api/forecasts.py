@@ -452,6 +452,11 @@ async def get_policy_change_impact(
                 "proposed_count": 0,
                 "adopted_count": 0,
             },
+            "transmission": {
+                "path": "sector_to_company",
+                "event_count": 0,
+                "matrix": [],
+            },
             "warnings": [],
             "provenance": {
                 "source": ["forecasts_policy_change_impact", "critical_route_error_fallback"],
