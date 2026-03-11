@@ -599,6 +599,10 @@ def test_build_context_payload_uses_saved_portfolio_scope_when_tickers_are_missi
             },
             "risk_profile": "balanced",
             "risk_level": "medium",
+            "weights": {
+                "AAPL": 0.72,
+                "MSFT": 0.28,
+            },
             "why": ["Saved weights stay close to target."],
             "warnings": [],
             "source": ["portfolio_service", "copilot_saved_portfolio"],
@@ -639,6 +643,24 @@ def test_build_context_payload_uses_saved_portfolio_scope_when_tickers_are_missi
             "risk_tolerance": "moderate",
         },
     }
+    assert response.get("regime_detection") == {
+        "label": "BULL_MARKET",
+        "confidence": 0.73,
+        "confidence_pct": 73.0,
+        "threshold_reason": "vix bas",
+        "source": ["forecasts", "macro", "news"],
+        "generated_at": "2026-03-02T21:00:00Z",
+    }
+
+    drift_alerts = response.get("allocation_drift_alerts") or {}
+    assert drift_alerts.get("active") is True
+    assert drift_alerts.get("weights_analyzed") == {"AAPL": 72.0, "MSFT": 28.0}
+    assert [item.get("id") for item in drift_alerts.get("alerts", [])] == [
+        "largest_position_concentration",
+        "equal_weight_rebalance_watch",
+    ]
+    assert drift_alerts.get("alerts", [])[0].get("threshold_pct") == 20.0
+    assert drift_alerts.get("alerts", [])[1].get("threshold_pct") == 5.0
 
 
 def test_build_context_payload_fallback_keeps_daily_brief_contract(monkeypatch):

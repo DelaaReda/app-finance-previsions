@@ -255,6 +255,212 @@ def _normalize_source_list(value: Any, fallback: str) -> List[str]:
     return [fallback]
 
 
+def _normalize_string_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        items: List[str] = []
+        for item in value:
+            token = _safe_text(item)
+            if token:
+                items.append(token)
+        return items
+
+    token = _safe_text(value)
+    return [token] if token else []
+
+
+def _normalize_memo_horizon(payload: Dict[str, Any]) -> str:
+    memo_payload = payload.get("memo") if isinstance(payload.get("memo"), dict) else {}
+    return _safe_text(
+        memo_payload.get("horizon") or payload.get("horizon") or payload.get("time_horizon"),
+        "1w",
+    )
+
+
+def _normalize_memo_why(payload: Dict[str, Any]) -> List[str]:
+    memo_payload = payload.get("memo") if isinstance(payload.get("memo"), dict) else {}
+
+    for candidate in (
+        memo_payload.get("why"),
+        payload.get("why"),
+        payload.get("reasoning"),
+    ):
+        items = _normalize_string_list(candidate)
+        if items:
+            return items
+
+    answer = _safe_text(memo_payload.get("answer") or payload.get("answer"))
+    return [answer] if answer else []
+
+
+def _has_explicit_insufficient_evidence(items: List[str]) -> bool:
+    haystack = " ".join(str(item).lower() for item in items)
+    return any(
+        token in haystack
+        for token in (
+            "insufficient",
+            "insuffisant",
+            "insuffisante",
+            "insuffisantes",
+            "moins de 2",
+            "fewer than 2",
+        )
+    )
+
+
+def _normalize_memo_risks(
+    payload: Dict[str, Any],
+    *,
+    insufficient_evidence: bool = False,
+) -> List[str]:
+    memo_payload = payload.get("memo") if isinstance(payload.get("memo"), dict) else {}
+
+    for candidate in (
+        memo_payload.get("risks"),
+        payload.get("risks"),
+    ):
+        items = _normalize_string_list(candidate)
+        if items:
+            risks = items
+            break
+    else:
+        risks = []
+
+    if not risks:
+        risk_payload = memo_payload.get("risk") if isinstance(memo_payload.get("risk"), dict) else {}
+        if not risk_payload and isinstance(payload.get("risk"), dict):
+            risk_payload = dict(payload.get("risk") or {})
+
+        if risk_payload:
+            level = _safe_text(risk_payload.get("level") or payload.get("risk_level"))
+            caveat = _safe_text(risk_payload.get("caveat") or payload.get("risk_caveat"))
+            if level:
+                risks.append(level)
+            if caveat:
+                risks.append(caveat)
+        else:
+            risks = _normalize_string_list(payload.get("risk"))
+
+    if not risks:
+        risks = _normalize_string_list(payload.get("risk_caveat"))
+
+    if insufficient_evidence and not _has_explicit_insufficient_evidence(risks):
+        risks = ["Sources insuffisantes (moins de 2).", *risks] if risks else [
+            "Sources insuffisantes (moins de 2)."
+        ]
+
+    return risks
+
+
+def _normalize_memo_sources(payload: Dict[str, Any]) -> List[Any]:
+    memo_payload = payload.get("memo") if isinstance(payload.get("memo"), dict) else {}
+
+    for candidate in (
+        memo_payload.get("sources"),
+        payload.get("sources"),
+    ):
+        if isinstance(candidate, list) and candidate:
+            return list(candidate)
+
+    for candidate in (
+        memo_payload.get("source"),
+        payload.get("source"),
+    ):
+        if isinstance(candidate, list) and candidate:
+            return list(candidate)
+
+        token = _safe_text(candidate)
+        if token:
+            return [token]
+
+    return []
+
+
+def _is_insufficient_evidence(payload: Dict[str, Any], *, sources: List[Any]) -> bool:
+    quality_status = _safe_text(payload.get("quality_status")).lower()
+    if quality_status == "insufficient_sources":
+        return True
+    if quality_status == "error":
+        return False
+
+    requirements = payload.get("requirements_met") if isinstance(payload.get("requirements_met"), dict) else {}
+    if requirements.get("min_sources_2") is False:
+        return True
+
+    try:
+        if payload.get("sources_count") is not None:
+            return int(payload.get("sources_count")) < 2
+    except Exception:
+        pass
+
+    return len(sources) < 2
+
+
+def normalize_ask_payload_contract(payload: Any) -> Dict[str, Any]:
+    normalized = dict(payload) if isinstance(payload, dict) else {}
+    memo_payload = normalized.get("memo") if isinstance(normalized.get("memo"), dict) else {}
+
+    freshness = _safe_text(
+        memo_payload.get("freshness") or normalized.get("freshness") or normalized.get("generated_at"),
+        "",
+    )
+    if not freshness:
+        freshness = utc_now_iso()
+    normalized.setdefault("generated_at", freshness)
+    normalized["freshness"] = freshness
+
+    sources = _normalize_memo_sources(normalized)
+    insufficient_evidence = _is_insufficient_evidence(normalized, sources=sources)
+    why = _normalize_memo_why(normalized)
+    if not why and insufficient_evidence:
+        why = ["Sources insuffisantes pour une recommandation fiable."]
+
+    risks = _normalize_memo_risks(
+        normalized,
+        insufficient_evidence=insufficient_evidence,
+    )
+    verdict = _safe_text(
+        memo_payload.get("verdict") or normalized.get("verdict") or normalized.get("action"),
+        "hold",
+    ).lower()
+    horizon = _normalize_memo_horizon(normalized)
+    confidence = memo_payload.get("confidence") if memo_payload.get("confidence") is not None else normalized.get("confidence")
+    next_steps = _normalize_string_list(memo_payload.get("next_steps"))
+    if not next_steps:
+        next_steps = _normalize_string_list(normalized.get("next_steps"))
+    invalidation = _normalize_string_list(memo_payload.get("invalidation"))
+    if not invalidation:
+        invalidation = _normalize_string_list(normalized.get("invalidation"))
+
+    memo: Dict[str, Any] = {
+        "verdict": verdict,
+        "horizon": horizon,
+        "why": why,
+        "risks": risks,
+        "confidence": confidence,
+        "freshness": freshness,
+        "sources": sources,
+    }
+    if next_steps:
+        memo["next_steps"] = next_steps
+    if invalidation:
+        memo["invalidation"] = invalidation
+
+    normalized["memo"] = memo
+    normalized["verdict"] = _safe_text(normalized.get("verdict"), verdict).lower() or verdict
+    normalized["action"] = _safe_text(normalized.get("action"), normalized["verdict"]).lower() or normalized["verdict"]
+    normalized["horizon"] = horizon
+    normalized["why"] = why
+    normalized["risks"] = risks
+    normalized["sources"] = sources
+    normalized["confidence"] = confidence
+    if next_steps:
+        normalized["next_steps"] = next_steps
+    if invalidation:
+        normalized["invalidation"] = invalidation
+
+    return normalized
+
+
 def _extract_saved_portfolio_state(
     portfolio_payload: Dict[str, Any],
     risk_payload: Dict[str, Any],
@@ -395,6 +601,201 @@ def _resolve_scope_with_saved_portfolio(
         resolved_scope.pop("tickers", None)
 
     return resolved_scope, saved_portfolio_context
+
+
+def _build_context_influence(
+    *,
+    requested_scope: Optional[Dict[str, Any]] = None,
+    requested_tickers: Optional[List[str]] = None,
+    resolved_scope: Optional[Dict[str, Any]] = None,
+    saved_portfolio_context: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    explicit_tickers = _normalize_tickers(
+        requested_tickers
+        if requested_tickers is not None
+        else (requested_scope.get("tickers") if isinstance(requested_scope, dict) else [])
+    )
+    effective_tickers = _normalize_tickers(
+        resolved_scope.get("tickers") if isinstance(resolved_scope, dict) else []
+    )
+    portfolio = (
+        saved_portfolio_context.get("portfolio")
+        if isinstance(saved_portfolio_context, dict) and isinstance(saved_portfolio_context.get("portfolio"), dict)
+        else {}
+    )
+
+    source = "market_default"
+    if explicit_tickers:
+        source = "explicit_tickers"
+    elif saved_portfolio_context:
+        source = "saved_portfolio_default"
+
+    influence: Dict[str, Any] = {
+        "mode": "portfolio_aware" if saved_portfolio_context else "market_wide",
+        "portfolio_applied": bool(saved_portfolio_context),
+        "source": source,
+        "requested_tickers": explicit_tickers,
+        "effective_tickers": effective_tickers,
+    }
+    portfolio_id = _safe_text(portfolio.get("id"), "")
+    if portfolio_id:
+        influence["portfolio_id"] = portfolio_id
+    portfolio_state = portfolio.get("state") if isinstance(portfolio.get("state"), dict) else {}
+    if portfolio_state:
+        influence["portfolio_state"] = {
+            field_name: portfolio_state[field_name]
+            for field_name in ("horizon", "conviction", "risk_tolerance")
+            if portfolio_state.get(field_name) is not None
+        }
+    return influence
+
+
+def _normalize_weight_percent_map(raw_weights: Any) -> Dict[str, float]:
+    if not isinstance(raw_weights, dict):
+        return {}
+
+    normalized: Dict[str, float] = {}
+    numeric_values: List[float] = []
+    for raw_key, raw_value in raw_weights.items():
+        key = _safe_text(raw_key).upper()
+        if not key:
+            continue
+        try:
+            value = float(raw_value)
+        except Exception:
+            continue
+        if value < 0:
+            continue
+        normalized[key] = value
+        numeric_values.append(value)
+
+    if not normalized:
+        return {}
+
+    scale = 100.0 if sum(numeric_values) <= 1.5 else 1.0
+    return {
+        key: round(value * scale, 2)
+        for key, value in normalized.items()
+    }
+
+
+def _extract_drift_threshold_pct(guardrails: Any) -> Optional[float]:
+    if not isinstance(guardrails, list):
+        return None
+
+    for item in guardrails:
+        text = _safe_text(item).lower()
+        if "drift" not in text:
+            continue
+        match = re.search(r"(\d+(?:\.\d+)?)\s*%", text)
+        if match:
+            try:
+                return float(match.group(1))
+            except Exception:
+                return None
+    return None
+
+
+def _extract_concentration_threshold_pct(guardrails: Any) -> Optional[float]:
+    if not isinstance(guardrails, list):
+        return None
+
+    for item in guardrails:
+        text = _safe_text(item).lower()
+        if "concentration" not in text:
+            continue
+        match = re.search(r"(\d+(?:\.\d+)?)\s*%", text)
+        if match:
+            try:
+                return float(match.group(1))
+            except Exception:
+                return None
+    return None
+
+
+def _build_regime_detection_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+    confidence = float(payload.get("confidence") or 0.0)
+    key_drivers = payload.get("key_drivers") if isinstance(payload.get("key_drivers"), list) else []
+    return {
+        "label": _safe_text(payload.get("regime"), "NORMAL"),
+        "confidence": round(confidence, 2),
+        "confidence_pct": round(confidence * 100.0, 1),
+        "threshold_reason": _safe_text(key_drivers[0], "Balanced market conditions") if key_drivers else "Balanced market conditions",
+        "source": _normalize_source_list(
+            metadata.get("sources"),
+            "copilot_context_regime_detection",
+        ),
+        "generated_at": _safe_text(metadata.get("generated_at"), utc_now_iso()),
+    }
+
+
+def _build_allocation_drift_alerts(
+    *,
+    playbook_context: Optional[Dict[str, Any]] = None,
+    saved_portfolio_context: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    playbook_context = playbook_context if isinstance(playbook_context, dict) else {}
+    saved_portfolio_context = saved_portfolio_context if isinstance(saved_portfolio_context, dict) else {}
+
+    guardrails = playbook_context.get("guardrails") if isinstance(playbook_context.get("guardrails"), list) else []
+    weights = _normalize_weight_percent_map(saved_portfolio_context.get("weights"))
+    if not weights:
+        return {
+            "active": False,
+            "alerts": [],
+            "warning": "saved_portfolio_weights_unavailable",
+        }
+
+    alerts: List[Dict[str, Any]] = []
+    concentration_threshold = _extract_concentration_threshold_pct(guardrails)
+    if concentration_threshold is not None:
+        symbol, weight_pct = max(weights.items(), key=lambda item: item[1])
+        if weight_pct > concentration_threshold:
+            alerts.append(
+                {
+                    "id": "largest_position_concentration",
+                    "severity": "high" if weight_pct - concentration_threshold >= 5 else "medium",
+                    "symbol": symbol,
+                    "current_weight_pct": round(weight_pct, 2),
+                    "threshold_pct": round(concentration_threshold, 2),
+                    "reason": (
+                        f"{symbol} is {weight_pct:.2f}% of saved weights, above the "
+                        f"{concentration_threshold:.2f}% playbook guardrail."
+                    ),
+                }
+            )
+
+    drift_threshold = _extract_drift_threshold_pct(guardrails)
+    if drift_threshold is not None and len(weights) > 1:
+        equal_weight_pct = round(100.0 / len(weights), 2)
+        symbol, weight_pct = max(
+            weights.items(),
+            key=lambda item: abs(item[1] - equal_weight_pct),
+        )
+        drift_pct = round(abs(weight_pct - equal_weight_pct), 2)
+        if drift_pct > drift_threshold:
+            alerts.append(
+                {
+                    "id": "equal_weight_rebalance_watch",
+                    "severity": "medium",
+                    "symbol": symbol,
+                    "current_weight_pct": round(weight_pct, 2),
+                    "reference_weight_pct": equal_weight_pct,
+                    "threshold_pct": round(drift_threshold, 2),
+                    "reason": (
+                        f"{symbol} deviates {drift_pct:.2f} pts from an equal-weight "
+                        f"baseline, above the {drift_threshold:.2f}% rebalance guardrail."
+                    ),
+                }
+            )
+
+    return {
+        "active": bool(alerts),
+        "alerts": alerts,
+        "weights_analyzed": weights,
+        "guardrails": guardrails,
+    }
 
 
 def _format_saved_portfolio_prompt(portfolio_context: Optional[Dict[str, Any]]) -> str:
@@ -1025,7 +1426,7 @@ def _finalize_ask_payload(payload: Dict[str, Any], *, default_source: str = "cop
         payload.setdefault("risk_flag", str(risk_level or "").lower() in {"high", "critical"})
         payload.setdefault("source", [default_source])
 
-    return payload
+    return normalize_ask_payload_contract(payload)
 
 async def build_ask_payload(
     *,
@@ -1140,21 +1541,43 @@ async def build_ask_payload(
         )
 
         parsed = _extract_json_from_text(str(llm_response.get("answer") or ""))
+        parsed_payload = parsed if isinstance(parsed, dict) else {}
         confidence = _resolve_payload_confidence(
-            parsed_payload=parsed if isinstance(parsed, dict) else None,
+            parsed_payload=parsed_payload or None,
             llm_response=llm_response,
             has_min_sources=has_min_sources,
             has_quality_model=has_quality_model,
         )
-        parsed_answer = _safe_text((parsed or {}).get("answer") if isinstance(parsed, dict) else "")
-        parsed_reasoning = _extract_reasoning((parsed or {}).get("reasoning", "")) if isinstance(parsed, dict) else []
-        parsed_action = _coerce_verdict(_safe_text((parsed or {}).get("action") or (parsed or {}).get("verdict")))
-        final_answer = parsed_answer or str(llm_response.get("answer") or "").strip()
+        parsed_answer = _safe_text(parsed_payload.get("answer"), "")
+        parsed_reasoning_source = parsed_payload.get("why")
+        if parsed_reasoning_source is None:
+            parsed_reasoning_source = parsed_payload.get("reasoning", "")
+        parsed_reasoning = _extract_reasoning(parsed_reasoning_source) if parsed_payload else []
+        parsed_action = _coerce_verdict(_safe_text(parsed_payload.get("action") or parsed_payload.get("verdict")))
+        parsed_horizon = parsed_payload.get("horizon") or parsed_payload.get("time_horizon")
+        parsed_risks = parsed_payload.get("risks")
+        parsed_next_steps = parsed_payload.get("next_steps")
+        parsed_invalidation = parsed_payload.get("invalidation")
+        parsed_risk = parsed_payload.get("risk") if isinstance(parsed_payload.get("risk"), dict) else {}
+        parsed_risk_caveat = _safe_text(
+            parsed_payload.get("risk_caveat") or parsed_risk.get("caveat"),
+            "",
+        )
 
-        reasoning = parsed_reasoning or _extract_reasoning(final_answer)
-        action = parsed_action or _coerce_verdict(final_answer)
+        raw_answer = str(llm_response.get("answer") or "").strip()
+        answer_seed = parsed_answer or raw_answer
+        reasoning = parsed_reasoning or _extract_reasoning(answer_seed)
+        action = parsed_action or _coerce_verdict(answer_seed)
+        if parsed_answer:
+            final_answer = parsed_answer
+        elif reasoning:
+            final_answer = " ".join(reasoning)
+        else:
+            final_answer = raw_answer
 
         risk_fragments = []
+        if parsed_risk_caveat:
+            risk_fragments.append(parsed_risk_caveat)
         if not has_min_sources:
             risk_fragments.append("Sources insuffisantes (moins de 2).")
         if not has_quality_model:
@@ -1163,7 +1586,7 @@ async def build_ask_payload(
             risk_fragments.append("Confiance marché faible.")
         risk_caveat = " ".join(risk_fragments) or "Contexte marché et sources disponibles."
         risk_level = _derive_risk_level(
-            parsed_payload=parsed if isinstance(parsed, dict) else None,
+            parsed_payload=parsed_payload or None,
             market_context_payload=market_context_payload,
             confidence=confidence,
         )
@@ -1173,8 +1596,12 @@ async def build_ask_payload(
             "answer": final_answer,
             "action": action,
             "verdict": action,
+            "horizon": parsed_horizon,
             "reasoning": reasoning,
-            "why": reasoning,
+            "why": parsed_payload.get("why") or reasoning,
+            "risks": parsed_risks,
+            "next_steps": parsed_next_steps,
+            "invalidation": parsed_invalidation,
             "risk": {"level": risk_level, "caveat": risk_caveat},
             "risk_level": risk_level,
             "risk_caveat": risk_caveat,
@@ -1189,6 +1616,12 @@ async def build_ask_payload(
                 "min_sources_2": has_min_sources,
                 "quality_threshold": has_quality_model,
             },
+            "context_influence": _build_context_influence(
+                requested_scope=scope,
+                requested_tickers=tickers,
+                resolved_scope=resolved_scope,
+                saved_portfolio_context=saved_portfolio_context,
+            ),
         }
         if saved_portfolio_context:
             response_payload["portfolio_context"] = saved_portfolio_context
@@ -1246,6 +1679,11 @@ async def build_context_payload(context_service_cls: Optional[Any] = None, scope
         payload["scope_tickers"] = _normalize_tickers(resolved_scope.get("tickers"))
     if saved_portfolio_context:
         payload["portfolio_context"] = saved_portfolio_context
+    payload["context_influence"] = _build_context_influence(
+        requested_scope=scope,
+        resolved_scope=resolved_scope,
+        saved_portfolio_context=saved_portfolio_context,
+    )
     
     # Enrich with strategy playbook (BATCH-15-DEV-02)
     # Extract regime and risk profile from context for playbook resolution
@@ -1268,6 +1706,12 @@ async def build_context_payload(context_service_cls: Optional[Any] = None, scope
         # Non-blocking: playbook enrichment is optional
         payload["playbook_id"] = None
         payload["playbook_warning"] = f"Playbook resolution unavailable: {str(e)}"
+
+    payload["regime_detection"] = _build_regime_detection_payload(payload)
+    payload["allocation_drift_alerts"] = _build_allocation_drift_alerts(
+        playbook_context=payload.get("playbook_context"),
+        saved_portfolio_context=saved_portfolio_context,
+    )
     
     payload["daily_brief"] = _load_daily_brief_payload()
     payload["entry_points"] = _build_copilot_entry_points(resolved_scope)
