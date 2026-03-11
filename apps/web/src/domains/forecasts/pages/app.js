@@ -3641,9 +3641,9 @@ function buildCopilotChatResponseHtml(payload) {
   const degradedHtml = memoDegraded
     ? `<p style="margin-top: 8px; color: #FBBF24;"><strong>Degraded:</strong> ${escapeHtml(memoDegradedReason || 'This memo is using partial backend context.')}</p>`
     : '';
-  const sourceLabels = payload.dataSources
+  const sourceLabels = toArray(payload.dataSources, [])
     .slice(0, 3)
-    .map((source) => escapeHtml(toString(source.label, 'Source')))
+    .map((source) => escapeHtml(toString(isObject(source) ? source.label : source, 'Source')))
     .join(', ');
   const updatedAt = toString(memo.freshness || payload.generatedAt, '');
   const updated = updatedAt ? escapeHtml(formatRelativeTime(updatedAt)) : 'just now';
@@ -3691,6 +3691,14 @@ function buildCopilotChatResponseHtml(payload) {
   const contextHtml = contextInfluence
     ? `<p style="margin-top: 8px; font-size: 12px; color: #94A3B8;"><strong>Context:</strong> ${contextMode}${contextInfluence.portfolioApplied ? ' • saved portfolio applied' : ''}${contextTickers ? ` • focus ${contextTickers}` : ''}${contextSource ? ` • source ${contextSource}` : ''}</p>`
     : '';
+  const metadataBadges = [
+    updatedAt ? `Freshness: ${updated}` : '',
+    sourceLabels ? `Sources: ${sourceLabels}` : '',
+    memoDegraded ? 'Degraded' : '',
+  ].filter(Boolean);
+  const metadataBadgesHtml = metadataBadges.length
+    ? `<div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">${metadataBadges.map((label) => `<span class="source-badge">${label}</span>`).join('')}</div>`
+    : '';
   const metadataParts = [
     `Model: ${model}`,
     `Sources: ${sourceLabels || 'Unavailable'}`,
@@ -3712,6 +3720,7 @@ function buildCopilotChatResponseHtml(payload) {
     ${riskHtml}
     ${degradedHtml}
     ${contextHtml}
+    ${metadataBadgesHtml}
     ${playbookHtml}
     ${conflictHtml}
     <p style="margin-top: 10px; font-size: 12px; color: #94A3B8;">${metadataParts}</p>

@@ -696,6 +696,44 @@ function loadRunCopilotStartOpen() {
   return { sandbox, overlay, calls };
 }
 
+function loadBuildCopilotChatResponseHtml() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractFunction(source, 'buildCopilotChatResponseHtml', '\n\nlet copilotContextRequest = null;');
+  const sandbox = {
+    console,
+    escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number : fallback;
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    formatRelativeTime(value) {
+      return value === '2026-03-10T10:00:00Z' ? '2 minutes ago' : 'just now';
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.buildCopilotChatResponseHtml = buildCopilotChatResponseHtml;`, sandbox, {
+    filename: 'app.js',
+  });
+  return sandbox;
+}
+
 function loadHydrateCopilotOverlayStart({
   getCopilotStart,
   getCopilotContext,
@@ -1934,6 +1972,43 @@ test('renderHeroCopilotBrief treats stale normalized brief status as degraded me
   assert.equal(elements.heroSuggestionChips.children[0].textContent, 'Regime: NEUTRAL');
   assert.equal(elements.heroSuggestionChips.children[1].textContent, 'Sources: brief_daily');
   assert.equal(elements.heroSuggestionChips.children[2].textContent, 'Degraded');
+});
+
+test('buildCopilotChatResponseHtml renders freshness, source, and degraded badges for normalized memo payloads', () => {
+  const sandbox = loadBuildCopilotChatResponseHtml();
+
+  const html = sandbox.buildCopilotChatResponseHtml({
+    consensus: 'BUY',
+    confidence: 71,
+    risk: { level: 'medium', caveat: 'CPI is the main near-term risk.' },
+    model: 'Copilot',
+    qualityStatus: 'degraded',
+    generatedAt: '2026-03-10T10:00:00Z',
+    why: ['Semis leadership remains intact.'],
+    dataSources: [{ label: 'judge_live' }],
+    contextInfluence: {
+      mode: 'portfolio_aware',
+      portfolioApplied: true,
+      effectiveTickers: ['NVDA', 'MSFT'],
+      source: 'saved_portfolio',
+    },
+    memo: {
+      summary: 'Leadership remains intact while breadth improves.',
+      regime: 'risk_on',
+      horizon: '1 week',
+      topOpportunities: ['NVDA relative strength'],
+      topRisks: ['CPI surprise'],
+      degraded: true,
+      degradedReason: 'partial_context',
+      freshness: '2026-03-10T10:00:00Z',
+    },
+  });
+
+  assert.match(html, /<span class="source-badge">Freshness: 2 minutes ago<\/span>/);
+  assert.match(html, /<span class="source-badge">Sources: judge_live<\/span>/);
+  assert.match(html, /<span class="source-badge">Degraded<\/span>/);
+  assert.match(html, /Context:<\/strong> portfolio aware • saved portfolio applied • focus NVDA, MSFT • source saved portfolio/);
+  assert.match(html, /Degraded:<\/strong> partial context/i);
 });
 
 test('app.js exposes runCopilotStartOpen for the static landing brief CTA', () => {
