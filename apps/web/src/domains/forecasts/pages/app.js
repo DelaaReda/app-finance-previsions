@@ -2897,25 +2897,38 @@ function renderMacroRegimeCardsWidget() {
   const contradictions = Array.isArray(consistency.pairs) ? consistency.pairs : [];
   const consistencyIcon = widget.querySelector('[data-role="macro-consistency-icon"]');
   const consistencyText = widget.querySelector('[data-role="macro-consistency-text"]');
+  const contradictionCount = toFiniteNumber(
+    consistency.contradiction_count,
+    contradictions.filter((item) => toString(item && item.status, '').trim().toLowerCase() === 'contradiction').length
+  );
+  const contradictionSummary = toString(
+    consistency.summary
+      || consistency.contradiction_summary
+      || (contradictions[0] && (contradictions[0].summary || contradictions[0].reason)),
+    ''
+  ).trim();
   if (consistencyIcon) {
     consistencyIcon.textContent = consistency.has_contradictions ? '!' : '✓';
     consistencyIcon.className = consistency.has_contradictions ? 'consistency-icon warning' : 'consistency-icon ok';
   }
   if (consistencyText) {
-    consistencyText.textContent = consistency.has_contradictions && contradictions.length
-      ? `Cross-level consistency: ${toString(contradictions[0].summary || contradictions[0].reason, 'Contradiction detected between macro layers')}`
+    consistencyText.textContent = consistency.has_contradictions
+      ? `Cross-level consistency: ${contradictionSummary || `${Math.max(1, contradictionCount)} contradiction${Math.max(1, contradictionCount) === 1 ? '' : 's'} detected between macro layers`}`
       : 'Cross-level consistency: All regimes aligned (no contradictions detected)';
   }
 
   const insightText = widget.querySelector('[data-role="macro-insight-text"]');
   if (insightText) {
     const narrative = isObject(payload.narrative) ? payload.narrative : {};
-    const confidenceAvg = levels.length
-      ? Math.round((levels.reduce((sum, level) => sum + toFiniteNumber(level.confidence, 0), 0) / levels.length) * 100)
-      : 0;
+    const hierarchyConfidence = Math.round(
+      toFiniteNumber(
+        payload.confidence,
+        payload.stats && payload.stats.hierarchy_confidence
+      ) * 100
+    );
     const summary = toString(narrative.summary, '').trim() || 'Macro hierarchy loaded from the live forecast engine.';
     const regimeBias = titleCase(narrative.regime_bias || narrative.regimeBias, '');
-    insightText.textContent = `${summary}${regimeBias ? ` Regime bias: ${regimeBias}.` : ''} Hierarchical model confidence: ${confidenceAvg}% average.`;
+    insightText.textContent = `${summary}${regimeBias ? ` Regime bias: ${regimeBias}.` : ''} Hierarchical model confidence: ${hierarchyConfidence}% aggregate.`;
   }
 
   const timestamp = widget.querySelector('[data-role="macro-timestamp"]');

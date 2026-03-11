@@ -1947,6 +1947,7 @@ test('renderMacroRegimeCardsWidget hydrates world continent country cards from l
 
   sandbox.liveDataMeta.macroRegimeHierarchy = {
     generated_at: '2026-03-11T10:00:00Z',
+    confidence: 0.58,
     levels: [
       {
         scope: 'world',
@@ -1980,6 +1981,8 @@ test('renderMacroRegimeCardsWidget hydrates world continent country cards from l
     ],
     consistency: {
       has_contradictions: true,
+      contradiction_count: 2,
+      contradiction_summary: '2 contradictions detected between macro layers',
       pairs: [{ summary: 'World risk-off conflicts with United States recovery' }],
     },
     narrative: {
@@ -2000,10 +2003,10 @@ test('renderMacroRegimeCardsWidget hydrates world continent country cards from l
   assert.equal(nodes.get('country:[data-role="macro-risks"]').textContent, 'Policy execution risk');
   assert.equal(consistencyIcon.textContent, '!');
   assert.equal(consistencyIcon.className, 'consistency-icon warning');
-  assert.equal(consistencyText.textContent, 'Cross-level consistency: World risk-off conflicts with United States recovery');
+  assert.equal(consistencyText.textContent, 'Cross-level consistency: 2 contradictions detected between macro layers');
   assert.match(insightText.textContent, /Macro hierarchy is mixed across the stack\./);
   assert.match(insightText.textContent, /Regime bias: Risk Off\./);
-  assert.match(insightText.textContent, /Hierarchical model confidence: 68% average\./);
+  assert.match(insightText.textContent, /Hierarchical model confidence: 58% aggregate\./);
   assert.equal(timestamp.textContent, 'Updated relative:2026-03-11T10:00:00Z');
 });
 
