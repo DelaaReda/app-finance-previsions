@@ -208,6 +208,16 @@ function testWidgetConflictVisibility() {
             'Widget should render conflict data'
         );
 
+        assert(
+            content.includes('renderPolicyGuardrail') && content.includes('playbook.policy_guardrails'),
+            'Widget should render personal policy guardrails from the playbook contract'
+        );
+
+        assert(
+            content.includes('playbook-policy-guardrail') && content.includes('Personal Policy Guardrail'),
+            'Widget should expose a policy guardrail panel'
+        );
+
         console.log('✅ Test 6 PASSED: Widget displays conflict visibility');
         return true;
     } catch (error) {

@@ -151,19 +151,58 @@ async function getExpectedReturn(ticker) {
 }
 
 /**
+ * Get policy guardrail indicator HTML for a ticker.
+ * Reuses the playbook payload instead of introducing a separate UI contract.
+ * @param {string} ticker - Stock ticker symbol
+ * @returns {Promise<string>} HTML policy indicator
+ */
+async function getPolicyGuardrailBadge(ticker) {
+  const playbook = await getPlaybookForTicker(ticker);
+
+  if (!playbook || !playbook.policy_guardrails || typeof playbook.policy_guardrails !== 'object') {
+    return '';
+  }
+
+  const guardrails = playbook.policy_guardrails;
+  const status = String(guardrails.status || 'ok').trim().toLowerCase();
+  const violationCount = Number.isFinite(guardrails.violation_count)
+    ? guardrails.violation_count
+    : 0;
+
+  if (status !== 'violated' && status !== 'review') {
+    return '';
+  }
+
+  const effectiveAction = String(guardrails.effective_action || playbook.decision || 'hold')
+    .trim()
+    .toUpperCase();
+  const badgeClass = status === 'violated' ? 'badge-policy-violated' : 'badge-policy-review';
+  const title = violationCount > 0
+    ? `Policy guardrail active: ${violationCount} issue(s), effective action ${effectiveAction}`
+    : `Policy guardrail active: effective action ${effectiveAction}`;
+
+  return `
+    <span class="playbook-badge ${badgeClass}" title="${title}">
+      🛡 ${effectiveAction}
+    </span>
+  `;
+}
+
+/**
  * Render the standard playbook markup used in ticker-based widgets.
  * Keeps badge/risk/return assembly in one place to avoid duplicate helpers.
  * @param {string} ticker - Stock ticker symbol
  * @returns {Promise<string>} Combined playbook markup
  */
 async function renderTickerPlaybookSummary(ticker) {
-  const [badgeHtml, riskHtml, returnHtml] = await Promise.all([
+  const [badgeHtml, policyHtml, riskHtml, returnHtml] = await Promise.all([
     getDecisionBadge(ticker),
+    getPolicyGuardrailBadge(ticker),
     getRiskIndicator(ticker),
     getExpectedReturn(ticker)
   ]);
 
-  return `${badgeHtml}${riskHtml}${returnHtml}`;
+  return `${badgeHtml}${policyHtml}${riskHtml}${returnHtml}`;
 }
 
 /**
@@ -193,6 +232,7 @@ window.PlaybookIntegration = {
   fetchPlaybooks,
   getPlaybookForTicker,
   getDecisionBadge,
+  getPolicyGuardrailBadge,
   getRiskIndicator,
   getExpectedReturn,
   renderTickerPlaybookSummary,

@@ -36,11 +36,13 @@ if (fs.existsSync(integrationPath)) {
   assert(content.includes('fetchPlaybooks'), 'Has fetchPlaybooks function');
   assert(content.includes('getPlaybookForTicker'), 'Has getPlaybookForTicker function');
   assert(content.includes('getDecisionBadge'), 'Has getDecisionBadge function');
+  assert(content.includes('getPolicyGuardrailBadge'), 'Has getPolicyGuardrailBadge function');
   assert(content.includes('getRiskIndicator'), 'Has getRiskIndicator function');
   assert(content.includes('getExpectedReturn'), 'Has getExpectedReturn function');
   assert(content.includes('renderTickerPlaybookSummary'), 'Has shared ticker summary renderer');
   assert(content.includes('window.getStrategyPlaybooks'), 'Uses window.getStrategyPlaybooks API');
   assert(content.includes('CACHE_TTL_MS'), 'Implements caching mechanism');
+  assert(content.includes('policy_guardrails'), 'Reads policy guardrail contract from playbooks');
 }
 
 // Test 2: Top Movers widget integration

@@ -229,6 +229,46 @@
         flex-wrap: wrap;
     }
 
+    .playbook-policy-guardrail {
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(251, 191, 36, 0.1);
+        border: 1px solid rgba(251, 191, 36, 0.2);
+    }
+
+    .playbook-policy-guardrail.violated {
+        background: rgba(248, 113, 113, 0.1);
+        border-color: rgba(248, 113, 113, 0.24);
+    }
+
+    .playbook-policy-title {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--color-text-tertiary);
+        margin-bottom: 6px;
+    }
+
+    .playbook-policy-status {
+        color: #FBBF24;
+        font-weight: 700;
+    }
+
+    .playbook-policy-guardrail.violated .playbook-policy-status {
+        color: #FCA5A5;
+    }
+
+    .playbook-policy-copy {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--color-text-secondary);
+    }
+
     .playbook-action-tag {
         padding: 4px 10px;
         background: rgba(59, 130, 246, 0.15);
@@ -365,6 +405,7 @@
         const returnClass = expectedReturn >= 0 ? 'positive' : 'negative';
         const returnSign = expectedReturn >= 0 ? '+' : '';
         const fusionHtml = renderForecastFusion(playbook.forecast_fusion);
+        const policyGuardrailHtml = renderPolicyGuardrail(playbook.policy_guardrails);
         
         const conflictsHtml = (playbook.conflicts || []).length > 0 ? `
             <div class="playbook-conflicts">
@@ -407,6 +448,7 @@
                 ` : ''}
 
                 ${fusionHtml}
+                ${policyGuardrailHtml}
 
                 ${playbook.recommended_actions && playbook.recommended_actions.length > 0 ? `
                     <div class="playbook-actions">
@@ -417,6 +459,38 @@
                 ` : ''}
 
                 ${conflictsHtml}
+            </div>
+        `;
+    }
+
+    function renderPolicyGuardrail(policyGuardrails) {
+        if (!policyGuardrails || typeof policyGuardrails !== 'object') {
+            return '';
+        }
+
+        const status = String(policyGuardrails.status || 'ok').trim().toLowerCase();
+        if (status !== 'violated' && status !== 'review') {
+            return '';
+        }
+
+        const effectiveAction = String(policyGuardrails.effective_action || 'hold').trim().toUpperCase();
+        const violationCount = Number.isFinite(policyGuardrails.violation_count)
+            ? policyGuardrails.violation_count
+            : 0;
+        const countCopy = violationCount > 0
+            ? `${violationCount} policy check${violationCount > 1 ? 's' : ''} triggered`
+            : 'Policy review required';
+
+        return `
+            <div class="playbook-policy-guardrail ${escapeHtml(status)}">
+                <div class="playbook-policy-title">
+                    <span>Personal Policy Guardrail</span>
+                    <span class="playbook-policy-status">${escapeHtml(effectiveAction)}</span>
+                </div>
+                <div class="playbook-policy-copy">
+                    ${escapeHtml(countCopy)}
+                    ${policyGuardrails.policy_version ? ` • version ${escapeHtml(policyGuardrails.policy_version)}` : ''}
+                </div>
             </div>
         `;
     }
