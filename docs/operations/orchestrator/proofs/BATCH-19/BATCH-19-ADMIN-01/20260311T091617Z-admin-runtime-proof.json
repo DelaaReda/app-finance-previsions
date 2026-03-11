@@ -1,0 +1,37 @@
+{
+  "task_id": "BATCH-19-ADMIN-01",
+  "stream_id": "BATCH-19",
+  "role": "admin",
+  "produced_at_utc": "2026-03-11T09:16:17Z",
+  "status": "UNBLOCKED_AFTER_RUNTIME_REPAIR",
+  "summary": "BATCH-19 runtime truth is restored. The explainability/source-traceability judge surface on :8050 is healthy, and monitor observability on :7779 recovered after hardening the monitor wrapper against connection-reset probes that previously aborted startup.",
+  "root_cause": "The monitor compatibility wrapper `scripts/monitor_server.py` treated a connection reset during its preflight self-probe as an unhandled exception. That left `scripts/monitor_server.py` exiting before binding :7779, so BATCH-19 had feature-local API health on :8050 but broken monitor observability for the required admin validation lane.",
+  "fix_applied": "Patched `scripts/monitor_server.py` so `_probe_monitor_up()` treats `OSError` subclasses such as `ConnectionResetError` as monitor-down instead of crashing. Added a focused regression test in `tests/test_monitor_server_wrapper.py`, then restarted the existing monitor entrypoint and re-ran the BATCH-19 probes.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-19/BATCH-19-ADMIN-01/20260311T091617Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=3 workboard_ready=0 admin_timeouts_recent=0 issues_records=4",
+    "monitor_status_lite": "PASS GET /api/status?lite=1 => health=OK",
+    "runtime_diagnostics_lite": "PASS GET /api/runtime-diagnostics?lite=1 => health=OK",
+    "judge_runtime": "PASS GET /api/judge?limit=1 => status=ok count=1 explainability.schema_version=judge_explainability_graph_v1 source_traceability[0].supporting_sources[*].link_status present",
+    "judge_contract_tests": "PASS 2 targeted pytest cases",
+    "wrapper_regression_test": "PASS connection-reset probe no longer aborts wrapper startup"
+  },
+  "files_touched": [
+    "scripts/monitor_server.py",
+    "tests/test_monitor_server_wrapper.py",
+    "docs/operations/orchestrator/proofs/BATCH-19/BATCH-19-ADMIN-01/20260311T091617Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "python3 -m pytest tests/test_monitor_server_wrapper.py apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -k 'probe_monitor_up_treats_connection_reset_as_down or weighted_source_traceability or invalid_source_links' -q -rA",
+    "bash scripts/monitor_contract_smoke.sh",
+    "python3 inline urllib probe for /api/status?lite=1 and /api/runtime-diagnostics?lite=1",
+    "curl -sS --max-time 30 'http://127.0.0.1:8050/api/judge?limit=1'"
+  ],
+  "commit_sha": "PENDING",
+  "architecture_check": "PASS: change stayed inside the existing monitor wrapper/runtime surface plus one focused regression test; no judge/web contract or orchestration-path widening.",
+  "vision_alignment": "PASS(BATCH-19): explainability graph and source traceability are now both feature-live on the canonical judge endpoint and observable through the runtime monitor required for planner merge.",
+  "recommended_next": "Planner can merge BATCH-19-ADMIN-01 after the commit is recorded and close BATCH-19 if no extra batch-local QA gate remains.",
+  "blocking_issue": "none"
+}

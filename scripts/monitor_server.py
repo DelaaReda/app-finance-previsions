@@ -60,7 +60,7 @@ def _probe_monitor_up(url: str, timeout_s: float = 1.5) -> bool:
     try:
         with urllib.request.urlopen(url, timeout=timeout_s) as resp:
             return 200 <= int(getattr(resp, "status", 0)) < 300
-    except (urllib.error.URLError, TimeoutError, ValueError):
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
         return False
 
 
