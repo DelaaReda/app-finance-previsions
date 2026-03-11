@@ -3698,6 +3698,49 @@ function applyLiveDashboardData(payload = {}) {
       }
     })
     : null;
+  const portfolioHealthRegimeDetection = isObject(copilotStart.regime_detection || copilotStart.regimeDetection)
+    ? (copilotStart.regime_detection || copilotStart.regimeDetection)
+    : null;
+  const portfolioHealthAllocationDriftAlerts = isObject(copilotStart.allocation_drift_alerts || copilotStart.allocationDriftAlerts)
+    ? (copilotStart.allocation_drift_alerts || copilotStart.allocationDriftAlerts)
+    : null;
+  const portfolioHealthDriftAlertRows = portfolioHealthAllocationDriftAlerts
+    ? toArray(portfolioHealthAllocationDriftAlerts.alerts, [])
+      .filter(isObject)
+      .map((alert) => ({
+        id: toString(alert.id, ''),
+        symbol: toString(alert.symbol || alert.ticker, '').trim().toUpperCase(),
+        severity: toString(alert.severity, '').trim().toLowerCase() || 'medium',
+        reason: toString(alert.reason, '').trim(),
+        thresholdPct: Math.max(0, Math.min(100, Math.round(toFiniteNumber(alert.threshold_pct || alert.thresholdPct, 0) * 10) / 10)),
+        currentWeightPct: Math.max(0, Math.min(100, Math.round(toFiniteNumber(alert.current_weight_pct || alert.currentWeightPct, 0) * 10) / 10)),
+        referenceWeightPct: Math.max(0, Math.min(100, Math.round(toFiniteNumber(alert.reference_weight_pct || alert.referenceWeightPct, 0) * 10) / 10)),
+      }))
+    : [];
+  const enrichedPortfolioHealth = mergedPortfolioHealth
+    ? {
+      ...mergedPortfolioHealth,
+      regimeDetection: portfolioHealthRegimeDetection
+        ? {
+          label: toString(portfolioHealthRegimeDetection.label || portfolioHealthRegimeDetection.regime, '').trim().toUpperCase(),
+          confidencePct: Math.max(0, Math.min(100, Math.round(toFiniteNumber(
+            portfolioHealthRegimeDetection.confidence_pct,
+            toFiniteNumber(portfolioHealthRegimeDetection.confidence, 0) * 100,
+          )))),
+          thresholdReason: toString(
+            portfolioHealthRegimeDetection.threshold_reason || portfolioHealthRegimeDetection.thresholdReason,
+            '',
+          ).replace(/_/g, ' ').trim(),
+        }
+        : (isObject(mergedPortfolioHealth.regimeDetection) ? mergedPortfolioHealth.regimeDetection : null),
+      allocationDriftAlerts: portfolioHealthAllocationDriftAlerts
+        ? {
+          active: !!portfolioHealthAllocationDriftAlerts.active,
+          alerts: portfolioHealthDriftAlertRows,
+        }
+        : (isObject(mergedPortfolioHealth.allocationDriftAlerts) ? mergedPortfolioHealth.allocationDriftAlerts : null),
+    }
+    : null;
   window.copilotStart = copilotStart;
   
   // Map story data from API (window.storyData set by apiConnector.js)
@@ -3711,7 +3754,7 @@ function applyLiveDashboardData(payload = {}) {
   
   appData = normalizeAppData({
     ...data,
-    ...(mergedPortfolioHealth ? { portfolioHealth: mergedPortfolioHealth } : {}),
+    ...(enrichedPortfolioHealth ? { portfolioHealth: enrichedPortfolioHealth } : {}),
     hero: {
       ...(isObject(data.hero) ? data.hero : {}),
       ...kpiSource,
@@ -6057,7 +6100,12 @@ function drawHealthGaugeCompact() {
       FALLBACK_APP_DATA.portfolioHealth.confidence,
     ))));
     const benchmark = toString(health.benchmark, FALLBACK_APP_DATA.portfolioHealth.benchmark);
-    profileConfidence.textContent = `${confidence}% confidence vs ${benchmark}`;
+    const regimeDetection = isObject(health.regimeDetection) ? health.regimeDetection : null;
+    const regimeLabel = toString(regimeDetection?.label, '').replace(/_/g, ' ').trim();
+    const regimeConfidence = Math.max(0, Math.min(100, Math.round(toFiniteNumber(regimeDetection?.confidencePct, 0))));
+    profileConfidence.textContent = regimeLabel
+      ? `Regime ${regimeLabel}${regimeConfidence ? ` • ${regimeConfidence}% confidence` : ''}`
+      : `${confidence}% confidence vs ${benchmark}`;
   }
 
   const stateSummary = document.getElementById('portfolioHealthStateSummary');
@@ -6067,7 +6115,12 @@ function drawHealthGaugeCompact() {
 
   const suggestionEl = document.getElementById('portfolioHealthSuggestion');
   if (suggestionEl) {
-    suggestionEl.textContent = `Suggestion: ${toString(health.suggestion, FALLBACK_APP_DATA.portfolioHealth.suggestion)}`;
+    const driftAlerts = isObject(health.allocationDriftAlerts) ? health.allocationDriftAlerts : null;
+    const primaryDriftAlert = driftAlerts && Array.isArray(driftAlerts.alerts) ? driftAlerts.alerts[0] : null;
+    const driftReason = toString(primaryDriftAlert?.reason, '').trim();
+    suggestionEl.textContent = driftReason
+      ? `Drift alert: ${driftReason}`
+      : `Suggestion: ${toString(health.suggestion, FALLBACK_APP_DATA.portfolioHealth.suggestion)}`;
   }
 
   const allocationLabel = document.getElementById('portfolioHealthAllocationLabel');
@@ -6546,6 +6599,17 @@ function toggleCollapse(button) {
 
 function renderPortfolioHealthFullDetails() {
   const health = isObject(appData.portfolioHealth) ? appData.portfolioHealth : {};
+  const regimeDetection = isObject(health.regimeDetection) ? health.regimeDetection : null;
+  const regimeLabel = toString(regimeDetection?.label, '').replace(/_/g, ' ').trim();
+  const regimeConfidence = Math.max(0, Math.min(100, Math.round(toFiniteNumber(regimeDetection?.confidencePct, 0))));
+  const regimeThresholdReason = toString(regimeDetection?.thresholdReason, '').trim();
+  const allocationDriftAlerts = isObject(health.allocationDriftAlerts) ? health.allocationDriftAlerts : null;
+  const primaryDriftAlert = allocationDriftAlerts && Array.isArray(allocationDriftAlerts.alerts)
+    ? allocationDriftAlerts.alerts[0]
+    : null;
+  const primaryDriftReason = toString(primaryDriftAlert?.reason, '').trim();
+  const driftThresholdPct = Math.max(0, Math.min(100, Math.round(toFiniteNumber(primaryDriftAlert?.thresholdPct, 0) * 10) / 10));
+  const driftCurrentWeightPct = Math.max(0, Math.min(100, Math.round(toFiniteNumber(primaryDriftAlert?.currentWeightPct, 0) * 10) / 10));
   const allocationProgress = Math.max(0, Math.min(100, Math.round(toFiniteNumber(
     health.allocationProgress,
     FALLBACK_APP_DATA.portfolioHealth.allocationProgress,
@@ -6595,7 +6659,10 @@ function renderPortfolioHealthFullDetails() {
 
   const riskSummary = document.getElementById('portfolioHealthFullRiskSummary');
   if (riskSummary) {
-    riskSummary.textContent = `Risk concentration: ${riskLabel} | Benchmark ${benchmark}`;
+    const regimeSummary = regimeLabel
+      ? ` | Regime ${regimeLabel}${regimeConfidence ? ` (${regimeConfidence}%)` : ''}`
+      : '';
+    riskSummary.textContent = `Risk concentration: ${riskLabel} | Benchmark ${benchmark}${regimeSummary}`;
   }
 
   const confidenceFill = document.getElementById('portfolioHealthFullConfidenceFill');
@@ -6616,7 +6683,7 @@ function renderPortfolioHealthFullDetails() {
 
   const primarySuggestionText = document.getElementById('portfolioHealthSuggestionPrimaryText');
   if (primarySuggestionText) {
-    primarySuggestionText.textContent = suggestion;
+    primarySuggestionText.textContent = primaryDriftReason || suggestion;
   }
 
   const secondarySuggestion = document.getElementById('portfolioHealthSuggestionSecondary');
@@ -6626,7 +6693,7 @@ function renderPortfolioHealthFullDetails() {
 
   const secondarySuggestionText = document.getElementById('portfolioHealthSuggestionSecondaryText');
   if (secondarySuggestionText) {
-    secondarySuggestionText.textContent = stateSummary;
+    secondarySuggestionText.textContent = regimeThresholdReason || stateSummary;
   }
 
   const tertiarySuggestion = document.getElementById('portfolioHealthSuggestionTertiary');
@@ -6636,7 +6703,9 @@ function renderPortfolioHealthFullDetails() {
 
   const tertiarySuggestionText = document.getElementById('portfolioHealthSuggestionTertiaryText');
   if (tertiarySuggestionText) {
-    tertiarySuggestionText.textContent = allocationLabel;
+    tertiarySuggestionText.textContent = driftThresholdPct > 0
+      ? `Drift threshold ${driftThresholdPct}%${driftCurrentWeightPct > 0 ? ` | Current ${driftCurrentWeightPct}%` : ''}`
+      : allocationLabel;
   }
 }
 

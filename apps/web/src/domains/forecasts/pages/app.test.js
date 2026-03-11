@@ -52,6 +52,10 @@ function loadApplyLiveDashboardData() {
     toString(value, fallback = '') {
       return typeof value === 'string' ? value : fallback;
     },
+    toFiniteNumber(value, fallback = 0) {
+      const normalized = Number(value);
+      return Number.isFinite(normalized) ? normalized : fallback;
+    },
     sanitizeTradeIdeas(value) {
       return Array.isArray(value) ? value : [];
     },
@@ -1632,6 +1636,8 @@ test('applyLiveDashboardData derives portfolio health from raw risk profile payl
     suggestion: 'Derived from raw risk profile',
     riskProfile: 'balanced',
     stateSummary: '1Y horizon | High conviction | Moderate risk',
+    regimeDetection: null,
+    allocationDriftAlerts: null,
   });
   assert.equal(sandbox.appData.portfolioRiskProfileFreshness, '2026-03-09T06:30:00Z');
   assert.equal(sandbox.liveDataMeta.generatedAt, '2026-03-09T07:00:00Z');
@@ -1676,9 +1682,65 @@ test('applyLiveDashboardData backfills portfolio health core fields from the raw
     riskProfile: 'balanced',
     stateSummary: '1Y horizon | High conviction | Moderate risk',
     overall: 91,
+    regimeDetection: null,
+    allocationDriftAlerts: null,
   });
   assert.equal(sandbox.appData.portfolioRiskProfileFreshness, '2026-03-09T06:30:00Z');
   assert.equal(sandbox.rendered, true);
+});
+
+test('applyLiveDashboardData enriches portfolio health with regime detection and allocation drift alerts from copilot start', () => {
+  const { sandbox } = loadApplyLiveDashboardData();
+
+  sandbox.applyLiveDashboardData({
+    generatedAt: '2026-03-11T08:05:00Z',
+    data: {
+      portfolioHealth: {
+        portfolioId: 'portfolio-123',
+        suggestion: 'Provided by API',
+      },
+      copilotStart: {
+        regime_detection: {
+          label: 'RISK_OFF',
+          confidence_pct: 81,
+          threshold_reason: 'Volatility regime and breadth deterioration',
+        },
+        allocation_drift_alerts: {
+          active: true,
+          alerts: [
+            {
+              id: 'largest_position_concentration',
+              symbol: 'NVDA',
+              severity: 'high',
+              reason: 'NVDA is 33.00% of saved weights, above the 25.00% playbook concentration proxy.',
+              threshold_pct: 25,
+              current_weight_pct: 33,
+            },
+          ],
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.appData.portfolioHealth.regimeDetection)), {
+    label: 'RISK_OFF',
+    confidencePct: 81,
+    thresholdReason: 'Volatility regime and breadth deterioration',
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.appData.portfolioHealth.allocationDriftAlerts)), {
+    active: true,
+    alerts: [
+      {
+        id: 'largest_position_concentration',
+        symbol: 'NVDA',
+        severity: 'high',
+        reason: 'NVDA is 33.00% of saved weights, above the 25.00% playbook concentration proxy.',
+        thresholdPct: 25,
+        currentWeightPct: 33,
+        referenceWeightPct: 0,
+      },
+    ],
+  });
 });
 
 test('applyLiveDashboardData hydrates the hero brief from live copilot_start data', () => {
@@ -2607,6 +2669,21 @@ test('renderPortfolioHealthFullDetails maps portfolio state and risk profile int
     stateSummary: '6M horizon | Medium conviction | High risk',
     suggestion: 'Trim NVDA position',
     status: 'degraded',
+    regimeDetection: {
+      label: 'RISK_OFF',
+      confidencePct: 81,
+      thresholdReason: 'Volatility regime and breadth deterioration',
+    },
+    allocationDriftAlerts: {
+      active: true,
+      alerts: [
+        {
+          thresholdPct: 25,
+          currentWeightPct: 33,
+          reason: 'NVDA is 33.00% of saved weights, above the 25.00% playbook concentration proxy.',
+        },
+      ],
+    },
   });
 
   sandbox.renderPortfolioHealthFullDetails();
@@ -2618,16 +2695,16 @@ test('renderPortfolioHealthFullDetails maps portfolio state and risk profile int
   assert.equal(elements.portfolioHealthFullRiskFill.textContent, 'High');
   assert.equal(elements.portfolioHealthFullProfileBadge.className, 'context-badge warning');
   assert.equal(elements.portfolioHealthFullProfileBadge.textContent, 'Risk Off');
-  assert.equal(elements.portfolioHealthFullRiskSummary.textContent, 'Risk concentration: High | Benchmark QQQ');
+  assert.equal(elements.portfolioHealthFullRiskSummary.textContent, 'Risk concentration: High | Benchmark QQQ | Regime RISK OFF (81%)');
   assert.equal(elements.portfolioHealthFullConfidenceFill.style.width, '61%');
   assert.equal(elements.portfolioHealthFullConfidenceFill.textContent, '61%');
   assert.equal(elements.portfolioHealthFullStateSummary.textContent, '6M horizon | Medium conviction | High risk');
   assert.equal(elements.portfolioHealthSuggestionPrimary.className, 'suggestion-item high');
-  assert.equal(elements.portfolioHealthSuggestionPrimaryText.textContent, 'Trim NVDA position');
+  assert.equal(elements.portfolioHealthSuggestionPrimaryText.textContent, 'NVDA is 33.00% of saved weights, above the 25.00% playbook concentration proxy.');
   assert.equal(elements.portfolioHealthSuggestionSecondary.className, 'suggestion-item medium');
-  assert.equal(elements.portfolioHealthSuggestionSecondaryText.textContent, '6M horizon | Medium conviction | High risk');
+  assert.equal(elements.portfolioHealthSuggestionSecondaryText.textContent, 'Volatility regime and breadth deterioration');
   assert.equal(elements.portfolioHealthSuggestionTertiary.className, 'suggestion-item high');
-  assert.equal(elements.portfolioHealthSuggestionTertiaryText.textContent, 'Largest saved weight: MSFT 70%');
+  assert.equal(elements.portfolioHealthSuggestionTertiaryText.textContent, 'Drift threshold 25% | Current 33%');
 });
 
 test('sanitizeCopilotStart preserves starter tickers and normalizes brief open targets', () => {
