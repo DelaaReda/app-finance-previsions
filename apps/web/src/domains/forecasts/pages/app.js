@@ -1283,6 +1283,7 @@ const DEFAULT_PERSONAL_POLICY_SETTINGS = Object.freeze({
   excludedTickers: [],
   blockedActions: [],
   maxRiskLevel: 'critical',
+  version: '',
   updatedAt: ''
 });
 
@@ -1300,6 +1301,7 @@ function normalizePersonalPolicySettings(policy) {
   const maxRiskLevel = toString(source.maxRiskLevel || source.max_risk_level, DEFAULT_PERSONAL_POLICY_SETTINGS.maxRiskLevel)
     .trim()
     .toLowerCase();
+  const version = toString(source.version || source.policyVersion || source.policy_version, '').trim();
   const updatedAt = toString(source.updatedAt || source.updated_at, '').trim();
 
   return {
@@ -1308,6 +1310,7 @@ function normalizePersonalPolicySettings(policy) {
     maxRiskLevel: PERSONAL_POLICY_RISK_LEVELS.has(maxRiskLevel)
       ? maxRiskLevel
       : DEFAULT_PERSONAL_POLICY_SETTINGS.maxRiskLevel,
+    version,
     updatedAt,
   };
 }
@@ -1326,9 +1329,11 @@ function loadStoredPersonalPolicySettings() {
 }
 
 function storePersonalPolicySettings(policy) {
+  const updatedAt = utcNowIso();
   const normalizedPolicy = normalizePersonalPolicySettings({
     ...policy,
-    updatedAt: utcNowIso(),
+    version: toString(policy?.version, '').trim() || updatedAt,
+    updatedAt,
   });
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
@@ -1357,6 +1362,9 @@ function renderPersonalPolicySettingsSummary(policy) {
       : 'Blocked: none',
     `Max risk: ${normalizedPolicy.maxRiskLevel.toUpperCase()}`,
   ];
+  if (normalizedPolicy.version) {
+    parts.push(`Version ${normalizedPolicy.version}`);
+  }
   if (normalizedPolicy.updatedAt) {
     parts.push(`Updated ${formatRelativeTime(normalizedPolicy.updatedAt)}`);
   }

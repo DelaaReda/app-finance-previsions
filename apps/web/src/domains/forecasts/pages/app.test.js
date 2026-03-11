@@ -3724,6 +3724,7 @@ test('personal policy settings normalize and persist a local editor draft', () =
     excludedTickers: ['TSLA', 'NVDA'],
     blockedActions: ['buy', 'sell'],
     maxRiskLevel: 'high',
+    version: '',
     updatedAt: '',
   });
 
@@ -3734,12 +3735,14 @@ test('personal policy settings normalize and persist a local editor draft', () =
   });
 
   assert.equal(stored.updatedAt, '2026-03-11T10:00:00Z');
+  assert.equal(stored.version, '2026-03-11T10:00:00Z');
 
   const loaded = sandbox.loadStoredPersonalPolicySettings();
   assert.deepEqual(JSON.parse(JSON.stringify(loaded)), {
     excludedTickers: ['MSFT'],
     blockedActions: ['hold'],
     maxRiskLevel: 'medium',
+    version: '2026-03-11T10:00:00Z',
     updatedAt: '2026-03-11T10:00:00Z',
   });
 });
@@ -3751,12 +3754,13 @@ test('personal policy settings summary renders the saved draft state', () => {
     excludedTickers: ['TSLA', 'QQQ'],
     blockedActions: ['buy'],
     maxRiskLevel: 'medium',
+    version: 'policy-2026-03-11T10:00:00Z',
     updatedAt: '2026-03-11T10:00:00Z',
   });
 
   assert.equal(
     sandbox.document.summaryNode.textContent,
-    'Excluded: TSLA, QQQ • Blocked: BUY • Max risk: MEDIUM • Updated just now'
+    'Excluded: TSLA, QQQ • Blocked: BUY • Max risk: MEDIUM • Version policy-2026-03-11T10:00:00Z • Updated just now'
   );
 });
 
