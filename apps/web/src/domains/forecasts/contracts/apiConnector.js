@@ -471,10 +471,74 @@ async function askCopilot(question, tickers) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, tickers, max_sources: 5 })
     });
-    return await response.json();
+    const payload = await response.json();
+    const data = getResponseData(payload);
+    const normalizedData = data && typeof data === 'object' ? { ...data } : {};
+    const memo = normalizeAskMemoPayload(
+      normalizedData.memo && typeof normalizedData.memo === 'object'
+        ? normalizedData.memo
+        : normalizedData
+    );
+
+    return {
+      ...payload,
+      data: {
+        ...normalizedData,
+        memo,
+        answer: normalizedData.answer || memo.summary || normalizedData.reasoning || '',
+        reasoning: normalizedData.reasoning || normalizedData.why || memo.main_reasons || [],
+        verdict: normalizedData.verdict || normalizedData.action || memo.verdict || '',
+        confidence: normalizedData.confidence ?? memo.confidence,
+        risk_level: normalizedData.risk_level || normalizedData.riskLevel || memo.risk_level || (memo.risk && memo.risk.level) || '',
+        risk_caveat: normalizedData.risk_caveat || memo.risk_caveat || (memo.risk && memo.risk.caveat) || '',
+        sources: Array.isArray(normalizedData.sources) && normalizedData.sources.length ? normalizedData.sources : memo.sources,
+        freshness: normalizedData.freshness || memo.freshness || normalizedData.generated_at || '',
+        generated_at: normalizedData.generated_at || normalizedData.generatedAt || memo.generated_at || memo.freshness || '',
+        quality_status: normalizedData.quality_status || normalizedData.qualityStatus || (memo.degraded ? 'degraded' : ''),
+        degraded_reason: normalizedData.degraded_reason || normalizedData.degradedReason || memo.degraded_reason || memo.degradedReason || '',
+        context_influence: normalizedData.context_influence || normalizedData.contextInfluence || null,
+        contextInfluence: normalizedData.contextInfluence || normalizedData.context_influence || null
+      }
+    };
   } catch (error) {
     return { data: { answer: 'Service temporarily unavailable', sources: [] } };
   }
+}
+
+function normalizeAskMemoPayload(payload) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  if (!Object.keys(source).length) {
+    return {};
+  }
+
+  const topOpportunities = normalizeConnectorStringList(
+    source.top_opportunities || source.topOpportunities || source.opportunities || source.top_signals || source.signals
+  );
+  const topRisks = normalizeConnectorStringList(source.top_risks || source.topRisks || source.risks);
+  const mainReasons = normalizeConnectorStringList(
+    source.main_reasons || source.mainReasons || source.reasons || source.drivers || source.why
+  );
+  const sources = normalizeConnectorSourceList(source.sources || source.source);
+  const freshness = source.freshness || source.generated_at || source.generatedAt || '';
+
+  return {
+    ...source,
+    summary: source.summary || source.answer || source.thesis || source.overview || '',
+    verdict: source.verdict || source.action || source.recommendation || '',
+    market_regime: source.market_regime || source.marketRegime || source.regime || '',
+    horizon: source.horizon || '',
+    top_opportunities: topOpportunities,
+    top_risks: topRisks,
+    main_reasons: mainReasons,
+    next_steps: normalizeConnectorStringList(source.next_steps || source.nextSteps),
+    invalidation: normalizeConnectorStringList(source.invalidation),
+    freshness,
+    generated_at: source.generated_at || source.generatedAt || freshness || '',
+    sources,
+    source: sources,
+    degraded: source.degraded === true,
+    degraded_reason: source.degraded_reason || source.degradedReason || ''
+  };
 }
 
 async function searchUniverse(query, options) {
@@ -678,14 +742,18 @@ function transformOpportunities(payload) {
 }
 
 function transformBrief(payload) {
-  const payloadSummary = payload.summary || payload.message || payload.overview;
-  const sectorRotation = payload.sector_rotation || payload.sectorRotation || {};
+  const briefPayload = normalizeBriefOfDayPayload(payload);
+  const source = Object.keys(briefPayload).length
+    ? briefPayload
+    : (payload && typeof payload === 'object' ? payload : {});
+  const payloadSummary = source.summary || source.message || source.overview;
+  const sectorRotation = source.sector_rotation || source.sectorRotation || {};
   const topSectors = (Array.isArray(sectorRotation.top) ? sectorRotation.top : []).map((entry) => String(entry || '').trim()).filter(Boolean);
   const bottomSectors = (Array.isArray(sectorRotation.bottom) ? sectorRotation.bottom : []).map((entry) => String(entry || '').trim()).filter(Boolean);
   const summary = payloadSummary || 'Le marché reste actif avec une lecture mitigée.';
-  const headline = payload.title || payload.headline || 'Aperçu du marché';
-  const sentiment = payload.sentiment || 'neutral';
-  const timestamp = payload.generated_at || payload.generatedAt || payload.generated_at_iso || new Date().toISOString();
+  const headline = source.title || source.headline || 'Aperçu du marché';
+  const sentiment = source.market_regime || source.market_sentiment || source.regime || source.sentiment || 'neutral';
+  const timestamp = source.freshness || source.generated_at || source.generatedAt || source.generated_at_iso || new Date().toISOString();
   const rotationText = [];
   if (topSectors.length > 0) {
     rotationText.push(`Top secteurs : ${topSectors.slice(0, 3).join(' · ')}`);
@@ -701,7 +769,65 @@ function transformBrief(payload) {
     timestamp,
     sectorRotationTop: topSectors,
     sectorRotationBottom: bottomSectors,
-    sectorRotationSummary: rotationText.join(' | ')
+    sectorRotationSummary: rotationText.join(' | '),
+    sources: normalizeConnectorSourceList(source.sources || source.source),
+    degraded: source.degraded === true
+  };
+}
+
+function normalizeConnectorStringList(value) {
+  const values = Array.isArray(value)
+    ? value
+    : (typeof value === 'string' ? value.split(/[\n,]+/) : []);
+  return values
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
+}
+
+function normalizeConnectorSourceList(value) {
+  const values = Array.isArray(value)
+    ? value
+    : (value ? [value] : []);
+  return values.filter((entry) => entry !== null && entry !== undefined && entry !== '');
+}
+
+function normalizeBriefOfDayPayload(payload) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  if (!Object.keys(source).length) {
+    return {};
+  }
+
+  const marketRegime = String(
+    source.market_regime
+      || source.marketRegime
+      || source.market_sentiment
+      || source.marketSentiment
+      || source.regime
+      || source.sentiment
+      || ''
+  ).trim().toUpperCase();
+  const topOpportunities = normalizeConnectorStringList(
+    source.top_opportunities || source.topOpportunities || source.top_signals || source.topSignals || source.signals
+  );
+  const topRisks = normalizeConnectorStringList(source.top_risks || source.topRisks || source.risks);
+  const sources = normalizeConnectorSourceList(source.sources || source.source);
+  const freshness = source.freshness || source.generated_at || source.generatedAt || '';
+  const degraded = source.degraded === true || normalizeFreshnessStatus(source.status) === 'degraded';
+
+  return {
+    ...source,
+    summary: source.summary || source.message || source.overview || '',
+    market_regime: marketRegime || String(source.market_regime || '').trim().toUpperCase(),
+    market_sentiment: marketRegime || String(source.market_sentiment || source.sentiment || '').trim().toUpperCase(),
+    regime: marketRegime || String(source.regime || '').trim().toUpperCase(),
+    top_opportunities: topOpportunities,
+    top_signals: topOpportunities,
+    top_risks: topRisks,
+    freshness,
+    generated_at: source.generated_at || source.generatedAt || freshness || new Date().toISOString(),
+    sources,
+    source: sources,
+    degraded,
   };
 }
 
@@ -743,9 +869,10 @@ function transformCopilotStart(payload, fallbackPayload = null) {
         target: normalizeCopilotOpenTarget(item.target, item.id)
       }))
       .filter((item) => item.target);
+  const resolvedBrief = Object.keys(briefOfDay).length ? briefOfDay : fallbackBrief;
 
   return {
-    brief_of_day: Object.keys(briefOfDay).length ? briefOfDay : fallbackBrief,
+    brief_of_day: normalizeBriefOfDayPayload(resolvedBrief),
     ask: normalizedAsk,
     open: normalizedOpen
   };

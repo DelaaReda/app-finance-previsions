@@ -1320,7 +1320,9 @@ const FALLBACK_COPILOT_START = {
   brief_of_day: {
     title: 'Brief of the day',
     summary: 'No daily brief available yet.',
+    market_regime: 'UNKNOWN',
     market_sentiment: 'UNKNOWN',
+    top_opportunities: [],
     top_signals: [],
     top_risks: [],
     macro_signals: [],
@@ -1330,7 +1332,9 @@ const FALLBACK_COPILOT_START = {
     },
     generated_at: '',
     freshness: '',
-    source: ['brief_daily_fallback']
+    source: ['brief_daily_fallback'],
+    sources: ['brief_daily_fallback'],
+    degraded: false
   },
   ask: [
     {
@@ -1616,7 +1620,8 @@ function normalizeReasoning(value) {
 }
 
 function normalizeCopilotSources(value) {
-  return toArray(value, []).map((source) => {
+  const sources = Array.isArray(value) ? value : (value ? [value] : []);
+  return sources.map((source) => {
     if (!isObject(source)) {
       return {
         label: toString(source, 'Source'),
@@ -1631,24 +1636,42 @@ function normalizeCopilotSources(value) {
   });
 }
 
+function normalizeCopilotSourceLabels(value) {
+  const sources = Array.isArray(value) ? value : (value ? [value] : []);
+  return sources
+    .map((source) => {
+      if (isObject(source)) {
+        return toString(source.label || source.source || source.ticker || source.type || source.name, '').trim();
+      }
+      return toString(source, '').trim();
+    })
+    .filter((label) => label.length > 0);
+}
+
 function buildCopilotJudgePayload(raw) {
   if (!isObject(raw) && raw !== null) {
     return null;
   }
   const payload = raw && isObject(raw) ? raw : {};
   const data = isObject(payload.data) ? payload.data : payload;
-  const verdict = normalizeVerdict(data.verdict || data.action || data.recommendation, 'hold');
-  const confidence = formatConfidence(data.confidence, 0.35);
-  const rawRisk = isObject(data.risk) ? data.risk : {};
+  const memo = isObject(data.memo) ? data.memo : {};
+  const verdict = normalizeVerdict(
+    data.verdict || data.action || data.recommendation || memo.verdict || memo.action || memo.recommendation,
+    'hold'
+  );
+  const confidence = formatConfidence(data.confidence ?? memo.confidence, 0.35);
+  const rawRisk = isObject(data.risk) ? data.risk : (isObject(memo.risk) ? memo.risk : {});
   const riskLevel = toString(
     data.risk_level
       || data.riskLevel
+      || memo.risk_level
+      || memo.riskLevel
       || rawRisk.level
       || rawRisk.risk_level
       || (typeof data.risk === 'string' ? data.risk : ''),
     'medium'
   ).toLowerCase();
-  const riskCaveat = toString(data.risk_caveat || rawRisk.caveat || rawRisk.reason || '', '');
+  const riskCaveat = toString(data.risk_caveat || memo.risk_caveat || rawRisk.caveat || rawRisk.reason || '', '');
   const models = toArray(data.models, []).filter(isObject);
   const fallbackModel = {
     name: toString(data.model, 'Copilot'),
@@ -1666,23 +1689,64 @@ function buildCopilotJudgePayload(raw) {
       evidence: toString(item.evidence || item.reasoning || item.why || riskCaveat, '')
     }))
     : [fallbackModel];
-  const reasoning = normalizeReasoning(data.why || data.reasoning || data.answer || '');
-  const sources = normalizeCopilotSources(data.sources || data.citations);
+  const memoSummary = toString(
+    memo.summary || memo.answer || memo.thesis || data.answer || data.reasoning || data.why,
+    ''
+  );
+  const memoRegime = toString(memo.market_regime || memo.marketRegime || memo.regime, '').toUpperCase();
+  const memoHorizon = toString(memo.horizon || data.horizon, '').replace(/_/g, ' ').trim();
+  const memoOpportunities = normalizeCopilotStartList(
+    memo.top_opportunities || memo.topOpportunities || memo.opportunities || memo.top_signals || memo.signals
+  );
+  const memoRisks = normalizeCopilotStartList(memo.top_risks || memo.topRisks || memo.risks);
+  const memoFreshness = toString(
+    memo.freshness || memo.generated_at || memo.generatedAt || data.freshness || data.generated_at || data.generatedAt,
+    ''
+  );
+  const nextSteps = toArray(data.next_steps || data.nextSteps || memo.next_steps || memo.nextSteps, [])
+    .map((item) => toString(item, '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const invalidation = toArray(data.invalidation || memo.invalidation, [])
+    .map((item) => toString(item, '').trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const reasoning = normalizeReasoning(
+    data.why || data.reasoning || memo.main_reasons || memo.mainReasons || memo.reasons || memo.drivers || memoSummary
+  );
+  const sources = normalizeCopilotSources(data.sources || data.citations || memo.sources || memo.source);
   const requirementsMet = isObject(data.requirements_met || data.requirementsMet)
     ? (data.requirements_met || data.requirementsMet)
     : {};
-  const qualityStatus = toString(data.quality_status || data.qualityStatus, 'insufficient_sources');
+  const qualityStatus = toString(data.quality_status || data.qualityStatus, memo.degraded === true ? 'degraded' : 'insufficient_sources');
   const rawPlaybookContext = isObject(data.playbook_context || data.playbookContext)
     ? (data.playbook_context || data.playbookContext)
     : null;
   const rawConflictWarning = isObject(data.conflict_warning || data.conflictWarning)
     ? (data.conflict_warning || data.conflictWarning)
     : null;
+  const rawContextInfluence = isObject(data.context_influence || data.contextInfluence)
+    ? (data.context_influence || data.contextInfluence)
+    : null;
+  const contextInfluence = rawContextInfluence
+    ? {
+      mode: toString(rawContextInfluence.mode, 'market_wide'),
+      portfolioApplied: !!(rawContextInfluence.portfolio_applied ?? rawContextInfluence.portfolioApplied),
+      source: toString(rawContextInfluence.source, ''),
+      requestedTickers: normalizeCopilotStarterTickers(
+        rawContextInfluence.requested_tickers || rawContextInfluence.requestedTickers
+      ),
+      effectiveTickers: normalizeCopilotStarterTickers(
+        rawContextInfluence.effective_tickers || rawContextInfluence.effectiveTickers
+      ),
+      portfolioId: toString(rawContextInfluence.portfolio_id || rawContextInfluence.portfolioId, '')
+    }
+    : null;
 
   return {
     question: toString(data.question, 'Que faire avec votre portefeuille ?'),
     consensus: verdict.toUpperCase(),
-    answer: toString(data.answer || data.reasoning || data.why, ''),
+    answer: memoSummary || toString(data.answer || data.reasoning || data.why, ''),
     confidence,
     verdictClass: verdict,
     model: toString(data.model, 'Copilot'),
@@ -1700,15 +1764,18 @@ function buildCopilotJudgePayload(raw) {
     why: reasoning,
     reasoning: reasoning.length
       ? reasoning.join(' ')
-      : toString(data.answer, 'Analyse indisponible pour le moment, réessayez plus tard.'),
+      : (memoSummary || toString(data.answer, 'Analyse indisponible pour le moment, réessayez plus tard.')),
     dataSources: sources,
+    horizon: memoHorizon,
+    next_steps: nextSteps,
+    invalidation,
     suggestedActions: toArray(data.suggestedActions, FALLBACK_LLM_JUDGE_DATA.suggestedActions).map((action) => ({
       icon: toString(action.icon, '➡️'),
       title: toString(action.title, 'Action'),
       detail: toString(action.detail, ''),
       action: toString(action.action, 'setAlert')
     })),
-    generatedAt: toString(data.generated_at || data.generatedAt, ''),
+    generatedAt: memoFreshness || toString(data.generated_at || data.generatedAt, ''),
     playbook_id: toString(data.playbook_id || data.playbookId, ''),
     playbook_context: rawPlaybookContext
       ? {
@@ -1727,7 +1794,23 @@ function buildCopilotJudgePayload(raw) {
         signal: toString(rawConflictWarning.signal, ''),
         playbook_id: toString(rawConflictWarning.playbook_id || rawConflictWarning.playbookId, '')
       }
-      : null
+      : null,
+    contextInfluence,
+    memo: {
+      summary: memoSummary,
+      regime: memoRegime,
+      horizon: memoHorizon,
+      topOpportunities: memoOpportunities,
+      topRisks: memoRisks,
+      nextSteps,
+      invalidation,
+      degraded: memo.degraded === true || qualityStatus === 'degraded',
+      degradedReason: toString(
+        memo.degraded_reason || memo.degradedReason || data.degraded_reason || data.degradedReason,
+        ''
+      ),
+      freshness: memoFreshness
+    }
   };
 }
 
@@ -1875,6 +1958,14 @@ function sanitizeCopilotStart(payload) {
   const sectorRotation = isObject(briefSource.sector_rotation)
     ? briefSource.sector_rotation
     : (isObject(briefSource.sectorRotation) ? briefSource.sectorRotation : {});
+  const marketRegime = toString(
+    briefSource.market_regime
+      || briefSource.marketRegime
+      || briefSource.market_sentiment
+      || briefSource.sentiment
+      || briefSource.regime,
+    fallback.brief_of_day.market_regime
+  ).toUpperCase();
   const askItems = toArray(source.ask, fallback.ask)
     .slice(0, fallback.ask.length)
     .map((item, index) => {
@@ -1909,14 +2000,15 @@ function sanitizeCopilotStart(payload) {
     brief_of_day: {
       ...fallback.brief_of_day,
       ...briefSource,
-      title: toString(briefSource.title, fallback.brief_of_day.title),
-      summary: toString(briefSource.summary, fallback.brief_of_day.summary),
-      market_sentiment: toString(
-        briefSource.market_sentiment || briefSource.sentiment,
-        fallback.brief_of_day.market_sentiment
-      ).toUpperCase(),
-      top_signals: toArray(briefSource.top_signals, fallback.brief_of_day.top_signals),
-      top_risks: toArray(briefSource.top_risks, fallback.brief_of_day.top_risks),
+      title: toString(briefSource.title || briefSource.headline, fallback.brief_of_day.title),
+      summary: toString(briefSource.summary || briefSource.message || briefSource.overview, fallback.brief_of_day.summary),
+      market_regime: marketRegime,
+      market_sentiment: marketRegime,
+      top_opportunities: normalizeCopilotStartList(
+        briefSource.top_opportunities || briefSource.topOpportunities || briefSource.opportunities || briefSource.top_signals || briefSource.signals
+      ),
+      top_signals: normalizeCopilotStartList(briefSource.top_signals || briefSource.signals),
+      top_risks: normalizeCopilotStartList(briefSource.top_risks || briefSource.risks),
       macro_signals: toArray(briefSource.macro_signals, fallback.brief_of_day.macro_signals),
       sector_rotation: {
         top: toArray(sectorRotation.top, fallback.brief_of_day.sector_rotation.top),
@@ -1930,7 +2022,9 @@ function sanitizeCopilotStart(payload) {
         briefSource.freshness || briefSource.generated_at || briefSource.generatedAt,
         fallback.brief_of_day.freshness
       ),
-      source: toArray(briefSource.source, fallback.brief_of_day.source)
+      source: normalizeCopilotSourceLabels(briefSource.sources || briefSource.source || fallback.brief_of_day.source),
+      sources: normalizeCopilotSourceLabels(briefSource.sources || briefSource.source || fallback.brief_of_day.sources),
+      degraded: briefSource.degraded === true
     },
     ask: askItems.length ? askItems : fallback.ask,
     open: openItems.length ? openItems : fallback.open,
@@ -3494,21 +3588,65 @@ function buildCopilotChatResponseHtml(payload) {
   const riskLevel = escapeHtml(toString(payload.risk && payload.risk.level, 'medium'));
   const model = escapeHtml(toString(payload.model, 'Copilot'));
   const quality = escapeHtml(toString(payload.qualityStatus, 'insufficient_sources').replace(/_/g, ' '));
+  const memo = isObject(payload.memo) ? payload.memo : {};
+  const memoSummary = toString(memo.summary, '').trim();
+  const memoRegime = toString(memo.regime, '').replace(/_/g, ' ').trim();
+  const memoHorizon = toString(payload.horizon || memo.horizon, '').replace(/_/g, ' ').trim();
+  const memoOpportunities = toArray(memo.topOpportunities, []).slice(0, 3);
+  const memoRisks = toArray(memo.topRisks, []).slice(0, 3);
+  const memoNextSteps = toArray(payload.next_steps || payload.nextSteps || memo.nextSteps || memo.next_steps, [])
+    .map((item) => toString(item, '').trim())
+    .filter((item) => item.length > 0)
+    .slice(0, 3);
+  const memoInvalidation = toArray(payload.invalidation || memo.invalidation, [])
+    .map((item) => toString(item, '').trim())
+    .filter((item) => item.length > 0)
+    .slice(0, 3);
+  const memoDegraded = memo.degraded === true;
+  const memoDegradedReason = toString(memo.degradedReason || memo.degraded_reason, '')
+    .replace(/_/g, ' ')
+    .trim();
   const reasoning = toArray(payload.why, [])
     .map((line) => toString(line, '').trim())
     .filter((line) => line.length > 0)
     .slice(0, 3);
+  const reasoningText = reasoning.join(' ').trim();
   const reasoningHtml = reasoning.length
     ? reasoning.map((line, index) => `<p${index ? ' style="margin-top: 8px;"' : ''}>${escapeHtml(line)}</p>`).join('')
     : `<p>${escapeHtml(toString(payload.answer, 'Analysis unavailable for the moment.'))}</p>`;
+  const summaryHtml = memoSummary
+    ? `<p style="margin-top: 8px;">${escapeHtml(memoSummary)}</p>`
+    : '';
+  const regimeHtml = memoRegime
+    ? `<p style="margin-top: 8px;"><strong>Regime:</strong> ${escapeHtml(memoRegime)}</p>`
+    : '';
+  const horizonHtml = memoHorizon
+    ? `<p style="margin-top: 8px;"><strong>Horizon:</strong> ${escapeHtml(memoHorizon)}</p>`
+    : '';
+  const opportunitiesHtml = memoOpportunities.length
+    ? `<p style="margin-top: 8px;"><strong>Opportunities:</strong> ${memoOpportunities.map((item) => escapeHtml(toString(item, ''))).join(' • ')}</p>`
+    : '';
+  const topRisksHtml = memoRisks.length
+    ? `<p style="margin-top: 8px;"><strong>Risks:</strong> ${memoRisks.map((item) => escapeHtml(toString(item, ''))).join(' • ')}</p>`
+    : '';
+  const nextStepsHtml = memoNextSteps.length
+    ? `<p style="margin-top: 8px;"><strong>Next steps:</strong> ${memoNextSteps.map((item) => escapeHtml(item)).join(' • ')}</p>`
+    : '';
+  const invalidationHtml = memoInvalidation.length
+    ? `<p style="margin-top: 8px;"><strong>Invalidation:</strong> ${memoInvalidation.map((item) => escapeHtml(item)).join(' • ')}</p>`
+    : '';
   const riskHtml = payload.risk && payload.risk.caveat
     ? `<p style="margin-top: 8px;"><strong>Risk:</strong> ${escapeHtml(payload.risk.caveat)}</p>`
+    : '';
+  const degradedHtml = memoDegraded
+    ? `<p style="margin-top: 8px; color: #FBBF24;"><strong>Degraded:</strong> ${escapeHtml(memoDegradedReason || 'This memo is using partial backend context.')}</p>`
     : '';
   const sourceLabels = payload.dataSources
     .slice(0, 3)
     .map((source) => escapeHtml(toString(source.label, 'Source')))
     .join(', ');
-  const updated = payload.generatedAt ? escapeHtml(formatRelativeTime(payload.generatedAt)) : 'just now';
+  const updatedAt = toString(memo.freshness || payload.generatedAt, '');
+  const updated = updatedAt ? escapeHtml(formatRelativeTime(updatedAt)) : 'just now';
   const playbookId = payload.playbook_id ? escapeHtml(payload.playbook_id) : null;
   const playbookContext = payload.playbook_context && typeof payload.playbook_context === 'object'
     ? payload.playbook_context
@@ -3519,6 +3657,26 @@ function buildCopilotChatResponseHtml(payload) {
   const conflictWarning = payload.conflict_warning && typeof payload.conflict_warning === 'object'
     ? payload.conflict_warning
     : null;
+  const contextInfluence = payload.contextInfluence && typeof payload.contextInfluence === 'object'
+    ? payload.contextInfluence
+    : null;
+  const contextMode = contextInfluence
+    ? escapeHtml(
+      toString(contextInfluence.mode, 'market_wide')
+        .replace(/_/g, ' ')
+        .trim()
+    )
+    : '';
+  const contextTickers = contextInfluence
+    ? toArray(contextInfluence.effectiveTickers, [])
+      .map((ticker) => escapeHtml(toString(ticker, '').trim()))
+      .filter(Boolean)
+      .slice(0, 3)
+      .join(', ')
+    : '';
+  const contextSource = contextInfluence
+    ? escapeHtml(toString(contextInfluence.source, '').replace(/_/g, ' ').trim())
+    : '';
 
   const playbookHtml = playbookId
     ? `<div style="margin-top: 8px;">
@@ -3530,14 +3688,33 @@ function buildCopilotChatResponseHtml(payload) {
   const conflictHtml = conflictWarning && conflictWarning.detected
     ? `<p style="margin-top: 8px; color: #FCA5A5;"><strong>Conflict:</strong> ${escapeHtml(toString(conflictWarning.reason, 'Signal diverges from active playbook.'))}</p>`
     : '';
+  const contextHtml = contextInfluence
+    ? `<p style="margin-top: 8px; font-size: 12px; color: #94A3B8;"><strong>Context:</strong> ${contextMode}${contextInfluence.portfolioApplied ? ' • saved portfolio applied' : ''}${contextTickers ? ` • focus ${contextTickers}` : ''}${contextSource ? ` • source ${contextSource}` : ''}</p>`
+    : '';
+  const metadataParts = [
+    `Model: ${model}`,
+    `Sources: ${sourceLabels || 'Unavailable'}`,
+    `Quality: ${quality}`,
+    `Updated ${updated}`,
+    updatedAt ? `Freshness: ${updated}` : '',
+  ].filter(Boolean).join(' • ');
 
   return `
     <p><strong>${verdict}</strong> position • Confidence ${confidence}% • Risk ${riskLevel}</p>
-    ${reasoningHtml}
+    ${summaryHtml || reasoningHtml}
+    ${regimeHtml}
+    ${horizonHtml}
+    ${opportunitiesHtml}
+    ${topRisksHtml}
+    ${memoSummary && reasoning.length && reasoningText !== memoSummary ? `<div style="margin-top: 10px;">${reasoningHtml}</div>` : ''}
+    ${nextStepsHtml}
+    ${invalidationHtml}
     ${riskHtml}
+    ${degradedHtml}
+    ${contextHtml}
     ${playbookHtml}
     ${conflictHtml}
-    <p style="margin-top: 10px; font-size: 12px; color: #94A3B8;">Model: ${model} • Sources: ${sourceLabels || 'Unavailable'} • Quality: ${quality} • Updated ${updated}</p>
+    <p style="margin-top: 10px; font-size: 12px; color: #94A3B8;">${metadataParts}</p>
   `;
 }
 
@@ -3569,9 +3746,14 @@ function buildDefaultCopilotStartState() {
     brief: {
       title: 'Brief of the day',
       summary: 'No daily brief available yet.',
+      generatedAt: '',
       marketSentiment: 'UNKNOWN',
+      marketRegime: 'UNKNOWN',
+      topOpportunities: [],
       topSignals: [],
       topRisks: [],
+      sources: [],
+      degraded: false,
       freshness: new Date().toISOString()
     },
     ask: [
@@ -3700,17 +3882,38 @@ function buildCopilotStartState(raw) {
       : (isObject(data.daily_brief) ? data.daily_brief : {}));
   const ask = normalizeCopilotStartAsk(copilotStart.ask, scopeTickers);
   const open = normalizeCopilotStartOpen(copilotStart.open);
+  const marketRegime = toString(
+    briefSource.market_regime
+      || briefSource.marketRegime
+      || briefSource.market_sentiment
+      || briefSource.sentiment
+      || briefSource.regime,
+    fallback.brief.marketRegime
+  ).toUpperCase();
+  const topSignals = normalizeCopilotStartList(briefSource.top_signals || briefSource.signals);
+  const topOpportunities = normalizeCopilotStartList(
+    briefSource.top_opportunities || briefSource.topOpportunities || briefSource.opportunities || topSignals
+  );
+  const topRisks = normalizeCopilotStartList(briefSource.top_risks || briefSource.risks);
+  const sourceLabels = normalizeCopilotSourceLabels(briefSource.sources || briefSource.source);
+  const generatedAt = toString(
+    briefSource.generated_at || briefSource.generatedAt || briefSource.freshness,
+    fallback.brief.generatedAt
+  );
 
   return {
     brief: {
-      title: toString(briefSource.title, fallback.brief.title),
-      summary: toString(briefSource.summary, fallback.brief.summary),
-      marketSentiment: toString(
-        briefSource.market_sentiment || briefSource.sentiment,
-        fallback.brief.marketSentiment
-      ).toUpperCase(),
-      topSignals: normalizeCopilotStartList(briefSource.top_signals || briefSource.signals),
-      topRisks: normalizeCopilotStartList(briefSource.top_risks || briefSource.risks),
+      title: toString(briefSource.title || briefSource.headline, fallback.brief.title),
+      summary: toString(briefSource.summary || briefSource.message || briefSource.overview, fallback.brief.summary),
+      generatedAt,
+      marketSentiment: marketRegime || fallback.brief.marketSentiment,
+      marketRegime: marketRegime || fallback.brief.marketRegime,
+      topSignals,
+      topOpportunities,
+      topRisks,
+      sources: sourceLabels,
+      degraded: briefSource.degraded === true,
+      degradedReason: toString(briefSource.degraded_reason || briefSource.degradedReason, ''),
       freshness: toString(
         briefSource.freshness || briefSource.generated_at,
         fallback.brief.freshness
@@ -3724,21 +3927,34 @@ function buildCopilotStartState(raw) {
 function buildCopilotStartHtml(state) {
   const brief = state && isObject(state.brief) ? state.brief : buildDefaultCopilotStartState().brief;
   const title = escapeHtml(toString(brief.title, 'Brief of the day'));
-  const sentiment = escapeHtml(toString(brief.marketSentiment, 'UNKNOWN').replace(/_/g, ' '));
+  const sentiment = escapeHtml(toString(brief.marketRegime || brief.marketSentiment, 'UNKNOWN').replace(/_/g, ' '));
   const summary = escapeHtml(toString(brief.summary, 'No daily brief available yet.')).replace(/\n/g, '<br/>');
   const updated = escapeHtml(brief.freshness ? formatRelativeTime(brief.freshness) : 'just now');
   const signals = brief.topSignals.length
     ? `<p style="margin-top: 8px;"><strong>Signals:</strong> ${brief.topSignals.map((item) => escapeHtml(item)).join(' • ')}</p>`
     : '';
+  const opportunities = !brief.topSignals.length && brief.topOpportunities.length
+    ? `<p style="margin-top: 8px;"><strong>Opportunities:</strong> ${brief.topOpportunities.map((item) => escapeHtml(item)).join(' • ')}</p>`
+    : '';
   const risks = brief.topRisks.length
     ? `<p style="margin-top: 8px;"><strong>Risks:</strong> ${brief.topRisks.map((item) => escapeHtml(item)).join(' • ')}</p>`
     : '';
+  const degradedReason = escapeHtml(
+    toString(brief.degradedReason || brief.degraded_reason, '').replace(/_/g, ' ').trim()
+  );
+  const meta = [
+    sentiment !== 'UNKNOWN' ? `Regime ${sentiment}` : '',
+    brief.degraded ? `Fallback: ${degradedReason || 'Degraded context'}` : '',
+    brief.sources.length ? `Sources: ${brief.sources.slice(0, 2).map((item) => escapeHtml(item)).join(', ')}` : ''
+  ].filter(Boolean).join(' • ');
 
   return `
     <p><strong>${title}</strong> • ${sentiment} • Updated ${updated}</p>
     <p style="margin-top: 8px;">${summary}</p>
     ${signals}
+    ${opportunities}
     ${risks}
+    ${meta ? `<p style="margin-top: 8px; font-size: 12px; color: #94A3B8;">${meta}</p>` : ''}
   `;
 }
 
@@ -3924,12 +4140,29 @@ function resolveCopilotStartState(state) {
     return fallback;
   }
   if (isObject(state.brief)) {
+    const rawBrief = state.brief;
+    const topSignals = normalizeCopilotStartList(rawBrief.topSignals || rawBrief.top_signals);
+    const topRisks = normalizeCopilotStartList(rawBrief.topRisks || rawBrief.top_risks);
+    const topOpportunities = normalizeCopilotStartList(rawBrief.topOpportunities || rawBrief.top_opportunities);
+    const marketRegime = toString(
+      rawBrief.marketRegime || rawBrief.market_regime || rawBrief.marketSentiment || rawBrief.market_sentiment || rawBrief.regime,
+      fallback.brief.marketRegime
+    );
+    const sourceLabels = normalizeCopilotSourceLabels(rawBrief.sources || rawBrief.source);
     return {
       brief: {
         ...fallback.brief,
-        ...state.brief,
-        topSignals: normalizeCopilotStartList(state.brief.topSignals),
-        topRisks: normalizeCopilotStartList(state.brief.topRisks)
+        ...rawBrief,
+        marketSentiment: marketRegime,
+        marketRegime,
+        generatedAt: toString(rawBrief.generatedAt || rawBrief.generated_at, fallback.brief.generatedAt),
+        freshness: toString(rawBrief.freshness || rawBrief.generated_at || rawBrief.generatedAt, fallback.brief.freshness),
+        topSignals,
+        topRisks,
+        topOpportunities,
+        sources: sourceLabels,
+        degraded: rawBrief.degraded === true,
+        degradedReason: toString(rawBrief.degradedReason || rawBrief.degraded_reason, '')
       },
       ask: Array.isArray(state.ask) && state.ask.length ? state.ask : fallback.ask,
       open: Array.isArray(state.open) && state.open.length ? state.open : fallback.open
@@ -3973,10 +4206,16 @@ function renderHeroCopilotBrief(state) {
   }
 
   if (leadEl) {
-    const sentiment = toString(brief.marketSentiment, fallbackState.brief.marketSentiment).replace(/_/g, ' ');
-    leadEl.textContent = sentiment === 'UNKNOWN'
-      ? 'A 30-second portfolio memo before you dive deeper.'
-      : `A 30-second portfolio memo before you dive deeper. Tone: ${sentiment.toLowerCase()}.`;
+    const regime = toString(brief.marketRegime || brief.marketSentiment, fallbackState.brief.marketRegime).replace(/_/g, ' ');
+    const degradedReason = toString(brief.degradedReason || brief.degraded_reason, '').replace(/_/g, ' ').trim();
+    const leadParts = ['A 30-second portfolio memo before you dive deeper.'];
+    if (regime !== 'UNKNOWN') {
+      leadParts.push(`Regime: ${regime.toLowerCase()}.`);
+    }
+    if (brief.degraded === true) {
+      leadParts.push(`Fallback context${degradedReason ? `: ${degradedReason.toLowerCase()}` : ''}.`);
+    }
+    leadEl.textContent = leadParts.join(' ');
   }
 
   if (summaryEl) {
@@ -3985,11 +4224,22 @@ function renderHeroCopilotBrief(state) {
 
   if (timestampEl) {
     const freshness = toString(brief.freshness || brief.generated_at || brief.generatedAt, '');
-    timestampEl.textContent = `Updated ${freshness ? formatRelativeTime(freshness) : 'just now'}`;
+    const timestampParts = [`Updated ${freshness ? formatRelativeTime(freshness) : 'just now'}`];
+    if (brief.sources.length) {
+      timestampParts.push(`${brief.sources.length} source${brief.sources.length > 1 ? 's' : ''}`);
+    }
+    if (brief.degraded === true) {
+      timestampParts.push('degraded');
+    }
+    timestampEl.textContent = timestampParts.join(' • ');
   }
 
   if (signalsEl) {
-    const text = brief.topSignals.length ? `Signals: ${brief.topSignals.join(' • ')}` : '';
+    const signalItems = brief.topSignals.length
+      ? brief.topSignals
+      : normalizeCopilotStartList(brief.topOpportunities || brief.top_opportunities);
+    const signalLabel = brief.topSignals.length ? 'Signals' : 'Opportunities';
+    const text = signalItems.length ? `${signalLabel}: ${signalItems.join(' • ')}` : '';
     signalsEl.textContent = text;
     signalsEl.style.display = text ? 'block' : 'none';
   }
@@ -4025,6 +4275,20 @@ function renderHeroCopilotBrief(state) {
   if (suggestionRoot) {
     suggestionRoot.innerHTML = '';
     const primaryOpenId = toString(openItem && openItem.id, '');
+    const regime = toString(brief.marketRegime || brief.marketSentiment, fallbackState.brief.marketRegime).replace(/_/g, ' ');
+    const metadataLabels = [
+      regime !== 'UNKNOWN' ? `Regime: ${regime}` : '',
+      brief.sources.length ? `Sources: ${brief.sources.slice(0, 2).join(', ')}` : '',
+      brief.degraded === true ? 'Degraded' : ''
+    ].filter(Boolean).slice(0, 3);
+
+    metadataLabels.forEach((label) => {
+      const badge = document.createElement('span');
+      badge.className = 'suggestion-chip';
+      badge.textContent = label;
+      suggestionRoot.appendChild(badge);
+    });
+
     const suggestionItems = [
       ...askItems.slice(1).map((item) => ({
         label: toString(item.label, 'Ask copilot'),
@@ -4040,7 +4304,7 @@ function renderHeroCopilotBrief(state) {
             runCopilotStartOpen(item.target);
           }
         }))
-    ].slice(0, 3);
+    ].slice(0, Math.max(0, 3 - metadataLabels.length));
 
     suggestionItems.forEach((item) => {
       const chip = document.createElement('button');
@@ -4081,10 +4345,15 @@ function updateCopilotContextLabel(state) {
   const contextValue = document.getElementById('aiContextValue');
   if (!contextValue) return;
 
-  const sentiment = toString(state?.brief?.marketSentiment, 'UNKNOWN').replace(/_/g, ' ');
-  contextValue.textContent = sentiment === 'UNKNOWN'
-    ? 'Brief of the day'
-    : `Brief of the day • ${sentiment}`;
+  const regime = toString(state?.brief?.marketRegime || state?.brief?.marketSentiment, 'UNKNOWN').replace(/_/g, ' ');
+  const parts = ['Brief of the day'];
+  if (regime !== 'UNKNOWN') {
+    parts.push(regime);
+  }
+  if (state?.brief?.degraded === true) {
+    parts.push('degraded');
+  }
+  contextValue.textContent = parts.join(' • ');
 }
 
 async function hydrateCopilotOverlayStart() {
