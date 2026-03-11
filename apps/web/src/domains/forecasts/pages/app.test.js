@@ -857,6 +857,32 @@ function loadRenderHeroCopilotBriefWithHeroIds(resolvedState) {
         .map((item) => String(item || '').trim())
         .filter(Boolean);
     },
+    normalizeCopilotStartEventTiming(value) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+      const summary = typeof value.summary === 'string' ? value.summary.replace(/_/g, ' ').trim() : '';
+      const events = (Array.isArray(value.events) ? value.events : [])
+        .map((item) => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+          return {
+            eventType: typeof (item.eventType || item.event_type) === 'string'
+              ? String(item.eventType || item.event_type).replace(/_/g, ' ').trim()
+              : '',
+            dominantHorizon: typeof (item.dominantHorizon || item.dominant_horizon) === 'string'
+              ? String(item.dominantHorizon || item.dominant_horizon).replace(/_/g, ' ').trim()
+              : '',
+            interpretation: typeof item.interpretation === 'string' ? item.interpretation.trim() : '',
+          };
+        })
+        .filter((item) => item && (item.eventType || item.dominantHorizon || item.interpretation))
+        .slice(0, 2);
+      if (!summary && !events.length) return null;
+      return {
+        summary,
+        freshness: typeof value.freshness === 'string' ? value.freshness.trim() : '',
+        sourceLabels: sandbox.normalizeCopilotSourceLabels(value.sourceLabels || value.sources || value.source),
+        events,
+      };
+    },
     normalizeCopilotStarterTickers(value) {
       const seen = new Set();
       return (Array.isArray(value) ? value : [])
@@ -1456,6 +1482,32 @@ function loadRenderHeroCopilotBrief() {
       return (Array.isArray(value) ? value : value ? [value] : [])
         .map((item) => String(item || '').trim())
         .filter(Boolean);
+    },
+    normalizeCopilotStartEventTiming(value) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+      const summary = typeof value.summary === 'string' ? value.summary.replace(/_/g, ' ').trim() : '';
+      const events = (Array.isArray(value.events) ? value.events : [])
+        .map((item) => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+          return {
+            eventType: typeof (item.eventType || item.event_type) === 'string'
+              ? String(item.eventType || item.event_type).replace(/_/g, ' ').trim()
+              : '',
+            dominantHorizon: typeof (item.dominantHorizon || item.dominant_horizon) === 'string'
+              ? String(item.dominantHorizon || item.dominant_horizon).replace(/_/g, ' ').trim()
+              : '',
+            interpretation: typeof item.interpretation === 'string' ? item.interpretation.trim() : '',
+          };
+        })
+        .filter((item) => item && (item.eventType || item.dominantHorizon || item.interpretation))
+        .slice(0, 2);
+      if (!summary && !events.length) return null;
+      return {
+        summary,
+        freshness: typeof value.freshness === 'string' ? value.freshness.trim() : '',
+        sourceLabels: sandbox.normalizeCopilotSourceLabels(value.sourceLabels || value.sources || value.source),
+        events,
+      };
     },
     sendOverlayMessage() {
       promptCalls.push({
@@ -3058,6 +3110,11 @@ test('buildCopilotStartState normalizes brief event timing for copilot starter s
     },
     toString(value, fallback = '') {
       return typeof value === 'string' ? value : fallback;
+    },
+    normalizeCopilotSourceLabels(value) {
+      return (Array.isArray(value) ? value : value ? [value] : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
     },
   };
   sandbox.globalThis = sandbox;
