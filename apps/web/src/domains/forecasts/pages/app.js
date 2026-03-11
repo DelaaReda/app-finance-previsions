@@ -1730,6 +1730,9 @@ function buildCopilotJudgePayload(raw) {
   const rawConflictWarning = isObject(data.conflict_warning || data.conflictWarning)
     ? (data.conflict_warning || data.conflictWarning)
     : null;
+  const rawPolicyGuardrails = isObject(data.policy_guardrails || data.policyGuardrails)
+    ? (data.policy_guardrails || data.policyGuardrails)
+    : null;
   const rawContextInfluence = isObject(data.context_influence || data.contextInfluence)
     ? (data.context_influence || data.contextInfluence)
     : null;
@@ -1757,6 +1760,32 @@ function buildCopilotJudgePayload(raw) {
         rawContextInfluence.effective_tickers || rawContextInfluence.effectiveTickers
       ),
       portfolioId: toString(rawContextInfluence.portfolio_id || rawContextInfluence.portfolioId, '')
+    }
+    : null;
+  const policyGuardrails = rawPolicyGuardrails
+    ? {
+      status: toString(rawPolicyGuardrails.status, 'ok').trim().toLowerCase(),
+      policyId: toString(rawPolicyGuardrails.policy_id || rawPolicyGuardrails.policyId, '').trim(),
+      policyVersion: toString(rawPolicyGuardrails.policy_version || rawPolicyGuardrails.policyVersion, '').trim(),
+      originalAction: toString(rawPolicyGuardrails.original_action || rawPolicyGuardrails.originalAction, '').trim().toUpperCase(),
+      effectiveAction: toString(rawPolicyGuardrails.effective_action || rawPolicyGuardrails.effectiveAction, '').trim().toUpperCase(),
+      violationCount: Math.max(
+        0,
+        Math.round(
+          toFiniteNumber(
+            rawPolicyGuardrails.violation_count || rawPolicyGuardrails.violationCount,
+            toArray(rawPolicyGuardrails.violations, []).filter(isObject).length,
+          )
+        )
+      ),
+      violations: toArray(rawPolicyGuardrails.violations, [])
+        .filter(isObject)
+        .map((violation) => ({
+          code: toString(violation.code, '').trim(),
+          message: toString(violation.message, '').trim(),
+        }))
+        .filter((violation) => violation.code || violation.message)
+        .slice(0, 3),
     }
     : null;
   const regimeDetection = rawRegimeDetection
@@ -1899,6 +1928,7 @@ function buildCopilotJudgePayload(raw) {
         playbook_id: toString(rawConflictWarning.playbook_id || rawConflictWarning.playbookId, '')
       }
       : null,
+    policyGuardrails,
     contextInfluence,
     regimeDetection,
     allocationDriftAlerts,
@@ -4482,6 +4512,9 @@ function buildCopilotChatResponseHtml(payload) {
   const playbookContext = payload.playbook_context && typeof payload.playbook_context === 'object'
     ? payload.playbook_context
     : null;
+  const policyGuardrails = payload.policyGuardrails && typeof payload.policyGuardrails === 'object'
+    ? payload.policyGuardrails
+    : null;
   const guardrail = playbookContext && Array.isArray(playbookContext.guardrails)
     ? toString(playbookContext.guardrails[0], '')
     : '';
@@ -4656,6 +4689,18 @@ function buildCopilotChatResponseHtml(payload) {
   const conflictHtml = conflictWarning && conflictWarning.detected
     ? `<p style="margin-top: 8px; color: #FCA5A5;"><strong>Conflict:</strong> ${escapeHtml(toString(conflictWarning.reason, 'Signal diverges from active playbook.'))}</p>`
     : '';
+  const policyViolationMessages = policyGuardrails
+    ? toArray(policyGuardrails.violations, [])
+      .map((violation) => toString(violation.message || violation.code, '').trim())
+      .filter(Boolean)
+      .slice(0, 2)
+    : [];
+  const policyGuardrailHtml = policyGuardrails && policyGuardrails.status === 'violated'
+    ? `<div style="margin-top: 8px;">
+        <p><strong>Personal policy:</strong> ${escapeHtml(toString(policyGuardrails.effectiveAction, 'HOLD') || 'HOLD')}${policyGuardrails.originalAction ? ` instead of ${escapeHtml(policyGuardrails.originalAction)}` : ''}${policyGuardrails.policyId ? ` • ${escapeHtml(policyGuardrails.policyId)}` : ''}${policyGuardrails.violationCount ? ` • ${escapeHtml(String(policyGuardrails.violationCount))} violation${policyGuardrails.violationCount === 1 ? '' : 's'}` : ''}</p>
+        ${policyViolationMessages.length ? `<p style="margin-top: 4px; font-size: 12px; color: #FCA5A5;">${policyViolationMessages.map((message) => escapeHtml(message)).join(' • ')}</p>` : ''}
+      </div>`
+    : '';
   const contextHtml = contextInfluence
     ? `<p style="margin-top: 8px; font-size: 12px; color: #94A3B8;"><strong>Context:</strong> ${contextMode}${contextInfluence.portfolioApplied ? ' • saved portfolio applied' : ''}${contextTickers ? ` • focus ${contextTickers}` : ''}${contextSource ? ` • source ${contextSource}` : ''}</p>`
     : '';
@@ -4700,6 +4745,7 @@ function buildCopilotChatResponseHtml(payload) {
     updatedAt ? `Freshness: ${updated}` : '',
     sourceLabels ? `Sources: ${sourceLabels}` : '',
     memoDegraded ? 'Degraded' : '',
+    policyGuardrails && policyGuardrails.status === 'violated' ? 'Policy blocked' : '',
   ].filter(Boolean);
   const metadataBadgesHtml = metadataBadges.length
     ? `<div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">${metadataBadges.map((label) => `<span class="source-badge">${label}</span>`).join('')}</div>`
@@ -4733,6 +4779,7 @@ function buildCopilotChatResponseHtml(payload) {
     ${metadataBadgesHtml}
     ${playbookHtml}
     ${conflictHtml}
+    ${policyGuardrailHtml}
     <p style="margin-top: 10px; font-size: 12px; color: #94A3B8;">${metadataParts}</p>
   `;
 }

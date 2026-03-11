@@ -3395,6 +3395,42 @@ test('buildCopilotChatResponseHtml renders freshness, source, and degraded badge
   assert.match(html, /Degraded:<\/strong> partial context/i);
 });
 
+test('buildCopilotChatResponseHtml renders personal policy guardrail badges and details', () => {
+  const sandbox = loadBuildCopilotChatResponseHtml();
+
+  const html = sandbox.buildCopilotChatResponseHtml({
+    consensus: 'BUY',
+    confidence: 71,
+    risk: { level: 'high', caveat: 'Volatility is still elevated.' },
+    model: 'Copilot',
+    qualityStatus: 'ok',
+    generatedAt: '2026-03-10T10:00:00Z',
+    why: ['Momentum is strong but outside the allowed policy envelope.'],
+    dataSources: [{ label: 'judge_live' }],
+    policyGuardrails: {
+      status: 'violated',
+      policyId: 'personal-default',
+      originalAction: 'BUY',
+      effectiveAction: 'HOLD',
+      violationCount: 2,
+      violations: [
+        { code: 'ticker_excluded', message: 'TSLA is excluded by personal policy.' },
+        { code: 'action_blocked', message: 'buy is blocked by personal policy.' },
+      ],
+    },
+    memo: {
+      summary: 'Momentum is strong but blocked by personal policy.',
+      regime: 'risk_on',
+      freshness: '2026-03-10T10:00:00Z',
+    },
+  });
+
+  assert.match(html, /<span class="source-badge">Policy blocked<\/span>/);
+  assert.match(html, /Personal policy:<\/strong> HOLD instead of BUY • personal-default • 2 violations/);
+  assert.match(html, /TSLA is excluded by personal policy\./);
+  assert.match(html, /buy is blocked by personal policy\./);
+});
+
 test('buildCopilotJudgePayload normalizes regime detection and allocation drift alerts from the copilot contract', () => {
   const sandbox = loadBuildCopilotJudgePayload();
 
@@ -3440,6 +3476,42 @@ test('buildCopilotJudgePayload normalizes regime detection and allocation drift 
         thresholdPct: 20,
         actualPct: 72,
         basis: 'position weight proxy',
+      },
+    ],
+  });
+});
+
+test('buildCopilotJudgePayload normalizes personal policy guardrails from the judge contract', () => {
+  const sandbox = loadBuildCopilotJudgePayload();
+
+  const payload = sandbox.buildCopilotJudgePayload({
+    verdict: 'buy',
+    policy_guardrails: {
+      status: 'violated',
+      policy_id: 'personal-default',
+      policy_version: '2026-03-11T09:00:00Z',
+      original_action: 'buy',
+      effective_action: 'hold',
+      violations: [
+        {
+          code: 'ticker_excluded',
+          message: 'TSLA is excluded by personal policy.',
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.policyGuardrails)), {
+    status: 'violated',
+    policyId: 'personal-default',
+    policyVersion: '2026-03-11T09:00:00Z',
+    originalAction: 'BUY',
+    effectiveAction: 'HOLD',
+    violationCount: 1,
+    violations: [
+      {
+        code: 'ticker_excluded',
+        message: 'TSLA is excluded by personal policy.',
       },
     ],
   });
