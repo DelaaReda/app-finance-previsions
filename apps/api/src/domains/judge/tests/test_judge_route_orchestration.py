@@ -926,3 +926,58 @@ def test_judge_geopolitical_risk_graph_route_delegates_to_service(monkeypatch):
     assert payload["data"]["stats"]["alerts_count"] == 1
     assert payload["data"]["nodes"][0]["id"] == "ukraine"
     assert captured == {"region": "ukraine", "limit": 2}
+
+
+def test_judge_event_impact_horizon_matrix_route_delegates_to_service(monkeypatch):
+    captured = {}
+    now_iso = "2026-03-10T00:00:00Z"
+
+    async def fake_event_impact_horizon_matrix(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "data": {
+                "generated_at": now_iso,
+                "freshness": now_iso,
+                "source": ["judge_event_impact_horizon_matrix_service", "tests"],
+                "filters_applied": {"event_type": "sanctions", "limit": 2},
+                "stats": {
+                    "article_count": 3,
+                    "event_types_returned": 1,
+                    "horizons": ["1d", "1w", "1m"],
+                },
+                "matrix": [
+                    {
+                        "event_type": "sanctions",
+                        "article_count": 3,
+                        "recent_count": 2,
+                        "sentiment_bias": -0.2,
+                        "cross_horizon_divergence": 0.18,
+                        "horizons": {
+                            "1d": {"impact_score": 0.6, "impact_band": "medium", "bias": "risk_off", "template": "Immediate repricing."},
+                            "1w": {"impact_score": 0.78, "impact_band": "medium", "bias": "persistent", "template": "Weekly persistence."},
+                            "1m": {"impact_score": 0.81, "impact_band": "high", "bias": "persistent", "template": "Monthly persistence."},
+                        },
+                        "sample_headlines": ["Synthetic sanctions update"],
+                    }
+                ],
+                "templates": {
+                    "cross_horizon_divergence": "Cross-horizon divergence is highest when the event creates immediate repricing but slower fundamental confirmation.",
+                },
+                "warnings": [],
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_event_impact_horizon_matrix_payload",
+        fake_event_impact_horizon_matrix,
+    )
+    client = _client()
+    resp = client.get("/api/judge/event-impact-horizon-matrix?event_type=sanctions&limit=2")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["data"]["matrix"][0]["event_type"] == "sanctions"
+    assert captured == {"event_type": "sanctions", "limit": 2}

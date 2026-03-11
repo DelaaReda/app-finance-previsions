@@ -3741,6 +3741,25 @@ async def get_judge_geopolitical_risk_graph(
     )
 
 
+@router.get("/event-impact-horizon-matrix")
+async def get_judge_event_impact_horizon_matrix(
+    event_type: Optional[str] = Query(
+        None,
+        description="Optional event filter (ex: earnings, sanctions, merger).",
+    ),
+    limit: int = Query(10, ge=1, le=50, description="Maximum number of event classes returned."),
+):
+    """Expose a stable event-class x horizon impact matrix from persisted news snapshots."""
+    from services.judge_endpoint_service import (
+        get_judge_event_impact_horizon_matrix_payload,
+    )
+
+    return await get_judge_event_impact_horizon_matrix_payload(
+        event_type=event_type,
+        limit=limit,
+    )
+
+
 @router.get("/quality")
 async def get_judge_quality(
     horizon_days: int = Query(

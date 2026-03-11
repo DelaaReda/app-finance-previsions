@@ -242,6 +242,206 @@ def _escalation_band(score: float) -> str:
     return "low"
 
 
+_EVENT_HORIZON_MATRIX_PRIORS: Dict[str, Dict[str, Dict[str, Any]]] = {
+    "earnings": {
+        "1d": {"impact_score": 0.92, "bias": "volatile", "template": "Earnings shocks usually dominate the next session before guidance clarity settles."},
+        "1w": {"impact_score": 0.68, "bias": "directional", "template": "One-week impact usually reflects guidance digestion and estimate revisions."},
+        "1m": {"impact_score": 0.41, "bias": "mean_reverting", "template": "One-month impact usually fades unless the earnings release changes the medium-term thesis."},
+    },
+    "sanctions": {
+        "1d": {"impact_score": 0.59, "bias": "risk_off", "template": "Sanctions headlines create immediate repricing, especially in exposed supply chains."},
+        "1w": {"impact_score": 0.77, "bias": "persistent", "template": "One-week impact often grows while counterparties reprice logistics and compliance risk."},
+        "1m": {"impact_score": 0.82, "bias": "persistent", "template": "One-month impact stays elevated when sanctions alter capital flows or trade routes."},
+    },
+    "export_controls": {
+        "1d": {"impact_score": 0.54, "bias": "risk_off", "template": "Export-control headlines hit exposed names quickly, but first-day moves can be noisy."},
+        "1w": {"impact_score": 0.74, "bias": "persistent", "template": "One-week impact usually expands as supplier and customer dependencies are repriced."},
+        "1m": {"impact_score": 0.79, "bias": "persistent", "template": "One-month impact remains elevated when restrictions force a durable supply-chain reset."},
+    },
+    "guidance": {
+        "1d": {"impact_score": 0.81, "bias": "directional", "template": "Guidance changes tend to re-anchor expectations immediately."},
+        "1w": {"impact_score": 0.71, "bias": "directional", "template": "One-week impact persists while analysts and positioning catch up."},
+        "1m": {"impact_score": 0.56, "bias": "persistent", "template": "One-month impact holds when guidance implies a genuine trend change."},
+    },
+    "merger": {
+        "1d": {"impact_score": 0.88, "bias": "event_locked", "template": "M&A headlines usually gap on day one as spread traders set the first price."},
+        "1w": {"impact_score": 0.63, "bias": "deal_spread", "template": "One-week impact depends on deal certainty, financing, and regulatory read-through."},
+        "1m": {"impact_score": 0.52, "bias": "deal_spread", "template": "One-month impact compresses unless the event changes long-run industry structure."},
+    },
+    "general_tension": {
+        "1d": {"impact_score": 0.42, "bias": "risk_off", "template": "General tensions usually create a modest immediate risk-off response."},
+        "1w": {"impact_score": 0.58, "bias": "persistent", "template": "One-week impact depends on whether tensions escalate into policy or supply disruption."},
+        "1m": {"impact_score": 0.49, "bias": "uncertain", "template": "One-month impact often fades unless the tension becomes a concrete economic constraint."},
+    },
+}
+_EVENT_HORIZON_KEYS: Tuple[str, ...] = ("1d", "1w", "1m")
+
+
+def _impact_band(score: float) -> str:
+    if score >= 0.8:
+        return "high"
+    if score >= 0.55:
+        return "medium"
+    if score >= 0.3:
+        return "low"
+    return "minimal"
+
+
+def _resolve_event_horizon_prior(event_tag: str) -> Dict[str, Dict[str, Any]]:
+    normalized = str(event_tag or "").strip().lower() or "general_tension"
+    return _EVENT_HORIZON_MATRIX_PRIORS.get(
+        normalized,
+        _EVENT_HORIZON_MATRIX_PRIORS["general_tension"],
+    )
+
+
+def _build_event_impact_horizon_matrix_payload(
+    *,
+    event_type: Optional[str],
+    limit: int,
+) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    event_filter = str(event_type or "").strip().lower()
+    articles_payload = load_json("news_feed") or {}
+    articles = articles_payload.get("articles") if isinstance(articles_payload, dict) else []
+    articles = articles if isinstance(articles, list) else []
+
+    warnings: List[str] = []
+    matrix_state: Dict[str, Dict[str, Any]] = {}
+
+    for article in articles:
+        if not isinstance(article, dict):
+            continue
+        event_tags = _article_event_tags(article) or ["general_tension"]
+        if event_filter and event_filter not in {tag.lower() for tag in event_tags}:
+            continue
+
+        published_at = _parse_datetime(
+            article.get("published_at")
+            or article.get("timestamp")
+            or article.get("ts")
+            or article.get("date")
+        )
+        recency_multiplier = 0.7
+        if published_at is None:
+            warnings.append("missing_article_timestamp")
+        else:
+            age_hours = max(0.0, (now - published_at).total_seconds() / 3600.0)
+            recency_multiplier = 1.0 if age_hours <= 24 else 0.85 if age_hours <= 72 else 0.65
+
+        raw_sentiment = article.get("sentiment_score") or article.get("sent") or article.get("sentiment")
+        try:
+            sentiment_value = float(raw_sentiment)
+        except Exception:
+            sentiment_value = 0.0
+
+        headline = str(article.get("title") or article.get("headline") or "").strip()
+        for tag in event_tags:
+            normalized_tag = str(tag or "").strip().lower() or "general_tension"
+            state = matrix_state.setdefault(
+                normalized_tag,
+                {
+                    "event_type": normalized_tag,
+                    "article_count": 0,
+                    "recent_count": 0,
+                    "sentiment_sum": 0.0,
+                    "sample_headlines": [],
+                },
+            )
+            state["article_count"] += 1
+            state["sentiment_sum"] += sentiment_value
+            if recency_multiplier >= 0.85:
+                state["recent_count"] += 1
+            if headline and len(state["sample_headlines"]) < 3:
+                state["sample_headlines"].append(headline)
+
+    matrix: List[Dict[str, Any]] = []
+    for event_key, state in matrix_state.items():
+        priors = _resolve_event_horizon_prior(event_key)
+        avg_sentiment = state["sentiment_sum"] / state["article_count"] if state["article_count"] else 0.0
+        sentiment_bias = round(max(-1.0, min(1.0, avg_sentiment)), 4)
+        horizons: Dict[str, Dict[str, Any]] = {}
+        impact_curve: List[float] = []
+        for horizon_key in _EVENT_HORIZON_KEYS:
+            prior = priors[horizon_key]
+            article_multiplier = min(1.35, 0.85 + (state["article_count"] * 0.08))
+            recent_multiplier = 1.0 if state["recent_count"] else 0.82
+            sentiment_multiplier = 1.0 + (min(abs(sentiment_bias), 0.6) * 0.15)
+            score = min(
+                1.0,
+                float(prior["impact_score"]) * article_multiplier * recent_multiplier * sentiment_multiplier,
+            )
+            score = round(score, 4)
+            impact_curve.append(score)
+            horizons[horizon_key] = {
+                "impact_score": score,
+                "impact_band": _impact_band(score),
+                "bias": prior["bias"],
+                "template": prior["template"],
+            }
+
+        divergence = round(max(impact_curve) - min(impact_curve), 4) if impact_curve else 0.0
+        matrix.append(
+            {
+                "event_type": event_key,
+                "article_count": state["article_count"],
+                "recent_count": state["recent_count"],
+                "sentiment_bias": sentiment_bias,
+                "cross_horizon_divergence": divergence,
+                "horizons": horizons,
+                "sample_headlines": state["sample_headlines"],
+            }
+        )
+
+    matrix.sort(
+        key=lambda item: (
+            -float(item["horizons"]["1w"]["impact_score"]),
+            -int(item["article_count"]),
+            str(item["event_type"]),
+        )
+    )
+    matrix = matrix[:limit]
+
+    dominant_template = (
+        "Cross-horizon divergence is highest when the event creates immediate repricing but slower fundamental confirmation."
+        if any(float(row["cross_horizon_divergence"]) >= 0.2 for row in matrix)
+        else "Cross-horizon impact stays relatively aligned when the event path is already well understood."
+    )
+
+    dedup_warnings: List[str] = []
+    seen_warnings = set()
+    for warning in warnings:
+        if warning in seen_warnings:
+            continue
+        seen_warnings.add(warning)
+        dedup_warnings.append(warning)
+
+    source = ["judge_event_impact_horizon_matrix_service", "news_feed_snapshot"]
+    if not articles:
+        source.append("news_feed_fallback")
+
+    return {
+        "generated_at": now_iso,
+        "freshness": now_iso,
+        "source": source,
+        "filters_applied": {
+            "event_type": event_filter or None,
+            "limit": limit,
+        },
+        "stats": {
+            "article_count": len(articles),
+            "event_types_returned": len(matrix),
+            "horizons": list(_EVENT_HORIZON_KEYS),
+        },
+        "matrix": matrix,
+        "templates": {
+            "cross_horizon_divergence": dominant_template,
+        },
+        "warnings": dedup_warnings,
+    }
+
+
 def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
@@ -318,7 +518,7 @@ def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> D
                     pair_state["recent_count"] += 1
 
     nodes = []
-    alerts = []
+    alerts_by_region: Dict[str, Dict[str, Any]] = {}
     for state in regions.values():
         escalation_score = _compute_escalation_score(
             article_count=state["article_count"],
@@ -340,18 +540,18 @@ def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> D
         }
         nodes.append(node)
         if node["escalation_band"] in {"high", "critical"}:
-            alerts.append(
-                {
-                    "region": node["label"],
-                    "escalation_band": node["escalation_band"],
-                    "escalation_score": node["escalation_score"],
-                    "timestamp": node["latest_at"] or now_iso,
-                }
-            )
+            alerts_by_region[node["id"]] = {
+                "region": node["label"],
+                "escalation_band": node["escalation_band"],
+                "escalation_score": node["escalation_score"],
+                "timestamp": node["latest_at"] or now_iso,
+            }
 
     nodes.sort(key=lambda item: (-float(item["escalation_score"]), str(item["label"])))
     nodes = nodes[:limit]
     allowed_ids = {node["id"] for node in nodes}
+    alerts = [alerts_by_region[node_id] for node_id in allowed_ids if node_id in alerts_by_region]
+    alerts.sort(key=lambda item: (-float(item["escalation_score"]), str(item["region"])))
 
     edges = [
         {
@@ -1696,6 +1896,208 @@ async def get_judge_strategy_playbooks_payload(
     )
 
 
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _build_sector_company_transmission_row(verdict: Dict[str, Any]) -> Dict[str, Any]:
+    ticker = normalize_ticker(verdict.get("ticker") or "")
+    fundamentals = verdict.get("fundamentals") if isinstance(verdict.get("fundamentals"), dict) else {}
+    meta = verdict.get("meta") if isinstance(verdict.get("meta"), dict) else {}
+    sector = str(
+        verdict.get("sector")
+        or fundamentals.get("sector")
+        or meta.get("sector")
+        or "unknown"
+    ).strip() or "unknown"
+    confidence_before = coerce_confidence(verdict.get("confidence"), default=0.0)
+    expected_return = _safe_float(verdict.get("expected_return"), 0.0)
+    impacts = verdict.get("impacts") if isinstance(verdict.get("impacts"), dict) else {}
+    equity_impacts = impacts.get("equity") if isinstance(impacts.get("equity"), list) else []
+    summary_items = verdict.get("summary") if isinstance(verdict.get("summary"), list) else []
+    evidence = _coerce_text_list([sector], equity_impacts, summary_items[:1])
+
+    sector_alignment = 0.55
+    if sector != "unknown":
+        sector_alignment += 0.15
+    if equity_impacts:
+        sector_alignment += 0.15
+    if expected_return != 0.0:
+        sector_alignment += min(0.15, abs(expected_return) * 5.0)
+    sector_alignment = max(0.0, min(1.0, sector_alignment))
+
+    transmission_factor = round(
+        max(0.05, min(1.0, (confidence_before * 0.55) + (sector_alignment * 0.45))),
+        4,
+    )
+    transmission_confidence = round(
+        max(
+            0.0,
+            min(
+                1.0,
+                confidence_before
+                * (0.92 if sector != "unknown" else 0.62)
+                * (0.95 if equity_impacts else 0.82),
+            ),
+        ),
+        4,
+    )
+    transmission_uncertainty = round(max(0.0, min(1.0, 1.0 - transmission_confidence)), 4)
+    confidence_after = round(
+        max(0.0, min(1.0, confidence_before * (1.0 - (transmission_uncertainty * 0.35)))),
+        4,
+    )
+
+    return {
+        "ticker": ticker,
+        "sector": sector,
+        "horizon": verdict.get("horizon") or "1w",
+        "company_direction": coerce_verdict(
+            verdict.get("verdict") or verdict.get("action") or verdict.get("direction"),
+            default="hold",
+        ),
+        "expected_return": expected_return,
+        "risk_level": normalize_risk_level(verdict.get("risk_level"), default="medium"),
+        "confidence_before_transmission": round(confidence_before, 4),
+        "transmission_factor": transmission_factor,
+        "transmission_confidence": transmission_confidence,
+        "transmission_uncertainty": transmission_uncertainty,
+        "confidence_after_transmission": confidence_after,
+        "impact_decomposition": {
+            "sector_tailwind_weight": round(max(0.0, min(1.0, transmission_factor * 0.6)), 4),
+            "idiosyncratic_weight": round(max(0.0, min(1.0, 1.0 - (transmission_factor * 0.6))), 4),
+        },
+        "sector_signal_evidence": evidence,
+    }
+
+
+async def get_judge_sector_company_transmission_payload(
+    *,
+    limit: int,
+    min_confidence: float,
+    ticker: Optional[List[str]],
+    portfolio_id: Optional[str] = None,
+    sort_by: Any,
+    sort_order: Any,
+    profile: str,
+    debug: bool,
+    debug_full: bool,
+    x_debug_token: Optional[str],
+    compute_verdicts_fn: JudgeVerdictsComputeFn,
+) -> Dict[str, Any]:
+    """Build a company-layer view with sector transmission metadata from Judge verdicts."""
+    now_iso = utc_now_iso()
+    normalized_tickers = normalize_tickers(ticker or [])
+    try:
+        verdict_payload = await get_judge_verdicts_payload(
+            limit=limit,
+            min_confidence=min_confidence,
+            ticker=ticker,
+            portfolio_id=portfolio_id,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            profile=profile,
+            debug=debug,
+            debug_full=debug_full,
+            x_debug_token=x_debug_token,
+            compute_verdicts_fn=compute_verdicts_fn,
+        )
+        data = verdict_payload.get("data") if isinstance(verdict_payload, dict) else {}
+        verdicts = data.get("verdicts") if isinstance(data, dict) and isinstance(data.get("verdicts"), list) else []
+        rows = [
+            _build_sector_company_transmission_row(verdict)
+            for verdict in verdicts
+            if isinstance(verdict, dict)
+        ]
+        response_data = {
+            "rows": rows,
+            "count": len(rows),
+            "generated_at": data.get("generated_at") if isinstance(data, dict) else now_iso,
+            "filters_applied": {
+                "min_confidence": min_confidence,
+                "tickers": normalized_tickers,
+                "sort_by": str(sort_by),
+                "sort_order": str(sort_order),
+                "limit": limit,
+                "profile": profile,
+            },
+            "stats": {
+                "sector_coverage_count": len([row for row in rows if row.get("sector") != "unknown"]),
+                "avg_transmission_factor": round(
+                    sum(row["transmission_factor"] for row in rows) / len(rows),
+                    4,
+                ) if rows else 0.0,
+                "avg_confidence_after_transmission": round(
+                    sum(row["confidence_after_transmission"] for row in rows) / len(rows),
+                    4,
+                ) if rows else 0.0,
+                "high_uncertainty_count": len(
+                    [row for row in rows if row.get("transmission_uncertainty", 0.0) >= 0.4]
+                ),
+            },
+            "warnings": [],
+            "source": ensure_source_list(
+                data.get("source") if isinstance(data, dict) else None,
+                default_source="judge_sector_company_transmission_route",
+            ),
+        }
+        append_source_tag(
+            response_data,
+            "judge_sector_company_transmission_route",
+            default_source="judge_sector_company_transmission_route",
+        )
+        if debug:
+            response_data["judge_source"] = {
+                "count": len(verdicts),
+                "freshness": verdict_payload.get("freshness"),
+                "status": verdict_payload.get("status"),
+                "error": verdict_payload.get("error"),
+            }
+        return service_response_with_metadata(
+            response_data,
+            default_source="judge_sector_company_transmission_route",
+            freshness=verdict_payload.get("freshness") or response_data.get("generated_at") or now_iso,
+            status=verdict_payload.get("status"),
+            error=verdict_payload.get("error"),
+        )
+    except Exception as exc:
+        return service_response_with_metadata(
+            {
+                "rows": [],
+                "count": 0,
+                "generated_at": now_iso,
+                "filters_applied": {
+                    "min_confidence": min_confidence,
+                    "tickers": normalized_tickers,
+                    "sort_by": str(sort_by),
+                    "sort_order": str(sort_order),
+                    "limit": limit,
+                    "profile": profile,
+                },
+                "stats": {
+                    "sector_coverage_count": 0,
+                    "avg_transmission_factor": 0.0,
+                    "avg_confidence_after_transmission": 0.0,
+                    "high_uncertainty_count": 0,
+                },
+                "warnings": [],
+                "source": [
+                    "judge_sector_company_transmission_route",
+                    "judge_sector_company_transmission_fallback",
+                ],
+                "error": str(exc),
+                "message": "Sector-to-company transmission unavailable; fallback returned.",
+            },
+            default_source="judge_sector_company_transmission_route",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
+        )
+
+
 async def get_judge_quality_payload(
     *,
     horizon_days: int,
@@ -1916,13 +2318,64 @@ async def get_judge_geopolitical_risk_graph_payload(
         )
 
 
+async def get_judge_event_impact_horizon_matrix_payload(
+    *,
+    event_type: Optional[str],
+    limit: int,
+) -> Dict[str, Any]:
+    now_iso = utc_now_iso()
+    try:
+        payload = _build_event_impact_horizon_matrix_payload(
+            event_type=event_type,
+            limit=limit,
+        )
+        return service_response_with_metadata(
+            payload,
+            default_source="judge_event_impact_horizon_matrix_service",
+            freshness=payload.get("freshness") or now_iso,
+        )
+    except Exception as exc:
+        return service_response_with_metadata(
+            {
+                "generated_at": now_iso,
+                "freshness": now_iso,
+                "source": [
+                    "judge_event_impact_horizon_matrix_service",
+                    "event_impact_horizon_matrix_fallback",
+                ],
+                "filters_applied": {
+                    "event_type": str(event_type or "").strip().lower() or None,
+                    "limit": limit,
+                },
+                "stats": {
+                    "article_count": 0,
+                    "event_types_returned": 0,
+                    "horizons": list(_EVENT_HORIZON_KEYS),
+                },
+                "matrix": [],
+                "templates": {
+                    "cross_horizon_divergence": "Event horizon matrix unavailable; no interpretation template generated.",
+                },
+                "warnings": [],
+                "error": str(exc),
+                "message": "Event impact horizon matrix unavailable; fallback returned.",
+            },
+            default_source="judge_event_impact_horizon_matrix_service",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
+        )
+
+
 __all__ = [
     "JudgeVerdictsComputeFn",
+    "get_judge_sector_company_transmission_payload",
     "get_judge_verdicts_payload",
     "get_judge_quality_payload",
     "get_judge_quality_history_payload",
     "get_judge_options_payload",
     "get_judge_geopolitical_risk_graph_payload",
+    "get_judge_event_impact_horizon_matrix_payload",
     "get_judge_decision_journal_payload",
     "append_judge_decision_outcome_feedback",
     "get_judge_decision_outcome_feedback",
