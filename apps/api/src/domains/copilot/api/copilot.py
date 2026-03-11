@@ -10,9 +10,11 @@ Implements minimal, never-empty endpoints backed by existing services when possi
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from annotated_types import Ge, Gt
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
+from typing_extensions import Annotated
 
 try:
     from domains.copilot.application.context_service import ContextService
@@ -401,11 +403,11 @@ class CopilotPaperTradeExecuteRequest(BaseModel):
     decision_id: str
     ticker: str
     side: str
-    quantity: float
-    reference_price: float
-    fee_bps: Optional[float] = 0.0
-    slippage_bps: Optional[float] = 0.0
-    market_price: Optional[float] = None
+    quantity: Annotated[float, Gt(0)]
+    reference_price: Annotated[float, Gt(0)]
+    fee_bps: Annotated[float, Ge(0)] = 0.0
+    slippage_bps: Annotated[float, Ge(0)] = 0.0
+    market_price: Optional[Annotated[float, Gt(0)]] = None
     executed_at: Optional[str] = None
     notes: Optional[str] = None
 
