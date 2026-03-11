@@ -1730,6 +1730,38 @@ test('applyLiveDashboardData stores insider behavior payloads for existing widge
   assert.equal(sandbox.rendered, true);
 });
 
+test('applyLiveDashboardData stores event impact horizon matrix payloads for the market news widget', () => {
+  const { sandbox } = loadApplyLiveDashboardData();
+
+  sandbox.applyLiveDashboardData({
+    generatedAt: '2026-03-11T10:00:00Z',
+    data: {
+      eventImpactHorizonMatrix: {
+        matrix: [
+          {
+            event_type: 'sanctions',
+            article_count: 3,
+            recent_count: 2,
+            cross_horizon_divergence: 0.18,
+            horizons: {
+              '1d': { impact_band: 'medium', bias: 'risk_off' },
+              '1w': { impact_band: 'medium', bias: 'persistent' },
+              '1m': { impact_band: 'high', bias: 'persistent' },
+            },
+          },
+        ],
+        templates: {
+          cross_horizon_divergence: 'Immediate repricing can diverge from slower confirmation.',
+        },
+      },
+    },
+  });
+
+  assert.equal(sandbox.liveDataMeta.eventImpactHorizonMatrix.matrix[0].event_type, 'sanctions');
+  assert.equal(sandbox.liveDataMeta.eventImpactHorizonMatrix.matrix[0].horizons['1m'].impact_band, 'high');
+  assert.equal(sandbox.rendered, true);
+});
+
 test('sanitizeInsiderBehavior preserves already-normalized guardrail and provenance fields', () => {
   const sandbox = loadSanitizeInsiderBehavior();
 

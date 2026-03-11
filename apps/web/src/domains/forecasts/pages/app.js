@@ -1483,6 +1483,7 @@ let liveDataMeta = {
   contractState: 'unknown',
   ingestionHealth: null
 };
+const EVENT_IMPACT_HORIZONS = ['1d', '1w', '1m'];
 const CRITICAL_WIDGET_HEALTH_TARGETS = {
   hero: {
     selectors: [
@@ -3473,6 +3474,11 @@ function applyLiveDashboardData(payload = {}) {
       : (isObject(payload.macroRegimeHierarchy)
         ? payload.macroRegimeHierarchy
         : (isObject(payloadMeta.macroRegimeHierarchy) ? payloadMeta.macroRegimeHierarchy : null)),
+    eventImpactHorizonMatrix: isObject(data.eventImpactHorizonMatrix)
+      ? data.eventImpactHorizonMatrix
+      : (isObject(payload.eventImpactHorizonMatrix)
+        ? payload.eventImpactHorizonMatrix
+        : (isObject(payloadMeta.eventImpactHorizonMatrix) ? payloadMeta.eventImpactHorizonMatrix : null)),
     geopoliticalRiskGraph: isObject(data.geopoliticalRiskGraph)
       ? data.geopoliticalRiskGraph
       : (isObject(payload.geopoliticalRiskGraph)
@@ -6124,6 +6130,7 @@ function drawClusterMap() {
 
 function renderNewsImpact() {
   const container = document.getElementById('newsTable');
+  const matrixContainer = document.getElementById('newsImpactHorizonMatrix');
   if (!container) return;
 
   const rows = Array.isArray(appData.newsImpact) && appData.newsImpact.length > 0
@@ -6167,6 +6174,52 @@ function renderNewsImpact() {
   if (window.NewsImpactPlaybooks && typeof window.NewsImpactPlaybooks.refresh === 'function') {
     window.NewsImpactPlaybooks.refresh();
   }
+
+  const eventMatrix = isObject(liveDataMeta?.eventImpactHorizonMatrix)
+    ? liveDataMeta.eventImpactHorizonMatrix
+    : (isObject(window.eventImpactHorizonMatrix) ? window.eventImpactHorizonMatrix : null);
+  const matrixRow = Array.isArray(eventMatrix?.matrix) ? eventMatrix.matrix.find(isObject) : null;
+  if (!matrixContainer) return;
+  if (!matrixRow) {
+    matrixContainer.hidden = true;
+    matrixContainer.innerHTML = '';
+    return;
+  }
+
+  const titleCase = (value) => toString(value, '')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const divergence = toFiniteNumber(matrixRow.cross_horizon_divergence, 0);
+  const divergenceBand = divergence >= 0.25 ? 'high' : divergence >= 0.12 ? 'medium' : 'low';
+  const horizonCards = EVENT_IMPACT_HORIZONS.map((horizon) => {
+    const point = isObject(matrixRow.horizons?.[horizon]) ? matrixRow.horizons[horizon] : {};
+    return `
+      <div class="news-horizon-cell">
+        <strong>${escapeHtml(horizon.toUpperCase())}</strong>
+        <span>${escapeHtml(titleCase(point.impact_band || 'n/a'))} • ${escapeHtml(titleCase(point.bias || 'neutral'))}</span>
+      </div>
+    `;
+  }).join('');
+  const templateCopy = toString(
+    matrixRow.horizons?.['1m']?.template
+      || matrixRow.horizons?.['1w']?.template
+      || eventMatrix.templates?.cross_horizon_divergence,
+    ''
+  );
+
+  matrixContainer.hidden = false;
+  matrixContainer.innerHTML = `
+    <div class="news-horizon-header">
+      <div>
+        <h3>${escapeHtml(titleCase(matrixRow.event_type || 'event'))} impact matrix</h3>
+        <p>${escapeHtml(`${toFiniteNumber(matrixRow.article_count, 0)} articles • ${toFiniteNumber(matrixRow.recent_count, 0)} recent`)}</p>
+      </div>
+      <span class="news-horizon-band band-${escapeHtml(divergenceBand)}">Divergence ${escapeHtml(titleCase(divergenceBand))}</span>
+    </div>
+    <div class="news-horizon-grid">${horizonCards}</div>
+    ${templateCopy ? `<p class="news-horizon-template">${escapeHtml(templateCopy)}</p>` : ''}
+  `;
 }
 
 function drawSectorPerformance() {

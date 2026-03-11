@@ -371,6 +371,24 @@ async function getMacroRegimeHierarchy(params = {}) {
   return payload && typeof payload === 'object' ? payload : null;
 }
 
+async function getEventImpactHorizonMatrix(params = {}) {
+  const safeParams = params && typeof params === 'object' ? params : {};
+  const search = new URLSearchParams();
+  const eventType = String(safeParams.event_type || safeParams.eventType || '').trim();
+  const limit = Number(safeParams.limit);
+
+  if (eventType) search.set('event_type', eventType);
+  if (Number.isFinite(limit) && limit > 0) {
+    search.set('limit', String(Math.min(10, Math.max(1, Math.floor(limit)))));
+  }
+
+  const query = search.toString();
+  const endpoint = `/judge/event-impact-horizon-matrix${query ? `?${query}` : ''}`;
+  const cacheKey = `judge_event_impact_horizon_matrix:${query || 'default'}`;
+  const payload = getResponseData(await fetchWithCache(endpoint, cacheKey));
+  return payload && typeof payload === 'object' ? payload : null;
+}
+
 async function getPolicyImpact(params = {}) {
   const safeParams = params && typeof params === 'object' ? params : {};
   const search = new URLSearchParams();
@@ -1453,6 +1471,10 @@ async function populateWindowGlobals() {
     window.geopoliticalRiskGraph = geopoliticalRiskGraph && typeof geopoliticalRiskGraph === 'object'
       ? geopoliticalRiskGraph
       : null;
+    const eventImpactHorizonMatrix = await getEventImpactHorizonMatrix({ limit: 3 });
+    window.eventImpactHorizonMatrix = eventImpactHorizonMatrix && typeof eventImpactHorizonMatrix === 'object'
+      ? eventImpactHorizonMatrix
+      : null;
 
     // Stocks - build top movers with real % change from price history
     const rawStocks = await getStockPrices();
@@ -1670,6 +1692,7 @@ async function populateWindowGlobals() {
           forecasts: window.liveForecasts || [],
           forecastScoreboard: window.liveForecastScoreboard || null,
           geopoliticalRiskGraph: window.geopoliticalRiskGraph || null,
+          eventImpactHorizonMatrix: window.eventImpactHorizonMatrix || null,
           tradeIdeas: window.tradeIdeas || [],
           alerts: window.alertTimeline || [],
           topMovers: window.topMovers || [],
@@ -1746,6 +1769,7 @@ window.FinanceAPI = {
   getForecasts,
   getWalkForwardScoreboard,
   getGeopoliticalRiskGraph,
+  getEventImpactHorizonMatrix,
   getStockPrices,
   getTopMovers,
   getAlerts,
@@ -1776,6 +1800,7 @@ window.getLiveDashboardData = () => ({
     forecasts: window.liveForecasts || [],
     forecastScoreboard: window.liveForecastScoreboard || null,
     geopoliticalRiskGraph: window.geopoliticalRiskGraph || null,
+    eventImpactHorizonMatrix: window.eventImpactHorizonMatrix || null,
     tradeIdeas: window.tradeIdeas || [],
     alerts: window.alertTimeline || [],
     topMovers: window.topMovers || [],

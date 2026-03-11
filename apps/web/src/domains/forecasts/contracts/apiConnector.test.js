@@ -213,6 +213,45 @@ test('getGeopoliticalRiskGraph unwraps region risk graph payloads and preserves 
   assert.equal(payload.stats.alerts_count, 1);
 });
 
+test('getEventImpactHorizonMatrix unwraps matrix payloads and preserves query params', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            matrix: [
+              {
+                event_type: 'sanctions',
+                article_count: 3,
+                recent_count: 2,
+                cross_horizon_divergence: 0.18,
+                horizons: {
+                  '1d': { impact_band: 'medium', bias: 'risk_off' },
+                  '1w': { impact_band: 'medium', bias: 'persistent' },
+                  '1m': { impact_band: 'high', bias: 'persistent' },
+                },
+              },
+            ],
+            templates: {
+              cross_horizon_divergence: 'Immediate repricing can diverge from slower confirmation.',
+            },
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getEventImpactHorizonMatrix({ event_type: 'sanctions', limit: 2 });
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/judge/event-impact-horizon-matrix?event_type=sanctions&limit=2']);
+  assert.equal(payload.matrix[0].event_type, 'sanctions');
+  assert.equal(payload.matrix[0].horizons['1m'].impact_band, 'high');
+  assert.equal(payload.templates.cross_horizon_divergence, 'Immediate repricing can diverge from slower confirmation.');
+});
+
 test('getMacroRegimeHierarchy unwraps hierarchy payloads and preserves scope filters', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {
