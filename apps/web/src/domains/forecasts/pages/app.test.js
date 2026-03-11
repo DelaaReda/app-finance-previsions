@@ -3426,6 +3426,47 @@ test('buildCopilotChatResponseHtml renders regime detection and allocation drift
   assert.match(html, /basis position weight proxy/);
 });
 
+test('buildCopilotChatResponseHtml renders explainability graph and source traceability from normalized copilot contract', () => {
+  const sandbox = loadBuildCopilotChatResponseHtml();
+
+  const html = sandbox.buildCopilotChatResponseHtml({
+    consensus: 'BUY',
+    confidence: 71,
+    risk: { level: 'medium', caveat: 'Macro volatility still matters.' },
+    model: 'Copilot',
+    qualityStatus: 'ok',
+    generatedAt: '2026-03-10T10:00:00Z',
+    why: ['Breadth keeps improving while semis leadership holds.'],
+    dataSources: ['judge_live', 'forecasts'],
+    contextInfluence: {
+      mode: 'portfolio_aware',
+      portfolioApplied: true,
+      source: 'saved_portfolio',
+      effectiveTickers: ['NVDA', 'MSFT'],
+    },
+    regimeDetection: {
+      label: 'BULL MARKET',
+      confidencePct: 73,
+      thresholdReason: 'vix bas',
+      sources: ['forecasts', 'macro'],
+    },
+    eventTiming: {
+      summary: 'Timing risk elevated around earnings (1w).',
+      freshness: '2026-03-10T10:00:00Z',
+      sourceLabels: ['copilot_event_timing', 'macro'],
+      events: [],
+    },
+    memo: {
+      summary: 'Leadership remains intact while breadth improves.',
+      regime: 'risk_on',
+      freshness: '2026-03-10T10:00:00Z',
+    },
+  });
+
+  assert.match(html, /Explainability graph:<\/strong> Context portfolio aware -> saved portfolio -> NVDA, MSFT -> Regime BULL MARKET -> 73% confidence -> Event timing -> Timing risk elevated around earnings \(1w\)\. -> Reasoning -> Breadth keeps improving while semis leadership holds\. -> Verdict -> BUY/);
+  assert.match(html, /Source traceability:<\/strong> judge_live -> forecasts -> macro -> copilot_event_timing/);
+});
+
 test('buildCopilotChatResponseHtml renders event timing notes when the copilot contract includes them', () => {
   const sandbox = loadBuildCopilotChatResponseHtml();
 

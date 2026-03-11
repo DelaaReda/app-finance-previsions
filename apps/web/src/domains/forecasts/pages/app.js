@@ -4535,6 +4535,30 @@ function buildCopilotChatResponseHtml(payload) {
   const eventTimingFreshness = eventTiming
     ? toString(eventTiming.freshness, '').trim()
     : '';
+  const traceabilitySources = [
+    ...toArray(payload.dataSources || payload.sources || payload.source, []),
+    ...toArray(regimeDetection && regimeDetection.sources, []),
+    ...toArray(eventTiming && (eventTiming.sourceLabels || eventTiming.sources || eventTiming.source), []),
+  ]
+    .map((source) => escapeHtml(toString(source, '').trim()))
+    .filter(Boolean)
+    .filter((source, index, rows) => rows.indexOf(source) === index)
+    .slice(0, 5);
+  const explainabilityNodes = [
+    contextInfluence
+      ? `Context ${escapeHtml(contextMode)}${contextInfluence.portfolioApplied ? ' -> saved portfolio' : ''}${contextTickers ? ` -> ${contextTickers}` : ''}`
+      : '',
+    regimeDetectionLabel
+      ? `Regime ${regimeDetectionLabel}${regimeDetectionConfidence ? ` -> ${regimeDetectionConfidence}% confidence` : ''}`
+      : '',
+    eventTimingSummary
+      ? `Event timing -> ${eventTimingSummary}`
+      : '',
+    reasoning.length
+      ? `Reasoning -> ${escapeHtml(reasoning[0])}`
+      : '',
+    `Verdict -> ${verdict}`,
+  ].filter(Boolean).slice(0, 5);
 
   const playbookHtml = playbookId
     ? `<div style="margin-top: 8px;">
@@ -4564,6 +4588,14 @@ function buildCopilotChatResponseHtml(payload) {
           eventTimingFreshness ? `Updated ${escapeHtml(formatRelativeTime(eventTimingFreshness))}` : '',
         ].filter(Boolean).join(' • ')}</p>` : ''}
       </div>`
+    : '';
+  const explainabilityGraphHtml = explainabilityNodes.length > 1
+    ? `<div style="margin-top: 8px;">
+        <p><strong>Explainability graph:</strong> ${explainabilityNodes.join(' -> ')}</p>
+      </div>`
+    : '';
+  const sourceTraceabilityHtml = traceabilitySources.length
+    ? `<p style="margin-top: 8px; font-size: 12px; color: #94A3B8;"><strong>Source traceability:</strong> ${traceabilitySources.join(' -> ')}</p>`
     : '';
   const metadataBadges = [
     updatedAt ? `Freshness: ${updated}` : '',
@@ -4596,6 +4628,8 @@ function buildCopilotChatResponseHtml(payload) {
     ${contextHtml}
     ${regimeDetectionHtml}
     ${eventTimingHtml}
+    ${explainabilityGraphHtml}
+    ${sourceTraceabilityHtml}
     ${allocationDriftHtml}
     ${metadataBadgesHtml}
     ${playbookHtml}
