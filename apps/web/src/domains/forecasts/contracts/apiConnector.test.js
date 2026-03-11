@@ -73,6 +73,50 @@ test('getStatus unwraps the canonical /status envelope', async () => {
   assert.equal(payload.last_updates.news, '2026-03-08T06:00:00Z');
 });
 
+test('refreshLiveData preserves forecast fusion metadata on live forecast rows', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url.endsWith('/api/forecasts?limit=20')) {
+      return {
+        async json() {
+          return {
+            ok: true,
+            data: {
+              rows: [
+                {
+                  ticker: 'NVDA',
+                  direction: 'up',
+                  confidence: 0.72,
+                  expected_return: 0.045,
+                  forecast_fusion: {
+                    dominant_layer: 'forecast_confidence',
+                    layers: [
+                      { layer: 'forecast_confidence', contribution: 0.3 },
+                      { layer: 'momentum', contribution: 0.2 },
+                    ],
+                  },
+                },
+              ],
+            },
+          };
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, data: {} };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.refreshLiveData();
+
+  assert.equal(payload.data.forecasts[0].ticker, 'NVDA');
+  assert.equal(payload.data.forecasts[0].forecast_fusion.dominant_layer, 'forecast_confidence');
+  assert.equal(payload.data.forecasts[0].forecastFusion.layers[0].layer, 'forecast_confidence');
+});
+
 test('getStatus falls back to /health when /status is unavailable', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {
@@ -1166,6 +1210,41 @@ test('getGlobalSignalMesh normalizes freshness status from mesh provenance SLA',
   assert.equal(payload.status, 'stale');
   assert.equal(payload.freshness.updated_at, '2026-03-11T03:55:00Z');
   assert.equal(payload.freshness.ttl_seconds, 900);
+});
+
+test('getFinalGlobalForecastGate unwraps the aggregated final gate contract', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            gate_id: 'final_global_forecast_gate_v1',
+            status: 'pass',
+            summary: {
+              free_data_compliant: true,
+              quality_non_regressing: true,
+              required_layers_active: ['macro', 'policy', 'insider'],
+            },
+            proofs: {
+              FINAL_GLOBAL_FORECAST_GATE_PROOF: {
+                quality_sample_size: 42,
+              },
+            },
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getFinalGlobalForecastGate({ country: 'US', horizon: '3m' });
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/forecasts/final-global-gate?country=US&horizon=3m']);
+  assert.equal(payload.gate_id, 'final_global_forecast_gate_v1');
+  assert.equal(payload.summary.free_data_compliant, true);
+  assert.equal(payload.proofs.FINAL_GLOBAL_FORECAST_GATE_PROOF.quality_sample_size, 42);
 });
 
 test('getMacroRegimeHierarchy unwraps the country continent world hierarchy contract', async () => {

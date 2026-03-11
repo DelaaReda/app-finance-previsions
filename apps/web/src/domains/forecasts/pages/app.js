@@ -1824,7 +1824,9 @@ function sanitizeTradeIdeas(items) {
     signalType: toString(item.signalType || item.signal, 'Signal'),
     entry: toFiniteNumber(item.entry, 0),
     target: toFiniteNumber(item.target, 0),
-    confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, 70))))
+    confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, 70)))),
+    attributionLabel: toString(item.attributionLabel || item.attribution_label, ''),
+    attributionDetail: toString(item.attributionDetail || item.attribution_detail, '')
   }));
 }
 
@@ -1883,6 +1885,9 @@ function sanitizeForecastRows(rows) {
       region,
       regime,
       geography,
+      forecastFusion: isObject(item.forecastFusion)
+        ? item.forecastFusion
+        : (isObject(item.forecast_fusion) ? item.forecast_fusion : null),
       provenance: {
         ...provenance,
         sla: isObject(provenance.sla) ? provenance.sla : {}
@@ -1914,8 +1919,41 @@ function sanitizeTopMovers(payload) {
   });
 }
 
-function buildTradeIdeasFromForecasts(items) {
+function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecommendations || []) {
   const rows = sanitizeForecastRows(items);
+  const recommendationRows = toArray(recommendations, []).filter((item) => isObject(item));
+  if (recommendationRows.length) {
+    return sanitizeTradeIdeas(recommendationRows.slice(0, 6).map((item) => {
+      const fusion = isObject(item.forecast_fusion) ? item.forecast_fusion : {};
+      const attribution = isObject(fusion.attribution) ? fusion.attribution : {};
+      const dominantLayer = toString(fusion.dominant_layer || fusion.dominantLayer, '').replace(/[_-]+/g, ' ').trim();
+      const blendedScore = Math.round(toFiniteNumber(fusion.blended_score || fusion.blendedScore, item.score) * 100);
+      const direction = toString(attribution.forecast_direction || item.direction || item.action, '').trim().toUpperCase();
+      const regime = toString(attribution.market_regime || attribution.marketRegime || '', '').replace(/_/g, ' ').trim();
+      const expectedReturn = normalizePercentValue(toFiniteNumber(
+        attribution.expected_return || attribution.expectedReturn,
+        NaN
+      ), NaN);
+      const detailParts = [
+        dominantLayer ? `Layer: ${dominantLayer}` : '',
+        direction ? `Direction: ${direction}` : '',
+        regime ? `Regime: ${regime}` : '',
+        Number.isFinite(expectedReturn)
+          ? `Return: ${expectedReturn >= 0 ? '+' : ''}${expectedReturn.toFixed(1)}%`
+          : ''
+      ].filter(Boolean);
+
+      return {
+        symbol: item.ticker,
+        signalType: toString(item.action, 'HOLD'),
+        entry: toFiniteNumber(item.entry || item.current_price || item.currentPrice, 0),
+        target: toFiniteNumber(item.target || item.target_price || item.targetPrice, 0),
+        confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, item.score) * 100))),
+        attributionLabel: blendedScore > 0 ? `Fusion ${blendedScore}%` : 'Fusion tracked',
+        attributionDetail: detailParts.join(' • ')
+      };
+    }));
+  }
   if (!rows.length) {
     return sanitizeTradeIdeas(window.tradeIdeas || FALLBACK_TRADE_IDEAS);
   }
@@ -2716,9 +2754,37 @@ function updateLiveProvenance(meta = {}) {
   const signalMeshText = signalMeshSourceCount > 0
     ? ` | mesh: ${signalMeshSourceCount} sources (${signalMeshNominalCount} nominal) across ${signalMeshLayerCount} layers${signalMeshLicenseLabels.length ? ` | licenses: ${signalMeshLicenseLabels.join(', ')}` : ''}`
     : '';
+  const finalGlobalForecastGate = isObject(meta.finalGlobalForecastGate) ? meta.finalGlobalForecastGate : null;
+  const gateSummary = isObject(finalGlobalForecastGate && finalGlobalForecastGate.summary)
+    ? finalGlobalForecastGate.summary
+    : {};
+  const gateStatus = toString(finalGlobalForecastGate && finalGlobalForecastGate.status, '').trim().toLowerCase();
+  const gateLayers = toArray(gateSummary.required_layers_active, []).map((entry) => toString(entry, '').trim()).filter(Boolean);
+  const gateQualitySample = toFiniteNumber(
+    finalGlobalForecastGate && finalGlobalForecastGate.proofs
+      && finalGlobalForecastGate.proofs.FINAL_GLOBAL_FORECAST_GATE_PROOF
+      && finalGlobalForecastGate.proofs.FINAL_GLOBAL_FORECAST_GATE_PROOF.quality_sample_size,
+    0,
+  );
+  const gateQualityStatus = gateSummary.quality_non_regressing === true
+    ? 'quality ok'
+    : (gateSummary.quality_non_regressing === false ? 'quality degraded' : '');
+  const gateComplianceStatus = gateSummary.free_data_compliant === true
+    ? 'free-data ok'
+    : (gateSummary.free_data_compliant === false ? 'free-data degraded' : '');
+  const gateParts = [gateComplianceStatus, gateQualityStatus].filter(Boolean);
+  const gateStatusLabel = gateStatus ? gateStatus.toUpperCase() : '';
+  const finalGateText = gateStatusLabel || gateLayers.length || gateParts.length || gateQualitySample > 0
+    ? ` | final gate: ${[
+      gateStatusLabel,
+      gateLayers.length ? `${gateLayers.length} layers` : '',
+      gateParts.join(', '),
+      gateQualitySample > 0 ? `sample ${gateQualitySample}` : '',
+    ].filter(Boolean).join(' | ')}`
+    : '';
   const warningText = warnings.length ? ` | warnings: ${warnings.join(', ')}` : '';
   const freshness = formatRelativeTime(meta.generatedAt);
-  lineage.textContent = `Source: ${sources.join(', ')} | model: ${models.join(', ')} | updated: ${freshness}${contractText}${forecastSlaText}${signalMeshText}${warningText}`;
+  lineage.textContent = `Source: ${sources.join(', ')} | model: ${models.join(', ')} | updated: ${freshness}${contractText}${forecastSlaText}${signalMeshText}${finalGateText}${warningText}`;
 }
 
 function summarizeForecastSla(rows) {
@@ -2950,6 +3016,10 @@ function renderForecastScenarioWidget() {
     base: bars[1],
     bear: bars[2]
   };
+  const attributionSection = scenarioWidget.querySelector('[data-role="fusion-attribution"]');
+  const attributionBand = scenarioWidget.querySelector('[data-role="fusion-attribution-band"]');
+  const attributionSummary = scenarioWidget.querySelector('[data-role="fusion-attribution-summary"]');
+  const attributionRows = scenarioWidget.querySelector('[data-role="fusion-attribution-rows"]');
   if (!rows.length || !bars.length) {
     return;
   }
@@ -3085,6 +3155,59 @@ function renderForecastScenarioWidget() {
         scenarioContext.textContent += ` • ${contradictionCopy}`;
       }
     }
+  }
+
+  const fusionLayerTotals = rows.reduce((acc, row) => {
+    const layers = Array.isArray(row?.forecastFusion?.layers) ? row.forecastFusion.layers : [];
+    layers.forEach((layer) => {
+      if (!isObject(layer)) return;
+      const key = toString(layer.layer, '').trim();
+      if (!key) return;
+      const rawContribution = toFiniteNumber(
+        layer.contribution,
+        toFiniteNumber(layer.weight, 0),
+      );
+      const normalizedContribution = rawContribution <= 1
+        ? rawContribution * 100
+        : rawContribution;
+      acc[key] = (acc[key] || 0) + Math.max(0, normalizedContribution);
+    });
+    return acc;
+  }, {});
+  const fusionEntries = Object.entries(fusionLayerTotals)
+    .map(([layer, contribution]) => ({
+      layer,
+      contribution,
+    }))
+    .filter((entry) => entry.contribution > 0);
+  const totalFusionContribution = fusionEntries.reduce((sum, entry) => sum + entry.contribution, 0);
+  const normalizedFusionEntries = totalFusionContribution > 0
+    ? fusionEntries
+      .map((entry) => ({
+        layer: entry.layer,
+        contribution: Math.round((entry.contribution / totalFusionContribution) * 100),
+      }))
+      .sort((left, right) => right.contribution - left.contribution)
+    : [];
+  if (normalizedFusionEntries.length && attributionSection && attributionBand && attributionSummary && attributionRows) {
+    const dominantLayer = normalizedFusionEntries[0];
+    attributionSection.hidden = false;
+    attributionBand.textContent = 'Live';
+    attributionBand.className = 'scenario-geopolitical-badge band-low';
+    attributionSummary.textContent = `Dominant layer: ${dominantLayer.layer.replace(/_/g, ' ')} (${dominantLayer.contribution}%)`;
+    attributionRows.innerHTML = normalizedFusionEntries.slice(0, 4).map((entry) => `
+      <div class="scenario-fusion-row">
+        <span class="scenario-fusion-label">${escapeHtml(entry.layer.replace(/_/g, ' '))}</span>
+        <div class="scenario-fusion-bar"><span style="width: ${Math.max(8, entry.contribution)}%"></span></div>
+        <strong class="scenario-fusion-value">${entry.contribution}%</strong>
+      </div>
+    `).join('');
+  } else if (attributionSection && attributionBand && attributionSummary && attributionRows) {
+    attributionSection.hidden = false;
+    attributionBand.textContent = 'Degraded';
+    attributionBand.className = 'scenario-geopolitical-badge';
+    attributionSummary.textContent = 'Awaiting auditable forecast fusion payload.';
+    attributionRows.innerHTML = '';
   }
 
   const widgetTimestamp = scenarioWidget.querySelector('.widget-timestamp');
@@ -3469,6 +3592,11 @@ function applyLiveDashboardData(payload = {}) {
     globalSignalMesh: isObject(payload.globalSignalMesh)
       ? payload.globalSignalMesh
       : (isObject(payloadMeta.globalSignalMesh) ? payloadMeta.globalSignalMesh : null),
+    finalGlobalForecastGate: isObject(data.finalGlobalForecastGate)
+      ? data.finalGlobalForecastGate
+      : (isObject(payload.finalGlobalForecastGate)
+        ? payload.finalGlobalForecastGate
+        : (isObject(payloadMeta.finalGlobalForecastGate) ? payloadMeta.finalGlobalForecastGate : null)),
     macroRegimeHierarchy: isObject(data.macroRegimeHierarchy)
       ? data.macroRegimeHierarchy
       : (isObject(payload.macroRegimeHierarchy)
@@ -3488,6 +3616,7 @@ function applyLiveDashboardData(payload = {}) {
 
   tradeIdeas = sanitizeTradeIdeas(data.tradeIdeas);
   liveForecastRows = sanitizeForecastRows(data.forecasts || window.liveForecasts);
+  window.liveRecommendations = toArray(data.recommendations, window.liveRecommendations || []);
   liveForecastScoreboard = isObject(data.forecastScoreboard)
     ? data.forecastScoreboard
     : (isObject(data.forecast_scoreboard) ? data.forecast_scoreboard : window.liveForecastScoreboard || null);
@@ -3504,7 +3633,7 @@ function applyLiveDashboardData(payload = {}) {
   newsItems = sanitizeNewsItems(data.newsItems);
   marketDrivers = sanitizeMarketDrivers(data.marketDrivers);
   insiderBehavior = sanitizeInsiderBehavior(data.insiderBehavior || payload.insiderBehavior || window.insiderBehavior || null);
-  tradeIdeas = buildTradeIdeasFromForecasts(liveForecastRows);
+  tradeIdeas = buildTradeIdeasFromForecasts(liveForecastRows, window.liveRecommendations);
 
   const payloadTopStocks = toArray(data.topStocks, []);
   const fallbackTopStocks = inferTopStocksFromMovers(liveTopMovers, payloadTopStocks);
@@ -6794,6 +6923,12 @@ function renderTradeIdeas(root = document) {
           <span class="arrow">→</span>
           <span class="target">$${idea.target}</span>
         </div>
+        ${idea.attributionLabel ? `
+          <div class="trade-attribution">
+            <span class="trade-attribution-badge">${idea.attributionLabel}</span>
+            ${idea.attributionDetail ? `<span class="trade-attribution-detail">${idea.attributionDetail}</span>` : ''}
+          </div>
+        ` : ''}
       </div>
       <div class="trade-meta">
         <div class="confidence-bar">

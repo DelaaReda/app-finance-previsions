@@ -372,6 +372,10 @@ function loadRenderForecastScenarioWidget() {
   const geopoliticalGraph = createElementStub();
   const geopoliticalAlertCopy = createElementStub();
   const geopoliticalAlertBand = createElementStub();
+  const fusionAttribution = createElementStub();
+  const fusionAttributionBand = createElementStub();
+  const fusionAttributionSummary = createElementStub();
+  const fusionAttributionRows = createElementStub();
   const shockChain = createElementStub();
   const shockChainBand = createElementStub();
   const shockChainUpstream = createElementStub();
@@ -397,6 +401,10 @@ function loadRenderForecastScenarioWidget() {
     querySelector(selector) {
       if (selector === '.scenario-context') return scenarioContext;
       if (selector === '.widget-timestamp') return widgetTimestamp;
+      if (selector === '[data-role="fusion-attribution"]') return fusionAttribution;
+      if (selector === '[data-role="fusion-attribution-band"]') return fusionAttributionBand;
+      if (selector === '[data-role="fusion-attribution-summary"]') return fusionAttributionSummary;
+      if (selector === '[data-role="fusion-attribution-rows"]') return fusionAttributionRows;
       if (selector === '[data-role="geopolitical-risk"]') return geopoliticalRisk;
       if (selector === '[data-role="geo-graph"]') return geopoliticalGraph;
       if (selector === '[data-role="geo-alert-copy"]') return geopoliticalAlertCopy;
@@ -469,6 +477,10 @@ function loadRenderForecastScenarioWidget() {
     geopoliticalGraph,
     geopoliticalAlertCopy,
     geopoliticalAlertBand,
+    fusionAttribution,
+    fusionAttributionBand,
+    fusionAttributionSummary,
+    fusionAttributionRows,
     shockChain,
     shockChainBand,
     shockChainUpstream,
@@ -478,6 +490,54 @@ function loadRenderForecastScenarioWidget() {
     shockChainAssumptionCopy,
     shockChainCopy,
   };
+}
+
+function loadTradeIdeaHelpers() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const sanitizeTradeIdeasSource = extractFunction(source, 'sanitizeTradeIdeas', '\n\nfunction normalizePercentValue');
+  const normalizePercentValueSource = extractFunction(source, 'normalizePercentValue', '\n\nfunction sanitizeForecastRows');
+  const buildTradeIdeasSource = extractFunction(source, 'buildTradeIdeasFromForecasts', '\n\nfunction normalizeKpiHero');
+  const renderTradeIdeasSource = extractFunction(source, 'renderTradeIdeas', '\n\n// V13: Render Market Calendar');
+  const container = { innerHTML: '' };
+  const sandbox = {
+    console,
+    window: {
+      liveRecommendations: [],
+      tradeIdeas: [],
+    },
+    FALLBACK_TRADE_IDEAS: [],
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return value === null || value === undefined ? fallback : String(value);
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : fallback;
+    },
+    sanitizeForecastRows(value) {
+      return Array.isArray(value) ? value : [];
+    },
+    getFacetteWidgetSlot() {
+      return container;
+    },
+    tradeIdeas: [],
+    document: {},
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${sanitizeTradeIdeasSource}\n${normalizePercentValueSource}\n${buildTradeIdeasSource}\n${renderTradeIdeasSource}\nthis.sanitizeTradeIdeas = sanitizeTradeIdeas;\nthis.buildTradeIdeasFromForecasts = buildTradeIdeasFromForecasts;\nthis.renderTradeIdeas = renderTradeIdeas;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  return { sandbox, container };
 }
 
 function loadRenderMarketDrivers() {
@@ -1762,6 +1822,34 @@ test('applyLiveDashboardData stores event impact horizon matrix payloads for the
   assert.equal(sandbox.rendered, true);
 });
 
+test('applyLiveDashboardData stores final global forecast gate payloads for downstream gate summaries', () => {
+  const { sandbox } = loadApplyLiveDashboardData();
+
+  sandbox.applyLiveDashboardData({
+    generatedAt: '2026-03-11T10:00:00Z',
+    data: {
+      finalGlobalForecastGate: {
+        gate_id: 'final_global_forecast_gate_v1',
+        status: 'pass',
+        summary: {
+          free_data_compliant: true,
+          quality_non_regressing: true,
+          required_layers_active: ['macro', 'policy', 'insider', 'geopolitical'],
+        },
+        proofs: {
+          FINAL_GLOBAL_FORECAST_GATE_PROOF: {
+            quality_sample_size: 42,
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(sandbox.liveDataMeta.finalGlobalForecastGate.gate_id, 'final_global_forecast_gate_v1');
+  assert.equal(sandbox.liveDataMeta.finalGlobalForecastGate.summary.required_layers_active.length, 4);
+  assert.equal(sandbox.rendered, true);
+});
+
 test('sanitizeInsiderBehavior preserves already-normalized guardrail and provenance fields', () => {
   const sandbox = loadSanitizeInsiderBehavior();
 
@@ -1818,6 +1906,57 @@ test('renderMarketDrivers appends insider behavior summary to the existing widge
   assert.match(container.innerHTML, /Uncertainty factors: limited_sample_size, single_cluster_activity/);
 });
 
+test('buildTradeIdeasFromForecasts prefers recommendation forecast fusion attribution', () => {
+  const { sandbox } = loadTradeIdeaHelpers();
+  const ideas = sandbox.buildTradeIdeasFromForecasts([], [
+    {
+      ticker: 'NVDA',
+      action: 'BUY',
+      confidence: 0.81,
+      score: 0.78,
+      current_price: 875,
+      target_price: 940,
+      forecast_fusion: {
+        blended_score: 0.78,
+        dominant_layer: 'forecast_confidence',
+        attribution: {
+          forecast_direction: 'up',
+          market_regime: 'BULL_MARKET',
+          expected_return: 0.123,
+        },
+      },
+    },
+  ]);
+
+  assert.equal(ideas.length, 1);
+  assert.equal(ideas[0].symbol, 'NVDA');
+  assert.equal(ideas[0].attributionLabel, 'Fusion 78%');
+  assert.match(ideas[0].attributionDetail, /Layer: forecast confidence/i);
+  assert.match(ideas[0].attributionDetail, /Regime: BULL MARKET/i);
+  assert.match(ideas[0].attributionDetail, /Return: \+12\.3%/i);
+});
+
+test('renderTradeIdeas renders attribution badge and detail when present', () => {
+  const { sandbox, container } = loadTradeIdeaHelpers();
+  sandbox.tradeIdeas = [
+    {
+      symbol: 'GLD',
+      signalType: 'BUY',
+      entry: 210,
+      target: 224,
+      confidence: 74,
+      attributionLabel: 'Fusion 71%',
+      attributionDetail: 'Layer: macro alignment • Regime: RISK OFF',
+    },
+  ];
+
+  sandbox.renderTradeIdeas();
+
+  assert.match(container.innerHTML, /Fusion 71%/);
+  assert.match(container.innerHTML, /Layer: macro alignment/);
+  assert.match(container.innerHTML, /Regime: RISK OFF/);
+});
+
 test('renderForecastScenarioWidget prefers threshold_summary over scoreboard rows for hit-rate copy', () => {
   const { sandbox, scenarioContext, widgetTimestamp } = loadRenderForecastScenarioWidget();
   sandbox.liveForecastRows = [
@@ -1851,6 +1990,51 @@ test('renderForecastScenarioWidget prefers threshold_summary over scoreboard row
     'Top live forecasts: NVDA, MSFT, AAPL • Walk-forward hit rate 61% vs 52% target'
   );
   assert.equal(widgetTimestamp.textContent, 'On target • Walk-forward 2 minutes ago');
+});
+
+test('renderForecastScenarioWidget surfaces normalized forecast fusion attribution weights', () => {
+  const {
+    sandbox,
+    fusionAttribution,
+    fusionAttributionBand,
+    fusionAttributionSummary,
+    fusionAttributionRows,
+  } = loadRenderForecastScenarioWidget();
+  sandbox.liveForecastRows = [
+    {
+      ticker: 'NVDA',
+      direction: 'up',
+      expectedReturn: 4.5,
+      forecastFusion: {
+        layers: [
+          { layer: 'forecast_confidence', contribution: 0.30 },
+          { layer: 'momentum', contribution: 0.20 },
+          { layer: 'news', contribution: 0.10 },
+        ],
+      },
+    },
+    {
+      ticker: 'MSFT',
+      direction: 'neutral',
+      expectedReturn: 1.2,
+      forecastFusion: {
+        layers: [
+          { layer: 'forecast_confidence', contribution: 0.25 },
+          { layer: 'macro_alignment', contribution: 0.15 },
+        ],
+      },
+    },
+  ];
+
+  sandbox.renderForecastScenarioWidget();
+
+  assert.equal(fusionAttribution.hidden, false);
+  assert.equal(fusionAttributionBand.textContent, 'Live');
+  assert.equal(fusionAttributionBand.className, 'scenario-geopolitical-badge band-low');
+  assert.equal(fusionAttributionSummary.textContent, 'Dominant layer: forecast confidence (55%)');
+  assert.match(fusionAttributionRows.innerHTML, /forecast confidence/);
+  assert.match(fusionAttributionRows.innerHTML, /55%/);
+  assert.match(fusionAttributionRows.innerHTML, /macro alignment/);
 });
 
 test('renderForecastScenarioWidget surfaces geopolitical conflict escalation from live payload', () => {
@@ -2913,6 +3097,32 @@ test('updateLiveProvenance includes global signal mesh source and license covera
 
   assert.match(lineage.textContent, /mesh: 9 sources \(7 nominal\) across 6 layers/);
   assert.match(lineage.textContent, /licenses: public_open_data:5, public_market_data_terms:2/);
+});
+
+test('updateLiveProvenance includes final global gate status and quality evidence', () => {
+  const { sandbox, lineage } = loadForecastSlaHelpers();
+
+  sandbox.updateLiveProvenance({
+    generatedAt: '2026-03-10T10:02:00Z',
+    sources: ['api-connector'],
+    modelVersions: ['live'],
+    contractState: 'ok',
+    finalGlobalForecastGate: {
+      status: 'pass',
+      summary: {
+        free_data_compliant: true,
+        quality_non_regressing: true,
+        required_layers_active: ['macro', 'policy', 'insider', 'geopolitical'],
+      },
+      proofs: {
+        FINAL_GLOBAL_FORECAST_GATE_PROOF: {
+          quality_sample_size: 42,
+        },
+      },
+    },
+  });
+
+  assert.match(lineage.textContent, /final gate: PASS \| 4 layers \| free-data ok, quality ok \| sample 42/);
 });
 
 test('sanitizeAlertTimeline surfaces policy status and jurisdiction in alert titles', () => {
