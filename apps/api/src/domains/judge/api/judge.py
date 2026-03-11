@@ -3724,6 +3724,56 @@ async def get_judge_strategy_playbooks(
     )
 
 
+@router.get("/sector-company-transmission")
+async def get_judge_sector_company_transmission(
+    limit: int = Query(20, ge=1, le=100, description="Max rows returned (1-100)"),
+    min_confidence: float = Query(
+        0.3, ge=0.0, le=1.0, description="Confidence minimum for inclusion (0.0-1.0)"
+    ),
+    ticker: Optional[List[str]] = Query(
+        None, description="Filter by ticker before transmission synthesis"
+    ),
+    portfolio_id: Optional[str] = Query(
+        None,
+        description="Saved portfolio id used to inject Judge portfolio context before transmission synthesis.",
+    ),
+    sort_by: JudgeSortBy = Query(
+        "confidence",
+        description="Sort by: confidence, expected_return, score, risk_level, timestamp",
+    ),
+    sort_order: JudgeSortOrder = Query("desc", description="Sort order: asc, desc"),
+    profile: str = Query("equity_1w", description="Judge profile used for underlying verdicts"),
+    debug: bool = Query(False, description="Expose upstream verdict metadata"),
+    debug_full: bool = Query(
+        False,
+        description="Include full debug payloads (admin-gated in upstream verdict path).",
+    ),
+    x_debug_token: Optional[str] = Header(
+        default=None,
+        alias="X-Debug-Token",
+        description="Token admin requis pour debug_full si JUDGE_DEBUG_ADMIN_TOKEN est configure.",
+    ),
+):
+    """Build sector-to-company transmission rows from the existing Judge verdict stack."""
+    from services.judge_endpoint_service import (
+        get_judge_sector_company_transmission_payload,
+    )
+
+    return await get_judge_sector_company_transmission_payload(
+        limit=limit,
+        min_confidence=min_confidence,
+        ticker=ticker,
+        portfolio_id=portfolio_id,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        profile=profile,
+        debug=debug,
+        debug_full=debug_full,
+        x_debug_token=x_debug_token,
+        compute_verdicts_fn=_legacy_get_judge_verdicts,
+    )
+
+
 @router.get("/geopolitical-risk-graph")
 async def get_judge_geopolitical_risk_graph(
     region: Optional[str] = Query(

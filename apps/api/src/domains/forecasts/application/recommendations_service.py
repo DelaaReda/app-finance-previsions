@@ -455,6 +455,81 @@ class RecommendationsService:
         
         # Default: NORMAL regime
         return 0.5
+
+    def _build_forecast_fusion(
+        self,
+        *,
+        ticker: str,
+        score: float,
+        forecast: Dict[str, Any],
+        market_context: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Expose the deterministic multi-layer blend behind each recommendation."""
+        direction = str(forecast.get("direction") or "flat").lower()
+        expected_return = float(forecast.get("expected_return", 0.0) or 0.0)
+        forecast_confidence = self._normalize(forecast.get("confidence"), 0.0, 1.0)
+        expected_return_score = self._normalize(expected_return, -0.05, 0.05)
+        news_context = forecast.get("market_context", {}) or {}
+        news_sentiment = self._normalize(news_context.get("news_sentiment"), -0.6, 0.6)
+        news_volume = self._normalize(news_context.get("news_volume_zscore"), -3.0, 3.0)
+        macro_alignment = self._calculate_macro_alignment(
+            ticker,
+            direction,
+            market_context.get("regime", "NORMAL"),
+        )
+        momentum = 0.8 if direction == "up" else 0.2 if direction == "down" else 0.5
+        risk_reward = self._normalize(abs(expected_return), 0.0, 0.08)
+        layers = [
+            {
+                "layer": "forecast_confidence",
+                "score": round(forecast_confidence, 3),
+                "weight": 0.30,
+                "contribution": round(forecast_confidence * 0.30, 3),
+            },
+            {
+                "layer": "expected_return",
+                "score": round(expected_return_score, 3),
+                "weight": 0.20,
+                "contribution": round(expected_return_score * 0.20, 3),
+            },
+            {
+                "layer": "momentum",
+                "score": round(momentum, 3),
+                "weight": 0.20,
+                "contribution": round(momentum * 0.20, 3),
+            },
+            {
+                "layer": "news",
+                "score": round((news_sentiment * 0.7) + (news_volume * 0.3), 3),
+                "weight": 0.15,
+                "contribution": round(((news_sentiment * 0.7) + (news_volume * 0.3)) * 0.15, 3),
+            },
+            {
+                "layer": "macro_alignment",
+                "score": round(macro_alignment, 3),
+                "weight": 0.10,
+                "contribution": round(macro_alignment * 0.10, 3),
+            },
+            {
+                "layer": "risk_reward",
+                "score": round(risk_reward, 3),
+                "weight": 0.05,
+                "contribution": round(risk_reward * 0.05, 3),
+            },
+        ]
+        dominant_layer = max(layers, key=lambda item: item["contribution"])
+        return {
+            "blended_score": round(score, 3),
+            "dominant_layer": dominant_layer["layer"],
+            "layers": layers,
+            "attribution": {
+                "forecast_direction": direction,
+                "market_regime": market_context.get("regime", "NORMAL"),
+                "expected_return": round(expected_return, 4),
+                "news_sentiment": round(news_sentiment, 3),
+                "macro_alignment": round(macro_alignment, 3),
+            },
+        }
     
     async def _validate_with_llm(
         self,
@@ -598,6 +673,12 @@ Output ONLY valid JSON with this structure:
             ticker = item['ticker']
             score = item['score']
             forecast = item.get('data', {}).get('forecast', {})
+            fusion = self._build_forecast_fusion(
+                ticker=ticker,
+                score=score,
+                forecast=forecast,
+                market_context=market_context,
+            )
 
             rec = {
                 'ticker': ticker,
@@ -610,8 +691,10 @@ Output ONLY valid JSON with this structure:
                 'supporting_data': {
                     'forecast_direction': forecast.get('direction', 'unknown'),
                     'forecast_confidence': round(forecast.get('confidence', 0.5), 2),
-                    'ml_score': round(score, 2)
-                }
+                    'ml_score': round(score, 2),
+                    'forecast_fusion': fusion,
+                },
+                'forecast_fusion': fusion,
             }
 
             # Enrich with playbook context (BATCH-15-DEV-02)

@@ -235,6 +235,57 @@ def test_judge_strategy_playbooks_marks_signal_divergence(monkeypatch):
     assert payload["data"]["playbooks"][0]["conflicts"] == ["signal_divergence"]
 
 
+def test_judge_sector_company_transmission_route_delegates_to_service(monkeypatch):
+    captured = {}
+    now_iso = "2026-03-11T05:00:00Z"
+
+    async def fake_get_judge_sector_company_transmission_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "data": {
+                "rows": [
+                    {
+                        "ticker": "NVDA",
+                        "sector": "Technology",
+                        "transmission_factor": 0.72,
+                        "transmission_confidence": 0.69,
+                        "transmission_uncertainty": 0.31,
+                        "confidence_before_transmission": 0.8,
+                        "confidence_after_transmission": 0.71,
+                    }
+                ],
+                "count": 1,
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+            },
+            "freshness": now_iso,
+            "status": "ok",
+            "error": None,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_sector_company_transmission_payload",
+        fake_get_judge_sector_company_transmission_payload,
+    )
+
+    client = _client()
+    resp = client.get(
+        "/api/judge/sector-company-transmission?limit=1&ticker=NVDA&portfolio_id=pf-123&debug=true"
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+
+    assert payload["ok"] is True
+    assert payload["data"]["count"] == 1
+    assert captured["limit"] == 1
+    assert captured["ticker"] == ["NVDA"]
+    assert captured["portfolio_id"] == "pf-123"
+    assert captured["debug"] is True
+    assert callable(captured["compute_verdicts_fn"])
+
+
 def test_judge_strategy_playbooks_supports_items_legacy_payload(monkeypatch):
     now_iso = "2026-02-28T00:00:00Z"
 

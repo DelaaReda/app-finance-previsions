@@ -333,6 +333,45 @@ class TestPlaybookEnrichmentStructure:
         assert 'name' in rec['playbook_context']
         assert 'description' in rec['playbook_context']
         assert 'guardrails' in rec['playbook_context']
+        assert 'forecast_fusion' in rec
+        assert rec['forecast_fusion']['blended_score'] == pytest.approx(0.78, abs=1e-3)
+        assert rec['forecast_fusion']['dominant_layer'] == 'forecast_confidence'
+        assert rec['forecast_fusion']['attribution']['market_regime'] == 'BULL_MARKET'
+        assert len(rec['forecast_fusion']['layers']) == 6
+        assert rec['supporting_data']['forecast_fusion'] == rec['forecast_fusion']
+
+    def test_forecast_fusion_tracks_macro_dominance_for_safe_haven(self):
+        """Safe havens in risk-off should expose macro attribution as dominant."""
+        service = RecommendationsService()
+
+        validated = [
+            {
+                'ticker': 'GLD',
+                'score': 0.14,
+                'data': {
+                    'forecast': {
+                        'direction': 'down',
+                        'confidence': 0.0,
+                        'expected_return': -0.05,
+                        'market_context': {
+                            'news_sentiment': 0.0,
+                            'news_volume_zscore': 0.0,
+                        },
+                    }
+                }
+            }
+        ]
+
+        market_context = {
+            'regime': 'RISK_OFF',
+            'key_drivers': ['Flight to safety']
+        }
+
+        result = service._format_recommendations(validated, market_context)
+        fusion = result['recommendations'][0]['forecast_fusion']
+
+        assert fusion['dominant_layer'] == 'macro_alignment'
+        assert fusion['attribution']['macro_alignment'] == pytest.approx(1.0, abs=1e-3)
 
 
 if __name__ == "__main__":
