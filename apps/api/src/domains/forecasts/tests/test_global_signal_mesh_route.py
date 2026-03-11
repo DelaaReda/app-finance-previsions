@@ -1,7 +1,8 @@
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.main import create_app
-from domains.forecasts.api import forecasts as forecasts_api
+from api.routes import forecasts as forecasts_api
 from domains.forecasts.application.global_signal_mesh_service import (
     _GLOBAL_SIGNAL_MESH_RESPONSE_CACHE,
     _INSIDER_BEHAVIOR_RESPONSE_CACHE,
@@ -62,7 +63,6 @@ def test_global_signal_mesh_debug_bypasses_cache_and_can_include_non_nominal_sou
 
 
 def test_global_signal_mesh_fallback_keeps_observability_contract(monkeypatch):
-    client = _client()
     _GLOBAL_SIGNAL_MESH_RESPONSE_CACHE.clear()
 
     monkeypatch.setattr(
@@ -70,8 +70,11 @@ def test_global_signal_mesh_fallback_keeps_observability_contract(monkeypatch):
         "build_global_signal_mesh_payload",
         lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
     )
+    app = FastAPI()
+    app.include_router(forecasts_api.router)
+    client = TestClient(app)
 
-    response = client.get("/api/forecasts/global-signal-mesh")
+    response = client.get("/forecasts/global-signal-mesh")
 
     assert response.status_code == 200
     data = response.json()["data"]
@@ -454,7 +457,15 @@ def test_batch46_country_continent_world_forecast_coverage(monkeypatch):
     assert isinstance(consistency["has_contradictions"], bool)
     assert "pairs" in consistency
     assert isinstance(consistency["pairs"], list)
-    
+    assert "contradiction_count" in consistency
+    assert isinstance(consistency["contradiction_count"], int)
+    assert "alignment_status" in consistency
+    assert consistency["alignment_status"] in {"aligned", "contradiction"}
+
+    assert "confidence" in data
+    assert isinstance(data["confidence"], float)
+    assert 0.0 <= data["confidence"] <= 1.0
+
     narrative = data["narrative"]
     assert "summary" in narrative
     assert "regime_bias" in narrative
@@ -465,6 +476,7 @@ def test_batch46_country_continent_world_forecast_coverage(monkeypatch):
     assert data["stats"]["level_count"] == 3
     assert "news_signal_count" in data["stats"]
     assert "coverage_source_count" in data["stats"]
+    assert data["stats"]["hierarchy_confidence"] == data["confidence"]
     
     provenance = data["provenance"]
     assert "source" in provenance

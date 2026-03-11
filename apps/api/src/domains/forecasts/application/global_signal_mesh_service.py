@@ -634,6 +634,37 @@ def _insider_signal_row(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _insider_placeholder_signal(*, ticker: str, generated_at: str, reason: str) -> Dict[str, Any]:
+    normalized_ticker = _coerce_text(ticker).upper() or "MARKET"
+    return {
+        "ticker": normalized_ticker,
+        "stance": "insufficient_evidence",
+        "summary": (
+            f"Insider activity for {normalized_ticker} is unavailable in the current snapshot, "
+            "so this layer stays conservative and should be combined with other layers."
+        ),
+        "confidence": 0.15,
+        "uncertainty": {
+            "level": "high",
+            "factors": [reason, "baseline_caution_required"],
+        },
+        "activity": {
+            "window_30d": {"buys": 0, "sells": 0, "net_trades": 0},
+            "window_90d": {"buys": 0, "sells": 0, "net_trades": 0},
+        },
+        "provenance": {
+            "source": ["ownership_snapshot_fallback", "SEC EDGAR"],
+            "asof_utc": generated_at,
+            "filing_source": "public_form4",
+        },
+        "guardrails": {
+            "deterministic_language_allowed": False,
+            "standalone_decision_grade": "not_allowed",
+            "review_note": "Use insider behavior only as corroborating evidence.",
+        },
+    }
+
+
 def _extract_policy_status(text: str) -> str:
     haystack = f" {text.lower()} "
     for label, keywords in _POLICY_STATUS_KEYWORDS:
@@ -866,6 +897,21 @@ def build_insider_behavior_payload(
         warnings.append("no_ownership_snapshot_rows")
     elif not signals:
         warnings.append("filters_excluded_all_insider_rows")
+    fallback_used = False
+    if not signals:
+        placeholder_tickers = list(normalized_tickers) or ["MARKET"]
+        placeholder_reason = (
+            "no_ownership_snapshot_rows" if not rows else "filters_excluded_all_insider_rows"
+        )
+        signals = [
+            _insider_placeholder_signal(
+                ticker=ticker,
+                generated_at=generated_at,
+                reason=placeholder_reason,
+            )
+            for ticker in placeholder_tickers[:normalized_limit]
+        ]
+        fallback_used = True
 
     payload = {
         "engine_id": "insider_behavior_intelligence_v1",
@@ -893,10 +939,11 @@ def build_insider_behavior_payload(
             "deterministic_language_allowed": False,
             "policy": "Insider activity is evidence with uncertainty, never a standalone directive.",
         },
+        "fallback_used": fallback_used,
         "warnings": warnings,
         "provenance": {
             "source": ["forecasts_insider_behavior", "ownership_snapshot", "sec_edgar_form4"],
-            "fallback_used": False,
+            "fallback_used": fallback_used,
             "snapshot_key": "ownership_snapshot",
             "sla": {
                 "updated_at": generated_at,
@@ -1072,6 +1119,28 @@ def _consistency_diagnostics(levels: List[Dict[str, Any]]) -> Dict[str, Any]:
         "has_contradictions": contradictory,
         "pairs": diagnostics,
     }
+
+
+def _hierarchy_confidence(levels: List[Dict[str, Any]], consistency: Dict[str, Any]) -> float:
+    confidences: List[float] = []
+    for level in levels:
+        try:
+            confidences.append(float(level.get("confidence") or 0.0))
+        except Exception:
+            continue
+    if not confidences:
+        return 0.0
+    aggregate = sum(confidences) / len(confidences)
+    contradiction_count = len(
+        [
+            item
+            for item in (consistency.get("pairs") or [])
+            if str(item.get("status") or "").lower() == "contradiction"
+        ]
+    )
+    if contradiction_count:
+        aggregate -= 0.1 * contradiction_count
+    return round(max(0.0, min(1.0, aggregate)), 3)
 
 
 def _llm_macro_narrative(levels: List[Dict[str, Any]], *, horizon: str) -> Dict[str, Any]:
@@ -1251,6 +1320,7 @@ def build_macro_regime_hierarchy_payload(
         _build_level("country", normalized_country),
     ]
     consistency = _consistency_diagnostics(levels)
+    hierarchy_confidence = _hierarchy_confidence(levels, consistency)
     sources = _selected_registry(include_non_nominal=include_non_nominal)
     coverage_sources = [
         item["source_id"]
@@ -1277,8 +1347,21 @@ def build_macro_regime_hierarchy_payload(
             "horizon": normalized_horizon,
             "include_non_nominal": bool(include_non_nominal),
         },
+        "confidence": hierarchy_confidence,
         "levels": levels,
-        "consistency": consistency,
+        "consistency": {
+            **consistency,
+            "contradiction_count": len(
+                [
+                    item
+                    for item in (consistency.get("pairs") or [])
+                    if str(item.get("status") or "").lower() == "contradiction"
+                ]
+            ),
+            "alignment_status": (
+                "contradiction" if consistency["has_contradictions"] else "aligned"
+            ),
+        },
         "narrative": (
             llm_narrative.get("payload")
             if llm_narrative.get("used")
@@ -1293,6 +1376,7 @@ def build_macro_regime_hierarchy_payload(
             "level_count": len(levels),
             "news_signal_count": sum(len(level.get("news_signals") or []) for level in levels),
             "coverage_source_count": len(coverage_sources),
+            "hierarchy_confidence": hierarchy_confidence,
         },
         "warnings": warnings,
         "provenance": {
