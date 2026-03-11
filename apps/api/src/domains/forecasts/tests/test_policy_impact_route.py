@@ -51,10 +51,20 @@ def test_policy_impact_contract_extracts_status_jurisdiction_and_sector(monkeypa
     assert all(isinstance(event["sectors"], list) and event["sectors"] for event in data["events"])
     assert data["transmission"]["path"] == "sector_to_company"
     assert data["transmission"]["event_count"] == 2
+    assert data["transmission"]["average_transmission_confidence"] > 0
     assert data["events"][0]["transmission"]["path"] == "sector_to_company"
     assert data["events"][0]["transmission"]["company_count"] >= 1
+    assert data["events"][0]["transmission"]["transmission_confidence"] > 0
+    assert data["events"][0]["transmission"]["transmission_uncertainty"] >= 0
+    assert data["events"][0]["transmission"]["confidence_after_degradation"] > 0
     assert all(
         row["transmission_path"] in {"sector_policy_direct", "policy_watchlist_indirect"}
+        for row in data["events"][0]["transmission"]["companies"]
+    )
+    assert all(
+        0.0 <= row["transmission_coefficient"] <= 1.0
+        and 0.0 <= row["transmission_confidence"] <= 1.0
+        and 0.0 <= row["transmission_uncertainty"] <= 1.0
         for row in data["events"][0]["transmission"]["companies"]
     )
     assert data["provenance"]["fallback_used"] is False
@@ -110,5 +120,6 @@ def test_policy_impact_route_fallback_keeps_transmission_contract(monkeypatch):
     assert data["transmission"] == {
         "path": "sector_to_company",
         "event_count": 0,
+        "average_transmission_confidence": 0.0,
         "matrix": [],
     }

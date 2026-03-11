@@ -545,6 +545,7 @@ async def get_policy_change_impact(
             "transmission": {
                 "path": "sector_to_company",
                 "event_count": 0,
+                "average_transmission_confidence": 0.0,
                 "matrix": [],
             },
             "warnings": [],
