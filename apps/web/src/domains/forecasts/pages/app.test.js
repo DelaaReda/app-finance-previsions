@@ -367,6 +367,41 @@ function loadAlertTimelineHelpers() {
   return { sandbox, timelineContainer };
 }
 
+function loadRenderMarketCalendar() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractFunction(source, 'renderMarketCalendar', '\n\n// V13: Render News Feed');
+  const noticeNode = { textContent: '' };
+  const container = { innerHTML: '' };
+  const root = {
+    querySelector(selector) {
+      if (selector === '.market-calendar-widget .impact-notice') return noticeNode;
+      return null;
+    },
+  };
+  const sandbox = {
+    console,
+    document: root,
+    marketCalendar: {
+      critical: [],
+      notice: '',
+      earnings: [],
+      economicData: [],
+      exDividend: [],
+    },
+    getFacetteWidgetSlot() {
+      return container;
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.renderMarketCalendar = renderMarketCalendar;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return { sandbox, noticeNode, container, root };
+}
+
 function loadRenderForecastScenarioWidget() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const functionSource = extractFunction(source, 'renderForecastScenarioWidget', '\n\nfunction renderTopMoversWidget');
@@ -2339,6 +2374,29 @@ test('renderMacroRegimeCardsWidget hydrates world continent country cards from l
   assert.equal(timestamp.textContent, 'Updated relative:2026-03-11T10:00:00Z');
 });
 
+test('renderMarketCalendar shows the critical 24h/48h lane and updates notice copy', () => {
+  const { sandbox, noticeNode, container, root } = loadRenderMarketCalendar();
+
+  sandbox.marketCalendar = {
+    critical: [
+      { label: 'NVDA earnings', date: 'Mar 11', impact: 'High', window: '24H' },
+      { label: 'CPI release', date: 'Mar 12', impact: 'High', window: '48H' },
+    ],
+    notice: '2 critical events in the next 48h',
+    earnings: [{ stock: 'NVDA', date: 'Mar 11', impact: 'High' }],
+    economicData: [{ event: 'CPI release', date: 'Mar 12', impact: 'High' }],
+    exDividend: [],
+  };
+
+  sandbox.renderMarketCalendar(root);
+
+  assert.equal(noticeNode.textContent, '2 critical events in the next 48h');
+  assert.match(container.innerHTML, /Critical Events \(24h\/48h\)/);
+  assert.match(container.innerHTML, /NVDA earnings/);
+  assert.match(container.innerHTML, /24H · Mar 11/);
+  assert.match(container.innerHTML, /CPI release/);
+});
+
 test('runCopilotStartPrompt opens the overlay before sending a hero starter prompt', () => {
   const { sandbox, overlay, input, calls } = loadRunCopilotStartPrompt();
 
@@ -3134,6 +3192,39 @@ test('buildCopilotJudgePayload normalizes regime detection and allocation drift 
   });
 });
 
+test('buildCopilotJudgePayload normalizes event timing details from the copilot contract', () => {
+  const sandbox = loadBuildCopilotJudgePayload();
+
+  const payload = sandbox.buildCopilotJudgePayload({
+    verdict: 'hold',
+    event_timing: {
+      summary: 'Timing risk elevated around earnings (1w).',
+      freshness: '2026-03-10T10:00:00Z',
+      source: ['copilot_event_timing', 'judge_event_matrix'],
+      events: [
+        {
+          event_type: 'earnings',
+          dominant_horizon: '1w',
+          interpretation: 'High earnings density over the next week.',
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.eventTiming)), {
+    summary: 'Timing risk elevated around earnings (1w).',
+    freshness: '2026-03-10T10:00:00Z',
+    sourceLabels: ['copilot_event_timing', 'judge_event_matrix'],
+    events: [
+      {
+        eventType: 'earnings',
+        dominantHorizon: '1w',
+        interpretation: 'High earnings density over the next week.',
+      },
+    ],
+  });
+});
+
 test('buildCopilotChatResponseHtml renders regime detection and allocation drift alert details', () => {
   const sandbox = loadBuildCopilotChatResponseHtml();
 
@@ -3176,6 +3267,42 @@ test('buildCopilotChatResponseHtml renders regime detection and allocation drift
   assert.match(html, /largest position concentration/);
   assert.match(html, /actual 72% vs threshold 20%/);
   assert.match(html, /basis position weight proxy/);
+});
+
+test('buildCopilotChatResponseHtml renders event timing notes when the copilot contract includes them', () => {
+  const sandbox = loadBuildCopilotChatResponseHtml();
+
+  const html = sandbox.buildCopilotChatResponseHtml({
+    consensus: 'HOLD',
+    confidence: 64,
+    risk: { level: 'medium', caveat: 'Event density is rising.' },
+    model: 'Copilot',
+    qualityStatus: 'ok',
+    generatedAt: '2026-03-10T10:00:00Z',
+    why: ['Stay selective while event risk resets positioning.'],
+    dataSources: [{ label: 'judge_live' }],
+    eventTiming: {
+      summary: 'Timing risk elevated around earnings (1w).',
+      freshness: '2026-03-10T10:00:00Z',
+      sourceLabels: ['copilot_event_timing', 'judge_event_matrix'],
+      events: [
+        {
+          eventType: 'earnings',
+          dominantHorizon: '1w',
+          interpretation: 'High earnings density over the next week.',
+        },
+      ],
+    },
+    memo: {
+      summary: 'Wait for post-event confirmation before pressing risk.',
+      regime: 'neutral',
+      freshness: '2026-03-10T10:00:00Z',
+    },
+  });
+
+  assert.match(html, /Event timing:<\/strong> Timing risk elevated around earnings \(1w\)\./);
+  assert.match(html, /<strong>earnings • 1w<\/strong>: High earnings density over the next week\./);
+  assert.match(html, /Sources copilot_event_timing, judge_event_matrix • Updated 2 minutes ago/);
 });
 
 test('app.js exposes runCopilotStartOpen for the static landing brief CTA', () => {

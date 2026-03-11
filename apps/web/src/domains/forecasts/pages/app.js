@@ -1282,6 +1282,8 @@ const FALLBACK_TRADE_IDEAS = [
 ];
 
 const FALLBACK_MARKET_CALENDAR = {
+  critical: [],
+  notice: '',
   earnings: [
     { stock: 'NVDA', date: 'Nov 20', impact: 'High', holding: true }
   ],
@@ -1737,6 +1739,9 @@ function buildCopilotJudgePayload(raw) {
   const rawAllocationDriftAlerts = isObject(data.allocation_drift_alerts || data.allocationDriftAlerts)
     ? (data.allocation_drift_alerts || data.allocationDriftAlerts)
     : null;
+  const rawEventTiming = isObject(data.event_timing || data.eventTiming)
+    ? (data.event_timing || data.eventTiming)
+    : null;
   const contextInfluence = rawContextInfluence
     ? {
       mode: toString(rawContextInfluence.mode, 'market_wide'),
@@ -1782,6 +1787,22 @@ function buildCopilotJudgePayload(raw) {
           actualPct: Math.max(0, Math.round(toFiniteNumber(alert.actual_pct || alert.actualPct, 0) * 10) / 10),
           basis: toString(alert.basis, '').replace(/_/g, ' ').trim(),
         }))
+        .slice(0, 2),
+    }
+    : null;
+  const eventTiming = rawEventTiming
+    ? {
+      summary: toString(rawEventTiming.summary, '').trim(),
+      freshness: toString(rawEventTiming.freshness, '').trim(),
+      sourceLabels: normalizeCopilotSourceLabels(rawEventTiming.source || rawEventTiming.sources).slice(0, 3),
+      events: toArray(rawEventTiming.events, [])
+        .filter(isObject)
+        .map((item) => ({
+          eventType: toString(item.event_type || item.eventType, '').replace(/_/g, ' ').trim(),
+          dominantHorizon: toString(item.dominant_horizon || item.dominantHorizon, '').replace(/_/g, ' ').trim(),
+          interpretation: toString(item.interpretation, '').trim(),
+        }))
+        .filter((item) => item.eventType || item.dominantHorizon || item.interpretation)
         .slice(0, 2),
     }
     : null;
@@ -1841,6 +1862,7 @@ function buildCopilotJudgePayload(raw) {
     contextInfluence,
     regimeDetection,
     allocationDriftAlerts,
+    eventTiming,
     memo: {
       summary: memoSummary,
       regime: memoRegime,
@@ -2292,6 +2314,14 @@ function renderAlertTimeline(alerts = liveAlerts) {
 function sanitizeMarketCalendar(calendar) {
   const source = isObject(calendar) ? calendar : FALLBACK_MARKET_CALENDAR;
   return {
+    critical: toArray(source.critical, FALLBACK_MARKET_CALENDAR.critical).map((item) => ({
+      label: toString(item.label || item.event || item.stock, 'N/A'),
+      date: toString(item.date, 'TBA'),
+      impact: toString(item.impact, 'Medium'),
+      window: toString(item.window, '24H'),
+      category: toString(item.category, 'macro')
+    })),
+    notice: toString(source.notice, ''),
     earnings: toArray(source.earnings, FALLBACK_MARKET_CALENDAR.earnings).map((item) => ({
       stock: toString(item.stock, 'N/A'),
       date: toString(item.date, 'TBA'),
@@ -4477,6 +4507,34 @@ function buildCopilotChatResponseHtml(payload) {
       .filter(Boolean)
       .slice(0, 2)
     : [];
+  const eventTiming = payload.eventTiming && typeof payload.eventTiming === 'object'
+    ? payload.eventTiming
+    : null;
+  const eventTimingSummary = eventTiming
+    ? escapeHtml(toString(eventTiming.summary, '').replace(/_/g, ' ').trim())
+    : '';
+  const eventTimingRows = eventTiming
+    ? toArray(eventTiming.events, [])
+      .map((event) => {
+        const eventType = escapeHtml(toString(event.eventType || event.event_type, '').replace(/_/g, ' ').trim());
+        const dominantHorizon = escapeHtml(toString(event.dominantHorizon || event.dominant_horizon, '').replace(/_/g, ' ').trim());
+        const interpretation = escapeHtml(toString(event.interpretation, '').trim());
+        const parts = [eventType, dominantHorizon].filter(Boolean).join(' • ');
+        if (!parts && !interpretation) return '';
+        return `<li><strong>${parts || 'Event timing'}</strong>${interpretation ? `: ${interpretation}` : ''}</li>`;
+      })
+      .filter(Boolean)
+      .slice(0, 2)
+    : [];
+  const eventTimingSources = eventTiming
+    ? toArray(eventTiming.sourceLabels || eventTiming.sources || eventTiming.source, [])
+      .map((source) => escapeHtml(toString(source, '').trim()))
+      .filter(Boolean)
+      .join(', ')
+    : '';
+  const eventTimingFreshness = eventTiming
+    ? toString(eventTiming.freshness, '').trim()
+    : '';
 
   const playbookHtml = playbookId
     ? `<div style="margin-top: 8px;">
@@ -4496,6 +4554,16 @@ function buildCopilotChatResponseHtml(payload) {
     : '';
   const allocationDriftHtml = allocationDriftRows.length
     ? `<div style="margin-top: 8px;"><p><strong>Allocation drift alerts:</strong></p><ul style="margin: 6px 0 0 18px;">${allocationDriftRows.join('')}</ul></div>`
+    : '';
+  const eventTimingHtml = eventTimingSummary || eventTimingRows.length
+    ? `<div style="margin-top: 8px;">
+        <p><strong>Event timing:</strong> ${eventTimingSummary || 'Near-term event pressure detected.'}</p>
+        ${eventTimingRows.length ? `<ul style="margin: 6px 0 0 18px;">${eventTimingRows.join('')}</ul>` : ''}
+        ${eventTimingSources || eventTimingFreshness ? `<p style="margin-top: 6px; font-size: 12px; color: #94A3B8;">${[
+          eventTimingSources ? `Sources ${eventTimingSources}` : '',
+          eventTimingFreshness ? `Updated ${escapeHtml(formatRelativeTime(eventTimingFreshness))}` : '',
+        ].filter(Boolean).join(' • ')}</p>` : ''}
+      </div>`
     : '';
   const metadataBadges = [
     updatedAt ? `Freshness: ${updated}` : '',
@@ -4527,6 +4595,7 @@ function buildCopilotChatResponseHtml(payload) {
     ${degradedHtml}
     ${contextHtml}
     ${regimeDetectionHtml}
+    ${eventTimingHtml}
     ${allocationDriftHtml}
     ${metadataBadgesHtml}
     ${playbookHtml}
@@ -7104,8 +7173,29 @@ function renderTradeIdeas(root = document) {
 function renderMarketCalendar(root = document) {
   const container = getFacetteWidgetSlot(root, 'calendarSections');
   if (!container) return;
+  const notice = typeof root.querySelector === 'function'
+    ? root.querySelector('.market-calendar-widget .impact-notice')
+    : null;
+
+  if (notice) {
+    notice.textContent = marketCalendar.notice || 'No critical event concentration in the next 48h';
+  }
 
   let html = '<div class="calendar-section">';
+  if (marketCalendar.critical.length > 0) {
+    html += '<h4>Critical Events (24h/48h)</h4>';
+    marketCalendar.critical.forEach((event) => {
+      html += `
+        <div class="event-item">
+          <span class="event-name">${event.label}</span>
+          <span class="event-date">${event.window} · ${event.date}</span>
+          <span class="impact-badge ${event.impact.toLowerCase()}">${event.impact} Impact</span>
+        </div>
+      `;
+    });
+    html += '</div><div class="calendar-section">';
+  }
+
   html += '<h4>Earnings (Next 7 days)</h4>';
   marketCalendar.earnings.forEach(e => {
     html += `
