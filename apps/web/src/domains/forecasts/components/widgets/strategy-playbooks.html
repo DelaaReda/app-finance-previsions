@@ -184,6 +184,45 @@
         margin-bottom: 12px;
     }
 
+    .playbook-fusion {
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: rgba(59, 130, 246, 0.08);
+        border: 1px solid rgba(96, 165, 250, 0.16);
+    }
+
+    .playbook-fusion-header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--color-text-tertiary);
+    }
+
+    .playbook-fusion-score {
+        color: #93C5FD;
+        font-weight: 700;
+    }
+
+    .playbook-fusion-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .playbook-fusion-chip {
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.06);
+        font-size: 11px;
+        color: var(--color-text-secondary);
+    }
+
     .playbook-actions {
         display: flex;
         gap: 8px;
@@ -261,21 +300,17 @@
                 </div>
             `;
 
-            const params = new URLSearchParams({
-                limit: '20',
-                min_confidence: '0.3',
-                profile: profile
-            });
+            const result = typeof window.getStrategyPlaybooks === 'function'
+                ? await window.getStrategyPlaybooks({
+                    limit: 20,
+                    min_confidence: 0.3,
+                    profile,
+                    ticker: tickerFilter
+                })
+                : null;
 
-            if (tickerFilter) {
-                params.append('ticker', tickerFilter);
-            }
-
-            const response = await fetch(`/api/judge/strategy-playbooks?${params}`);
-            const result = await response.json();
-
-            if (result.status !== 'ok' || !result.data) {
-                throw new Error(result.error || 'Failed to load playbooks');
+            if (!result?.data) {
+                throw new Error(result?.error || 'Failed to load playbooks');
             }
 
             playbooksData = result.data.playbooks || [];
@@ -329,6 +364,7 @@
         const expectedReturn = playbook.expected_return || 0;
         const returnClass = expectedReturn >= 0 ? 'positive' : 'negative';
         const returnSign = expectedReturn >= 0 ? '+' : '';
+        const fusionHtml = renderForecastFusion(playbook.forecast_fusion);
         
         const conflictsHtml = (playbook.conflicts || []).length > 0 ? `
             <div class="playbook-conflicts">
@@ -370,6 +406,8 @@
                     </div>
                 ` : ''}
 
+                ${fusionHtml}
+
                 ${playbook.recommended_actions && playbook.recommended_actions.length > 0 ? `
                     <div class="playbook-actions">
                         ${playbook.recommended_actions.slice(0, 3).map(action => 
@@ -381,6 +419,47 @@
                 ${conflictsHtml}
             </div>
         `;
+    }
+
+    function renderForecastFusion(fusion) {
+        if (!fusion || typeof fusion !== 'object') {
+            return '';
+        }
+
+        const attribution = fusion.attribution || {};
+        const chips = [
+            fusion.dominant_layer ? `Lead: ${formatFusionLabel(fusion.dominant_layer)}` : '',
+            attribution.market_regime ? `Regime: ${formatFusionLabel(attribution.market_regime)}` : '',
+            typeof attribution.macro_alignment === 'number'
+                ? `Macro: ${Math.round(attribution.macro_alignment * 100)}%`
+                : ''
+        ].filter(Boolean);
+
+        return `
+            <div class="playbook-fusion">
+                <div class="playbook-fusion-header">
+                    <span>Forecast Fusion</span>
+                    <span class="playbook-fusion-score">Blend ${formatBlendScore(fusion.blended_score)}</span>
+                </div>
+                <div class="playbook-fusion-chips">
+                    ${chips.map(chip => `<span class="playbook-fusion-chip">${escapeHtml(chip)}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    function formatBlendScore(value) {
+        if (typeof value !== 'number' || Number.isNaN(value)) {
+            return '--';
+        }
+        return `${Math.round(value * 100)}%`;
+    }
+
+    function formatFusionLabel(value) {
+        return String(value || '')
+            .replace(/_/g, ' ')
+            .toLowerCase()
+            .replace(/\b\w/g, char => char.toUpperCase());
     }
 
     function debounceLoadPlaybooks() {

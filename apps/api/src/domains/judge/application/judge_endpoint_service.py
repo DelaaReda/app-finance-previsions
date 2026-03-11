@@ -676,6 +676,7 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
     raw_impacts = verdict.get("impacts") if isinstance(verdict.get("impacts"), dict) else {}
     scenarios = verdict.get("scenarios") if isinstance(verdict.get("scenarios"), list) else []
     risks = verdict.get("risks") if isinstance(verdict.get("risks"), list) else []
+    forecast_fusion = verdict.get("forecast_fusion") if isinstance(verdict.get("forecast_fusion"), dict) else None
 
     conflicts: List[str] = _coerce_text_list(verdict.get("conflicts", []))
     if decision == "go" and risk_level in {"high", "critical"}:
@@ -728,6 +729,7 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
             "risk_count": len(risks),
             "impact_keys": sorted(raw_impacts.keys()),
         },
+        "forecast_fusion": forecast_fusion,
         "reasons": reasons,
         "conflicts": normalized_conflicts,
         "decision_id": verdict.get("decision_id"),

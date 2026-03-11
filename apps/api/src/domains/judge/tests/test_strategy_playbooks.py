@@ -191,6 +191,30 @@ class TestBuildStrategyPlaybook:
         assert "fed_decision" in playbook["evidence"]["impact_keys"]
         assert "earnings" in playbook["evidence"]["impact_keys"]
 
+    def test_build_playbook_preserves_forecast_fusion(self):
+        """Forecast fusion metadata should remain visible in the playbook contract."""
+        verdict = {
+            "ticker": "NVDA",
+            "horizon": "1w",
+            "confidence": 0.82,
+            "expected_return": 0.07,
+            "go_no_go": {"decision": "go", "reasons": []},
+            "forecast_fusion": {
+                "blended_score": 0.78,
+                "dominant_layer": "forecast_confidence",
+                "attribution": {
+                    "market_regime": "BULL_MARKET",
+                    "macro_alignment": 0.9,
+                },
+            },
+        }
+
+        playbook = _build_strategy_playbook(verdict, profile="equity_1w")
+
+        assert playbook["forecast_fusion"]["blended_score"] == pytest.approx(0.78, abs=1e-3)
+        assert playbook["forecast_fusion"]["dominant_layer"] == "forecast_confidence"
+        assert playbook["forecast_fusion"]["attribution"]["market_regime"] == "BULL_MARKET"
+
     def test_build_playbook_unknown_ticker_fallback(self):
         """Test fallback for missing ticker."""
         verdict = {
