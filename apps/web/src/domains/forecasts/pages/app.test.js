@@ -1575,6 +1575,22 @@ test('renderForecastScenarioWidget surfaces geopolitical conflict escalation fro
   );
 });
 
+test('renderForecastScenarioWidget surfaces macro hierarchy coverage and contradiction copy', () => {
+  const { sandbox, scenarioContext } = loadRenderForecastScenarioWidget();
+  sandbox.liveForecastRows = [
+    { ticker: 'WORLD', layer: 'LAYER-5', region: 'World', regime: 'risk_off', direction: 'down', expectedReturn: -1.1 },
+    { ticker: 'EU', layer: 'LAYER-4', region: 'Europe', regime: 'risk_off', direction: 'down', expectedReturn: -0.8 },
+    { ticker: 'US', layer: 'LAYER-3', region: 'United States', regime: 'risk_on', direction: 'up', expectedReturn: 1.4 },
+  ];
+
+  sandbox.renderForecastScenarioWidget();
+
+  assert.equal(
+    scenarioContext.textContent,
+    'Top live forecasts: WORLD, EU, US • Macro hierarchy: 1 world, 1 continent, 1 country • Contradiction: World risk_off vs United States risk_on'
+  );
+});
+
 test('runCopilotStartPrompt opens the overlay before sending a hero starter prompt', () => {
   const { sandbox, overlay, input, calls } = loadRunCopilotStartPrompt();
 
@@ -2354,6 +2370,27 @@ test('sanitizeForecastRows preserves forecast provenance SLA metadata for UI con
   assert.equal(row.updatedAt, '2026-03-10T10:00:00Z');
   assert.equal(row.provenance.sla.target_max_age_seconds, 600);
   assert.equal(row.provenance.sla.within_target, true);
+});
+
+test('sanitizeForecastRows preserves macro hierarchy metadata for country continent world slices', () => {
+  const { sandbox } = loadForecastSlaHelpers();
+
+  const [row] = sandbox.sanitizeForecastRows([
+    {
+      ticker: 'WORLD',
+      layer: 'LAYER-5',
+      region: 'World',
+      regime: 'risk_off',
+      geography: {
+        scope: 'global',
+      },
+    },
+  ]);
+
+  assert.equal(row.layer, 'LAYER-5');
+  assert.equal(row.region, 'World');
+  assert.equal(row.regime, 'risk_off');
+  assert.deepEqual(row.geography, { scope: 'global' });
 });
 
 test('updateLiveProvenance surfaces aggregated forecast SLA compliance', () => {

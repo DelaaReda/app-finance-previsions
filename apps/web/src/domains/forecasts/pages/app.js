@@ -1840,6 +1840,30 @@ function sanitizeForecastRows(rows) {
     const currentPrice = toFiniteNumber(item.currentPrice ?? item.current_price ?? item.current, 0);
     const updatedAt = toString(item.updatedAt || item.updated_at || item.generated_at || item.timestamp, '');
     const provenance = isObject(item.provenance) ? item.provenance : {};
+    const layer = toString(
+      item.layer || item.layer_id || item.layer_name || item.forecast_layer || item.scope_level || '',
+      '',
+    );
+    const geography = isObject(item.geography) ? item.geography : {};
+    const region = toString(
+      item.region
+      || item.country
+      || item.continent
+      || item.world_region
+      || geography.region
+      || geography.country
+      || geography.continent
+      || geography.world
+      || item.ticker
+      || item.symbol
+      || item.asset
+      || '',
+      '',
+    );
+    const regime = toString(
+      item.marketRegime || item.market_regime || item.regime || item.regime_label || item.macro_regime || '',
+      '',
+    );
     return {
       ticker: toString(item.ticker || item.symbol || item.asset || 'UNKNOWN', 'UNKNOWN').toUpperCase(),
       direction: direction,
@@ -1853,6 +1877,10 @@ function sanitizeForecastRows(rows) {
       action: toString(item.action, 'hold'),
       riskLevel: toString(item.riskLevel || item.risk, 'medium'),
       updatedAt,
+      layer,
+      region,
+      regime,
+      geography,
       provenance: {
         ...provenance,
         sla: isObject(provenance.sla) ? provenance.sla : {}
@@ -2825,14 +2853,78 @@ function renderForecastScenarioWidget() {
       || null;
     const hitRateValue = hitRateSummary?.value != null ? hitRateSummary.value : hitRateRow?.value;
     const hitRateTarget = hitRateSummary?.target != null ? hitRateSummary.target : hitRateRow?.target;
+    const normalizeLayer = (value) => {
+      const token = toString(value, '').trim().toLowerCase();
+      if (!token) return '';
+      if (token === 'layer-3' || token === 'l3' || token === 'country') return 'country';
+      if (token === 'layer-4' || token === 'l4' || token === 'continent') return 'continent';
+      if (token === 'layer-5' || token === 'l5' || token === 'world' || token === 'global') return 'world';
+      return '';
+    };
+    const normalizeRegimeDirection = (row) => {
+      const regimeToken = toString(row.regime, '').trim().toLowerCase().replace(/[_\s]+/g, '-');
+      if (
+        regimeToken.includes('risk-on')
+        || regimeToken.includes('expansion')
+        || regimeToken.includes('reflation')
+        || regimeToken.includes('bull')
+      ) {
+        return 'up';
+      }
+      if (
+        regimeToken.includes('risk-off')
+        || regimeToken.includes('contraction')
+        || regimeToken.includes('slowdown')
+        || regimeToken.includes('bear')
+      ) {
+        return 'down';
+      }
+      const directionToken = toString(row.direction, '').trim().toLowerCase();
+      if (directionToken === 'up' || directionToken === 'bullish') return 'up';
+      if (directionToken === 'down' || directionToken === 'bearish') return 'down';
+      return 'neutral';
+    };
+    const hierarchyRows = rows
+      .map((row) => ({ ...row, hierarchyLayer: normalizeLayer(row.layer) }))
+      .filter((row) => row.hierarchyLayer);
+    const hierarchyCounts = hierarchyRows.reduce((acc, row) => {
+      acc[row.hierarchyLayer] = (acc[row.hierarchyLayer] || 0) + 1;
+      return acc;
+    }, {});
+    const hierarchyParts = ['world', 'continent', 'country']
+      .filter((layer) => hierarchyCounts[layer])
+      .map((layer) => `${hierarchyCounts[layer]} ${layer}${hierarchyCounts[layer] > 1 ? 's' : ''}`);
+    const worldRow = hierarchyRows.find((row) => row.hierarchyLayer === 'world');
+    const contradictionRows = hierarchyRows.filter((row) => (
+      worldRow
+      && row.hierarchyLayer !== 'world'
+      && normalizeRegimeDirection(row) !== 'neutral'
+      && normalizeRegimeDirection(worldRow) !== 'neutral'
+      && normalizeRegimeDirection(row) !== normalizeRegimeDirection(worldRow)
+    ));
+    const contradictionCopy = contradictionRows.length
+      ? `Contradiction: ${toString(worldRow.region, worldRow.ticker)} ${toString(worldRow.regime, worldRow.direction)} vs ${toString(contradictionRows[0].region, contradictionRows[0].ticker)} ${toString(contradictionRows[0].regime, contradictionRows[0].direction)}`
+      : '';
     if (hitRateValue != null) {
       const hitRate = Math.round(toFiniteNumber(hitRateValue, 0) * 1000) / 10;
       const target = hitRateTarget != null ? Math.round(toFiniteNumber(hitRateTarget, 0) * 1000) / 10 : null;
       scenarioContext.textContent = target != null
         ? `Top live forecasts: ${liveTickers} • Walk-forward hit rate ${hitRate}% vs ${target}% target`
         : `Top live forecasts: ${liveTickers} • Walk-forward hit rate ${hitRate}%`;
+      if (hierarchyParts.length) {
+        scenarioContext.textContent += ` • Macro hierarchy: ${hierarchyParts.join(', ')}`;
+      }
+      if (contradictionCopy) {
+        scenarioContext.textContent += ` • ${contradictionCopy}`;
+      }
     } else {
       scenarioContext.textContent = `Top live forecasts: ${liveTickers}`;
+      if (hierarchyParts.length) {
+        scenarioContext.textContent += ` • Macro hierarchy: ${hierarchyParts.join(', ')}`;
+      }
+      if (contradictionCopy) {
+        scenarioContext.textContent += ` • ${contradictionCopy}`;
+      }
     }
   }
 
