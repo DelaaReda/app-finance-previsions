@@ -1,0 +1,41 @@
+{
+  "task_id": "BATCH-46-ADMIN-01",
+  "stream_id": "BATCH-46",
+  "role": "admin",
+  "produced_at_utc": "2026-03-11T07:23:00Z",
+  "status": "unblocked",
+  "summary": "BATCH-46 monitor/runtime validation is green after tightening lite monitor endpoint behavior. The monitor route no longer blocks on live planner-subagent discovery for the task-scoped warm-path checks, and the BATCH-46 monitor contract smoke passes after priming the lite status endpoint.",
+  "root_cause": "The monitor lite status path still executed expensive planner-subagent subprocess discovery through cached-role and stale-contract checks, which made cold /api/status and downstream smoke probes exceed the default monitor timeouts during this admin validation lane.",
+  "fix_applied": "Patched apps/monitor/server.py to keep lite monitor requests on cached snapshot data where safe, avoid unnecessary planner-subagent discovery for fresh contracts, and preserve activity endpoint shape without widening runtime scope. Revalidated by restarting the monitor in-process for probes and re-running targeted monitor tests plus contract smoke.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-46/BATCH-46-ADMIN-01/20260311T072300Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "monitor_tests": "PASS 4 passed",
+    "profile_status_lite": "PASS cProfile status(lite=1) ~= 4.1s cold path",
+    "profile_runtime_diagnostics_lite": "PASS cProfile runtime_diagnostics(lite=1) ~= 0.63s",
+    "monitor_status": "PASS GET /api/status?lite=1 after warm prime",
+    "runtime_diagnostics": "PASS GET /api/runtime-diagnostics?lite=1",
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=4 workboard_ready=0 admin_timeouts_recent=0 issues_records=7",
+    "fc_status_brief": "PASS health=OK mode=planner_experimental freshness=fresh/71s",
+    "health_snapshot": "PASS health=OK critical_widgets=ok"
+  },
+  "files_touched": [
+    "apps/monitor/server.py",
+    "docs/operations/orchestrator/proofs/BATCH-46/BATCH-46-ADMIN-01/20260311T072300Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "python3 -m pytest apps/monitor/tests/test_status_never_null.py apps/monitor/tests/test_activity_endpoints.py -q -rA",
+    "python3 - <<'PY' ... status(lite=1) / runtime_diagnostics(lite=1) cProfile ... PY",
+    "curl -sS --max-time 30 http://127.0.0.1:7779/api/status?lite=1 > /tmp/b46_status2.json",
+    "curl -sS --max-time 12 http://127.0.0.1:7779/api/runtime-diagnostics?lite=1",
+    "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 --timeout 12",
+    "bash scripts/fc_status_brief.sh",
+    "bash scripts/health_snapshot.sh"
+  ],
+  "commit_sha": "pending",
+  "architecture_check": "PASS(batch-scoped runtime repair): change stays inside apps/monitor/server.py monitor endpoint composition; no queue/workboard/planner routing artifacts were edited.",
+  "vision_alignment": "PASS(BATCH-46): country/continent/world macro regime delivery chain now has explicit admin-side runtime evidence that the monitor surfaces and diagnostics needed for downstream visibility are healthy again.",
+  "recommended_next": "Planner can merge BATCH-46-ADMIN-01 and move to GOV_REVIEW. If monitor cold-start latency regresses again, follow up inside apps/monitor/server.py contract/planner-subagent lookups rather than the BATCH-46 feature surfaces.",
+  "blocking_issue": "none"
+}

@@ -601,6 +601,20 @@ def _planner_subagents_snapshot() -> dict:
     ):
         return cached_payload
 
+    latest_snapshot = monitor_latest_snapshot()
+    if isinstance(latest_snapshot, dict):
+        latest_subagents = latest_snapshot.get("planner_subagents", {})
+        latest_ts = _parse_ts_epoch(str(latest_snapshot.get("ts_utc", "")))
+        if (
+            isinstance(latest_subagents, dict)
+            and latest_subagents
+            and latest_ts is not None
+            and (now - latest_ts) <= 180
+        ):
+            _PLANNER_SUBAGENTS_CACHE["payload"] = latest_subagents
+            _PLANNER_SUBAGENTS_CACHE["ts"] = now
+            return latest_subagents
+
     try:
         import planner_subagent_manager as native_module  # type: ignore
 
@@ -1615,13 +1629,15 @@ def _contract_is_stale_for_planner_mode(role: str, path: Path, now_ts: float | N
     role_token = str(role or "").strip().lower()
     if role_token in {"", "planner"}:
         return False
-    if role_token in set(_active_planner_subagent_roles()):
-        return False
     try:
         age_s = (now_ts if now_ts is not None else time.time()) - path.stat().st_mtime
     except Exception:
         return False
-    return age_s > 3600
+    if age_s <= 3600:
+        return False
+    if role_token in set(_active_planner_subagent_roles()):
+        return False
+    return True
 
 
 def _capability_state_is_stale_for_planner_mode(target_role: str, since_ts: str, now_ts: float | None = None) -> bool:
@@ -3155,12 +3171,24 @@ def status(lite: int = 0):
     latest_snapshot = monitor_latest_snapshot()
     latest_roles_raw = latest_snapshot.get("roles", {})
     latest_roles = latest_roles_raw if isinstance(latest_roles_raw, dict) else {}
-    # Canonical UI scope: core roles remain canonical in planner-only mode, but
-    # the monitor must still expose planner-owned capability truth for
-    # dev/admin/scrum_master when Atlas or operators inspect live execution.
-    roles = monitor_roles()
     effective_execution_mode = str(runtime_state.get("execution_mode", "") or _execution_mode(ROOT)).strip()
     planner_only_runtime = effective_execution_mode == "planner_experimental"
+    # Lite mode should avoid expensive live planner-subagent discovery. Reuse the
+    # last monitor snapshot when possible and fall back to canonical core roles.
+    if lite_mode and latest_roles:
+        cached_roles = [str(role).strip() for role in latest_roles.keys() if str(role).strip()]
+        if planner_only_runtime:
+            for capability_role in ("dev", "admin", "scrum_master"):
+                if capability_role not in cached_roles:
+                    cached_roles.append(capability_role)
+        roles = _ordered_roles(cached_roles)
+        if not roles:
+            roles = CORE_ROLES
+    else:
+        # Canonical UI scope: core roles remain canonical in planner-only mode, but
+        # the monitor must still expose planner-owned capability truth for
+        # dev/admin/scrum_master when Atlas or operators inspect live execution.
+        roles = monitor_roles()
     agent_roles = list(roles)
     if planner_only_runtime:
         for capability_role in ("dev", "admin", "scrum_master"):
@@ -3338,7 +3366,12 @@ def status(lite: int = 0):
     planner_policy_enforced = bool(planner_autonomy.get("wait_forbidden", True))
     planner_autonomy_last_action = str(planner_autonomy.get("last_action", "idle") or "idle").strip() or "idle"
     planner_autonomy_last_outcome = str(planner_autonomy.get("last_outcome", "none") or "none").strip() or "none"
-    planner_subagents = _planner_subagents_snapshot()
+    if lite_mode:
+        planner_subagents = latest_snapshot.get("planner_subagents", {}) if isinstance(latest_snapshot, dict) else {}
+        if not isinstance(planner_subagents, dict):
+            planner_subagents = {}
+    else:
+        planner_subagents = _planner_subagents_snapshot()
     planner_live_subagents = planner_subagents.get("active", []) if isinstance(planner_subagents.get("active", []), list) else []
     planner_live_subagent = planner_live_subagents[0] if planner_live_subagents else {}
     planner_live_cron_only = _parse_bool_token(planner_subagents.get("cron_planner_only"))
@@ -3878,28 +3911,56 @@ def status(lite: int = 0):
     system_summary = activity_bundle.get("system_summary", {}) if isinstance(activity_bundle, dict) else {}
     if not isinstance(system_summary, dict):
         system_summary = {}
-    dynamic_workers = _dynamic_workers_snapshot()
-    agent_activity = _agent_activity_snapshot(
-        roles=tuple(agent_roles),
-        agents=agents,
-        tasks=tasks,
-        planner_subagents=planner_subagents,
-        dynamic_workers=dynamic_workers,
-    )
-    planner_dispatch = _planner_dispatch_snapshot(
-        runtime_state=runtime_state,
-        queue_snapshot={
-            "ready_dev_count": ready_dev_display_count,
-            "ready_planner_count": queue_ready_planner + queue_ready_legacy,
-        },
-        workboard_snapshot={"in_progress": workboard_in_progress},
-        activity_summary=activity_summary,
-        planner_subagents=planner_subagents,
-        system_summary=system_summary,
-    )
-    delivery_integrity = _delivery_integrity_snapshot()
-    delivery_control = _delivery_control_snapshot()
-    product_value_metrics = _product_value_metrics_snapshot()
+    if lite_mode:
+        dynamic_workers = latest_snapshot.get("dynamic_workers", {}) if isinstance(latest_snapshot, dict) else {}
+        if not isinstance(dynamic_workers, dict):
+            dynamic_workers = {}
+        agent_activity = latest_snapshot.get("agent_activity", {}) if isinstance(latest_snapshot, dict) else {}
+        if not isinstance(agent_activity, dict):
+            agent_activity = {}
+        if not isinstance(agent_activity.get("roles"), dict):
+            agent_activity = _agent_activity_snapshot(
+                roles=tuple(agent_roles),
+                agents=agents,
+                tasks=tasks,
+                planner_subagents=planner_subagents,
+                dynamic_workers=dynamic_workers,
+            )
+        planner_dispatch = latest_snapshot.get("planner_dispatch", {}) if isinstance(latest_snapshot, dict) else {}
+        if not isinstance(planner_dispatch, dict):
+            planner_dispatch = {}
+        delivery_integrity = latest_snapshot.get("delivery_integrity", {}) if isinstance(latest_snapshot, dict) else {}
+        if not isinstance(delivery_integrity, dict):
+            delivery_integrity = {}
+        delivery_control = latest_snapshot.get("delivery_control", {}) if isinstance(latest_snapshot, dict) else {}
+        if not isinstance(delivery_control, dict):
+            delivery_control = {}
+        product_value_metrics = latest_snapshot.get("product_value_metrics", {}) if isinstance(latest_snapshot, dict) else {}
+        if not isinstance(product_value_metrics, dict):
+            product_value_metrics = {}
+    else:
+        dynamic_workers = _dynamic_workers_snapshot()
+        agent_activity = _agent_activity_snapshot(
+            roles=tuple(agent_roles),
+            agents=agents,
+            tasks=tasks,
+            planner_subagents=planner_subagents,
+            dynamic_workers=dynamic_workers,
+        )
+        planner_dispatch = _planner_dispatch_snapshot(
+            runtime_state=runtime_state,
+            queue_snapshot={
+                "ready_dev_count": ready_dev_display_count,
+                "ready_planner_count": queue_ready_planner + queue_ready_legacy,
+            },
+            workboard_snapshot={"in_progress": workboard_in_progress},
+            activity_summary=activity_summary,
+            planner_subagents=planner_subagents,
+            system_summary=system_summary,
+        )
+        delivery_integrity = _delivery_integrity_snapshot()
+        delivery_control = _delivery_control_snapshot()
+        product_value_metrics = _product_value_metrics_snapshot()
     execution_mode = _execution_mode(ROOT)
     multi_agent_policy = _multi_agent_policy_snapshot(ROOT)
     monitor_access = _monitor_access_snapshot(ROOT)
