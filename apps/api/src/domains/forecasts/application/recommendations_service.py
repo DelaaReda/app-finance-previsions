@@ -518,15 +518,31 @@ class RecommendationsService:
                 "contribution": round(risk_reward * 0.05, 3),
             },
         ]
+        ranked_layers = sorted(layers, key=lambda item: item["contribution"], reverse=True)
+        dominant_layer = max(layers, key=lambda item: item["contribution"])
         total_contribution = sum(max(float(item["contribution"]), 0.0) for item in layers)
+        normalized_contributions = []
         for item in layers:
             contribution = max(float(item["contribution"]), 0.0)
             normalized_contribution = (contribution / total_contribution) if total_contribution > 0 else 0.0
-            item["normalized_contribution"] = round(normalized_contribution, 3)
-            item["contribution_pct"] = round(normalized_contribution * 100, 1)
+            normalized_contributions.append(round(normalized_contribution, 3))
 
-        ranked_layers = sorted(layers, key=lambda item: item["contribution"], reverse=True)
-        dominant_layer = max(layers, key=lambda item: item["contribution"])
+        if total_contribution > 0:
+            dominant_index = next(
+                index for index, item in enumerate(layers) if item["layer"] == dominant_layer["layer"]
+            )
+            normalized_contributions[dominant_index] = round(
+                normalized_contributions[dominant_index] + (1.0 - sum(normalized_contributions)),
+                3,
+            )
+
+        # Add rank to each layer based on contribution (for UX transparency - E49.3)
+        rank_map = {item["layer"]: idx + 1 for idx, item in enumerate(ranked_layers)}
+        for item, normalized_contribution in zip(layers, normalized_contributions):
+            item["normalized_contribution"] = normalized_contribution
+            item["contribution_pct"] = round(normalized_contribution * 100, 1)
+            item["layer_rank"] = rank_map[item["layer"]]
+
         runner_up_layer = ranked_layers[1] if len(ranked_layers) > 1 else dominant_layer
         dominance_gap = max(
             float(dominant_layer["normalized_contribution"]) - float(runner_up_layer["normalized_contribution"]),

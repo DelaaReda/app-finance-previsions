@@ -267,10 +267,43 @@ class TestForecastFusionContract:
             market_context={'regime': 'NORMAL'},
         )
 
-        required_fields = ['layer', 'score', 'weight', 'contribution', 'normalized_contribution', 'contribution_pct']
+        required_fields = ['layer', 'score', 'weight', 'contribution', 'normalized_contribution', 'contribution_pct', 'layer_rank']
         for layer in fusion['layers']:
             for field in required_fields:
                 assert field in layer, f"Layer {layer['layer']} missing field '{field}'"
+
+    def test_fusion_layer_rank_ordering(self):
+        """E49.3: Verify layer_rank reflects contribution-based ordering (UX transparency)."""
+        service = RecommendationsService()
+
+        fusion = service._build_forecast_fusion(
+            ticker='AAPL',
+            score=0.65,
+            forecast={
+                'direction': 'up',
+                'confidence': 0.7,
+                'expected_return': 0.02,
+                'market_context': {
+                    'news_sentiment': 0.1,
+                    'news_volume_zscore': 0.5,
+                },
+            },
+            market_context={'regime': 'NORMAL'},
+        )
+
+        # Verify ranks are 1 through N with no gaps
+        ranks = [layer['layer_rank'] for layer in fusion['layers']]
+        assert sorted(ranks) == list(range(1, len(fusion['layers']) + 1)), "layer_rank should be contiguous 1..N"
+
+        # Verify dominant layer has rank 1
+        dominant_layer = next(l for l in fusion['layers'] if l['layer'] == fusion['dominant_layer'])
+        assert dominant_layer['layer_rank'] == 1, "Dominant layer should have rank 1"
+
+        # Verify layers are ordered by contribution (higher contribution = lower rank number)
+        sorted_by_rank = sorted(fusion['layers'], key=lambda l: l['layer_rank'])
+        sorted_by_contrib = sorted(fusion['layers'], key=lambda l: l['contribution'], reverse=True)
+        assert [l['layer'] for l in sorted_by_rank] == [l['layer'] for l in sorted_by_contrib], \
+            "layer_rank ordering should match contribution ordering"
 
     def test_fusion_stability_structure_complete(self):
         """Verify stability section has all required fields."""
