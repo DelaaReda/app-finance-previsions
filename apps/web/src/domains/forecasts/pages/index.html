@@ -326,6 +326,10 @@
       <!-- Loaded dynamically from components/widgets/market-volatility.html -->
       <div id="market-volatility-widget-container"></div>
 
+      <!-- ============ BATCH-46: MACRO REGIME FORECASTS ============ -->
+      <!-- Loaded dynamically from components/widgets/macro-regime-cards.html -->
+      <div id="macro-regime-cards-widget-container"></div>
+
     </div><!-- End tab-market -->
 
     <!-- ============ TAB CONTENT: OPPORTUNITIES ============ -->
@@ -1131,7 +1135,8 @@
           { path: '../components/widgets/similar-stocks.html', target: '#similar-stocks-widget-container' },
           { path: '../components/widgets/news-impact.html', target: '#news-impact-widget-container' },
           { path: '../components/widgets/sector-performance.html', target: '#sector-performance-widget-container' },
-          { path: '../components/widgets/market-volatility.html', target: '#market-volatility-widget-container' }
+          { path: '../components/widgets/market-volatility.html', target: '#market-volatility-widget-container' },
+          { path: '../components/widgets/macro-regime-cards.html', target: '#macro-regime-cards-widget-container' }
         ];
 
         const results = await loadComponents(components);
