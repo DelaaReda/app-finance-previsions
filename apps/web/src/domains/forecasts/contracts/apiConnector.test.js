@@ -213,6 +213,46 @@ test('getGeopoliticalRiskGraph unwraps region risk graph payloads and preserves 
   assert.equal(payload.stats.alerts_count, 1);
 });
 
+test('getMacroRegimeHierarchy unwraps hierarchy payloads and preserves scope filters', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            generated_at: '2026-03-11T05:00:00Z',
+            levels: [
+              { scope: 'world', regime: 'expansion', confidence: 0.82 },
+              { scope: 'continent', entity: 'Europe', regime: 'slowdown', confidence: 0.58 },
+              { scope: 'country', entity: 'United States', regime: 'recovery', confidence: 0.76 },
+            ],
+            consistency: {
+              has_contradictions: true,
+              pairs: [{ summary: 'Europe diverges from the world regime.' }],
+            },
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getMacroRegimeHierarchy({
+    country: 'CA',
+    continent: 'North America',
+    horizon: '6m',
+    debug: true,
+  });
+
+  assert.deepEqual(calls, [
+    'http://localhost:8050/api/forecasts/macro-regime-hierarchy?country=CA&continent=North+America&horizon=6m&debug=true',
+  ]);
+  assert.equal(payload.levels[1].entity, 'Europe');
+  assert.equal(payload.consistency.has_contradictions, true);
+  assert.equal(payload.consistency.pairs[0].summary, 'Europe diverges from the world regime.');
+});
+
 test('getInsiderBehavior unwraps insider signals and preserves ticker filters', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {
