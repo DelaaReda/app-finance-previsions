@@ -4,6 +4,7 @@ from api.main import create_app
 from domains.forecasts.application.global_signal_mesh_service import (
     _GLOBAL_SIGNAL_MESH_RESPONSE_CACHE,
     _INSIDER_BEHAVIOR_RESPONSE_CACHE,
+    _MACRO_REGIME_RESPONSE_CACHE,
     _POLICY_IMPACT_RESPONSE_CACHE,
     build_global_signal_mesh_payload,
 )
@@ -240,3 +241,90 @@ def test_insider_behavior_cache_and_debug_bypass(monkeypatch):
     assert second.json()["data"]["cache"]["hit"] is True
     assert debug.json()["data"]["cache"]["hit"] is False
     assert debug.json()["data"]["debug_pipeline"]["cache_bypassed"] is True
+
+
+def test_macro_regime_hierarchy_contract_exposes_world_continent_country(monkeypatch):
+    client = _client()
+    _MACRO_REGIME_RESPONSE_CACHE.clear()
+
+    news_snapshot = {
+        "articles": [
+            {
+                "title": "Global growth stabilizes as rate cuts near",
+                "summary": "World demand stays positive but fragile.",
+                "source": "macro_wire",
+                "timestamp": "2026-03-10T09:00:00Z",
+            },
+            {
+                "title": "North America capex cycle remains resilient",
+                "summary": "Regional investment and consumer demand stay firm.",
+                "source": "regional_wire",
+                "timestamp": "2026-03-10T10:00:00Z",
+            },
+            {
+                "title": "US inflation cools while labor demand stays healthy",
+                "summary": "The United States keeps a soft landing bias.",
+                "source": "country_wire",
+                "timestamp": "2026-03-10T11:00:00Z",
+            },
+        ]
+    }
+
+    monkeypatch.setattr(global_signal_mesh_service, "load_json", lambda _key: news_snapshot)
+    monkeypatch.setattr(
+        global_signal_mesh_service,
+        "_llm_macro_narrative",
+        lambda levels, horizon: {"used": False, "status": "unavailable"},
+    )
+
+    response = client.get("/api/forecasts/macro-regime-hierarchy?country=US&continent=north_america")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["forecast_id"] == "macro_regime_hierarchy_v1"
+    assert [level["scope"] for level in data["levels"]] == ["world", "continent", "country"]
+    assert data["levels"][1]["entity"] == "north_america"
+    assert data["levels"][2]["entity"] == "US"
+    assert "pairs" in data["consistency"]
+    assert data["stats"]["level_count"] == 3
+    assert data["provenance"]["llm_used"] is False
+    assert "llm_narrative_fallback" in data["warnings"]
+    assert data["cache"]["hit"] is False
+
+
+def test_macro_regime_hierarchy_cache_and_debug_pipeline(monkeypatch):
+    client = _client()
+    _MACRO_REGIME_RESPONSE_CACHE.clear()
+
+    monkeypatch.setattr(global_signal_mesh_service, "load_json", lambda _key: {"articles": []})
+    monkeypatch.setattr(
+        global_signal_mesh_service,
+        "_llm_macro_narrative",
+        lambda levels, horizon: {
+            "used": True,
+            "status": "ok",
+            "model": "test-model",
+            "provider": "test-provider",
+            "payload": {
+                "summary": "LLM hierarchy summary",
+                "regime_bias": "soft_landing_bias",
+                "key_risks": ["policy repricing"],
+                "consistency_call": "aligned",
+            },
+        },
+    )
+
+    first = client.get("/api/forecasts/macro-regime-hierarchy?country=US")
+    second = client.get("/api/forecasts/macro-regime-hierarchy?country=US")
+    debug = client.get("/api/forecasts/macro-regime-hierarchy?country=US&debug=true")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert debug.status_code == 200
+    assert first.json()["data"]["cache"]["hit"] is False
+    assert second.json()["data"]["cache"]["hit"] is True
+    assert second.json()["data"]["narrative"]["summary"] == "LLM hierarchy summary"
+    assert second.json()["data"]["provenance"]["llm_model"] == "test-model"
+    assert debug.json()["data"]["cache"]["hit"] is False
+    assert debug.json()["data"]["debug_pipeline"]["cache_bypassed"] is True
+    assert debug.json()["data"]["debug_pipeline"]["llm_status"] == "ok"

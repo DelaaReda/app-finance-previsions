@@ -938,6 +938,194 @@ def _selected_registry(include_non_nominal: bool) -> List[Dict[str, Any]]:
     return rows
 
 
+def _normalize_country(country: str) -> str:
+    value = re.sub(r"[^A-Za-z ]+", " ", str(country or "").strip()).upper()
+    value = re.sub(r"\s+", " ", value).strip()
+    return value or "US"
+
+
+def _normalize_continent(continent: str, *, country: str) -> str:
+    base = str(continent or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if base:
+        return base
+    return _COUNTRY_TO_CONTINENT.get(country, "north_america")
+
+
+def _baseline_regime(scope: str, entity: str) -> Dict[str, Any]:
+    direct = _BASELINE_REGIMES.get((scope, entity))
+    if direct:
+        return dict(direct)
+    if scope == "country":
+        continent = _COUNTRY_TO_CONTINENT.get(entity, "north_america")
+        base = dict(_BASELINE_REGIMES.get(("continent", continent), _BASELINE_REGIMES[("world", "world")]))
+        base["confidence"] = round(max(0.45, float(base.get("confidence", 0.6)) - 0.08), 2)
+        base["summary"] = f"{entity} inherits a cautious {continent.replace('_', ' ')} macro baseline until country-specific signals improve."
+        base["drivers"] = list(base.get("drivers") or [])[:2] + ["country-specific policy sensitivity"]
+        base["risks"] = list(base.get("risks") or [])[:2] + ["country execution risk"]
+        base["score"] = float(base.get("score") or 0.0)
+        return base
+    if scope == "continent":
+        return dict(_BASELINE_REGIMES[("world", "world")])
+    return dict(_BASELINE_REGIMES[("world", "world")])
+
+
+def _entity_keywords(scope: str, entity: str) -> List[str]:
+    if scope == "world":
+        return ["global", "world", "international", "macro"]
+    if scope == "continent":
+        words = entity.replace("_", " ")
+        return [words, words.replace(" ", "")]
+    return [entity, entity.replace(" ", "")]
+
+
+def _load_news_articles() -> List[Dict[str, Any]]:
+    snapshot = load_json("news_feed")
+    if not isinstance(snapshot, dict):
+        return []
+    articles = snapshot.get("articles")
+    if not isinstance(articles, list):
+        return []
+    return [item for item in articles if isinstance(item, dict)]
+
+
+def _scope_news(scope: str, entity: str) -> List[Dict[str, Any]]:
+    articles = _load_news_articles()
+    if not articles:
+        return []
+    keywords = [f" {item.lower()} " for item in _entity_keywords(scope, entity)]
+    matched: List[Dict[str, Any]] = []
+    for item in articles:
+        haystack = (
+            f" {(item.get('title') or '').lower()} "
+            f"{(item.get('summary') or item.get('description') or '').lower()} "
+        )
+        if any(keyword in haystack for keyword in keywords):
+            matched.append(item)
+    return matched[:12]
+
+
+def _extract_json_block(answer: str) -> Optional[Dict[str, Any]]:
+    text = str(answer or "").strip()
+    if not text:
+        return None
+    candidates = [text]
+    if "```json" in text:
+        candidates.append(text.split("```json", 1)[1].split("```", 1)[0].strip())
+    if "```" in text:
+        parts = text.split("```")
+        if len(parts) >= 3:
+            candidates.append(parts[1].strip())
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        candidates.append(text[start : end + 1])
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _build_level(scope: str, entity: str) -> Dict[str, Any]:
+    baseline = _baseline_regime(scope, entity)
+    scoped_news = _scope_news(scope, entity)
+    news_signals = (
+        score_news(scoped_news, cap=3) if callable(score_news) and scoped_news else []
+    )
+    return {
+        "scope": scope,
+        "entity": entity.lower() if scope == "continent" else entity,
+        "regime": baseline["regime"],
+        "confidence": baseline["confidence"],
+        "summary": baseline["summary"],
+        "drivers": list(baseline.get("drivers") or []),
+        "risks": list(baseline.get("risks") or []),
+        "score": baseline["score"],
+        "news_signals": news_signals,
+    }
+
+
+def _consistency_diagnostics(levels: List[Dict[str, Any]]) -> Dict[str, Any]:
+    diagnostics: List[Dict[str, Any]] = []
+    contradictory = False
+    for parent, child in zip(levels, levels[1:]):
+        delta = round(float(child.get("score") or 0.0) - float(parent.get("score") or 0.0), 3)
+        is_contradictory = abs(delta) >= 0.45
+        contradictory = contradictory or is_contradictory
+        diagnostics.append(
+            {
+                "from_scope": parent["scope"],
+                "to_scope": child["scope"],
+                "delta_score": delta,
+                "status": "contradiction" if is_contradictory else "aligned",
+            }
+        )
+    return {
+        "has_contradictions": contradictory,
+        "pairs": diagnostics,
+    }
+
+
+def _llm_macro_narrative(levels: List[Dict[str, Any]], *, horizon: str) -> Dict[str, Any]:
+    try:
+        from domains.judge.application.g4f_client import call_llm
+    except Exception:  # pragma: no cover
+        call_llm = None  # type: ignore
+
+    if call_llm is None:
+        return {"used": False, "status": "unavailable"}
+
+    compact_levels = [
+        {
+            "scope": level["scope"],
+            "entity": level["entity"],
+            "regime": level["regime"],
+            "confidence": level["confidence"],
+            "drivers": level["drivers"][:3],
+            "risks": level["risks"][:3],
+        }
+        for level in levels
+    ]
+    prompt = (
+        "You are a macro regime forecaster.\n"
+        "Summarize the hierarchy below and flag contradictions.\n"
+        "Return ONLY valid JSON with keys: summary, regime_bias, key_risks, consistency_call.\n"
+        f"Horizon: {horizon}\n"
+        f"Hierarchy: {json.dumps(compact_levels, ensure_ascii=True)}"
+    )
+    response = call_llm(
+        messages=[{"role": "user", "content": prompt}],
+        mode=os.getenv("LLM_MODEL_MODE") or "dev",
+        timeout=25,
+        category_preference="forecast",
+    )
+    if not isinstance(response, dict) or not response.get("ok"):
+        return {
+            "used": False,
+            "status": "failed",
+            "error": str((response or {}).get("error") or "llm_failed"),
+        }
+    parsed = _extract_json_block(str(response.get("answer") or ""))
+    if not isinstance(parsed, dict):
+        return {
+            "used": False,
+            "status": "invalid_json",
+            "error": "llm_invalid_json",
+            "model": response.get("model"),
+            "provider": response.get("provider"),
+        }
+    return {
+        "used": True,
+        "status": "ok",
+        "model": response.get("model"),
+        "provider": response.get("provider"),
+        "payload": parsed,
+    }
+
+
 def build_global_signal_mesh_payload(
     *,
     include_non_nominal: bool = False,
@@ -1014,3 +1202,108 @@ def build_global_signal_mesh_payload(
         }
         return payload
     return _cache_set(cache_key, payload)
+
+
+def build_macro_regime_hierarchy_payload(
+    *,
+    country: str = "US",
+    continent: str = "",
+    horizon: str = "3m",
+    include_non_nominal: bool = False,
+    debug: bool = False,
+) -> Dict[str, Any]:
+    normalized_country = _normalize_country(country)
+    normalized_continent = _normalize_continent(continent, country=normalized_country)
+    normalized_horizon = str(horizon or "3m").strip().lower() or "3m"
+    cache_key = _macro_cache_key(
+        normalized_country,
+        normalized_continent,
+        normalized_horizon,
+        include_non_nominal,
+    )
+    if not debug:
+        cached = _macro_cache_get(cache_key)
+        if cached is not None:
+            return cached
+
+    generated_at = _now_iso()
+    levels = [
+        _build_level("world", "world"),
+        _build_level("continent", normalized_continent),
+        _build_level("country", normalized_country),
+    ]
+    consistency = _consistency_diagnostics(levels)
+    sources = _selected_registry(include_non_nominal=include_non_nominal)
+    coverage_sources = [
+        item["source_id"]
+        for item in sources
+        if any(scope in (item.get("entity_scope") or []) for scope in ("world", "continent", "country"))
+    ]
+
+    llm_narrative = _llm_macro_narrative(levels, horizon=normalized_horizon)
+    warnings: List[str] = []
+    if consistency["has_contradictions"]:
+        warnings.append("cross_level_regime_contradiction")
+    if not llm_narrative.get("used"):
+        warnings.append("llm_narrative_fallback")
+
+    payload = {
+        "forecast_id": "macro_regime_hierarchy_v1",
+        "generated_at": generated_at,
+        "freshness": generated_at,
+        "last_update": generated_at,
+        "source": ["forecasts_macro_regime_hierarchy", "free_data_source_registry", "judge_score_news"],
+        "filters_applied": {
+            "country": normalized_country,
+            "continent": normalized_continent,
+            "horizon": normalized_horizon,
+            "include_non_nominal": bool(include_non_nominal),
+        },
+        "levels": levels,
+        "consistency": consistency,
+        "narrative": (
+            llm_narrative.get("payload")
+            if llm_narrative.get("used")
+            else {
+                "summary": "Hierarchy generated from deterministic macro baselines with source-registry coverage.",
+                "regime_bias": levels[-1]["regime"],
+                "key_risks": levels[-1]["risks"][:2],
+                "consistency_call": "contradiction" if consistency["has_contradictions"] else "aligned",
+            }
+        ),
+        "stats": {
+            "level_count": len(levels),
+            "news_signal_count": sum(len(level.get("news_signals") or []) for level in levels),
+            "coverage_source_count": len(coverage_sources),
+        },
+        "warnings": warnings,
+        "provenance": {
+            "source": ["forecasts_macro_regime_hierarchy", "free_data_source_registry", "judge_score_news"],
+            "coverage_source_ids": coverage_sources,
+            "llm_used": bool(llm_narrative.get("used")),
+            "llm_model": llm_narrative.get("model"),
+            "llm_provider": llm_narrative.get("provider"),
+            "fallback_used": not bool(llm_narrative.get("used")),
+            "sla": {
+                "updated_at": generated_at,
+                "freshness_status": "fresh",
+                "freshness_age_seconds": 0.0,
+                "target_max_age_seconds": _MACRO_REGIME_CACHE_TTL_SECONDS,
+                "within_target": True,
+            },
+        },
+    }
+    if debug:
+        payload["cache"] = {
+            "hit": False,
+            "age_seconds": 0.0,
+            "ttl_seconds": _MACRO_REGIME_CACHE_TTL_SECONDS,
+        }
+        payload["debug_pipeline"] = {
+            "cache_bypassed": True,
+            "llm_status": llm_narrative.get("status"),
+            "level_entities": [level["entity"] for level in levels],
+            "coverage_source_ids": coverage_sources,
+        }
+        return payload
+    return _macro_cache_set(cache_key, payload)

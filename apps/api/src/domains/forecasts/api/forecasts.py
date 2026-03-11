@@ -77,11 +77,13 @@ try:
     from domains.forecasts.application.global_signal_mesh_service import (
         build_global_signal_mesh_payload,
         build_insider_behavior_payload,
+        build_macro_regime_hierarchy_payload,
         build_policy_change_impact_payload,
     )
 except Exception:  # pragma: no cover
     build_global_signal_mesh_payload = None  # type: ignore
     build_insider_behavior_payload = None  # type: ignore
+    build_macro_regime_hierarchy_payload = None  # type: ignore
     build_policy_change_impact_payload = None  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -462,6 +464,78 @@ async def get_policy_change_impact(
             "message": "Policy impact engine unavailable, returning never-empty fallback.",
         }
         _apply_decision_contract(fallback_payload, route="forecasts_policy_change_impact")
+        return ok(fallback_payload)
+
+
+@router.get("/macro-regime-hierarchy")
+async def get_macro_regime_hierarchy(
+    country: str = Query("US", description="Country focus for the hierarchy."),
+    continent: str = Query("", description="Optional continent override."),
+    horizon: str = Query("3m", description="Forecast horizon label."),
+    include_non_nominal: bool = Query(
+        False,
+        description="Include free fallback-only sources outside the nominal runtime path.",
+    ),
+    debug: bool = Query(False, description="Bypass cache and include debug_pipeline traces."),
+):
+    try:
+        if build_macro_regime_hierarchy_payload is None:
+            raise ModuleNotFoundError("domains.forecasts.application.global_signal_mesh_service")
+        payload = build_macro_regime_hierarchy_payload(
+            country=country,
+            continent=continent,
+            horizon=horizon,
+            include_non_nominal=include_non_nominal,
+            debug=debug,
+        )
+        _apply_decision_contract(payload, route="forecasts_macro_regime_hierarchy")
+        return ok(payload)
+    except Exception as exc:
+        logger.error("Error in get_macro_regime_hierarchy route orchestration: %s", exc, exc_info=True)
+        now_iso = _now_iso()
+        fallback_payload = {
+            "forecast_id": "macro_regime_hierarchy_v1",
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "last_update": now_iso,
+            "source": ["forecasts_macro_regime_hierarchy", "critical_route_error_fallback"],
+            "filters_applied": {
+                "country": str(country or "US").upper(),
+                "continent": str(continent or "").lower(),
+                "horizon": str(horizon or "3m").lower(),
+                "include_non_nominal": bool(include_non_nominal),
+            },
+            "levels": [],
+            "consistency": {"has_contradictions": False, "pairs": []},
+            "narrative": {
+                "summary": "Macro regime hierarchy unavailable, returning never-empty fallback.",
+                "regime_bias": "unknown",
+                "key_risks": [],
+                "consistency_call": "unknown",
+            },
+            "stats": {
+                "level_count": 0,
+                "news_signal_count": 0,
+                "coverage_source_count": 0,
+            },
+            "warnings": ["macro_regime_hierarchy_unavailable"],
+            "provenance": {
+                "source": ["forecasts_macro_regime_hierarchy", "critical_route_error_fallback"],
+                "llm_used": False,
+                "fallback_used": True,
+                "sla": {
+                    "updated_at": now_iso,
+                    "freshness_status": "unknown",
+                    "freshness_age_seconds": 0.0,
+                    "target_max_age_seconds": 0,
+                    "within_target": False,
+                },
+            },
+            "cache": {"hit": False, "age_seconds": 0.0, "ttl_seconds": 0},
+            "error": str(exc),
+            "message": "Macro regime hierarchy unavailable, returning never-empty fallback.",
+        }
+        _apply_decision_contract(fallback_payload, route="forecasts_macro_regime_hierarchy")
         return ok(fallback_payload)
 
 
