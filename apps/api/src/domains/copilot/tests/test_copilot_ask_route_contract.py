@@ -140,6 +140,68 @@ def test_copilot_ask_route_keeps_insufficient_evidence_explicit(monkeypatch):
     assert data["requirements_met"]["min_sources_2"] is False
 
 
+def test_copilot_ask_route_preserves_event_timing_contract(monkeypatch):
+    async def fake_build_ask_payload(**_kwargs):
+        return {
+            "answer": "Hold sizing steady into the event window.",
+            "action": "hold",
+            "confidence": 0.58,
+            "reasoning": ["Near-term event timing is the main risk driver."],
+            "freshness": "2026-03-11T09:00:00Z",
+            "generated_at": "2026-03-11T09:00:00Z",
+            "sources": [{"type": "news", "ticker": "NVDA"}],
+            "quality_status": "sufficient_sources",
+            "requirements_met": {"min_sources_2": True, "quality_threshold": True},
+            "event_timing": {
+                "summary": "Timing risk elevated around earnings (1w).",
+                "events": [
+                    {
+                        "event_type": "earnings",
+                        "dominant_horizon": "1w",
+                        "impact_score": 0.74,
+                        "interpretation": "earnings has its strongest signal on the 1w horizon.",
+                    }
+                ],
+                "freshness": "2026-03-11T09:00:00Z",
+                "source": [
+                    "copilot_event_timing",
+                    "judge_event_impact_horizon_matrix_service",
+                ],
+            },
+        }
+
+    monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", fake_build_ask_payload)
+
+    client = _client()
+    response = client.post(
+        "/api/copilot/ask",
+        json={"question": "Should I add before earnings?", "tickers": ["NVDA"]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+
+    data = payload["data"]
+    assert data["event_timing"] == {
+        "summary": "Timing risk elevated around earnings (1w).",
+        "events": [
+            {
+                "event_type": "earnings",
+                "dominant_horizon": "1w",
+                "impact_score": 0.74,
+                "interpretation": "earnings has its strongest signal on the 1w horizon.",
+            }
+        ],
+        "freshness": "2026-03-11T09:00:00Z",
+        "source": [
+            "copilot_event_timing",
+            "judge_event_impact_horizon_matrix_service",
+        ],
+    }
+    assert data["memo"]["risks"] == ["Sources insuffisantes (moins de 2)."]
+
+
 def test_copilot_ask_route_preserves_portfolio_context_markers(monkeypatch):
     async def fake_build_ask_payload(**_kwargs):
         return {
