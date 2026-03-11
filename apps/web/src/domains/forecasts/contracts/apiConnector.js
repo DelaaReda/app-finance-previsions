@@ -351,6 +351,26 @@ async function getGlobalSignalMesh() {
   };
 }
 
+async function getMacroRegimeHierarchy(params = {}) {
+  const safeParams = params && typeof params === 'object' ? params : {};
+  const search = new URLSearchParams();
+  const country = String(safeParams.country || 'US').trim();
+  const continent = String(safeParams.continent || '').trim();
+  const horizon = String(safeParams.horizon || '3m').trim();
+  const debug = safeParams.debug === true;
+
+  if (country) search.set('country', country);
+  if (continent) search.set('continent', continent);
+  if (horizon) search.set('horizon', horizon);
+  if (debug) search.set('debug', 'true');
+
+  const query = search.toString();
+  const payload = getResponseData(
+    await fetchWithCache(`/forecasts/macro-regime-hierarchy${query ? `?${query}` : ''}`, `macro-regime-hierarchy:${query || 'default'}`)
+  );
+  return payload && typeof payload === 'object' ? payload : null;
+}
+
 async function getPolicyImpact(params = {}) {
   const safeParams = params && typeof params === 'object' ? params : {};
   const search = new URLSearchParams();
@@ -1551,6 +1571,11 @@ async function populateWindowGlobals() {
       window.globalSignalMesh = globalSignalMesh;
     }
 
+    const macroRegimeHierarchy = await getMacroRegimeHierarchy();
+    window.macroRegimeHierarchy = macroRegimeHierarchy && typeof macroRegimeHierarchy === 'object'
+      ? macroRegimeHierarchy
+      : null;
+
     // Health
     const status = await getStatus();
     if (status) {
@@ -1646,7 +1671,8 @@ async function populateWindowGlobals() {
         cache: liveFreshnessContract.freshness,
         contractState: liveFreshnessContract.contractState,
         ingestionHealth: window.ingestionHealth || null,
-        globalSignalMesh: window.globalSignalMesh || null
+        globalSignalMesh: window.globalSignalMesh || null,
+        macroRegimeHierarchy: window.macroRegimeHierarchy || null
       }
     });
     window.dispatchEvent(liveEvent);
@@ -1696,6 +1722,7 @@ window.FinanceAPI = {
   getStatus,
   getHealth,
   getGlobalSignalMesh,
+  getMacroRegimeHierarchy,
   getPolicyImpact,
   getInsiderBehavior,
   getJudgeAnalysis,
@@ -1738,7 +1765,8 @@ window.getLiveDashboardData = () => ({
     portfolioRiskProfileFreshness: window.livePortfolioRiskProfileFreshness || null,
     portfolioHealth: window.livePortfolioHealth || null,
     llmJudgeData: window.llmJudgeData || null,
-    judgeDecisionJournal: window.judgeDecisionJournal || null
+    judgeDecisionJournal: window.judgeDecisionJournal || null,
+    macroRegimeHierarchy: window.macroRegimeHierarchy || null
   },
   generatedAt: window.FinanceAPI && window.FinanceAPI.getCacheStats ? new Date().toISOString() : new Date().toISOString(),
   sources: collectLiveDashboardSources(),
@@ -1752,7 +1780,8 @@ window.getLiveDashboardData = () => ({
     : { lastFetchedAt: Date.now(), ttlMs: cache.TTL },
   contractState: window.liveFreshnessContract ? window.liveFreshnessContract.contractState : 'unknown',
   ingestionHealth: window.ingestionHealth || null,
-  globalSignalMesh: window.globalSignalMesh || null
+  globalSignalMesh: window.globalSignalMesh || null,
+  macroRegimeHierarchy: window.macroRegimeHierarchy || null
 });
 
 async function getStrategyPlaybooks(params = {}) {

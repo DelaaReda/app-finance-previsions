@@ -101,16 +101,16 @@ test('Widget displays regime indicators', () => {
 // Test 6: Widget shows macro metrics
 test('Widget displays macro economic metrics', () => {
   assert(
-    macroRegimeCardsContent.includes('GDP Growth'),
-    'Should display GDP Growth metric'
+    macroRegimeCardsContent.includes('Summary'),
+    'Should display summary metric'
   );
   assert(
-    macroRegimeCardsContent.includes('Inflation'),
-    'Should display Inflation metric'
+    macroRegimeCardsContent.includes('Drivers'),
+    'Should display drivers metric'
   );
   assert(
-    macroRegimeCardsContent.includes('Risk Level'),
-    'Should display Risk Level metric'
+    macroRegimeCardsContent.includes('Risks'),
+    'Should display risks metric'
   );
 });
 

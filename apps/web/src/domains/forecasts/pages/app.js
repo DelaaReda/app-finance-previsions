@@ -2245,6 +2245,8 @@ function sanitizeInsiderBehavior(payload) {
   }
 
   const warnings = toArray(payload.warnings, []).map((warning) => toString(warning, '')).filter(Boolean);
+  const policy = toString(payload.guardrails?.policy, toString(payload.policy, ''));
+  const summaryWarning = toString(payload.summaryWarning, warnings.length ? warnings.join(' • ') : '');
   const signals = toArray(payload.signals, [])
     .filter((item) => isObject(item))
     .slice(0, 3)
@@ -2252,21 +2254,27 @@ function sanitizeInsiderBehavior(payload) {
       ticker: toString(item.ticker, 'MARKET').toUpperCase(),
       stance: toString(item.stance, 'insufficient_evidence'),
       summary: toString(item.summary, ''),
-      confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, 0) * 100))),
-      uncertaintyLevel: toString(item.uncertainty?.level, 'high'),
-      uncertaintyFactors: toArray(item.uncertainty?.factors, []).map((factor) => toString(factor, '')).filter(Boolean),
-      netTrades30d: Math.round(toFiniteNumber(item.activity?.window_30d?.net_trades, 0)),
-      reviewNote: toString(item.guardrails?.review_note, ''),
-      sources: toArray(item.provenance?.source, []).map((source) => toString(source, '')).filter(Boolean),
-      filingSource: toString(item.provenance?.filing_source, ''),
+      confidence: (() => {
+        const confidence = toFiniteNumber(item.confidence, 0);
+        return Math.max(0, Math.min(100, Math.round(confidence <= 1 ? confidence * 100 : confidence)));
+      })(),
+      uncertaintyLevel: toString(item.uncertainty?.level, toString(item.uncertaintyLevel, 'high')),
+      uncertaintyFactors: toArray(
+        item.uncertainty?.factors,
+        toArray(item.uncertaintyFactors, [])
+      ).map((factor) => toString(factor, '')).filter(Boolean),
+      netTrades30d: Math.round(toFiniteNumber(item.activity?.window_30d?.net_trades, toFiniteNumber(item.netTrades30d, 0))),
+      reviewNote: toString(item.guardrails?.review_note, toString(item.reviewNote, '')),
+      sources: toArray(item.provenance?.source, toArray(item.sources, [])).map((source) => toString(source, '')).filter(Boolean),
+      filingSource: toString(item.provenance?.filing_source, toString(item.filingSource, '')),
     }));
 
   return {
-    engineId: toString(payload.engine_id, 'insider_behavior_intelligence_v1'),
-    fallbackUsed: payload.fallback_used === true,
+    engineId: toString(payload.engine_id, toString(payload.engineId, 'insider_behavior_intelligence_v1')),
+    fallbackUsed: payload.fallback_used === true || payload.fallbackUsed === true,
     warnings,
-    policy: toString(payload.guardrails?.policy, ''),
-    summaryWarning: warnings.length ? warnings.join(' • ') : '',
+    policy,
+    summaryWarning,
     signals,
   };
 }
@@ -2799,6 +2807,7 @@ function renderLiveDashboardWidgets() {
   renderMarketCalendar();
   renderNewsFeed();
   renderMarketDrivers();
+  renderMacroRegimeCardsWidget();
   renderHeroCopilotBrief(appData.copilotStart);
   renderAlertTimeline();
   renderJudgeDecisionJournal();
@@ -2811,6 +2820,109 @@ function renderLiveDashboardWidgets() {
   drawConfidenceGauge(Math.round(toFiniteNumber(appData.hero?.forecastConfidence, 82)));
   drawWinRateCircle();
   scheduleCriticalWidgetHealthRender();
+}
+
+function renderMacroRegimeCardsWidget() {
+  const widget = document.querySelector('.macro-regime-cards');
+  if (!widget) return;
+
+  const payload = isObject(liveDataMeta?.macroRegimeHierarchy)
+    ? liveDataMeta.macroRegimeHierarchy
+    : (isObject(window.macroRegimeHierarchy) ? window.macroRegimeHierarchy : null);
+  const levels = Array.isArray(payload?.levels) ? payload.levels.filter((item) => isObject(item)) : [];
+  if (!levels.length) return;
+
+  const directionClass = (value) => {
+    const token = toString(value, '').trim().toLowerCase().replace(/[_\s]+/g, '-');
+    if (token.includes('risk-on') || token.includes('expansion') || token.includes('recovery') || token.includes('reflation')) {
+      return 'expansion';
+    }
+    if (token.includes('slowdown') || token.includes('cooling')) {
+      return 'slowdown';
+    }
+    if (token.includes('contraction') || token.includes('risk-off') || token.includes('recession')) {
+      return 'recession';
+    }
+    return 'recovery';
+  };
+  const confidenceClass = (value) => {
+    const numeric = toFiniteNumber(value, 0);
+    if (numeric >= 0.75) return 'high';
+    if (numeric >= 0.45) return 'medium';
+    return 'low';
+  };
+  const titleCase = (value, fallback = '') => {
+    const text = toString(value, fallback)
+      .replace(/[_-]+/g, ' ')
+      .trim();
+    if (!text) return fallback;
+    return text.replace(/\b\w/g, (letter) => letter.toUpperCase());
+  };
+
+  levels.forEach((level) => {
+    const scope = toString(level.scope, '').trim().toLowerCase();
+    const card = widget.querySelector(`[data-role="macro-card"][data-scope="${scope}"]`);
+    if (!card) return;
+
+    const confidence = Math.round(toFiniteNumber(level.confidence, 0) * 100);
+    const regimeToken = titleCase(level.regime, 'Monitoring');
+    const label = scope === 'world'
+      ? 'World'
+      : titleCase(level.display_name || level.entity, scope);
+    const summary = toString(level.summary, '').trim();
+    const drivers = toArray(level.drivers, []).map((item) => toString(item, '').trim()).filter(Boolean);
+    const risks = toArray(level.risks, []).map((item) => toString(item, '').trim()).filter(Boolean);
+    const confidenceNode = card.querySelector('[data-role="macro-confidence"]');
+    const regimeNode = card.querySelector('[data-role="macro-regime"]');
+    const labelNode = card.querySelector('[data-role="macro-label"]');
+    const summaryNode = card.querySelector('[data-role="macro-summary"]');
+    const driversNode = card.querySelector('[data-role="macro-drivers"]');
+    const risksNode = card.querySelector('[data-role="macro-risks"]');
+
+    if (labelNode) labelNode.textContent = label;
+    if (confidenceNode) {
+      confidenceNode.textContent = `${confidence}%`;
+      confidenceNode.className = `macro-confidence ${confidenceClass(level.confidence)}`;
+    }
+    if (regimeNode) {
+      regimeNode.textContent = regimeToken;
+      regimeNode.className = `regime-badge ${directionClass(level.regime || level.direction)}`;
+    }
+    if (summaryNode) summaryNode.textContent = summary || 'Macro summary unavailable.';
+    if (driversNode) driversNode.textContent = drivers.slice(0, 2).join(' • ') || 'Drivers unavailable';
+    if (risksNode) risksNode.textContent = risks.slice(0, 2).join(' • ') || 'Risks unavailable';
+  });
+
+  const consistency = isObject(payload.consistency) ? payload.consistency : {};
+  const contradictions = Array.isArray(consistency.pairs) ? consistency.pairs : [];
+  const consistencyIcon = widget.querySelector('[data-role="macro-consistency-icon"]');
+  const consistencyText = widget.querySelector('[data-role="macro-consistency-text"]');
+  if (consistencyIcon) {
+    consistencyIcon.textContent = consistency.has_contradictions ? '!' : '✓';
+    consistencyIcon.className = consistency.has_contradictions ? 'consistency-icon warning' : 'consistency-icon ok';
+  }
+  if (consistencyText) {
+    consistencyText.textContent = consistency.has_contradictions && contradictions.length
+      ? `Cross-level consistency: ${toString(contradictions[0].summary || contradictions[0].reason, 'Contradiction detected between macro layers')}`
+      : 'Cross-level consistency: All regimes aligned (no contradictions detected)';
+  }
+
+  const insightText = widget.querySelector('[data-role="macro-insight-text"]');
+  if (insightText) {
+    const narrative = isObject(payload.narrative) ? payload.narrative : {};
+    const confidenceAvg = levels.length
+      ? Math.round((levels.reduce((sum, level) => sum + toFiniteNumber(level.confidence, 0), 0) / levels.length) * 100)
+      : 0;
+    const summary = toString(narrative.summary, '').trim() || 'Macro hierarchy loaded from the live forecast engine.';
+    const regimeBias = titleCase(narrative.regime_bias || narrative.regimeBias, '');
+    insightText.textContent = `${summary}${regimeBias ? ` Regime bias: ${regimeBias}.` : ''} Hierarchical model confidence: ${confidenceAvg}% average.`;
+  }
+
+  const timestamp = widget.querySelector('[data-role="macro-timestamp"]');
+  const updatedAt = toString(payload.generated_at || payload.freshness || payload.last_update, '').trim();
+  if (timestamp && updatedAt) {
+    timestamp.textContent = `Updated ${formatRelativeTime(updatedAt)}`;
+  }
 }
 
 function renderForecastScenarioWidget() {
@@ -3310,6 +3422,11 @@ function applyLiveDashboardData(payload = {}) {
     globalSignalMesh: isObject(payload.globalSignalMesh)
       ? payload.globalSignalMesh
       : (isObject(payloadMeta.globalSignalMesh) ? payloadMeta.globalSignalMesh : null),
+    macroRegimeHierarchy: isObject(data.macroRegimeHierarchy)
+      ? data.macroRegimeHierarchy
+      : (isObject(payload.macroRegimeHierarchy)
+        ? payload.macroRegimeHierarchy
+        : (isObject(payloadMeta.macroRegimeHierarchy) ? payloadMeta.macroRegimeHierarchy : null)),
     geopoliticalRiskGraph: isObject(data.geopoliticalRiskGraph)
       ? data.geopoliticalRiskGraph
       : (isObject(payload.geopoliticalRiskGraph)

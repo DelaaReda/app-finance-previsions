@@ -193,6 +193,133 @@ function loadForecastSlaHelpers() {
   return { sandbox, lineage };
 }
 
+function loadMacroRegimeCardsRenderer() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractFunction(source, 'renderMacroRegimeCardsWidget', '\n\nfunction renderForecastScenarioWidget');
+  const nodes = new Map();
+  const makeNode = (initialClassName = '') => ({
+    textContent: '',
+    className: initialClassName,
+  });
+  const worldCard = {
+    querySelector(selector) {
+      return nodes.get(`world:${selector}`) || null;
+    },
+  };
+  const continentCard = {
+    querySelector(selector) {
+      return nodes.get(`continent:${selector}`) || null;
+    },
+  };
+  const countryCard = {
+    querySelector(selector) {
+      return nodes.get(`country:${selector}`) || null;
+    },
+  };
+
+  ['world', 'continent', 'country'].forEach((scope) => {
+    nodes.set(`${scope}:[data-role="macro-label"]`, makeNode());
+    nodes.set(`${scope}:[data-role="macro-confidence"]`, makeNode('macro-confidence medium'));
+    nodes.set(`${scope}:[data-role="macro-regime"]`, makeNode('regime-badge recovery'));
+    nodes.set(`${scope}:[data-role="macro-summary"]`, makeNode());
+    nodes.set(`${scope}:[data-role="macro-drivers"]`, makeNode());
+    nodes.set(`${scope}:[data-role="macro-risks"]`, makeNode());
+  });
+  const consistencyIcon = makeNode('consistency-icon ok');
+  const consistencyText = makeNode();
+  const insightText = makeNode();
+  const timestamp = makeNode();
+  const widget = {
+    querySelector(selector) {
+      if (selector === '[data-role="macro-card"][data-scope="world"]') return worldCard;
+      if (selector === '[data-role="macro-card"][data-scope="continent"]') return continentCard;
+      if (selector === '[data-role="macro-card"][data-scope="country"]') return countryCard;
+      if (selector === '[data-role="macro-consistency-icon"]') return consistencyIcon;
+      if (selector === '[data-role="macro-consistency-text"]') return consistencyText;
+      if (selector === '[data-role="macro-insight-text"]') return insightText;
+      if (selector === '[data-role="macro-timestamp"]') return timestamp;
+      return null;
+    },
+  };
+
+  const sandbox = {
+    console,
+    liveDataMeta: {
+      macroRegimeHierarchy: null,
+    },
+    window: {
+      macroRegimeHierarchy: null,
+    },
+    document: {
+      querySelector(selector) {
+        if (selector === '.macro-regime-cards') return widget;
+        return null;
+      },
+    },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : fallback;
+    },
+    formatRelativeTime(value) {
+      return `relative:${value}`;
+    },
+  };
+  sandbox.window.window = sandbox.window;
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.renderMacroRegimeCardsWidget = renderMacroRegimeCardsWidget;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return {
+    sandbox,
+    nodes,
+    consistencyIcon,
+    consistencyText,
+    insightText,
+    timestamp,
+  };
+}
+
+function loadSanitizeInsiderBehavior() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractFunction(source, 'sanitizeInsiderBehavior', '\n\nfunction sanitizeJudgeDecisionJournal');
+  const sandbox = {
+    console,
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : fallback;
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.sanitizeInsiderBehavior = sanitizeInsiderBehavior;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return sandbox;
+}
+
 function loadAlertTimelineHelpers() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const helpersSource = extractSection(source, 'const ALERT_SEVERITY_ORDER = {', '\n\nfunction sanitizeMarketCalendar');
@@ -1597,6 +1724,47 @@ test('applyLiveDashboardData stores insider behavior payloads for existing widge
   assert.equal(sandbox.rendered, true);
 });
 
+test('sanitizeInsiderBehavior preserves already-normalized guardrail and provenance fields', () => {
+  const sandbox = loadSanitizeInsiderBehavior();
+
+  const result = JSON.parse(JSON.stringify(sandbox.sanitizeInsiderBehavior({
+    engineId: 'insider_behavior_intelligence_v1',
+    fallbackUsed: true,
+    summaryWarning: 'Insider activity is evidence with uncertainty, never a standalone directive.',
+    policy: 'Use insider behavior only as corroborating evidence.',
+    signals: [
+      {
+        ticker: 'nvda',
+        confidence: 61,
+        uncertaintyLevel: 'medium',
+        summary: 'Insider activity suggests accumulation bias.',
+        netTrades30d: 4,
+        reviewNote: 'Wait for corroboration.',
+        filingSource: 'public_form4',
+        sources: ['forecasts_insider_behavior', 'sec_edgar_form4'],
+        uncertaintyFactors: ['limited_sample_size'],
+      },
+    ],
+  })));
+
+  assert.equal(result.engineId, 'insider_behavior_intelligence_v1');
+  assert.equal(result.fallbackUsed, true);
+  assert.equal(result.summaryWarning, 'Insider activity is evidence with uncertainty, never a standalone directive.');
+  assert.equal(result.policy, 'Use insider behavior only as corroborating evidence.');
+  assert.deepEqual(result.signals[0], {
+    ticker: 'NVDA',
+    stance: 'insufficient_evidence',
+    summary: 'Insider activity suggests accumulation bias.',
+    confidence: 61,
+    uncertaintyLevel: 'medium',
+    uncertaintyFactors: ['limited_sample_size'],
+    netTrades30d: 4,
+    reviewNote: 'Wait for corroboration.',
+    sources: ['forecasts_insider_behavior', 'sec_edgar_form4'],
+    filingSource: 'public_form4',
+  });
+});
+
 test('renderMarketDrivers appends insider behavior summary to the existing widget', () => {
   const { sandbox, container } = loadRenderMarketDrivers();
 
@@ -1752,6 +1920,78 @@ test('renderForecastScenarioWidget surfaces macro hierarchy coverage and contrad
     scenarioContext.textContent,
     'Top live forecasts: WORLD, EU, US • Macro hierarchy: 1 world, 1 continent, 1 country • Contradiction: World risk_off vs United States risk_on'
   );
+});
+
+test('renderMacroRegimeCardsWidget hydrates world continent country cards from live hierarchy payload', () => {
+  const {
+    sandbox,
+    nodes,
+    consistencyIcon,
+    consistencyText,
+    insightText,
+    timestamp,
+  } = loadMacroRegimeCardsRenderer();
+
+  sandbox.liveDataMeta.macroRegimeHierarchy = {
+    generated_at: '2026-03-11T10:00:00Z',
+    levels: [
+      {
+        scope: 'world',
+        entity: 'world',
+        regime: 'risk_off',
+        confidence: 0.82,
+        summary: 'Global liquidity is tightening.',
+        drivers: ['Dollar strength', 'Manufacturing slowdown'],
+        risks: ['Cross-asset volatility'],
+      },
+      {
+        scope: 'continent',
+        entity: 'north_america',
+        display_name: 'North America',
+        regime: 'slowdown',
+        confidence: 0.64,
+        summary: 'Growth is cooling across North America.',
+        drivers: ['Higher real yields'],
+        risks: ['Consumer retrenchment'],
+      },
+      {
+        scope: 'country',
+        entity: 'US',
+        display_name: 'United States',
+        regime: 'recovery',
+        confidence: 0.58,
+        summary: 'Domestic demand is stabilizing.',
+        drivers: ['Labor resilience'],
+        risks: ['Policy execution risk'],
+      },
+    ],
+    consistency: {
+      has_contradictions: true,
+      pairs: [{ summary: 'World risk-off conflicts with United States recovery' }],
+    },
+    narrative: {
+      summary: 'Macro hierarchy is mixed across the stack.',
+      regime_bias: 'risk_off',
+    },
+  };
+
+  sandbox.renderMacroRegimeCardsWidget();
+
+  assert.equal(nodes.get('world:[data-role="macro-label"]').textContent, 'World');
+  assert.equal(nodes.get('world:[data-role="macro-confidence"]').textContent, '82%');
+  assert.equal(nodes.get('world:[data-role="macro-confidence"]').className, 'macro-confidence high');
+  assert.equal(nodes.get('world:[data-role="macro-regime"]').className, 'regime-badge recession');
+  assert.equal(nodes.get('continent:[data-role="macro-label"]').textContent, 'North America');
+  assert.equal(nodes.get('country:[data-role="macro-summary"]').textContent, 'Domestic demand is stabilizing.');
+  assert.equal(nodes.get('country:[data-role="macro-drivers"]').textContent, 'Labor resilience');
+  assert.equal(nodes.get('country:[data-role="macro-risks"]').textContent, 'Policy execution risk');
+  assert.equal(consistencyIcon.textContent, '!');
+  assert.equal(consistencyIcon.className, 'consistency-icon warning');
+  assert.equal(consistencyText.textContent, 'Cross-level consistency: World risk-off conflicts with United States recovery');
+  assert.match(insightText.textContent, /Macro hierarchy is mixed across the stack\./);
+  assert.match(insightText.textContent, /Regime bias: Risk Off\./);
+  assert.match(insightText.textContent, /Hierarchical model confidence: 68% average\./);
+  assert.equal(timestamp.textContent, 'Updated relative:2026-03-11T10:00:00Z');
 });
 
 test('runCopilotStartPrompt opens the overlay before sending a hero starter prompt', () => {

@@ -1089,6 +1089,35 @@ test('getGlobalSignalMesh normalizes freshness status from mesh provenance SLA',
   assert.equal(payload.freshness.ttl_seconds, 900);
 });
 
+test('getMacroRegimeHierarchy unwraps the country continent world hierarchy contract', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            forecast_id: 'macro_regime_hierarchy_v1',
+            levels: [
+              { scope: 'world', entity: 'world', regime: 'risk_off', confidence: 0.72 },
+              { scope: 'continent', entity: 'europe', regime: 'slowdown', confidence: 0.61 },
+              { scope: 'country', entity: 'Germany', regime: 'recovery', confidence: 0.58 },
+            ],
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getMacroRegimeHierarchy({ country: 'Germany', continent: 'europe', horizon: '1m' });
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/forecasts/macro-regime-hierarchy?country=Germany&continent=europe&horizon=1m']);
+  assert.equal(payload.forecast_id, 'macro_regime_hierarchy_v1');
+  assert.equal(payload.levels[0].scope, 'world');
+  assert.equal(payload.levels[2].entity, 'Germany');
+});
+
 test('getPolicyImpact unwraps the policy engine contract', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {

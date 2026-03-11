@@ -17,79 +17,79 @@
         <!-- Hierarchical Cards: World → Continent → Country -->
         <div class="macro-cards-grid">
             <!-- World Level (L5) -->
-            <div class="macro-card world-level">
+            <div class="macro-card world-level" data-role="macro-card" data-scope="world">
                 <div class="macro-card-header">
-                    <span class="macro-icon">🌐</span>
-                    <span class="macro-label">World</span>
-                    <span class="macro-confidence high">92%</span>
+                    <span class="macro-icon" data-role="macro-icon">🌐</span>
+                    <span class="macro-label" data-role="macro-label">World</span>
+                    <span class="macro-confidence high" data-role="macro-confidence">92%</span>
                 </div>
                 <div class="macro-regime-indicator">
-                    <div class="regime-badge expansion">Expansion</div>
+                    <div class="regime-badge expansion" data-role="macro-regime">Expansion</div>
                 </div>
                 <div class="macro-metrics">
                     <div class="macro-metric">
                         <span class="metric-label">GDP Growth</span>
-                        <span class="metric-value positive">+3.2%</span>
+                        <span class="metric-value positive" data-role="macro-summary">+3.2%</span>
                     </div>
                     <div class="macro-metric">
-                        <span class="metric-label">Inflation</span>
-                        <span class="metric-value neutral">2.8%</span>
+                        <span class="metric-label">Drivers</span>
+                        <span class="metric-value neutral" data-role="macro-drivers">Global manufacturing resilience</span>
                     </div>
                     <div class="macro-metric">
-                        <span class="metric-label">Risk Level</span>
-                        <span class="metric-value low">Low</span>
+                        <span class="metric-label">Risks</span>
+                        <span class="metric-value low" data-role="macro-risks">Liquidity shock risk</span>
                     </div>
                 </div>
             </div>
 
             <!-- Continent Level (L4) -->
-            <div class="macro-card continent-level">
+            <div class="macro-card continent-level" data-role="macro-card" data-scope="continent">
                 <div class="macro-card-header">
-                    <span class="macro-icon">🇪🇺</span>
-                    <span class="macro-label">Europe</span>
-                    <span class="macro-confidence medium">78%</span>
+                    <span class="macro-icon" data-role="macro-icon">🇪🇺</span>
+                    <span class="macro-label" data-role="macro-label">Europe</span>
+                    <span class="macro-confidence medium" data-role="macro-confidence">78%</span>
                 </div>
                 <div class="macro-regime-indicator">
-                    <div class="regime-badge slowdown">Slowdown</div>
+                    <div class="regime-badge slowdown" data-role="macro-regime">Slowdown</div>
                 </div>
                 <div class="macro-metrics">
                     <div class="macro-metric">
-                        <span class="metric-label">GDP Growth</span>
-                        <span class="metric-value neutral">+1.1%</span>
+                        <span class="metric-label">Summary</span>
+                        <span class="metric-value neutral" data-role="macro-summary">+1.1%</span>
                     </div>
                     <div class="macro-metric">
-                        <span class="metric-label">Inflation</span>
-                        <span class="metric-value warning">3.5%</span>
+                        <span class="metric-label">Drivers</span>
+                        <span class="metric-value warning" data-role="macro-drivers">ECB sensitivity</span>
                     </div>
                     <div class="macro-metric">
-                        <span class="metric-label">Risk Level</span>
-                        <span class="metric-value medium">Medium</span>
+                        <span class="metric-label">Risks</span>
+                        <span class="metric-value medium" data-role="macro-risks">Energy inflation</span>
                     </div>
                 </div>
             </div>
 
             <!-- Country Level (L3) -->
-            <div class="macro-card country-level">
+            <div class="macro-card country-level" data-role="macro-card" data-scope="country">
                 <div class="macro-card-header">
-                    <span class="macro-icon">🇺🇸</span>
-                    <span class="macro-label">United States</span>
-                    <span class="macro-confidence high">88%</span>
+                    <span class="macro-icon" data-role="macro-icon">🇺🇸</span>
+                    <span class="macro-label" data-role="macro-label">United States</span>
+                    <span class="macro-confidence high" data-role="macro-confidence">88%</span>
                 </div>
                 <div class="macro-regime-indicator">
-                    <div class="regime-badge recovery">Recovery</div>
+                    <div class="regime-badge recovery" data-role="macro-regime">Recovery</div>
                 </div>
                 <div class="macro-metrics">
                     <div class="macro-metric">
-                        <span class="metric-label">GDP Growth</span>
-                        <span class="metric-value positive">+2.8%</span>
+                        <span class="metric-label">Summary</span>
+                        <span class="metric-value positive" data-role="macro-summary">+2.8%</span>
                     </div>
                     <div class="macro-metric">
-                        <span class="metric-label">Inflation</span>
-                        <span class="metric-value neutral">2.4%</span>
+                        <span class="metric-label">Drivers</span>
+                        <span class="metric-value neutral" data-role="macro-drivers">Domestic demand strength</span>
                     </div>
                     <div class="macro-metric">
-                        <span class="metric-label">Risk Level</span>
-                        <span class="metric-value low">Low</span>
+                        <span class="metric-label">Risks</span>
+                        <span class="metric-value low" data-role="macro-risks">Policy execution risk</span>
                     </div>
                 </div>
             </div>
@@ -97,14 +97,14 @@
 
         <!-- Consistency Check Banner -->
         <div class="consistency-check">
-            <span class="consistency-icon ok">✓</span>
-            <span class="consistency-text">Cross-level consistency: All regimes aligned (no contradictions detected)</span>
+            <span class="consistency-icon ok" data-role="macro-consistency-icon">✓</span>
+            <span class="consistency-text" data-role="macro-consistency-text">Cross-level consistency: All regimes aligned (no contradictions detected)</span>
         </div>
 
         <!-- AI Insight Bar -->
         <div class="ai-insight-bar">
             <span class="insight-icon">🤖</span>
-            <span class="insight-text">
+            <span class="insight-text" data-role="macro-insight-text">
                 Global expansion continues with US leading recovery. Europe shows slowdown signals - monitor ECB policy shifts.
                 Hierarchical model confidence: 86% average.
             </span>
@@ -112,7 +112,7 @@
     </div>
 
     <div class="widget-footer">
-        <span class="widget-timestamp">Updated 15 minutes ago</span>
+        <span class="widget-timestamp" data-role="macro-timestamp">Updated 15 minutes ago</span>
         <button class="widget-action-btn" onclick="showToast('Opening detailed macro view...')">Show Detailed View</button>
     </div>
 </section>
