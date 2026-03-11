@@ -124,6 +124,8 @@ def _build_start_response(
     note: Optional[str] = None,
     context_influence: Optional[Dict[str, Any]] = None,
     portfolio_context: Optional[Dict[str, Any]] = None,
+    regime_detection: Optional[Dict[str, Any]] = None,
+    allocation_drift_alerts: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     resolved_start = dict(start_payload) if isinstance(start_payload, dict) else {}
     brief_of_day = (
@@ -175,6 +177,10 @@ def _build_start_response(
         payload["context_influence"] = dict(context_influence)
     if isinstance(portfolio_context, dict) and portfolio_context:
         payload["portfolio_context"] = dict(portfolio_context)
+    if isinstance(regime_detection, dict) and regime_detection:
+        payload["regime_detection"] = dict(regime_detection)
+    if isinstance(allocation_drift_alerts, dict) and allocation_drift_alerts:
+        payload["allocation_drift_alerts"] = dict(allocation_drift_alerts)
     return payload
 
 
@@ -285,6 +291,8 @@ async def copilot_start(
                 note=note,
                 context_influence=payload.get("context_influence") if isinstance(payload, dict) else None,
                 portfolio_context=payload.get("portfolio_context") if isinstance(payload, dict) else None,
+                regime_detection=payload.get("regime_detection") if isinstance(payload, dict) else None,
+                allocation_drift_alerts=payload.get("allocation_drift_alerts") if isinstance(payload, dict) else None,
             ),
         }
     except Exception:
@@ -309,6 +317,12 @@ async def copilot_start(
                 "ask": [],
                 "open": [],
             }
+        fallback_payload = {
+            "context_influence": None,
+            "portfolio_context": None,
+            "regime_detection": None,
+            "allocation_drift_alerts": None,
+        }
 
         return {
             "ok": True,
@@ -316,8 +330,10 @@ async def copilot_start(
                 fallback_start,
                 scope=scope,
                 note="Market context service temporarily unavailable.",
-                context_influence=fallback.get("context_influence"),
-                portfolio_context=fallback.get("portfolio_context"),
+                context_influence=fallback_payload.get("context_influence"),
+                portfolio_context=fallback_payload.get("portfolio_context"),
+                regime_detection=fallback_payload.get("regime_detection"),
+                allocation_drift_alerts=fallback_payload.get("allocation_drift_alerts"),
             ),
         }
 

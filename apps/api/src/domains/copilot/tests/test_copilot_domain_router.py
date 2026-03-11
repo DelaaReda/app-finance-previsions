@@ -215,7 +215,22 @@ def test_copilot_start_route_reuses_context_payload(monkeypatch):
                     {"id": "brief_of_day", "target": "/brief/daily"},
                     {"id": "open_copilot", "target": "/copilot"},
                 ],
-            }
+            },
+            "regime_detection": {
+                "label": "RISK_ON",
+                "confidence": 0.81,
+                "threshold_reason": "Breadth improving",
+            },
+            "allocation_drift_alerts": {
+                "active": True,
+                "alerts": [
+                    {
+                        "id": "largest_position_concentration",
+                        "symbol": "NVDA",
+                        "severity": "high",
+                    }
+                ],
+            },
         }
 
     monkeypatch.setattr(copilot_service, "build_context_payload", _fake_build_context_payload)
@@ -236,6 +251,8 @@ def test_copilot_start_route_reuses_context_payload(monkeypatch):
     assert data.get("stats") == {"ask_count": 1, "open_count": 2}
     assert data.get("scope_tickers") == ["NVDA", "MSFT"]
     assert "copilot_start_route" in (data.get("source") or [])
+    assert data.get("regime_detection", {}).get("label") == "RISK_ON"
+    assert data.get("allocation_drift_alerts", {}).get("active") is True
 
 
 def test_copilot_start_route_uses_service_resolved_scope_metadata(monkeypatch):
@@ -334,6 +351,44 @@ def test_copilot_start_route_fallback_keeps_brief_and_actions(monkeypatch):
     assert [item.get("id") for item in data.get("ask", [])] == ["ask_copilot"]
     assert data.get("filters_applied") == {"tickers": ["SPY"]}
     assert data.get("scope_tickers") == ["SPY"]
+
+
+def test_copilot_start_route_omits_alert_payloads_in_fallback(monkeypatch):
+    async def _raise_context_error(*_args, **_kwargs):
+        raise RuntimeError("copilot context unavailable")
+
+    monkeypatch.setattr(copilot_service, "build_context_payload", _raise_context_error)
+    monkeypatch.setattr(
+        copilot_service,
+        "_load_daily_brief_payload",
+        lambda: {
+            "summary": "No daily brief available yet.",
+            "market_sentiment": "UNKNOWN",
+            "generated_at": "2026-03-09T06:00:00Z",
+            "freshness": "2026-03-09T06:00:00Z",
+            "source": ["copilot_daily_brief_fallback"],
+        },
+    )
+    monkeypatch.setattr(copilot_service, "_build_copilot_entry_points", lambda scope=None: [])
+    monkeypatch.setattr(
+        copilot_service,
+        "_build_copilot_start_payload",
+        lambda *, daily_brief=None, entry_points=None, scope=None: {
+            "brief_of_day": dict(daily_brief or {}),
+            "open": [],
+            "ask": [],
+        },
+    )
+
+    client = _client()
+    response = client.get("/api/copilot/start")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("ok") is True
+    data = payload.get("data") or {}
+    assert "regime_detection" not in data
+    assert "allocation_drift_alerts" not in data
 
 
 def test_copilot_context_includes_playbook_enrichment(monkeypatch):
