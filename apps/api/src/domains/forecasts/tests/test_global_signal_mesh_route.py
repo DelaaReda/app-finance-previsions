@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from api.main import create_app
 from api.routes import forecasts as forecasts_api
 from domains.forecasts.application.global_signal_mesh_service import (
+    _FINAL_GATE_RESPONSE_CACHE,
     _GLOBAL_SIGNAL_MESH_RESPONSE_CACHE,
     _INSIDER_BEHAVIOR_RESPONSE_CACHE,
     _MACRO_REGIME_RESPONSE_CACHE,
@@ -117,6 +118,96 @@ def test_global_signal_mesh_cache_returns_isolated_nested_payloads():
     assert second["sources_catalog"][0]["provenance"]["registry_source"] == (
         "FREE_DATA_SOURCE_KEY_MATRIX"
     )
+
+
+def test_final_global_gate_contract_reuses_existing_forecast_components(monkeypatch):
+    client = _client()
+    _FINAL_GATE_RESPONSE_CACHE.clear()
+
+    async def _scoreboard(**_kwargs):
+        return {
+            "generated_at": "2026-03-10T12:00:00Z",
+            "freshness": "2026-03-10T12:00:00Z",
+            "last_update": "2026-03-10T12:00:00Z",
+            "source": ["walk_forward_scoreboard"],
+            "summary": {
+                "hit_rate_percentage": 61.0,
+                "total_predictions_analyzed": 42,
+                "average_confidence": 0.66,
+            },
+            "stats": {"passing_rows": 3, "failing_rows": 0},
+            "threshold_summary": {
+                "walk_forward_direction_hit_rate": {
+                    "target": 0.52,
+                    "value": 0.61,
+                    "status": "pass",
+                    "sample_size": 42,
+                }
+            },
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(forecasts_api.forecasts_service, "get_walk_forward_scoreboard_payload", _scoreboard)
+
+    response = client.get("/api/forecasts/final-global-gate?country=US&horizon=3m")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+
+    data = payload["data"]
+    assert data["gate_id"] == "final_global_forecast_gate_v1"
+    assert data["status"] == "pass"
+    assert data["summary"]["free_data_compliant"] is True
+    assert data["summary"]["quality_non_regressing"] is True
+    assert "macro" in data["summary"]["required_layers_active"]
+    assert data["proofs"]["FREE_DATA_SOURCE_CATALOG_PROOF"]["status"] == "pass"
+    assert data["proofs"]["LICENSE_COMPLIANCE_PROOF"]["status"] == "pass"
+    assert data["proofs"]["FINAL_GLOBAL_FORECAST_GATE_PROOF"]["quality_sample_size"] == 42
+    assert data["components"]["quality_trend"]["threshold_summary"]["walk_forward_direction_hit_rate"]["status"] == "pass"
+    assert data["provenance"]["fallback_used"] is False
+
+
+def test_final_global_gate_cache_and_debug_bypass(monkeypatch):
+    client = _client()
+    _FINAL_GATE_RESPONSE_CACHE.clear()
+
+    async def _scoreboard(**_kwargs):
+        return {
+            "generated_at": "2026-03-10T12:00:00Z",
+            "freshness": "2026-03-10T12:00:00Z",
+            "last_update": "2026-03-10T12:00:00Z",
+            "source": ["walk_forward_scoreboard"],
+            "summary": {
+                "hit_rate_percentage": 61.0,
+                "total_predictions_analyzed": 42,
+                "average_confidence": 0.66,
+            },
+            "stats": {"passing_rows": 3, "failing_rows": 0},
+            "threshold_summary": {
+                "walk_forward_direction_hit_rate": {
+                    "target": 0.52,
+                    "value": 0.61,
+                    "status": "pass",
+                    "sample_size": 42,
+                }
+            },
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(forecasts_api.forecasts_service, "get_walk_forward_scoreboard_payload", _scoreboard)
+
+    first = client.get("/api/forecasts/final-global-gate")
+    second = client.get("/api/forecasts/final-global-gate")
+    debug = client.get("/api/forecasts/final-global-gate?debug=true")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert debug.status_code == 200
+    assert first.json()["data"]["cache"]["hit"] is False
+    assert second.json()["data"]["cache"]["hit"] is True
+    assert debug.json()["data"]["cache"]["hit"] is False
+    assert debug.json()["data"]["debug_pipeline"]["cache_bypassed"] is True
 
 
 def test_policy_impact_contract_extracts_status_jurisdiction_and_sector(monkeypatch):
@@ -559,6 +650,7 @@ def test_batch46_macro_regime_contradictions_degrade_confidence(monkeypatch):
 
 def test_batch46_macro_regime_hierarchy_fallback_preserves_contract_shape(monkeypatch):
     from domains.forecasts.api import forecasts as domain_forecasts_api
+    from platform.routes import forecasts as platform_forecasts_api
 
     client = _client()
     _MACRO_REGIME_RESPONSE_CACHE.clear()
@@ -568,6 +660,7 @@ def test_batch46_macro_regime_hierarchy_fallback_preserves_contract_shape(monkey
 
     monkeypatch.setattr(forecasts_api, "build_macro_regime_hierarchy_payload", _explode)
     monkeypatch.setattr(domain_forecasts_api, "build_macro_regime_hierarchy_payload", _explode)
+    monkeypatch.setattr(platform_forecasts_api, "build_macro_regime_hierarchy_payload", _explode)
 
     response = client.get("/api/forecasts/macro-regime-hierarchy?country=US")
 

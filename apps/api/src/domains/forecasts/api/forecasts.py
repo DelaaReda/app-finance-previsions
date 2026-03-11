@@ -75,12 +75,14 @@ except Exception:  # pragma: no cover
 
 try:
     from domains.forecasts.application.global_signal_mesh_service import (
+        build_final_global_forecast_gate_payload,
         build_global_signal_mesh_payload,
         build_insider_behavior_payload,
         build_macro_regime_hierarchy_payload,
         build_policy_change_impact_payload,
     )
 except Exception:  # pragma: no cover
+    build_final_global_forecast_gate_payload = None  # type: ignore
     build_global_signal_mesh_payload = None  # type: ignore
     build_insider_behavior_payload = None  # type: ignore
     build_macro_regime_hierarchy_payload = None  # type: ignore
@@ -401,6 +403,94 @@ async def get_global_signal_mesh(
             "message": "Global signal mesh unavailable, returning never-empty fallback.",
         }
         _apply_decision_contract(fallback_payload, route="forecasts_global_signal_mesh")
+        return ok(fallback_payload)
+
+
+@router.get("/final-global-gate")
+async def get_final_global_forecast_gate(
+    country: str = Query("US", description="Country focus for the final gate."),
+    continent: str = Query("", description="Optional continent override."),
+    horizon: str = Query("3m", description="Quality trend horizon label."),
+    include_non_nominal: bool = Query(
+        False,
+        description="Include free fallback-only sources outside the nominal runtime path.",
+    ),
+    debug: bool = Query(False, description="Bypass cache and include debug_pipeline traces."),
+):
+    try:
+        if build_final_global_forecast_gate_payload is None:
+            raise ModuleNotFoundError("domains.forecasts.application.global_signal_mesh_service")
+        scoreboard_payload = await forecasts_service.get_walk_forward_scoreboard_payload(
+            horizon=horizon,
+            debug=debug,
+            load_json_fn=load_json,
+        )
+        payload = build_final_global_forecast_gate_payload(
+            country=country,
+            continent=continent,
+            horizon=horizon,
+            include_non_nominal=include_non_nominal,
+            walk_forward_scoreboard=scoreboard_payload,
+            debug=debug,
+        )
+        _apply_decision_contract(payload, route="forecasts_final_global_gate")
+        return ok(payload)
+    except Exception as exc:
+        logger.error("Error in get_final_global_forecast_gate route orchestration: %s", exc, exc_info=True)
+        now_iso = _now_iso()
+        fallback_payload = {
+            "gate_id": "final_global_forecast_gate_v1",
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "last_update": now_iso,
+            "source": ["forecasts_final_global_gate", "critical_route_error_fallback"],
+            "filters_applied": {
+                "country": str(country or "US").upper(),
+                "continent": str(continent or "").lower(),
+                "horizon": str(horizon or "3m").lower(),
+                "include_non_nominal": bool(include_non_nominal),
+            },
+            "status": "degraded",
+            "summary": {
+                "required_layers_active": [],
+                "missing_layers": ["macro", "market", "news", "policy", "insider", "geopolitical"],
+                "free_data_compliant": False,
+                "quality_non_regressing": False,
+                "quality_status": "fail",
+            },
+            "proofs": {
+                "FINAL_GLOBAL_FORECAST_GATE_PROOF": {
+                    "status": "degraded",
+                    "required_layers_active": [],
+                    "missing_layers": ["macro", "market", "news", "policy", "insider", "geopolitical"],
+                    "quality_status": "fail",
+                    "quality_sample_size": 0,
+                }
+            },
+            "components": {
+                "global_signal_mesh": {"stats": {}},
+                "macro_regime_hierarchy": {"stats": {}, "consistency": {}},
+                "policy_change_impact": {"stats": {}, "timeline": {}},
+                "insider_behavior": {"stats": {}, "guardrails": {}},
+                "quality_trend": {"threshold_summary": {}, "summary": {}, "stats": {}},
+            },
+            "warnings": ["final_global_forecast_gate_unavailable"],
+            "provenance": {
+                "source": ["forecasts_final_global_gate", "critical_route_error_fallback"],
+                "fallback_used": True,
+                "sla": {
+                    "updated_at": now_iso,
+                    "freshness_status": "unknown",
+                    "freshness_age_seconds": 0.0,
+                    "target_max_age_seconds": 0,
+                    "within_target": False,
+                },
+            },
+            "cache": {"hit": False, "age_seconds": 0.0, "ttl_seconds": 0},
+            "error": str(exc),
+            "message": "Final global forecast gate unavailable, returning never-empty fallback.",
+        }
+        _apply_decision_contract(fallback_payload, route="forecasts_final_global_gate")
         return ok(fallback_payload)
 
 
