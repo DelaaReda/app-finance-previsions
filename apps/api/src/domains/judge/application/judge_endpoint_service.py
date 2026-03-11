@@ -205,6 +205,240 @@ def _parse_datetime(value: Any) -> Optional[datetime]:
         return None
 
 
+def _as_freshness_hours(value: Any) -> Optional[float]:
+    parsed = _parse_datetime(value)
+    if parsed is None:
+        return None
+    return round(
+        max(0.0, (datetime.now(timezone.utc) - parsed).total_seconds()) / 3600.0,
+        3,
+    )
+
+
+def _normalize_trace_source_items(verdict: Dict[str, Any]) -> List[Dict[str, Any]]:
+    meta = verdict.get("meta") if isinstance(verdict.get("meta"), dict) else {}
+    debug_payload = verdict.get("debug_payload") if isinstance(verdict.get("debug_payload"), dict) else {}
+    attachments = verdict.get("attachments") if isinstance(verdict.get("attachments"), list) else []
+    news_items = debug_payload.get("news") if isinstance(debug_payload.get("news"), list) else []
+    source_tags = ensure_source_list(
+        verdict.get("source") or meta.get("source"),
+        default_source="judge_endpoint_service",
+    )
+
+    normalized: List[Dict[str, Any]] = []
+    seen = set()
+
+    for idx, tag in enumerate(source_tags):
+        source_id = f"source_tag:{tag}"
+        normalized.append(
+            {
+                "source_id": source_id,
+                "label": tag,
+                "kind": "source_tag",
+                "weight": round(1.0 / max(1, len(source_tags)), 4),
+                "quality_score": None,
+                "freshness": {
+                    "timestamp": None,
+                    "age_hours": None,
+                },
+                "trace": {
+                    "origin": "verdict.source",
+                    "position": idx,
+                },
+            }
+        )
+        seen.add(source_id)
+
+    for idx, item in enumerate(news_items):
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or item.get("headline") or "").strip()
+        if not title:
+            continue
+        source_name = str(item.get("source") or "news").strip() or "news"
+        timestamp = item.get("ts") or item.get("timestamp") or item.get("published_at") or item.get("date")
+        age_hours = item.get("age_hours")
+        if age_hours is None:
+            age_hours = _as_freshness_hours(timestamp)
+        freshness_hours = _coerce_float(age_hours, default=24.0)
+        sent_abs = abs(_coerce_float(item.get("sent"), default=0.0))
+        weight = round(max(0.05, 1.0 / (1.0 + freshness_hours / 24.0) + sent_abs * 0.15), 4)
+        quality_score = round(max(0.0, min(1.0, 1.0 / (1.0 + freshness_hours / 48.0) + sent_abs * 0.1)), 4)
+        source_id = f"news:{sha1(f'{source_name}|{title}'.encode('utf-8')).hexdigest()[:12]}"
+        if source_id in seen:
+            continue
+        normalized.append(
+            {
+                "source_id": source_id,
+                "label": title,
+                "kind": "news_item",
+                "weight": weight,
+                "quality_score": quality_score,
+                "freshness": {
+                    "timestamp": timestamp,
+                    "age_hours": freshness_hours if freshness_hours is not None else None,
+                },
+                "trace": {
+                    "origin": "debug_payload.news",
+                    "publisher": source_name,
+                    "position": idx,
+                },
+            }
+        )
+        seen.add(source_id)
+
+    for idx, item in enumerate(attachments):
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("title") or item.get("label") or item.get("name") or item.get("type") or "").strip()
+        if not label:
+            continue
+        source_id = f"attachment:{sha1(label.encode('utf-8')).hexdigest()[:12]}"
+        if source_id in seen:
+            continue
+        quality_score = round(max(0.0, min(1.0, _coerce_float(item.get("confidence"), default=0.6))), 4)
+        normalized.append(
+            {
+                "source_id": source_id,
+                "label": label,
+                "kind": "attachment",
+                "weight": round(max(0.05, quality_score), 4),
+                "quality_score": quality_score,
+                "freshness": {
+                    "timestamp": item.get("generated_at") or meta.get("generated_at"),
+                    "age_hours": _as_freshness_hours(item.get("generated_at") or meta.get("generated_at")),
+                },
+                "trace": {
+                    "origin": "verdict.attachments",
+                    "position": idx,
+                },
+            }
+        )
+        seen.add(source_id)
+
+    return normalized
+
+
+def _build_explainability_graph(
+    verdicts: List[Dict[str, Any]],
+    *,
+    freshness: Optional[str],
+) -> Dict[str, Any]:
+    generated_at = str(freshness or utc_now_iso()).strip() or utc_now_iso()
+    graph_nodes: List[Dict[str, Any]] = []
+    graph_edges: List[Dict[str, Any]] = []
+    traceability: List[Dict[str, Any]] = []
+    graph_stats = {
+        "verdict_count": 0,
+        "source_count": 0,
+        "edge_count": 0,
+        "stale_source_count": 0,
+        "broken_source_count": 0,
+        "avg_source_weight": 0.0,
+    }
+    source_node_ids = set()
+    total_weight = 0.0
+    weighted_source_count = 0
+
+    for index, verdict in enumerate(verdicts):
+        if not isinstance(verdict, dict):
+            continue
+        verdict_ticker = str(verdict.get("ticker") or f"VERDICT_{index + 1}").strip().upper() or f"VERDICT_{index + 1}"
+        verdict_id = str(verdict.get("decision_id") or f"verdict:{verdict_ticker}:{index}").strip()
+        verdict_weight = round(max(0.0, min(1.0, _coerce_float(verdict.get("confidence"), default=0.0))), 4)
+        graph_nodes.append(
+            {
+                "id": verdict_id,
+                "label": verdict_ticker,
+                "kind": "verdict",
+                "ticker": verdict_ticker,
+                "weight": verdict_weight,
+                "freshness": {
+                    "timestamp": verdict.get("generated_at") or freshness,
+                    "age_hours": _as_freshness_hours(verdict.get("generated_at") or freshness),
+                },
+            }
+        )
+        graph_stats["verdict_count"] += 1
+
+        sources = _normalize_trace_source_items(verdict)
+        supporting_sources: List[Dict[str, Any]] = []
+        for source in sources:
+            source_id = str(source.get("source_id") or "").strip()
+            if not source_id:
+                continue
+            node_id = f"source:{source_id}"
+            freshness_meta = source.get("freshness") if isinstance(source.get("freshness"), dict) else {}
+            age_hours = freshness_meta.get("age_hours")
+            age_hours_value = _coerce_float(age_hours, default=-1.0)
+            if node_id not in source_node_ids:
+                graph_nodes.append(
+                    {
+                        "id": node_id,
+                        "label": source.get("label"),
+                        "kind": source.get("kind"),
+                        "weight": source.get("weight"),
+                        "quality_score": source.get("quality_score"),
+                        "freshness": freshness_meta,
+                    }
+                )
+                source_node_ids.add(node_id)
+                graph_stats["source_count"] += 1
+            edge_weight = round(max(0.0, min(1.0, _coerce_float(source.get("weight"), default=0.0))), 4)
+            graph_edges.append(
+                {
+                    "from": node_id,
+                    "to": verdict_id,
+                    "relationship": "supports",
+                    "weight": edge_weight,
+                    "trace": source.get("trace") or {},
+                }
+            )
+            total_weight += edge_weight
+            weighted_source_count += 1
+            if age_hours_value >= 72.0:
+                graph_stats["stale_source_count"] += 1
+            supporting_sources.append(
+                {
+                    "source_id": source_id,
+                    "label": source.get("label"),
+                    "kind": source.get("kind"),
+                    "weight": edge_weight,
+                    "quality_score": source.get("quality_score"),
+                    "freshness": freshness_meta,
+                    "trace": source.get("trace") or {},
+                }
+            )
+
+        traceability.append(
+            {
+                "verdict_id": verdict_id,
+                "ticker": verdict_ticker,
+                "supporting_sources": supporting_sources,
+                "primary_source_count": len(supporting_sources),
+                "freshness": {
+                    "generated_at": verdict.get("generated_at") or freshness or generated_at,
+                    "age_hours": _as_freshness_hours(verdict.get("generated_at") or freshness or generated_at),
+                },
+            }
+        )
+
+    graph_stats["edge_count"] = len(graph_edges)
+    if weighted_source_count:
+        graph_stats["avg_source_weight"] = round(total_weight / weighted_source_count, 4)
+
+    return {
+        "schema_version": "judge_explainability_graph_v1",
+        "generated_at": generated_at,
+        "graph": {
+            "nodes": graph_nodes,
+            "edges": graph_edges,
+        },
+        "source_traceability": traceability,
+        "stats": graph_stats,
+    }
+
+
 def _article_geopolitical_tags(article: Dict[str, Any]) -> List[str]:
     seeded = _coerce_text_list(article.get("geopolitics"), article.get("regions"))
     if seeded:
@@ -1857,6 +2091,16 @@ async def get_judge_verdicts_payload(
         profile=profile,
         freshness=response.get("freshness") or data.get("generated_at"),
     )
+    if isinstance(verdicts, list):
+        data["explainability"] = _build_explainability_graph(
+            [entry for entry in verdicts if isinstance(entry, dict)],
+            freshness=response.get("freshness") or data.get("generated_at"),
+        )
+        append_source_tag(
+            data,
+            "judge_explainability_graph_v1",
+            default_source="judge_endpoint_service",
+        )
     ensure_endpoint_metadata(
         data,
         default_source="judge_endpoint_service",

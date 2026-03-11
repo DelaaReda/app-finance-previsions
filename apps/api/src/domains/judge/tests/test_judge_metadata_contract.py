@@ -166,6 +166,14 @@ def test_judge_verdicts_payload_exposes_stable_metadata(monkeypatch):
     assert "decision_journal_projection_v1" in (payload["data"].get("source") or [])
     assert "decision_outcome_feedback_v1" in (payload["data"].get("source") or [])
     assert "decision_journal_store_v1" in (payload["data"].get("source") or [])
+    assert "judge_explainability_graph_v1" in (payload["data"].get("source") or [])
+    explainability = payload["data"]["explainability"]
+    assert explainability["schema_version"] == "judge_explainability_graph_v1"
+    assert explainability["stats"]["verdict_count"] == 1
+    assert explainability["stats"]["source_count"] >= 1
+    assert explainability["stats"]["edge_count"] >= 1
+    assert explainability["source_traceability"][0]["ticker"] == "AAPL"
+    assert explainability["source_traceability"][0]["primary_source_count"] >= 1
     saved_by_key = {call["key"]: call for call in saved_calls}
     assert set(saved_by_key) == {"decision_journal"}
     manifest_save = saved_by_key["decision_journal"]
@@ -174,6 +182,98 @@ def test_judge_verdicts_payload_exposes_stable_metadata(monkeypatch):
     assert manifest_save["payload"]["append_only"] is True
     assert manifest_save["payload"]["outcomes_update_mode"] == "separate_records"
     assert manifest_save["payload"]["entries"][0]["decision_id"] == entry["decision_id"]
+
+
+def test_judge_verdicts_payload_builds_weighted_source_traceability(monkeypatch):
+    now_iso = "2026-03-07T16:54:00Z"
+
+    async def fake_compute_verdicts_fn(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "NVDA",
+                        "verdict": "buy",
+                        "confidence": 0.82,
+                        "expected_return": 0.11,
+                        "generated_at": now_iso,
+                        "source": ["judge_route", "news_feed_snapshot"],
+                        "debug_payload": {
+                            "news": [
+                                {
+                                    "title": "NVIDIA demand accelerates",
+                                    "source": "Reuters",
+                                    "ts": "2026-03-07T12:54:00Z",
+                                    "sent": 0.7,
+                                }
+                            ]
+                        },
+                        "attachments": [
+                            {
+                                "title": "phase_scores",
+                                "confidence": 0.74,
+                                "generated_at": now_iso,
+                            }
+                        ],
+                    }
+                ],
+                "count": 1,
+                "generated_at": now_iso,
+            },
+            "freshness": now_iso,
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "load_json",
+        lambda _key: {"schema_version": "decision_journal_v1", "entries": []},
+    )
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "save_json",
+        lambda key, payload, source=None, version="v1": Path("runtime/data") / f"{key}.json",
+    )
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_persist_immutable_decision_journal_entries",
+        lambda entries, generated_at: {
+            "status": "persisted",
+            "storage_key_prefix": "decision_journal/entries",
+            "schema_version": "decision_journal_v1",
+            "path_prefix": "runtime/data/decision_journal/entries",
+            "persisted_count": len(entries),
+            "existing_count": 0,
+            "failed_count": 0,
+        },
+    )
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_verdicts_payload(
+            limit=1,
+            min_confidence=0.3,
+            ticker=["NVDA"],
+            sort_by="confidence",
+            sort_order="desc",
+            profile="balanced",
+            debug=False,
+            debug_full=False,
+            x_debug_token=None,
+            compute_verdicts_fn=fake_compute_verdicts_fn,
+        )
+    )
+
+    explainability = payload["data"]["explainability"]
+    graph = explainability["graph"]
+    assert any(node["kind"] == "verdict" and node["ticker"] == "NVDA" for node in graph["nodes"])
+    assert any(node["kind"] == "news_item" for node in graph["nodes"])
+    assert any(node["kind"] == "attachment" for node in graph["nodes"])
+    assert any(edge["relationship"] == "supports" and edge["weight"] > 0 for edge in graph["edges"])
+    trace = explainability["source_traceability"][0]
+    assert trace["ticker"] == "NVDA"
+    assert any(source["kind"] == "news_item" for source in trace["supporting_sources"])
+    assert any(source["kind"] == "attachment" for source in trace["supporting_sources"])
+    assert explainability["stats"]["avg_source_weight"] > 0
 
 
 def test_judge_verdicts_payload_respects_stored_outcome_feedback(monkeypatch):
