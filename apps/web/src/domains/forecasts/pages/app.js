@@ -3900,6 +3900,25 @@ function buildCopilotStartState(raw) {
     briefSource.generated_at || briefSource.generatedAt || briefSource.freshness,
     fallback.brief.generatedAt
   );
+  const rawContextInfluence = isObject(data.context_influence || data.contextInfluence)
+    ? (data.context_influence || data.contextInfluence)
+    : (isObject(copilotStart.context_influence || copilotStart.contextInfluence)
+      ? (copilotStart.context_influence || copilotStart.contextInfluence)
+      : null);
+  const contextInfluence = rawContextInfluence
+    ? {
+      mode: toString(rawContextInfluence.mode, 'market_wide'),
+      portfolioApplied: !!(rawContextInfluence.portfolio_applied ?? rawContextInfluence.portfolioApplied),
+      source: toString(rawContextInfluence.source, ''),
+      requestedTickers: normalizeCopilotStarterTickers(
+        rawContextInfluence.requested_tickers || rawContextInfluence.requestedTickers
+      ),
+      effectiveTickers: normalizeCopilotStarterTickers(
+        rawContextInfluence.effective_tickers || rawContextInfluence.effectiveTickers
+      ),
+      portfolioId: toString(rawContextInfluence.portfolio_id || rawContextInfluence.portfolioId, '')
+    }
+    : null;
 
   return {
     brief: {
@@ -3919,6 +3938,7 @@ function buildCopilotStartState(raw) {
         fallback.brief.freshness
       )
     },
+    contextInfluence,
     ask: ask.length ? ask : fallback.ask,
     open: open.length ? open : fallback.open
   };
@@ -4149,6 +4169,9 @@ function resolveCopilotStartState(state) {
       fallback.brief.marketRegime
     );
     const sourceLabels = normalizeCopilotSourceLabels(rawBrief.sources || rawBrief.source);
+    const rawContextInfluence = isObject(state.contextInfluence || state.context_influence)
+      ? (state.contextInfluence || state.context_influence)
+      : null;
     return {
       brief: {
         ...fallback.brief,
@@ -4164,6 +4187,20 @@ function resolveCopilotStartState(state) {
         degraded: rawBrief.degraded === true,
         degradedReason: toString(rawBrief.degradedReason || rawBrief.degraded_reason, '')
       },
+      contextInfluence: rawContextInfluence
+        ? {
+          mode: toString(rawContextInfluence.mode, 'market_wide'),
+          portfolioApplied: !!(rawContextInfluence.portfolio_applied ?? rawContextInfluence.portfolioApplied),
+          source: toString(rawContextInfluence.source, ''),
+          requestedTickers: normalizeCopilotStarterTickers(
+            rawContextInfluence.requestedTickers || rawContextInfluence.requested_tickers
+          ),
+          effectiveTickers: normalizeCopilotStarterTickers(
+            rawContextInfluence.effectiveTickers || rawContextInfluence.effective_tickers
+          ),
+          portfolioId: toString(rawContextInfluence.portfolioId || rawContextInfluence.portfolio_id, '')
+        }
+        : null,
       ask: Array.isArray(state.ask) && state.ask.length ? state.ask : fallback.ask,
       open: Array.isArray(state.open) && state.open.length ? state.open : fallback.open
     };
@@ -4200,6 +4237,19 @@ function renderHeroCopilotBrief(state) {
   const openItem = openItems.find((item) => isObject(item) && toString(item.target, '').toLowerCase() !== 'copilot')
     || openItems[0]
     || fallbackState.open[0];
+  const rawContextInfluence = isObject(resolvedState.contextInfluence || resolvedState.context_influence)
+    ? (resolvedState.contextInfluence || resolvedState.context_influence)
+    : null;
+  const contextInfluence = rawContextInfluence
+    ? {
+      mode: toString(rawContextInfluence.mode, 'market_wide'),
+      portfolioApplied: !!(rawContextInfluence.portfolio_applied ?? rawContextInfluence.portfolioApplied),
+      source: toString(rawContextInfluence.source, ''),
+      effectiveTickers: normalizeCopilotStarterTickers(
+        rawContextInfluence.effective_tickers || rawContextInfluence.effectiveTickers
+      )
+    }
+    : null;
 
   if (titleEl) {
     titleEl.textContent = toString(brief.title, fallbackState.brief.title);
@@ -4214,6 +4264,9 @@ function renderHeroCopilotBrief(state) {
     }
     if (brief.degraded === true) {
       leadParts.push(`Fallback context${degradedReason ? `: ${degradedReason.toLowerCase()}` : ''}.`);
+    }
+    if (contextInfluence && contextInfluence.portfolioApplied) {
+      leadParts.push('Saved portfolio context applied.');
     }
     leadEl.textContent = leadParts.join(' ');
   }
@@ -4276,8 +4329,17 @@ function renderHeroCopilotBrief(state) {
     suggestionRoot.innerHTML = '';
     const primaryOpenId = toString(openItem && openItem.id, '');
     const regime = toString(brief.marketRegime || brief.marketSentiment, fallbackState.brief.marketRegime).replace(/_/g, ' ');
+    const contextMode = contextInfluence
+      ? toString(contextInfluence.mode, 'market_wide').replace(/_/g, ' ').trim()
+      : '';
+    const focusTickers = contextInfluence && contextInfluence.effectiveTickers.length
+      ? contextInfluence.effectiveTickers.slice(0, 2).join(', ')
+      : '';
     const metadataLabels = [
       regime !== 'UNKNOWN' ? `Regime: ${regime}` : '',
+      contextInfluence
+        ? `Context: ${contextMode || 'market wide'}${contextInfluence.portfolioApplied ? ' portfolio' : ''}${focusTickers ? ` • ${focusTickers}` : ''}`
+        : '',
       brief.sources.length ? `Sources: ${brief.sources.slice(0, 2).join(', ')}` : '',
       brief.degraded === true ? 'Degraded' : ''
     ].filter(Boolean).slice(0, 3);
@@ -4349,6 +4411,9 @@ function updateCopilotContextLabel(state) {
   const parts = ['Brief of the day'];
   if (regime !== 'UNKNOWN') {
     parts.push(regime);
+  }
+  if (state?.contextInfluence?.portfolioApplied) {
+    parts.push('portfolio aware');
   }
   if (state?.brief?.degraded === true) {
     parts.push('degraded');

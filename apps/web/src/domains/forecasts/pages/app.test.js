@@ -374,6 +374,16 @@ function loadRenderHeroCopilotBriefWithHeroIds(resolvedState) {
         .map((item) => String(item || '').trim())
         .filter(Boolean);
     },
+    normalizeCopilotStarterTickers(value) {
+      const seen = new Set();
+      return (Array.isArray(value) ? value : [])
+        .map((item) => String(item || '').trim().toUpperCase())
+        .filter((ticker) => {
+          if (!ticker || seen.has(ticker)) return false;
+          seen.add(ticker);
+          return true;
+        });
+    },
     runCopilotStartPrompt(prompt, tickers = []) {
       promptCalls.push({ prompt, tickers });
     },
@@ -1859,6 +1869,39 @@ test('renderHeroCopilotBrief accepts normalized backend snake_case brief fields 
   assert.equal(elements.heroBriefSignals.style.display, 'block');
   assert.equal(elements.heroBriefRisks.textContent, 'Risks: CPI tomorrow');
   assert.equal(elements.heroBriefRisks.style.display, 'block');
+});
+
+test('renderHeroCopilotBrief surfaces saved portfolio context in hero metadata', () => {
+  const state = {
+    brief: {
+      title: 'Daily Brief',
+      summary: 'Saved holdings tilt the watchlist toward mega-cap tech.',
+      marketSentiment: 'NEUTRAL',
+      topSignals: [],
+      topRisks: [],
+      freshness: '2026-03-09T08:00:00Z',
+      sources: ['copilot_start_test'],
+    },
+    contextInfluence: {
+      mode: 'portfolio_aware',
+      portfolioApplied: true,
+      effectiveTickers: ['AAPL', 'MSFT'],
+    },
+    ask: [],
+    open: [],
+  };
+  const { sandbox, elements } = loadRenderHeroCopilotBriefWithHeroIds(state);
+
+  sandbox.renderHeroCopilotBrief(state);
+
+  assert.equal(
+    elements.heroBriefLead.textContent,
+    'A 30-second portfolio memo before you dive deeper. Regime: neutral. Saved portfolio context applied.'
+  );
+  assert.equal(elements.heroSuggestionChips.children.length, 3);
+  assert.equal(elements.heroSuggestionChips.children[0].textContent, 'Regime: NEUTRAL');
+  assert.equal(elements.heroSuggestionChips.children[1].textContent, 'Context: portfolio aware portfolio • AAPL, MSFT');
+  assert.equal(elements.heroSuggestionChips.children[2].textContent, 'Sources: copilot_start_test');
 });
 
 test('app.js exposes runCopilotStartOpen for the static landing brief CTA', () => {
