@@ -1331,6 +1331,62 @@ def _build_context_chunk_from_payload(context_payload: Dict[str, Any]) -> Dict[s
     }
 
 
+async def _load_event_timing_payload(limit: int = 3) -> Dict[str, Any]:
+    try:
+        module = import_module("domains.judge.application.judge_endpoint_service")
+        build_fn = getattr(module, "get_judge_event_impact_horizon_matrix_payload", None)
+        if not callable(build_fn):
+            return {}
+        response = await build_fn(event_type=None, limit=max(1, int(limit)))
+        data = response.get("data") if isinstance(response, dict) else {}
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _build_event_timing_note(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return None
+
+    rows = payload.get("matrix")
+    if not isinstance(rows, list) or not rows:
+        return None
+
+    critical_events: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        horizons = row.get("horizons") if isinstance(row.get("horizons"), dict) else {}
+        one_week = horizons.get("1w") if isinstance(horizons.get("1w"), dict) else {}
+        impact_score = _to_float(one_week.get("impact_score"), 0.0)
+        if impact_score < 0.6:
+            continue
+        critical_events.append(
+            {
+                "event_type": _safe_text(row.get("event_type"), "event"),
+                "dominant_horizon": _safe_text(row.get("dominant_horizon"), "1w"),
+                "impact_score": round(impact_score, 4),
+                "interpretation": _safe_text(row.get("interpretation")),
+            }
+        )
+        if len(critical_events) >= 2:
+            break
+
+    if not critical_events:
+        return None
+
+    labels = ", ".join(
+        f"{item['event_type']} ({item['dominant_horizon']})"
+        for item in critical_events
+    )
+    return {
+        "summary": f"Timing risk elevated around {labels}.",
+        "events": critical_events,
+        "freshness": _safe_text(payload.get("freshness") or payload.get("generated_at"), utc_now_iso()),
+        "source": ["copilot_event_timing", *(_normalize_string_list(payload.get("source")) or [])],
+    }
+
+
 
 def _fetch_live_market_context() -> str:
     """Fetches live market data (forecasts, brief, news) and formats as context string.
@@ -1566,6 +1622,7 @@ async def build_ask_payload(
             parsed_payload.get("risk_caveat") or parsed_risk.get("caveat"),
             "",
         )
+        event_timing = _build_event_timing_note(await _load_event_timing_payload())
 
         raw_answer = str(llm_response.get("answer") or "").strip()
         answer_seed = parsed_answer or raw_answer
@@ -1581,6 +1638,8 @@ async def build_ask_payload(
         risk_fragments = []
         if parsed_risk_caveat:
             risk_fragments.append(parsed_risk_caveat)
+        if event_timing:
+            risk_fragments.append(event_timing["summary"])
         if not has_min_sources:
             risk_fragments.append("Sources insuffisantes (moins de 2).")
         if not has_quality_model:
@@ -1626,6 +1685,8 @@ async def build_ask_payload(
                 saved_portfolio_context=saved_portfolio_context,
             ),
         }
+        if event_timing:
+            response_payload["event_timing"] = event_timing
         if saved_portfolio_context:
             response_payload["portfolio_context"] = saved_portfolio_context
         return _finalize_ask_payload(response_payload)
