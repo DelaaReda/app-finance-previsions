@@ -760,3 +760,132 @@ async def get_forecast(forecast_id: str):
 
 
 forecasts_router = router
+
+
+@router.get("/policy-validator/types")
+async def list_policy_types():
+    """List available policy types for user configuration."""
+    try:
+        from domains.forecasts.application.policy_validator_service import get_policy_validator
+        
+        validator = get_policy_validator()
+        policy_types = validator.list_policy_types()
+        
+        return ok({
+            "policy_types": policy_types,
+            "count": len(policy_types),
+            "generated_at": _now_iso()
+        })
+    except Exception as exc:
+        logger.error("Error listing policy types: %s", exc, exc_info=True)
+        return ok({
+            "policy_types": [],
+            "count": 0,
+            "error": str(exc),
+            "generated_at": _now_iso()
+        })
+
+
+@router.get("/policy-validator/template/{policy_type}")
+async def get_policy_template(policy_type: str):
+    """Get a template for creating a new policy."""
+    try:
+        from domains.forecasts.application.policy_validator_service import get_policy_validator
+        
+        validator = get_policy_validator()
+        template = validator.get_policy_template(policy_type)
+        
+        return ok({
+            "template": template,
+            "policy_type": policy_type,
+            "generated_at": _now_iso()
+        })
+    except Exception as exc:
+        logger.error(f"Error getting policy template: %s", exc, exc_info=True)
+        return ok({
+            "template": {},
+            "policy_type": policy_type,
+            "error": str(exc),
+            "generated_at": _now_iso()
+        })
+
+
+@router.post("/policy-validator/validate")
+async def validate_recommendation(payload: Dict[str, Any]):
+    """
+    Validate a recommendation against user policies.
+    
+    Request body:
+        {
+            "recommendation": {
+                "ticker": "AAPL",
+                "action": "BUY",
+                "sector": "Technology",
+                "risk_score": 0.45,
+                "position_size_pct": 15.0,
+                "esg_score": 0.72,
+                "region": "US"
+            },
+            "user_policies": [
+                {
+                    "type": "sector_exclusion",
+                    "enabled": True,
+                    "excluded_sectors": ["tobacco", "weapons"]
+                },
+                {
+                    "type": "risk_concentration",
+                    "enabled": True,
+                    "max_risk_score": 0.7
+                }
+            ]
+        }
+    
+    Response:
+        {
+            "ticker": "AAPL",
+            "original_action": "BUY",
+            "validated_action": "BUY",  # May be downgraded to HOLD/AVOID
+            "violations": [],
+            "violation_badge": null,  # Present if violations exist
+            "policy_version": "2026-03-11T12:00:00Z",
+            "validated_at": "2026-03-11T12:00:00Z"
+        }
+    """
+    try:
+        from domains.forecasts.application.policy_validator_service import get_policy_validator
+        
+        validator = get_policy_validator()
+        recommendation = payload.get("recommendation", {})
+        user_policies = payload.get("user_policies", [])
+        
+        result = validator.validate_recommendation(
+            recommendation=recommendation,
+            user_policies=user_policies
+        )
+        
+        return ok({
+            "validation": result,
+            "generated_at": _now_iso()
+        })
+    except Exception as exc:
+        logger.error("Error validating recommendation: %s", exc, exc_info=True)
+        recommendation = payload.get("recommendation", {})
+        ticker = recommendation.get("ticker", "UNKNOWN")
+        original_action = recommendation.get("action", "HOLD")
+        now_iso = _now_iso()
+        
+        # Never-empty fallback: return pass-through validation
+        return ok({
+            "validation": {
+                "ticker": ticker,
+                "original_action": original_action,
+                "validated_action": original_action,
+                "violations": [],
+                "violation_badge": None,
+                "policy_version": now_iso,
+                "validated_at": now_iso,
+                "error": str(exc),
+                "fallback_used": True
+            },
+            "generated_at": now_iso
+        })
