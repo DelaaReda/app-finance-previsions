@@ -544,6 +544,10 @@ function normalizeAskMemoPayload(payload) {
   );
   const sources = normalizeConnectorSourceList(source.sources || source.source);
   const freshness = source.freshness || source.generated_at || source.generatedAt || '';
+  const degradedReason = source.degraded_reason || source.degradedReason || '';
+  const degraded = source.degraded === true
+    || normalizeFreshnessStatus(source.status || source.quality_status || source.qualityStatus) === 'degraded'
+    || Boolean(degradedReason);
 
   return {
     ...source,
@@ -560,8 +564,8 @@ function normalizeAskMemoPayload(payload) {
     generated_at: source.generated_at || source.generatedAt || freshness || '',
     sources,
     source: sources,
-    degraded: source.degraded === true,
-    degraded_reason: source.degraded_reason || source.degradedReason || ''
+    degraded,
+    degraded_reason: degradedReason
   };
 }
 
@@ -836,7 +840,10 @@ function normalizeBriefOfDayPayload(payload) {
   const topRisks = normalizeConnectorStringList(source.top_risks || source.topRisks || source.risks);
   const sources = normalizeConnectorSourceList(source.sources || source.source);
   const freshness = source.freshness || source.generated_at || source.generatedAt || '';
-  const degraded = source.degraded === true || normalizeFreshnessStatus(source.status) === 'degraded';
+  const degradedReason = source.degraded_reason || source.degradedReason || '';
+  const degraded = source.degraded === true
+    || normalizeFreshnessStatus(source.status || source.quality_status || source.qualityStatus) === 'degraded'
+    || Boolean(degradedReason);
 
   return {
     ...source,
@@ -852,6 +859,7 @@ function normalizeBriefOfDayPayload(payload) {
     sources,
     source: sources,
     degraded,
+    degraded_reason: degradedReason,
   };
 }
 

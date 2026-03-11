@@ -392,6 +392,99 @@ test('getCopilotContext forwards scoped tickers to the backend starter endpoint'
   assert.deepEqual(payload.copilot_start.ask[0].prefill.tickers, ['NVDA', 'MSFT']);
 });
 
+test('askCopilot preserves normalized memo metadata and context influence cues', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url, options = {}) => {
+    calls.push({ url, options });
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            answer: 'NVDA remains constructive over the next week.',
+            verdict: 'buy',
+            confidence: 0.71,
+            quality_status: 'sufficient_sources',
+            generated_at: '2026-03-10T10:00:00Z',
+            context_influence: {
+              mode: 'portfolio_aware',
+              portfolio_applied: true,
+              effective_tickers: ['NVDA', 'MSFT'],
+            },
+            memo: {
+              summary: 'Leadership remains intact while breadth improves.',
+              market_regime: 'risk_on',
+              top_opportunities: ['NVDA relative strength'],
+              top_risks: ['CPI surprise'],
+              main_reasons: ['Semis leadership remains intact'],
+              next_steps: ['Watch CPI'],
+              invalidation: ['Leadership breaks below 20D MA'],
+              freshness: '2026-03-10T10:00:00Z',
+              sources: [{ label: 'judge_live', type: 'route' }],
+              degraded: true,
+              degraded_reason: 'partial_context',
+            },
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.askCopilot(
+    'Give me a 1-week investment memo on NVDA.',
+    ['NVDA', 'MSFT']
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'http://localhost:8050/api/copilot/ask');
+  assert.deepEqual(JSON.parse(calls[0].options.body), {
+    question: 'Give me a 1-week investment memo on NVDA.',
+    tickers: ['NVDA', 'MSFT'],
+    max_sources: 5,
+  });
+  assert.equal(payload.data.answer, 'NVDA remains constructive over the next week.');
+  assert.equal(payload.data.quality_status, 'sufficient_sources');
+  assert.equal(payload.data.degraded_reason, 'partial_context');
+  assert.deepEqual(payload.data.memo.next_steps, ['Watch CPI']);
+  assert.deepEqual(payload.data.memo.invalidation, ['Leadership breaks below 20D MA']);
+  assert.deepEqual(payload.data.context_influence, {
+    mode: 'portfolio_aware',
+    portfolio_applied: true,
+    effective_tickers: ['NVDA', 'MSFT'],
+  });
+  assert.deepEqual(payload.data.contextInfluence, {
+    mode: 'portfolio_aware',
+    portfolio_applied: true,
+    effective_tickers: ['NVDA', 'MSFT'],
+  });
+});
+
+test('askCopilot infers degraded memo state from quality metadata without explicit boolean flag', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          answer: 'Context is partial but actionable.',
+          quality_status: 'degraded',
+          memo: {
+            summary: 'Context is partial but actionable.',
+            quality_status: 'degraded',
+            degraded_reason: 'forecast_gap',
+            freshness: '2026-03-10T11:00:00Z',
+          },
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.askCopilot('What changed?');
+
+  assert.equal(payload.data.memo.degraded, true);
+  assert.equal(payload.data.memo.degraded_reason, 'forecast_gap');
+  assert.equal(payload.data.quality_status, 'degraded');
+});
+
 test('startAutoRefresh clears scoped copilot starter cache entries before reloading the brief', async () => {
   const copilotStartCalls = [];
   let scheduledRefresh = null;
@@ -542,6 +635,33 @@ test('getCopilotStart unwraps the dedicated starter contract and normalizes open
   );
   assert.deepEqual(payload.scope_tickers, ['NVDA']);
   assert.deepEqual(payload.stats, { ask_count: 1, open_count: 2 });
+});
+
+test('getCopilotStart infers degraded brief state from status metadata', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          brief_of_day: {
+            title: 'Brief of the day',
+            summary: 'Forecast freshness is outside the normal window.',
+            status: 'degraded',
+            degraded_reason: 'stale_forecasts',
+            generated_at: '2026-03-10T09:30:00.000Z',
+          },
+          ask: [],
+          open: [],
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotStart();
+  const brief = payload.copilot_start.brief_of_day;
+
+  assert.equal(brief.degraded, true);
+  assert.equal(brief.degraded_reason, 'stale_forecasts');
 });
 
 test('getCopilotStart maps open_copilot without explicit target to the copilot landing', async () => {
