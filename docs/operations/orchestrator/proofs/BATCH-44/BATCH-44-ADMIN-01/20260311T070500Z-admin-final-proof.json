@@ -1,0 +1,107 @@
+{
+  "task_id": "BATCH-44-ADMIN-01",
+  "stream_id": "BATCH-44",
+  "title": "Insider Behavior Intelligence Layer [ADMIN-01]",
+  "captured_at_utc": "2026-03-11T07:05:00Z",
+  "scope": "Validate runtime truth and observability after BATCH-44 DEV chain completion (DEV-01, DEV-02, DEV-03).",
+  "dependencies_verified": {
+    "BATCH-44-DEV-01": {
+      "status": "completed",
+      "artifact": "GET /api/forecasts/insider-behavior endpoint with engine_id=insider_behavior_intelligence_v1",
+      "proof": "docs/operations/orchestrator/proofs/BATCH-44/BATCH-44-DEV-01/20260311T041849Z-743.yaml",
+      "tests": "pytest apps/api/src/domains/forecasts/tests/test_global_signal_mesh_route.py -q (passed)"
+    },
+    "BATCH-44-DEV-02": {
+      "status": "completed",
+      "artifact": "getInsiderBehavior() in apiConnector.js + live dashboard insiderBehavior payload",
+      "proof": "docs/operations/orchestrator/proofs/BATCH-44/BATCH-44-DEV-02/20260311T045848Z-707.yaml",
+      "tests": "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js (passed)"
+    },
+    "BATCH-44-DEV-03": {
+      "status": "completed",
+      "artifact": "market-drivers insider panel shows guardrails, provenance, uncertainty",
+      "proof": "docs/operations/orchestrator/proofs/BATCH-44/BATCH-44-DEV-03/20260311T050155Z-303.yaml",
+      "tests": "node --test apps/web/src/domains/forecasts/pages/app.test.js (passed)"
+    }
+  },
+  "runtime_probes": {
+    "host_check": {
+      "command": "bash scripts/runtime_host_check.sh",
+      "result": "PASS",
+      "runtime_is_vm": 1,
+      "workspace": "/home/venom/shared/analyse-financiere"
+    },
+    "monitor_health": {
+      "command": "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779",
+      "result": "PASS",
+      "health": "OK",
+      "roles": 1,
+      "agents": 4,
+      "queue_states": 4,
+      "admin_timeouts_recent": 0
+    },
+    "fc_status": {
+      "command": "bash scripts/fc_status_brief.sh",
+      "result": "PASS",
+      "status": "OK",
+      "mode": "planner_experimental",
+      "freshness": "fresh/25s",
+      "in_progress": 1,
+      "waiting_dep": 9,
+      "mismatch_count": 0,
+      "planner_quality": 89
+    },
+    "stale_cron_sweep": {
+      "command": "bash scripts/stale_cron_sweep.sh --dry-run --threshold 330",
+      "result": "PASS",
+      "matched": 0,
+      "stale": 0,
+      "action": "none"
+    },
+    "workboard_stale_task_sweep": {
+      "command": "python3 scripts/workboard_stale_task_sweep.py --threshold-seconds 14400",
+      "result": "PASS",
+      "BATCH-44-ADMIN-01_age_s": 361,
+      "stale": false,
+      "action": "none"
+    },
+    "insider_behavior_tests": {
+      "command": "python3 -m pytest apps/api/src/domains/forecasts/tests/test_global_signal_mesh_route.py -k insider -v",
+      "result": "PASS",
+      "tests_passed": 3,
+      "tests": [
+        "test_insider_behavior_returns_never_empty_with_ownership_snapshot",
+        "test_insider_behavior_cache_and_debug_bypass",
+        "test_insider_behavior_returns_conservative_placeholder_when_snapshot_missing"
+      ]
+    }
+  },
+  "doctor_summary": {
+    "overall_status": "degraded",
+    "runtime_core": "ok",
+    "scheduler_authority": "ok",
+    "sessions": "ok",
+    "locks": "ok",
+    "queue_workboard": "ok",
+    "providers": "ok",
+    "delivery_integrity": "ok",
+    "degraded_reasons": [
+      "VB-04-ADMIN-01 missing browser proof (unrelated to BATCH-44)",
+      "capability_result_integrity degraded from other admin lane (BATCH-43-ADMIN-01 invalid_subagent_result)"
+    ],
+    "batch_44_specific_blockers": "none"
+  },
+  "conclusion": {
+    "status": "UNBLOCKED",
+    "root_cause": "No BATCH-44-specific runtime or stale-state failures. All DEV chain tasks (DEV-01, DEV-02, DEV-03) completed with passing tests and proof artifacts. Runtime health is OK.",
+    "fix_applied": "SKIP(no code/config/runtime repair needed). Captured fresh runtime evidence and test verification only.",
+    "verify": "before=no admin runtime proof for BATCH-44-ADMIN-01; after=runtime probes confirm healthy VM, monitor OK, fc_status OK, no stale locks/crons/tasks, insider behavior tests pass (3/3)",
+    "planner_merge_signal": "BATCH-44-ADMIN-01 is runtime-unblocked and ready for planner merge. The degraded doctor status comes from unrelated VB-04-ADMIN-01 browser proof debt and BATCH-43-ADMIN-01 capability errors, not BATCH-44."
+  },
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-44/BATCH-44-ADMIN-01/20260311T070500Z-admin-final-proof.json",
+  "files_touched": "none",
+  "tests_run": "python3 -m pytest apps/api/src/domains/forecasts/tests/test_global_signal_mesh_route.py -k insider -v (3 passed)",
+  "commit_sha": "none",
+  "architecture_check": "layer=admin runtime validation only; no code changes; imports_ok=N/A; path_target=runtime probes and test verification",
+  "vision_alignment": "batch=BATCH-44; target=Insider Behavior Intelligence Layer [ADMIN-01] runtime validation; impact=confirms BATCH-44 DEV chain delivered working insider behavior endpoint with tests, frontend integration, and guardrails visible in UI"
+}
