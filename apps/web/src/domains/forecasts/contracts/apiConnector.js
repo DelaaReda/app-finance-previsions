@@ -1446,6 +1446,34 @@ function buildMarketCalendar(brief, newsItems, alerts) {
   const safeBrief = brief && typeof brief === 'object' ? brief : {};
   const newsRows = Array.isArray(newsItems) ? newsItems : [];
   const alertRows = Array.isArray(alerts) ? alerts : [];
+  const keyEvents = Array.isArray(safeBrief.key_events) ? safeBrief.key_events : [];
+
+  const critical = keyEvents
+    .slice(0, 4)
+    .map((item, index) => {
+      const row = item && typeof item === 'object' ? item : { label: String(item || '').trim() };
+      const label = String(
+        row.label
+          || row.title
+          || row.name
+          || row.event
+          || row.stock
+          || row.ticker
+          || row.symbol
+          || ''
+      ).trim();
+      if (!label) return null;
+      const category = String(row.category || row.type || row.event_type || '').trim().toLowerCase();
+      const eventDate = row.date || row.timestamp || row.starts_at || row.generated_at || safeBrief.generated_at;
+      return {
+        label,
+        date: formatCalendarDate(eventDate, index < 2 ? 'Today' : 'Soon'),
+        impact: mapImpactLabel(row.impact_score ?? row.score ?? (index < 2 ? 0.85 : 0.7)),
+        window: String(row.window || row.horizon || (index === 0 ? '24h' : '48h')).trim().toUpperCase(),
+        category: category || (/earn/i.test(label) ? 'earnings' : 'macro'),
+      };
+    })
+    .filter(Boolean);
 
   const earnings = newsRows
     .filter((item) => looksLikeEarningsEvent(item))
@@ -1457,12 +1485,35 @@ function buildMarketCalendar(brief, newsItems, alerts) {
       holding: Boolean(item.tickers && item.tickers.length)
     }));
 
+  critical
+    .filter((item) => item.category.includes('earn'))
+    .forEach((item) => {
+      if (earnings.length >= 3) return;
+      earnings.push({
+        stock: item.label,
+        date: item.date,
+        impact: item.impact,
+        holding: false,
+      });
+    });
+
   const macroSignals = Array.isArray(safeBrief.macro_signals) ? safeBrief.macro_signals : [];
   const economicData = macroSignals.slice(0, 3).map((item) => ({
     event: item.topic || item.name || 'Macro signal',
     date: formatCalendarDate(safeBrief.generated_at, 'Today'),
     impact: mapImpactLabel(item.confidence ?? item.score ?? 0.5)
   }));
+
+  critical
+    .filter((item) => !item.category.includes('earn'))
+    .forEach((item) => {
+      if (economicData.length >= 3) return;
+      economicData.push({
+        event: item.label,
+        date: item.date,
+        impact: item.impact,
+      });
+    });
 
   const exDividend = alertRows
     .filter((item) => String(item.type || '').toLowerCase().includes('dividend'))
@@ -1473,7 +1524,15 @@ function buildMarketCalendar(brief, newsItems, alerts) {
       amount: normalizeNumber(item.amount, 0)
     }));
 
-  return { earnings, economicData, exDividend };
+  return {
+    critical,
+    notice: critical.length
+      ? `${critical.length} critical event${critical.length > 1 ? 's' : ''} in the next 48h`
+      : '',
+    earnings,
+    economicData,
+    exDividend,
+  };
 }
 
 function hasCalendarEntries(calendar) {

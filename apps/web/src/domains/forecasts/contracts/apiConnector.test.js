@@ -1757,6 +1757,69 @@ test('initLiveData merges policy-impact events into the shared alert timeline', 
   assert.equal(sandbox.window.getLiveDashboardData().sources.includes('forecasts_policy_change_impact'), true);
 });
 
+test('initLiveData derives a 24h/48h critical event timeline from brief key events', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url.includes('/api/copilot/start')) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              brief_of_day: {
+                title: 'Daily brief',
+                summary: 'Macro stays constructive but event density is elevated.',
+                market_regime: 'BALANCED',
+                generated_at: '2026-03-11T08:00:00Z',
+                key_events: [
+                  { label: 'NVDA earnings', date: '2026-03-11T21:00:00Z', type: 'earnings' },
+                  { label: 'CPI release', date: '2026-03-12T13:30:00Z', type: 'macro', impact_score: 0.91 },
+                ],
+              },
+            },
+          };
+        },
+      };
+    }
+
+    if (url.includes('/api/alerts')) {
+      return {
+        ok: true,
+        async json() {
+          return { ok: true, data: { alerts: [] } };
+        },
+      };
+    }
+
+    if (url.includes('/api/llm/judge/run')) {
+      return {
+        ok: false,
+        async json() {
+          return {};
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, data: {} };
+      },
+    };
+  });
+
+  await sandbox.window.initLiveData();
+
+  assert.equal(Array.isArray(sandbox.window.marketCalendar.critical), true);
+  assert.equal(sandbox.window.marketCalendar.critical.length, 2);
+  assert.equal(sandbox.window.marketCalendar.critical[0].label, 'NVDA earnings');
+  assert.equal(sandbox.window.marketCalendar.critical[0].window, '24H');
+  assert.equal(sandbox.window.marketCalendar.critical[1].window, '48H');
+  assert.match(sandbox.window.marketCalendar.notice, /critical events? in the next 48h/i);
+  assert.equal(sandbox.window.marketCalendar.earnings[0].stock, 'NVDA earnings');
+  assert.equal(sandbox.window.marketCalendar.economicData[0].event, 'CPI release');
+});
+
 test('initLiveData hydrates regime detection and allocation drift alerts from copilot context into the shared alert timeline', async () => {
   const sandbox = loadConnector(async (url) => {
     if (url.includes('/api/alerts')) {
