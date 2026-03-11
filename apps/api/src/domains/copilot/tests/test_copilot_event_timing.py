@@ -103,5 +103,6 @@ def test_ask_payload_adds_event_timing_risk_note_from_judge_stack(monkeypatch):
         ],
         "freshness": "2026-03-11T09:00:00Z",
         "source": ["copilot_event_timing", "judge_event_impact_horizon_matrix_service"],
+        "sources": ["copilot_event_timing", "judge_event_impact_horizon_matrix_service"],
     }
     assert response["memo"]["risks"][-1] == response["risk_caveat"]

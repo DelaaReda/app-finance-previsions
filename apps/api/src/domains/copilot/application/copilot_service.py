@@ -1386,11 +1386,13 @@ def _build_event_timing_note(payload: Dict[str, Any]) -> Optional[Dict[str, Any]
         f"{item['event_type']} ({item['dominant_horizon']})"
         for item in critical_events
     )
+    normalized_source = ["copilot_event_timing", *(_normalize_string_list(payload.get("source")) or [])]
     return {
         "summary": f"Timing risk elevated around {labels}.",
         "events": critical_events,
         "freshness": _safe_text(payload.get("freshness") or payload.get("generated_at"), utc_now_iso()),
-        "source": ["copilot_event_timing", *(_normalize_string_list(payload.get("source")) or [])],
+        "source": normalized_source,
+        "sources": normalized_source,
     }
 
 
