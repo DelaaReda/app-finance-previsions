@@ -25,6 +25,7 @@ if str(SRC_ROOT) not in sys.path:
 from domains.copilot.application.decision_journal import (
     log_copilot_decision,
     record_outcome_feedback,
+    execute_paper_trade,
     get_decision_journal,
     get_outcome_feedback,
     compute_metrics,
@@ -83,6 +84,37 @@ class TestDecisionJournalIntegration:
             with patch('domains.copilot.application.decision_journal._save_outcome_feedback_records', side_effect=fake_save):
                 yield {
                     'feedback_file': feedback_file,
+                    'tmp_path': tmp_path,
+                }
+
+    @pytest.fixture
+    def mock_trade_storage(self, tmp_path):
+        """Mock paper trade execution storage."""
+        trade_file = tmp_path / "paper_trade_records.json"
+
+        def fake_load():
+            if not trade_file.exists():
+                return []
+            with open(trade_file) as f:
+                data = json.load(f)
+                return data.get("records", [])
+
+        def fake_save(records, freshness):
+            payload = {
+                "schema_version": "copilot_paper_trade_execution_v1",
+                "record_mode": "append_only",
+                "count": len(records),
+                "records": records,
+                "freshness": freshness,
+            }
+            with open(trade_file, 'w') as f:
+                json.dump(payload, f, indent=2)
+            return trade_file
+
+        with patch('domains.copilot.application.decision_journal._load_paper_trade_execution_records', side_effect=fake_load):
+            with patch('domains.copilot.application.decision_journal._save_paper_trade_execution_records', side_effect=fake_save):
+                yield {
+                    'trade_file': trade_file,
                     'tmp_path': tmp_path,
                 }
 
@@ -333,6 +365,54 @@ class TestDecisionJournalIntegration:
         
         # Verify record mode
         assert feedback["record_mode"] == "append_only"
+
+    def test_paper_trade_metrics_roll_up_execution_quality(self, temp_storage, mock_feedback_storage, mock_trade_storage):
+        """Execution quality metrics aggregate paper-trade fills and PnL."""
+
+        decision = log_copilot_decision(
+            question="Should I buy AAPL?",
+            answer="Buy AAPL on pullback",
+            verdict="buy",
+            confidence=0.72,
+            tickers=["AAPL"],
+            horizon="1d",
+            model="test",
+        )
+
+        execute_paper_trade(
+            decision_id=decision["decision_id"],
+            ticker="AAPL",
+            side="buy",
+            quantity=10,
+            reference_price=100.0,
+            fee_bps=10.0,
+            slippage_bps=20.0,
+            market_price=103.0,
+        )
+        execute_paper_trade(
+            decision_id=decision["decision_id"],
+            ticker="AAPL",
+            side="sell",
+            quantity=5,
+            reference_price=110.0,
+            fee_bps=20.0,
+            slippage_bps=10.0,
+            market_price=111.0,
+        )
+
+        journal = get_decision_journal(limit=10)
+        execution_quality = journal["entries"][0]["paper_trade_execution"]["execution_quality"]
+        assert execution_quality["total_records"] == 2
+        assert execution_quality["buy_count"] == 1
+        assert execution_quality["sell_count"] == 1
+        assert execution_quality["avg_slippage_bps"] == pytest.approx(15.0)
+
+        metrics = compute_metrics()
+        assert metrics["total_paper_trade_records"] == 2
+        assert metrics["paper_trade_execution"]["total_records"] == 2
+        assert metrics["paper_trade_execution"]["win_rate"] == 0.5
+        assert metrics["paper_trade_execution"]["total_fees"] == pytest.approx(2.1009)
+        assert metrics["paper_trade_execution"]["avg_unrealized_pnl"] == pytest.approx(10.17455)
 
 
 class TestDecisionJournalEdgeCases:

@@ -289,6 +289,22 @@ class TestPaperTradeExecuteRoute:
 
         assert response.status_code == 422
 
+    def test_execute_paper_trade_rejects_invalid_numeric_inputs(self):
+        client = _client()
+
+        response = client.post(
+            "/api/copilot/paper-trades/execute",
+            json={
+                "decision_id": "abc123",
+                "ticker": "AAPL",
+                "side": "buy",
+                "quantity": -10,
+                "reference_price": 100,
+            },
+        )
+
+        assert response.status_code == 422
+
 
 class TestGetDecisionJournalRoute:
     """Tests for GET /api/copilot/decision-journal"""
@@ -447,6 +463,38 @@ class TestDecisionJournalMetricsRoute:
             assert data["ok"] is True
             assert data["data"]["total_feedback_records"] == 17
             assert data["data"]["metrics"]["1d"]["hit_rate"] == 0.75
+
+    def test_get_metrics_includes_paper_trade_execution_summary(self):
+        """Test metrics route exposes execution-quality summary."""
+        client = _client()
+
+        with patch('domains.copilot.application.decision_journal.compute_metrics') as mock_metrics:
+            mock_metrics.return_value = {
+                "metrics": {
+                    "1d": {"hit_rate": 0.5, "calibration_error": 0.03, "resolved_count": 2},
+                    "1w": {"hit_rate": None, "calibration_error": None, "resolved_count": 0},
+                    "1m": {"hit_rate": None, "calibration_error": None, "resolved_count": 0},
+                },
+                "paper_trade_execution": {
+                    "total_records": 2,
+                    "buy_count": 1,
+                    "sell_count": 1,
+                    "win_rate": 0.5,
+                    "avg_slippage_bps": 15.0,
+                    "total_fees": 2.5,
+                },
+                "total_feedback_records": 2,
+                "total_paper_trade_records": 2,
+            }
+
+            response = client.get("/api/copilot/decision-journal/metrics")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["ok"] is True
+            assert data["data"]["paper_trade_execution"]["total_records"] == 2
+            assert data["data"]["paper_trade_execution"]["avg_slippage_bps"] == 15.0
+            assert data["data"]["total_paper_trade_records"] == 2
 
 
 class TestDecisionJournalEndToEnd:
