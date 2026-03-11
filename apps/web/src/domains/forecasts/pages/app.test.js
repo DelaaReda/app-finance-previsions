@@ -3040,6 +3040,71 @@ test('renderHeroCopilotBrief accepts normalized backend snake_case brief fields 
   assert.equal(elements.heroBriefRisks.style.display, 'block');
 });
 
+test('buildCopilotStartState normalizes brief event timing for copilot starter surfaces', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractSection(
+    source,
+    'function normalizeCopilotStarterTickers(',
+    '\n\nfunction focusCopilotInput('
+  );
+  const sandbox = {
+    console,
+    Date,
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${functionSource}\nthis.buildCopilotStartState = buildCopilotStartState;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  const state = sandbox.buildCopilotStartState({
+    data: {
+      copilot_start: {
+        brief_of_day: {
+          summary: 'Stay selective around major catalysts.',
+          event_timing: {
+            summary: 'Critical events are clustered into the next 48h.',
+            freshness: '2026-03-11T10:00:00Z',
+            source: ['brief_calendar'],
+            events: [
+              {
+                event_type: 'fed_minutes',
+                dominant_horizon: '24h',
+                interpretation: 'Rates could reset quickly after the release.',
+              },
+            ],
+          },
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(state.brief.eventTiming)), {
+    summary: 'Critical events are clustered into the next 48h.',
+    freshness: '2026-03-11T10:00:00Z',
+    sourceLabels: ['brief_calendar'],
+    events: [
+      {
+        eventType: 'fed minutes',
+        dominantHorizon: '24h',
+        interpretation: 'Rates could reset quickly after the release.',
+      },
+    ],
+  });
+});
+
 test('renderHeroCopilotBrief surfaces saved portfolio context in hero metadata', () => {
   const state = {
     brief: {
@@ -3072,6 +3137,41 @@ test('renderHeroCopilotBrief surfaces saved portfolio context in hero metadata',
   assert.equal(elements.heroSuggestionChips.children[0].textContent, 'Regime: NEUTRAL');
   assert.equal(elements.heroSuggestionChips.children[1].textContent, 'Context: portfolio aware portfolio • AAPL, MSFT • saved portfolio');
   assert.equal(elements.heroSuggestionChips.children[2].textContent, 'Sources: copilot_start_test');
+});
+
+test('renderHeroCopilotBrief surfaces critical upcoming events from the normalized brief contract', () => {
+  const state = {
+    brief: {
+      title: 'Daily Brief',
+      summary: 'Watch event density before adding risk.',
+      marketSentiment: 'NEUTRAL',
+      topSignals: ['Semis leadership intact'],
+      topRisks: ['Headline volatility'],
+      freshness: '2026-03-09T08:00:00Z',
+      sources: ['brief_daily'],
+      event_timing: {
+        summary: 'Critical events are clustered into the next 48h.',
+        events: [
+          {
+            event_type: 'fed_minutes',
+            dominant_horizon: '24h',
+            interpretation: 'Rates could reset quickly after the release.',
+          },
+        ],
+      },
+    },
+    ask: [],
+    open: [],
+  };
+  const { sandbox, elements } = loadRenderHeroCopilotBriefWithHeroIds(state);
+
+  sandbox.renderHeroCopilotBrief(state);
+
+  assert.equal(
+    elements.heroBriefRisks.textContent,
+    'Risks: Headline volatility | Upcoming events: Critical events are clustered into the next 48h. • fed minutes • 24h'
+  );
+  assert.equal(elements.heroBriefRisks.style.display, 'block');
 });
 
 test('renderHeroCopilotBrief treats stale normalized brief status as degraded metadata', () => {

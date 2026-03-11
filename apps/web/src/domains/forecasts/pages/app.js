@@ -4744,6 +4744,32 @@ function normalizeCopilotStartList(value) {
     .slice(0, 3);
 }
 
+function normalizeCopilotStartEventTiming(value) {
+  if (!isObject(value)) return null;
+
+  const summary = toString(value.summary, '').replace(/_/g, ' ').trim();
+  const events = toArray(value.events, [])
+    .map((item) => {
+      if (!isObject(item)) return null;
+      return {
+        eventType: toString(item.event_type || item.eventType, '').replace(/_/g, ' ').trim(),
+        dominantHorizon: toString(item.dominant_horizon || item.dominantHorizon, '').replace(/_/g, ' ').trim(),
+        interpretation: toString(item.interpretation, '').trim()
+      };
+    })
+    .filter((item) => item && (item.eventType || item.dominantHorizon || item.interpretation))
+    .slice(0, 2);
+
+  if (!summary && !events.length) return null;
+
+  return {
+    summary,
+    freshness: toString(value.freshness, '').trim(),
+    sourceLabels: normalizeCopilotSourceLabels(value.sourceLabels || value.sources || value.source),
+    events
+  };
+}
+
 function buildCopilotStartState(raw) {
   const fallback = buildDefaultCopilotStartState();
   const payload = isObject(raw) ? raw : {};
@@ -4781,6 +4807,7 @@ function buildCopilotStartState(raw) {
     briefSource.top_opportunities || briefSource.topOpportunities || briefSource.opportunities || topSignals
   );
   const topRisks = normalizeCopilotStartList(briefSource.top_risks || briefSource.risks);
+  const eventTiming = normalizeCopilotStartEventTiming(briefSource.event_timing || briefSource.eventTiming);
   const sourceLabels = normalizeCopilotSourceLabels(briefSource.sources || briefSource.source);
   const generatedAt = toString(
     briefSource.generated_at || briefSource.generatedAt || briefSource.freshness,
@@ -4816,6 +4843,7 @@ function buildCopilotStartState(raw) {
       topSignals,
       topOpportunities,
       topRisks,
+      eventTiming,
       sources: sourceLabels,
       degraded: briefSource.degraded === true,
       degradedReason: toString(briefSource.degraded_reason || briefSource.degradedReason, ''),
@@ -4845,13 +4873,24 @@ function buildCopilotStartHtml(state) {
   const risks = brief.topRisks.length
     ? `<p style="margin-top: 8px;"><strong>Risks:</strong> ${brief.topRisks.map((item) => escapeHtml(item)).join(' • ')}</p>`
     : '';
+  const eventTiming = normalizeCopilotStartEventTiming(brief.eventTiming || brief.event_timing);
+  const eventTimingText = eventTiming
+    ? [
+      eventTiming.summary,
+      ...eventTiming.events.map((item) => [item.eventType, item.dominantHorizon, item.interpretation].filter(Boolean).join(' • '))
+    ].filter(Boolean).join(' • ')
+    : '';
+  const eventTimingHtml = eventTimingText
+    ? `<p style="margin-top: 8px;"><strong>Upcoming events:</strong> ${escapeHtml(eventTimingText)}</p>`
+    : '';
   const degradedReason = escapeHtml(
     toString(brief.degradedReason || brief.degraded_reason, '').replace(/_/g, ' ').trim()
   );
   const meta = [
     sentiment !== 'UNKNOWN' ? `Regime ${sentiment}` : '',
     brief.degraded ? `Fallback: ${degradedReason || 'Degraded context'}` : '',
-    brief.sources.length ? `Sources: ${brief.sources.slice(0, 2).map((item) => escapeHtml(item)).join(', ')}` : ''
+    brief.sources.length ? `Sources: ${brief.sources.slice(0, 2).map((item) => escapeHtml(item)).join(', ')}` : '',
+    eventTiming && eventTiming.sourceLabels.length ? `Event sources: ${eventTiming.sourceLabels.slice(0, 2).map((item) => escapeHtml(item)).join(', ')}` : ''
   ].filter(Boolean).join(' • ');
 
   return `
@@ -4860,6 +4899,7 @@ function buildCopilotStartHtml(state) {
     ${signals}
     ${opportunities}
     ${risks}
+    ${eventTimingHtml}
     ${meta ? `<p style="margin-top: 8px; font-size: 12px; color: #94A3B8;">${meta}</p>` : ''}
   `;
 }
@@ -5069,6 +5109,7 @@ function resolveCopilotStartState(state) {
         topSignals,
         topRisks,
         topOpportunities,
+        eventTiming: normalizeCopilotStartEventTiming(rawBrief.eventTiming || rawBrief.event_timing),
         sources: sourceLabels,
         degraded: rawBrief.degraded === true,
         degradedReason: toString(rawBrief.degradedReason || rawBrief.degraded_reason, '')
@@ -5192,7 +5233,17 @@ function renderHeroCopilotBrief(state) {
   }
 
   if (risksEl) {
-    const text = brief.topRisks.length ? `Risks: ${brief.topRisks.join(' • ')}` : '';
+    const eventTiming = normalizeCopilotStartEventTiming(brief.eventTiming || brief.event_timing);
+    const eventTimingSummary = eventTiming
+      ? [eventTiming.summary, ...eventTiming.events.map((item) => [item.eventType, item.dominantHorizon].filter(Boolean).join(' • '))]
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(' • ')
+      : '';
+    const text = [
+      brief.topRisks.length ? `Risks: ${brief.topRisks.join(' • ')}` : '',
+      eventTimingSummary ? `Upcoming events: ${eventTimingSummary}` : ''
+    ].filter(Boolean).join(' | ');
     risksEl.textContent = text;
     risksEl.style.display = text ? 'block' : 'none';
   }
