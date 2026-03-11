@@ -61,6 +61,11 @@ def test_walk_forward_scoreboard_contract_and_cache(monkeypatch):
     assert first_data["cache"]["hit"] is False
     assert first_data["summary"]["hit_rate_percentage"] == 61.0
     assert first_data["threshold_summary"]["walk_forward_direction_hit_rate"]["target"] == 0.52
+    assert first_data["threshold_summary"]["walk_forward_direction_hit_rate"]["value"] == 0.61
+    assert first_data["threshold_summary"]["walk_forward_direction_hit_rate"]["status"] == "pass"
+    assert first_data["threshold_summary"]["walk_forward_direction_hit_rate"]["sample_size"] == 42
+    assert first_data["threshold_summary"]["walk_forward_direction_hit_rate"]["scope"] == "overall"
+    assert first_data["threshold_summary"]["walk_forward_direction_hit_rate"]["updated_at"] == FRESH_TS
     assert any(row["scope"] == "overall" for row in first_data["rows"])
     assert any(row["scope"] == "horizon:1w" for row in first_data["rows"])
     assert first_data["rows"][0]["metric_key"] == "walk_forward_direction_hit_rate"

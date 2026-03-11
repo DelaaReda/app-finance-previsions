@@ -915,6 +915,19 @@ async def get_walk_forward_scoreboard_payload(
                     },
                 }
             )
+            payload["threshold_summary"]["walk_forward_direction_hit_rate"].update(
+                {
+                    "value": round(overall_hit_rate, 6),
+                    "status": _scoreboard_status(
+                        overall_hit_rate,
+                        target=WALK_FORWARD_HIT_RATE_TARGET,
+                        comparator="gte",
+                    ),
+                    "sample_size": _safe_int(metrics.get("total_predictions", 0)),
+                    "scope": "overall",
+                    "updated_at": report_generated_at,
+                }
+            )
             if not rows:
                 payload["message"] = "No walk-forward metrics available."
                 payload["warnings"].append("walk_forward_metrics_missing")
