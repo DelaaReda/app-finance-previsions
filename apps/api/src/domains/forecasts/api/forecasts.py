@@ -76,9 +76,13 @@ except Exception:  # pragma: no cover
 try:
     from domains.forecasts.application.global_signal_mesh_service import (
         build_global_signal_mesh_payload,
+        build_insider_behavior_payload,
+        build_policy_change_impact_payload,
     )
 except Exception:  # pragma: no cover
     build_global_signal_mesh_payload = None  # type: ignore
+    build_insider_behavior_payload = None  # type: ignore
+    build_policy_change_impact_payload = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/forecasts")
@@ -290,7 +294,15 @@ async def get_walk_forward_scoreboard(
             "filters_applied": {"horizon": str(horizon or "all").lower()},
             "stats": {"overall_rows": 0, "horizon_rows": 0, "asset_rows": 0, "passing_rows": 0, "failing_rows": 0},
             "threshold_summary": {
-                "walk_forward_direction_hit_rate": {"target": 0.52, "comparator": "gte"}
+                "walk_forward_direction_hit_rate": {
+                    "target": 0.52,
+                    "comparator": "gte",
+                    "value": 0.0,
+                    "status": "fail",
+                    "sample_size": 0,
+                    "scope": "overall",
+                    "updated_at": now_iso,
+                }
             },
             "summary": {},
             "warnings": [],
@@ -385,6 +397,134 @@ async def get_global_signal_mesh(
         return ok(fallback_payload)
 
 
+@router.get("/policy-impact")
+async def get_policy_change_impact(
+    jurisdiction: str = Query("all", description="Jurisdiction filter: all, US, EU, UK, global."),
+    status: str = Query("all", description="Policy status filter: all, proposed, adopted, effective, monitoring."),
+    sector: str = Query("all", description="Sector filter: all, financials, technology, energy, healthcare, industrials."),
+    limit: int = Query(10, ge=1, le=25, description="Max policy events to return."),
+    debug: bool = Query(False, description="Bypass cache and include debug_pipeline traces."),
+):
+    try:
+        if build_policy_change_impact_payload is None:
+            raise ModuleNotFoundError("domains.forecasts.application.global_signal_mesh_service")
+        payload = build_policy_change_impact_payload(
+            jurisdiction=jurisdiction,
+            status=status,
+            sector=sector,
+            limit=limit,
+            debug=debug,
+        )
+        _apply_decision_contract(payload, route="forecasts_policy_change_impact")
+        return ok(payload)
+    except Exception as exc:
+        logger.error("Error in get_policy_change_impact route orchestration: %s", exc, exc_info=True)
+        now_iso = _now_iso()
+        fallback_payload = {
+            "engine_id": "policy_change_impact_v1",
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "last_update": now_iso,
+            "source": ["forecasts_policy_change_impact", "critical_route_error_fallback"],
+            "filters_applied": {
+                "jurisdiction": jurisdiction,
+                "status": status,
+                "sector": sector,
+                "limit": int(limit),
+            },
+            "events": [],
+            "stats": {
+                "policy_article_count": 0,
+                "returned_event_count": 0,
+                "status_counts": {},
+                "jurisdiction_counts": {},
+                "sector_counts": {},
+            },
+            "timeline": {
+                "effective_now_count": 0,
+                "proposed_count": 0,
+                "adopted_count": 0,
+            },
+            "warnings": [],
+            "provenance": {
+                "source": ["forecasts_policy_change_impact", "critical_route_error_fallback"],
+                "fallback_used": True,
+                "sla": {
+                    "updated_at": now_iso,
+                    "freshness_status": "unknown",
+                    "freshness_age_seconds": 0.0,
+                    "target_max_age_seconds": 0,
+                    "within_target": False,
+                },
+            },
+            "cache": {"hit": False, "age_seconds": 0.0, "ttl_seconds": 0},
+            "error": str(exc),
+            "message": "Policy impact engine unavailable, returning never-empty fallback.",
+        }
+        _apply_decision_contract(fallback_payload, route="forecasts_policy_change_impact")
+        return ok(fallback_payload)
+
+
+@router.get("/insider-behavior")
+async def get_insider_behavior(
+    tickers: str = Query("", description="Optional comma-separated ticker filter."),
+    limit: int = Query(10, ge=1, le=25, description="Max insider signals to return."),
+    debug: bool = Query(False, description="Bypass cache and include debug_pipeline traces."),
+):
+    try:
+        if build_insider_behavior_payload is None:
+            raise ModuleNotFoundError("domains.forecasts.application.global_signal_mesh_service")
+        payload = build_insider_behavior_payload(
+            tickers=tickers,
+            limit=limit,
+            debug=debug,
+        )
+        _apply_decision_contract(payload, route="forecasts_insider_behavior")
+        return ok(payload)
+    except Exception as exc:
+        logger.error("Error in get_insider_behavior route orchestration: %s", exc, exc_info=True)
+        now_iso = _now_iso()
+        fallback_payload = {
+            "engine_id": "insider_behavior_intelligence_v1",
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "last_update": now_iso,
+            "source": ["forecasts_insider_behavior", "critical_route_error_fallback"],
+            "filters_applied": {
+                "tickers": [item.strip().upper() for item in tickers.split(",") if item.strip()],
+                "limit": limit,
+            },
+            "signals": [],
+            "stats": {
+                "snapshot_row_count": 0,
+                "returned_signal_count": 0,
+                "stance_counts": {},
+                "high_uncertainty_count": 0,
+            },
+            "guardrails": {
+                "deterministic_language_allowed": False,
+                "policy": "Insider activity is evidence with uncertainty, never a standalone directive.",
+            },
+            "warnings": [],
+            "provenance": {
+                "source": ["forecasts_insider_behavior", "critical_route_error_fallback"],
+                "fallback_used": True,
+                "sla": {
+                    "updated_at": now_iso,
+                    "freshness_status": "unknown",
+                    "freshness_age_seconds": 0.0,
+                    "target_max_age_seconds": 0,
+                    "within_target": False,
+                },
+            },
+            "cache": {"hit": False, "age_seconds": 0.0, "ttl_seconds": 0},
+            "error": str(exc),
+            "message": "Insider behavior intelligence unavailable, returning never-empty fallback.",
+        }
+        _apply_decision_contract(fallback_payload, route="forecasts_insider_behavior")
+        return ok(fallback_payload)
+
+
 @router.get(
     "/{forecast_id}",
     response_model=ForecastDetailResponse if ForecastDetailResponse is not None else None,
@@ -413,11 +553,18 @@ async def get_forecast(forecast_id: str):
             "generated_at": now_iso,
             "freshness": now_iso,
             "last_update": now_iso,
+            "updated_at": now_iso,
+            "freshness_status": "fresh",
+            "freshness_age": 0.0,
             "source": ["forecasts_route", "critical_route_error_fallback"],
             "warnings": [],
             "error": str(exc),
             "message": "Forecast temporarily unavailable, returning empty response per never-empty pattern.",
         }
+        fallback_payload["provenance"] = forecasts_service._build_payload_provenance(
+            payload=fallback_payload,
+            now_iso=now_iso,
+        )
         _apply_decision_contract(fallback_payload, route="forecast_detail")
         if edge_enabled(EDGE_FORECASTS_FLAG, default=True):
             return edge_degraded(
