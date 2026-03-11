@@ -90,6 +90,8 @@ elif __name__ == "services.judge_endpoint_service":
 JudgeVerdictsComputeFn = Callable[..., Awaitable[Dict[str, Any]]]
 DECISION_JOURNAL_STORAGE_KEY = "decision_journal"
 DECISION_JOURNAL_SCHEMA_VERSION = "decision_journal_v1"
+JUDGE_POLICY_STORAGE_KEY = "judge_personal_policy"
+JUDGE_POLICY_SCHEMA_VERSION = "judge_personal_policy_v1"
 DECISION_JOURNAL_FEEDBACK_HORIZONS = ("1d", "1w", "1m")
 DECISION_JOURNAL_IMMUTABLE_ENTRY_KEY_PREFIX = f"{DECISION_JOURNAL_STORAGE_KEY}/entries"
 DECISION_JOURNAL_IMMUTABLE_ENTRY_PATH_PREFIX = "runtime/data/decision_journal/entries"
@@ -116,6 +118,14 @@ _FEEDBACK_STATUS_ALIASES = {
 
 def _default_risk_levels() -> List[str]:
     return ["low", "medium", "high", "critical"]
+
+
+def _risk_level_rank(level: Any) -> int:
+    normalized = normalize_risk_level(level, default="medium")
+    try:
+        return _default_risk_levels().index(normalized)
+    except ValueError:
+        return _default_risk_levels().index("medium")
 
 
 def _decision_journal_dir() -> Path:
@@ -182,6 +192,159 @@ def _coerce_float(value: Any, default: float = 0.0) -> float:
         return float(value)
     except Exception:
         return default
+
+
+def _load_personal_policy() -> Dict[str, Any]:
+    raw = load_json(JUDGE_POLICY_STORAGE_KEY)
+    if not isinstance(raw, dict):
+        return {}
+    policy = dict(raw)
+    if not policy.get("schema_version"):
+        policy["schema_version"] = JUDGE_POLICY_SCHEMA_VERSION
+    return policy
+
+
+def _normalize_personal_policy(policy: Dict[str, Any]) -> Dict[str, Any]:
+    excluded_tickers = [
+        ticker
+        for ticker in normalize_tickers(policy.get("excluded_tickers") or [])
+        if ticker
+    ]
+    blocked_actions = []
+    for value in policy.get("blocked_actions") or []:
+        action = coerce_verdict(value, default="")
+        if action in {"buy", "sell", "hold"} and action not in blocked_actions:
+            blocked_actions.append(action)
+    max_risk_level = normalize_risk_level(
+        policy.get("max_risk_level"),
+        default="critical",
+    )
+    return {
+        "schema_version": str(policy.get("schema_version") or JUDGE_POLICY_SCHEMA_VERSION),
+        "policy_id": str(policy.get("policy_id") or "default").strip() or "default",
+        "policy_version": str(policy.get("policy_version") or "v1").strip() or "v1",
+        "updated_at": str(policy.get("updated_at") or utc_now_iso()).strip() or utc_now_iso(),
+        "excluded_tickers": excluded_tickers,
+        "blocked_actions": blocked_actions,
+        "max_risk_level": max_risk_level,
+    }
+
+
+def _apply_personal_policy_guardrails(
+    data: Dict[str, Any],
+    *,
+    freshness: Optional[str],
+) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return data
+    verdicts = data.get("verdicts")
+    if not isinstance(verdicts, list):
+        return data
+
+    policy = _normalize_personal_policy(_load_personal_policy())
+    has_rules = bool(
+        policy["excluded_tickers"]
+        or policy["blocked_actions"]
+        or policy["max_risk_level"] != "critical"
+    )
+    if not has_rules:
+        return data
+
+    evaluated_at = str(freshness or data.get("generated_at") or utc_now_iso()).strip() or utc_now_iso()
+    blocked_tickers = set(policy["excluded_tickers"])
+    blocked_actions = set(policy["blocked_actions"])
+    max_risk_rank = _risk_level_rank(policy["max_risk_level"])
+    downgraded_count = 0
+    violation_count = 0
+
+    for verdict in verdicts:
+        if not isinstance(verdict, dict):
+            continue
+        ticker = normalize_ticker(verdict.get("ticker") or "") or "UNKNOWN"
+        original_action = coerce_verdict(
+            verdict.get("verdict") or verdict.get("action") or verdict.get("direction"),
+            default="hold",
+        )
+        risk_level = normalize_risk_level(verdict.get("risk_level"), default="medium")
+        violations: List[Dict[str, Any]] = []
+
+        if ticker in blocked_tickers:
+            violations.append(
+                {
+                    "code": "ticker_excluded",
+                    "field": "ticker",
+                    "message": f"{ticker} is excluded by personal policy.",
+                }
+            )
+        if original_action in blocked_actions:
+            violations.append(
+                {
+                    "code": "action_blocked",
+                    "field": "action",
+                    "message": f"{original_action} is blocked by personal policy.",
+                }
+            )
+        if _risk_level_rank(risk_level) > max_risk_rank:
+            violations.append(
+                {
+                    "code": "risk_above_limit",
+                    "field": "risk_level",
+                    "message": f"{risk_level} exceeds personal max risk {policy['max_risk_level']}.",
+                }
+            )
+
+        effective_action = original_action
+        status = "ok"
+        if violations:
+            violation_count += len(violations)
+            status = "violated"
+            if original_action in {"buy", "sell"}:
+                effective_action = "hold"
+                verdict["verdict"] = "hold"
+                verdict["action"] = "hold"
+                downgraded_count += 1
+            warnings = verdict.get("warnings")
+            if not isinstance(warnings, list):
+                warnings = [] if warnings in (None, "") else [str(warnings)]
+            if "policy_guardrail_violation" not in warnings:
+                warnings.append("policy_guardrail_violation")
+            verdict["warnings"] = warnings
+            verdict["policy_override_reason"] = "; ".join(v["message"] for v in violations)
+
+        verdict["policy_guardrails"] = {
+            "schema_version": "judge_policy_guardrail_result_v1",
+            "policy_id": policy["policy_id"],
+            "policy_version": policy["policy_version"],
+            "evaluated_at": evaluated_at,
+            "status": status,
+            "original_action": original_action,
+            "effective_action": effective_action,
+            "violations": violations,
+        }
+
+    data["policy_guardrails"] = {
+        "schema_version": "judge_policy_guardrail_projection_v1",
+        "evaluated_at": evaluated_at,
+        "policy": policy,
+        "summary": {
+            "verdict_count": len([v for v in verdicts if isinstance(v, dict)]),
+            "violations_count": violation_count,
+            "downgraded_count": downgraded_count,
+        },
+    }
+    append_source_tag(
+        data,
+        "judge_policy_guardrail_projection_v1",
+        default_source="judge_endpoint_service",
+    )
+    if violation_count:
+        warnings = data.get("warnings")
+        if not isinstance(warnings, list):
+            warnings = [] if warnings in (None, "") else [str(warnings)]
+        if "policy_guardrail_violation" not in warnings:
+            warnings.append("policy_guardrail_violation")
+        data["warnings"] = warnings
+    return data
 
 
 def _parse_datetime(value: Any) -> Optional[datetime]:
@@ -2092,6 +2255,11 @@ async def get_judge_verdicts_payload(
     if not isinstance(data, dict):
         return response
 
+    verdicts = data.get("verdicts")
+    _apply_personal_policy_guardrails(
+        data,
+        freshness=response.get("freshness") or data.get("generated_at"),
+    )
     verdicts = data.get("verdicts")
     head = verdicts[0] if isinstance(verdicts, list) and verdicts and isinstance(verdicts[0], dict) else {}
     ensure_decision_contract(

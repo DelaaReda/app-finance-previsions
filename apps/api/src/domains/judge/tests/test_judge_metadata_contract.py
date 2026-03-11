@@ -366,6 +366,109 @@ def test_judge_verdicts_payload_counts_invalid_source_links(monkeypatch):
     assert links["Malformed trace source"]["link_status"] == "invalid"
 
 
+def test_judge_verdicts_payload_applies_personal_policy_guardrails(monkeypatch):
+    now_iso = "2026-03-07T16:54:00Z"
+
+    async def fake_compute_verdicts_fn(**_kwargs):
+        return {
+            "ok": True,
+            "data": {
+                "verdicts": [
+                    {
+                        "ticker": "TSLA",
+                        "verdict": "buy",
+                        "confidence": 0.78,
+                        "expected_return": 0.14,
+                        "risk_level": "high",
+                        "summary": ["Momentum is strong but volatile."],
+                        "scenarios": [],
+                        "risks": ["valuation"],
+                        "impacts": {},
+                        "actions": ["buy incrementally"],
+                        "phase_scores": {},
+                        "data_needed": [],
+                        "attachments": [],
+                        "meta": {
+                            "generated_at": now_iso,
+                            "source": ["judge_route", "tests"],
+                        },
+                    }
+                ],
+                "count": 1,
+                "generated_at": now_iso,
+                "source": ["judge_route", "tests"],
+            },
+            "freshness": now_iso,
+        }
+
+    def fake_load_json(key):
+        if key == judge_endpoint_service.JUDGE_POLICY_STORAGE_KEY:
+            return {
+                "policy_id": "personal-default",
+                "policy_version": "2026-03-11T09:00:00Z",
+                "updated_at": "2026-03-11T09:00:00Z",
+                "excluded_tickers": ["TSLA"],
+                "blocked_actions": ["buy"],
+                "max_risk_level": "medium",
+            }
+        return {"schema_version": "decision_journal_v1", "entries": []}
+
+    monkeypatch.setattr(judge_endpoint_service, "load_json", fake_load_json)
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "save_json",
+        lambda key, payload, source=None, version="v1": Path("runtime/data") / f"{key}.json",
+    )
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_persist_immutable_decision_journal_entries",
+        lambda entries, generated_at: {
+            "status": "persisted",
+            "storage_key_prefix": "decision_journal/entries",
+            "schema_version": "decision_journal_v1",
+            "path_prefix": "runtime/data/decision_journal/entries",
+            "persisted_count": len(entries),
+            "existing_count": 0,
+            "failed_count": 0,
+        },
+    )
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_verdicts_payload(
+            limit=1,
+            min_confidence=0.3,
+            ticker=["TSLA"],
+            sort_by="confidence",
+            sort_order="desc",
+            profile="balanced",
+            debug=False,
+            debug_full=False,
+            x_debug_token=None,
+            compute_verdicts_fn=fake_compute_verdicts_fn,
+        )
+    )
+
+    verdict = payload["data"]["verdicts"][0]
+    guardrails = verdict["policy_guardrails"]
+    assert verdict["verdict"] == "hold"
+    assert verdict["action"] == "hold"
+    assert payload["data"]["policy_guardrails"]["summary"] == {
+        "verdict_count": 1,
+        "violations_count": 3,
+        "downgraded_count": 1,
+    }
+    assert guardrails["status"] == "violated"
+    assert guardrails["original_action"] == "buy"
+    assert guardrails["effective_action"] == "hold"
+    assert {violation["code"] for violation in guardrails["violations"]} == {
+        "ticker_excluded",
+        "action_blocked",
+        "risk_above_limit",
+    }
+    assert "policy_guardrail_violation" in payload["data"]["warnings"]
+    assert "judge_policy_guardrail_projection_v1" in payload["data"]["source"]
+
+
 def test_judge_verdicts_payload_respects_stored_outcome_feedback(monkeypatch):
     now_iso = "2026-03-07T16:54:00Z"
     judge_decision_id = "judge_c28e370c4d647688"

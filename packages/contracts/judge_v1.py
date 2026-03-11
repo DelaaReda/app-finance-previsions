@@ -266,6 +266,46 @@ class DecisionJournal(BaseModel):
     store: Optional[DecisionJournalStore] = None
 
 
+class JudgePolicyViolation(BaseModel):
+    code: str
+    field: str
+    message: str
+
+
+class JudgePolicyGuardrailResult(BaseModel):
+    schema_version: str
+    policy_id: str
+    policy_version: str
+    evaluated_at: datetime
+    status: Literal["ok", "violated"]
+    original_action: Literal["buy", "sell", "hold"]
+    effective_action: Literal["buy", "sell", "hold"]
+    violations: List[JudgePolicyViolation] = Field(default_factory=list)
+
+
+class JudgePolicyConfig(BaseModel):
+    schema_version: str
+    policy_id: str
+    policy_version: str
+    updated_at: datetime
+    excluded_tickers: List[str] = Field(default_factory=list)
+    blocked_actions: List[Literal["buy", "sell", "hold"]] = Field(default_factory=list)
+    max_risk_level: Literal["low", "medium", "high", "critical"] = "critical"
+
+
+class JudgePolicyGuardrailSummary(BaseModel):
+    verdict_count: int
+    violations_count: int
+    downgraded_count: int
+
+
+class JudgePolicyGuardrailProjection(BaseModel):
+    schema_version: str
+    evaluated_at: datetime
+    policy: JudgePolicyConfig
+    summary: JudgePolicyGuardrailSummary
+
+
 # ---------- Verdict principal ----------
 
 
@@ -346,6 +386,7 @@ class JudgeVerdict(BaseModel):
     )
     debug_payload: Optional[Dict[str, Any]] = None
     debug_llm_res: Optional[Dict[str, Any]] = None
+    policy_guardrails: Optional[JudgePolicyGuardrailResult] = None
 
     # ---------- Validators / helpers ----------
 
@@ -415,6 +456,8 @@ class JudgeData(BaseModel):
     filters_applied: JudgeFiltersApplied
     generated_at: datetime
     decision_journal: Optional[DecisionJournal] = None
+    explainability: Optional[Dict[str, Any]] = None
+    policy_guardrails: Optional[JudgePolicyGuardrailProjection] = None
     source: Optional[List[str]] = None
     freshness: Optional[str] = None
     status: Optional[Literal["ok", "degraded", "error"]] = None
