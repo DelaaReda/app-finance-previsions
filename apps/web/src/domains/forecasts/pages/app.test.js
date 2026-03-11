@@ -119,6 +119,7 @@ function loadApplyLiveDashboardData() {
     liveDataMeta: null,
     tradeIdeas: null,
     liveForecastRows: null,
+    liveForecastScoreboard: null,
     liveTopMovers: null,
     liveAlerts: null,
     liveKpis: null,
@@ -1330,6 +1331,39 @@ test('applyLiveDashboardData hydrates the hero brief from live copilot_start dat
     );
   }
   assert.deepEqual(JSON.parse(JSON.stringify(sandbox.appData.copilotStart.scope_tickers)), ['NVDA', 'MSFT']);
+});
+
+test('applyLiveDashboardData stores walk-forward scoreboard payloads for forecast widgets', () => {
+  const { sandbox } = loadApplyLiveDashboardData();
+  const scoreboard = {
+    rows: [
+      {
+        metric_key: 'walk_forward_direction_hit_rate',
+        scope: 'overall',
+        value: 0.61,
+        target: 0.52,
+        status: 'pass',
+      },
+    ],
+    updated_at: '2026-03-10T10:00:00Z',
+    threshold_summary: {
+      walk_forward_direction_hit_rate: {
+        target: 0.52,
+        status: 'pass',
+      },
+    },
+  };
+
+  sandbox.applyLiveDashboardData({
+    generatedAt: '2026-03-10T10:01:00Z',
+    data: {
+      forecasts: [],
+      forecastScoreboard: scoreboard,
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.liveForecastScoreboard)), scoreboard);
+  assert.equal(sandbox.rendered, true);
 });
 
 test('runCopilotStartPrompt opens the overlay before sending a hero starter prompt', () => {

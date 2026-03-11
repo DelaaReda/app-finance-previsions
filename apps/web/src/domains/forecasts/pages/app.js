@@ -1467,6 +1467,7 @@ let llmJudgeData = window.llmJudgeData || FALLBACK_LLM_JUDGE_DATA;
 let judgeDecisionJournal = sanitizeJudgeDecisionJournal(window.judgeDecisionJournal || []);
 let marketDrivers = sanitizeMarketDrivers(window.marketDrivers || FALLBACK_MARKET_DRIVERS);
 let liveForecastRows = [];
+let liveForecastScoreboard = null;
 let liveTopMovers = [];
 let liveKpis = window.liveKpis || null;
 let livePortfolioSummary = window.livePortfolioSummary || null;
@@ -2744,6 +2745,7 @@ function renderForecastScenarioWidget() {
   const positive = rows.filter((row) => row.direction === 'up' || row.direction === 'bullish');
   const negative = rows.filter((row) => row.direction === 'down' || row.direction === 'bearish');
   const neutral = rows.filter((row) => row.direction === 'neutral' || row.direction === 'flat');
+  const scoreRows = Array.isArray(liveForecastScoreboard?.rows) ? liveForecastScoreboard.rows : [];
 
   const avgReturn = rows.reduce((acc, row) => acc + row.expectedReturn, 0) / rows.length;
   const bullRow = positive.sort((a, b) => b.expectedReturn - a.expectedReturn)[0];
@@ -2792,7 +2794,31 @@ function renderForecastScenarioWidget() {
   const scenarioContext = scenarioWidget.querySelector('.scenario-context');
   if (scenarioContext) {
     const liveTickers = rows.slice(0, 4).map((row) => row.ticker).join(', ');
-    scenarioContext.textContent = `Top live forecasts: ${liveTickers}`;
+    const hitRateRow = scoreRows.find((row) => row && row.metric_key === 'walk_forward_direction_hit_rate' && row.scope === 'overall')
+      || scoreRows.find((row) => row && row.metric_key === 'walk_forward_direction_hit_rate')
+      || null;
+    if (hitRateRow) {
+      const hitRate = Math.round(toFiniteNumber(hitRateRow.value, 0) * 1000) / 10;
+      const target = hitRateRow.target != null ? Math.round(toFiniteNumber(hitRateRow.target, 0) * 1000) / 10 : null;
+      scenarioContext.textContent = target != null
+        ? `Top live forecasts: ${liveTickers} • Walk-forward hit rate ${hitRate}% vs ${target}% target`
+        : `Top live forecasts: ${liveTickers} • Walk-forward hit rate ${hitRate}%`;
+    } else {
+      scenarioContext.textContent = `Top live forecasts: ${liveTickers}`;
+    }
+  }
+
+  const widgetTimestamp = scenarioWidget.querySelector('.widget-timestamp');
+  if (widgetTimestamp && liveForecastScoreboard?.updated_at) {
+    const scoreStatus = String(
+      liveForecastScoreboard?.threshold_summary?.walk_forward_direction_hit_rate?.status
+      || scoreRows.find((row) => row && row.metric_key === 'walk_forward_direction_hit_rate' && row.scope === 'overall')?.status
+      || ''
+    ).toLowerCase();
+    const statusLabel = scoreStatus === 'pass'
+      ? 'On target'
+      : (scoreStatus === 'fail' ? 'Below target' : 'Monitoring');
+    widgetTimestamp.textContent = `${statusLabel} • Walk-forward ${formatRelativeTime(liveForecastScoreboard.updated_at)}`;
   }
 }
 
@@ -2988,6 +3014,9 @@ function applyLiveDashboardData(payload = {}) {
 
   tradeIdeas = sanitizeTradeIdeas(data.tradeIdeas);
   liveForecastRows = sanitizeForecastRows(data.forecasts || window.liveForecasts);
+  liveForecastScoreboard = isObject(data.forecastScoreboard)
+    ? data.forecastScoreboard
+    : (isObject(data.forecast_scoreboard) ? data.forecast_scoreboard : window.liveForecastScoreboard || null);
   liveDataMeta.forecastSla = summarizeForecastSla(liveForecastRows);
   liveTopMovers = sanitizeTopMovers(data.topMovers || data.stocks || window.topMovers);
   liveAlerts = sanitizeAlertTimeline(data.alerts || window.alertTimeline || []);

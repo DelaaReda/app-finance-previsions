@@ -141,6 +141,46 @@ test('getStatus prefers same-origin api base when window.location.origin is avai
   assert.deepEqual(payload.source, ['api_status']);
 });
 
+test('getWalkForwardScoreboard unwraps scoreboard payloads and preserves query params', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      async json() {
+        return {
+          ok: true,
+          data: {
+            rows: [
+              {
+                metric_key: 'walk_forward_direction_hit_rate',
+                scope: 'overall',
+                value: 0.61,
+                target: 0.52,
+                status: 'pass',
+              },
+            ],
+            updated_at: '2026-03-10T10:00:00Z',
+            threshold_summary: {
+              walk_forward_direction_hit_rate: {
+                target: 0.52,
+                status: 'pass',
+              },
+            },
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getWalkForwardScoreboard({ horizon: '1w' });
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/forecasts/scoreboard?horizon=1w']);
+  assert.equal(payload.rows[0].metric_key, 'walk_forward_direction_hit_rate');
+  assert.equal(payload.rows[0].value, 0.61);
+  assert.equal(payload.updated_at, '2026-03-10T10:00:00Z');
+  assert.equal(payload.threshold_summary.walk_forward_direction_hit_rate.target, 0.52);
+});
+
 test('getCopilotContext normalizes brief-first entry points into ask/open starters', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {

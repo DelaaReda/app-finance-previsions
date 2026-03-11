@@ -143,6 +143,26 @@ async function getForecasts(limit) {
   return extractArray(payload, ['rows', 'forecasts', 'data']) || [];
 }
 
+async function getWalkForwardScoreboard(params = {}) {
+  const safeParams = params && typeof params === 'object' ? params : {};
+  const search = new URLSearchParams();
+  const horizon = String(safeParams.horizon || '').trim();
+  const debug = safeParams.debug === true;
+
+  if (horizon) {
+    search.set('horizon', horizon);
+  }
+  if (debug) {
+    search.set('debug', 'true');
+  }
+
+  const query = search.toString();
+  const endpoint = `/forecasts/scoreboard${query ? `?${query}` : ''}`;
+  const cacheKey = `forecasts_scoreboard:${query || 'default'}`;
+  const payload = getResponseData(await fetchWithCache(endpoint, cacheKey));
+  return payload && typeof payload === 'object' ? payload : {};
+}
+
 async function getStockPrices() {
   const payload = getResponseData(await fetchWithCache('/stocks/prices?tickers=NVDA,META,AAPL,MSFT,GOOGL', 'stocks'));
   return extractObject(payload, ['prices', 'tickers', 'data']) || {};
@@ -1150,6 +1170,11 @@ async function populateWindowGlobals() {
       contractWarnings.push('tradeIdeas-unavailable');
     }
 
+    const scoreboard = await getWalkForwardScoreboard();
+    if (scoreboard && typeof scoreboard === 'object' && Array.isArray(scoreboard.rows)) {
+      window.liveForecastScoreboard = scoreboard;
+    }
+
     // Stocks - build top movers with real % change from price history
     const rawStocks = await getStockPrices();
     const tickers = Object.keys(rawStocks);
@@ -1345,6 +1370,7 @@ async function populateWindowGlobals() {
         data: {
           newsItems: window.newsItems || [],
           forecasts: window.liveForecasts || [],
+          forecastScoreboard: window.liveForecastScoreboard || null,
           tradeIdeas: window.tradeIdeas || [],
           alerts: window.alertTimeline || [],
           topMovers: window.topMovers || [],
@@ -1415,6 +1441,7 @@ function startAutoRefresh(intervalMs) {
 window.FinanceAPI = {
   getNewsFeed,
   getForecasts,
+  getWalkForwardScoreboard,
   getStockPrices,
   getTopMovers,
   getAlerts,
@@ -1439,6 +1466,7 @@ window.getLiveDashboardData = () => ({
   data: {
     newsItems: window.newsItems || [],
     forecasts: window.liveForecasts || [],
+    forecastScoreboard: window.liveForecastScoreboard || null,
     tradeIdeas: window.tradeIdeas || [],
     alerts: window.alertTimeline || [],
     topMovers: window.topMovers || [],
