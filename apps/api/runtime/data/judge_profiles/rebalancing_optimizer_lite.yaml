@@ -1,0 +1,24 @@
+name: rebalancing_optimizer_lite
+horizon: 1m
+tickers:
+  - SPY
+  - QQQ
+  - GLD
+  - IEF
+  - XLK
+  - XLF
+  - XLV
+  - XLE
+focus: balanced
+sources_weights:
+  fundamental: 0.30
+  macro: 0.20
+  technical: 0.20
+  news: 0.15
+  sentiment: 0.15
+prompt_template: |
+  Analyze {ticker} for a lightweight portfolio rebalance over a 1-month horizon.
+  When portfolio context is available, use it to flag concentration, drift, and simple trim/add/hold adjustments.
+  Prefer practical actions over directional trading and call out what would invalidate the rebalance thesis.
+  Keep response under 450 tokens.
+max_tokens: 1050

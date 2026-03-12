@@ -120,6 +120,52 @@ def _default_risk_levels() -> List[str]:
     return ["low", "medium", "high", "critical"]
 
 
+def _judge_profiles_dir_candidates() -> List[Path]:
+    api_root = Path(__file__).resolve().parents[4]
+    candidates = [
+        api_root / "runtime" / "data" / "judge_profiles",
+        Path("data") / "judge_profiles",
+    ]
+    unique: List[Path] = []
+    seen = set()
+    for candidate in candidates:
+        resolved = candidate.resolve(strict=False)
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique.append(candidate)
+    return unique
+
+
+def _list_judge_profile_options() -> List[Dict[str, str]]:
+    names: List[str] = []
+    seen = set()
+    for candidate_dir in _judge_profiles_dir_candidates():
+        if not candidate_dir.is_dir():
+            continue
+        for profile_path in sorted(candidate_dir.glob("*.yaml")):
+            profile_name = profile_path.stem.strip()
+            if not profile_name:
+                continue
+            if profile_name in seen:
+                continue
+            seen.add(profile_name)
+            names.append(profile_name)
+
+    if "equity_1w" in names:
+        names = ["equity_1w"] + [name for name in names if name != "equity_1w"]
+    elif not names:
+        names = ["equity_1w"]
+
+    return [
+        {
+            "value": profile_name,
+            "label": profile_name.replace("_", " ").title(),
+        }
+        for profile_name in names
+    ]
+
+
 def _risk_level_rank(level: Any) -> int:
     normalized = normalize_risk_level(level, default="medium")
     try:
@@ -2782,6 +2828,7 @@ async def get_judge_options_payload(
                 {"value": "risk_level", "label": "Niveau de risque"},
                 {"value": "timestamp", "label": "Date de generation"},
             ],
+            "profiles": _list_judge_profile_options(),
             "risk_levels": risk_levels,
             "confidence_thresholds": [
                 {"label": "Toutes", "value": 0.0},
@@ -2804,6 +2851,7 @@ async def get_judge_options_payload(
                     {"value": "confidence", "label": "Confiance"},
                     {"value": "expected_return", "label": "Retour attendu"},
                 ],
+                "profiles": _list_judge_profile_options(),
                 "risk_levels": _default_risk_levels(),
                 "confidence_thresholds": [
                     {"label": "Toutes", "value": 0.0},

@@ -782,6 +782,17 @@ def test_judge_options_fallback_exposes_degraded_metadata():
     assert payload["data"]["risk_levels"] == ["low", "medium", "high", "critical"]
 
 
+def test_judge_options_expose_available_profiles():
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_options_payload()
+    )
+
+    assert payload["ok"] is True
+    profiles = payload["data"]["profiles"]
+    assert profiles[0]["value"] == "equity_1w"
+    assert any(item["value"] == "rebalancing_optimizer_lite" for item in profiles)
+
+
 def test_judge_decision_outcome_feedback_persists_append_only(monkeypatch):
     store = {}
 

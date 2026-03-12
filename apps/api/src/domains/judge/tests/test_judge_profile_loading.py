@@ -34,3 +34,17 @@ def test_load_profile_supports_supply_chain_commodity_shock_profile(monkeypatch,
     assert "XLE" in profile.tickers
     assert "DBA" in profile.tickers
     assert "shock propagation" in profile.prompt_template.lower()
+
+
+def test_load_profile_supports_rebalancing_optimizer_lite_profile(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    profile = load_profile("rebalancing_optimizer_lite")
+
+    assert profile.name == "rebalancing_optimizer_lite"
+    assert profile.horizon == "1m"
+    assert profile.focus == "balanced"
+    assert "SPY" in profile.tickers
+    assert "IEF" in profile.tickers
+    assert "portfolio rebalance" in profile.prompt_template.lower()
+    assert "portfolio context" in profile.prompt_template.lower()
