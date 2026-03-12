@@ -3193,6 +3193,147 @@ function syncDashboardCards() {
   });
 }
 
+async function renderRebalanceProposalCard() {
+  const card = document.getElementById('rebalanceProposalCard');
+  if (!card) return;
+
+  const badge = document.getElementById('rebalanceProposalBadge');
+  const title = document.getElementById('rebalanceProposalTitle');
+  const metrics = document.getElementById('rebalanceProposalMetrics');
+  const summary = document.getElementById('rebalanceProposalSummary');
+  const primaryAction = document.getElementById('rebalanceProposalPrimaryAction');
+  const secondaryAction = document.getElementById('rebalanceProposalSecondaryAction');
+  const health = isObject(appData.portfolioHealth) ? appData.portfolioHealth : {};
+  const driftAlerts = isObject(health.allocationDriftAlerts) ? health.allocationDriftAlerts : null;
+  const primaryDriftAlert = driftAlerts && Array.isArray(driftAlerts.alerts)
+    ? driftAlerts.alerts.find((alert) => isObject(alert)) || null
+    : null;
+
+  const formatSignedValue = (value) => {
+    const normalized = Math.round(toFiniteNumber(value, 0) * 10) / 10;
+    const digits = Number.isInteger(normalized) ? 0 : 1;
+    return `${normalized > 0 ? '+' : ''}${normalized.toFixed(digits)}`;
+  };
+  const formatPercentValue = (value) => {
+    const normalized = Math.max(0, Math.round(toFiniteNumber(value, 0) * 10) / 10);
+    return `${Number.isInteger(normalized) ? normalized.toFixed(0) : normalized.toFixed(1)}%`;
+  };
+  const firstNonEmptyText = (items) => toArray(items, [])
+    .map((item) => toString(item, '').trim())
+    .find(Boolean) || '';
+  const applyProposalModel = (model) => {
+    if (badge) {
+      badge.className = `conviction-badge status ${model.badgeClass || 'status--info'}`;
+      badge.textContent = model.badgeText || 'Policy-aware';
+    }
+    if (title) {
+      title.textContent = model.title || 'Rebalance Portfolio';
+    }
+    if (metrics) {
+      metrics.innerHTML = `
+        <span>Turnover delta: ${formatPercentValue(model.turnover)}</span>
+        <span>Risk delta: ${formatSignedValue(model.riskDelta)}</span>
+      `;
+    }
+    if (summary) {
+      summary.textContent = model.summary || 'Review saved portfolio drift and the proposed rebalance.';
+    }
+    if (primaryAction) {
+      primaryAction.textContent = model.primaryLabel || 'See Plan';
+    }
+    if (secondaryAction) {
+      secondaryAction.textContent = model.secondaryLabel || 'Schedule';
+    }
+  };
+  const buildFallbackModel = () => {
+    const thresholdPct = Math.max(0, Math.round(toFiniteNumber(primaryDriftAlert?.thresholdPct, 0) * 10) / 10);
+    const currentWeightPct = Math.max(0, Math.round(toFiniteNumber(primaryDriftAlert?.currentWeightPct, 0) * 10) / 10);
+    const allocationProgress = Math.max(0, Math.round(toFiniteNumber(health.allocationProgress, 0) * 10) / 10);
+    const turnover = currentWeightPct > 0 && thresholdPct > 0
+      ? Math.max(0, Math.round((currentWeightPct - thresholdPct) * 10) / 10)
+      : Math.max(0, Math.round(Math.max(0, allocationProgress - 25) * 10) / 10);
+    const severity = toString(primaryDriftAlert?.severity, '').trim().toLowerCase();
+    const riskLabel = toString(health.riskLabel, '').trim().toLowerCase();
+    const riskDelta = severity === 'high' || riskLabel === 'high'
+      ? -2
+      : (riskLabel === 'medium' ? -1 : 0);
+    const symbol = toString(primaryDriftAlert?.symbol, '').trim().toUpperCase();
+
+    return {
+      title: symbol ? `Rebalance ${symbol} Exposure` : 'Rebalance Portfolio',
+      turnover,
+      riskDelta,
+      summary: toString(primaryDriftAlert?.reason, '').trim()
+        || toString(health.suggestion, 'Review saved portfolio drift and rebalance risk.'),
+      badgeText: 'Policy-aware fallback',
+      badgeClass: riskDelta < 0 ? 'status--warning' : 'status--info',
+      primaryLabel: 'See Plan',
+      secondaryLabel: 'Schedule'
+    };
+  };
+  const fallbackModel = buildFallbackModel();
+  applyProposalModel(fallbackModel);
+
+  if (!window.FinanceAPI || typeof window.FinanceAPI.getStrategyPlaybooks !== 'function') {
+    return;
+  }
+
+  const portfolioId = toString(
+    health.portfolioId || appData.portfolioRiskProfile?.portfolio?.id,
+    '',
+  ).trim();
+  const requestKey = `${Date.now()}`;
+  card.dataset.rebalanceRequestKey = requestKey;
+
+  try {
+    const response = await window.FinanceAPI.getStrategyPlaybooks({
+      limit: 1,
+      min_confidence: 0,
+      profile: 'rebalancing_optimizer_lite',
+      portfolio_id: portfolioId,
+      sort_by: 'confidence',
+      sort_order: 'desc'
+    });
+    if (card.dataset.rebalanceRequestKey !== requestKey) {
+      return;
+    }
+
+    const payload = isObject(response) ? (response.data || response) : {};
+    const playbooks = Array.isArray(payload)
+      ? payload
+      : toArray(payload.playbooks, toArray(payload.rows, toArray(payload.items, [])));
+    const playbook = playbooks.find((item) => isObject(item));
+    if (!playbook) {
+      return;
+    }
+
+    const confidenceRaw = toFiniteNumber(playbook.confidence, 0);
+    const confidencePct = confidenceRaw > 1
+      ? Math.max(0, Math.min(100, Math.round(confidenceRaw)))
+      : Math.max(0, Math.min(100, Math.round(confidenceRaw * 100)));
+    const ticker = toString(playbook.ticker, '').trim().toUpperCase();
+    const decision = toString(playbook.decision, '').trim().toUpperCase();
+    const horizon = toString(playbook.horizon, '').trim().toUpperCase();
+    const liveSummary = firstNonEmptyText(playbook.summary)
+      || firstNonEmptyText(playbook.reasons)
+      || fallbackModel.summary;
+    const summarySuffix = [decision, horizon].filter(Boolean).join(' | ');
+
+    applyProposalModel({
+      title: ticker && ticker !== 'UNKNOWN' ? `Rebalance Toward ${ticker}` : fallbackModel.title,
+      turnover: toFiniteNumber(playbook.turnover, fallbackModel.turnover),
+      riskDelta: toFiniteNumber(playbook.risk_delta ?? playbook.riskDelta, fallbackModel.riskDelta),
+      summary: summarySuffix ? `${liveSummary} | ${summarySuffix}` : liveSummary,
+      badgeText: confidencePct > 0 ? `${confidencePct}% confidence` : 'Policy-aware',
+      badgeClass: confidencePct >= 75 ? 'status--success' : confidencePct >= 55 ? 'status--warning' : 'status--info',
+      primaryLabel: 'Open Plan',
+      secondaryLabel: 'Schedule'
+    });
+  } catch (error) {
+    console.warn('[Rebalance Proposal] strategy playbook refresh failed:', error?.message || error);
+  }
+}
+
 function renderLiveDashboardWidgets() {
   renderMarketPulse();
   renderTradeIdeas();
@@ -3207,6 +3348,7 @@ function renderLiveDashboardWidgets() {
   updateLiveProvenance(liveDataMeta);
   renderForecastScenarioWidget();
   renderTopMoversWidget();
+  renderRebalanceProposalCard();
   drawHealthGaugeCompact();
   drawHealthGauge();
   drawConfidenceGauge(Math.round(toFiniteNumber(appData.hero?.forecastConfidence, 82)));

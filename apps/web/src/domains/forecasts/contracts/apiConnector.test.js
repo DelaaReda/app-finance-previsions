@@ -117,6 +117,44 @@ test('refreshLiveData preserves forecast fusion metadata on live forecast rows',
   assert.equal(payload.data.forecasts[0].forecastFusion.layers[0].layer, 'forecast_confidence');
 });
 
+test('getStrategyPlaybooks forwards portfolio_id for rebalancing optimizer slices', async () => {
+  const calls = [];
+  const sandbox = loadConnector(async (url) => {
+    calls.push(url);
+    return {
+      ok: true,
+      async json() {
+        return {
+          ok: true,
+          data: {
+            playbooks: [
+              {
+                ticker: 'IEF',
+                turnover: 10,
+                risk_delta: -2,
+              },
+            ],
+          },
+        };
+      },
+    };
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getStrategyPlaybooks({
+    limit: 1,
+    min_confidence: 0,
+    profile: 'rebalancing_optimizer_lite',
+    portfolio_id: 'portfolio-123',
+  });
+
+  assert.match(calls[0], /\/api\/judge\/strategy-playbooks\?/);
+  assert.match(calls[0], /profile=rebalancing_optimizer_lite/);
+  assert.match(calls[0], /portfolio_id=portfolio-123/);
+  assert.equal(payload.data.playbooks[0].ticker, 'IEF');
+  assert.equal(payload.data.playbooks[0].turnover, 10);
+  assert.equal(payload.data.playbooks[0].risk_delta, -2);
+});
+
 test('getStatus falls back to /health when /status is unavailable', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {

@@ -375,17 +375,19 @@
                   <button class="rec-btn" onclick="showToast('Learning why...')">Learn Why</button>
                 </div>
               </div>
-              <div class="recommendation-card medium-conviction">
+              <div class="recommendation-card medium-conviction" id="rebalanceProposalCard">
                 <div class="rec-header">
-                  <span class="conviction-badge status status--warning">Medium Conviction</span>
+                  <span class="conviction-badge status status--warning" id="rebalanceProposalBadge">Policy-aware</span>
                 </div>
-                <h3 class="rec-title">Rebalance Portfolio</h3>
-                <div class="rec-metrics">
-                  <span>Benefit: Risk reduction</span>
+                <h3 class="rec-title" id="rebalanceProposalTitle">Rebalance Portfolio</h3>
+                <div class="rec-metrics" id="rebalanceProposalMetrics">
+                  <span>Turnover delta: pending</span>
+                  <span>Risk delta: pending</span>
                 </div>
+                <p class="rec-reasoning" id="rebalanceProposalSummary">Syncing saved portfolio rebalance context.</p>
                 <div class="rec-actions">
-                  <button class="rec-btn primary" onclick="showToast('Viewing rebalance plan...')">See Plan</button>
-                  <button class="rec-btn secondary" onclick="showToast('Scheduled')">Schedule</button>
+                  <button class="rec-btn primary" id="rebalanceProposalPrimaryAction" onclick="showToast('Viewing rebalance plan...')">See Plan</button>
+                  <button class="rec-btn secondary" id="rebalanceProposalSecondaryAction" onclick="showToast('Scheduled')">Schedule</button>
                 </div>
               </div>
               <div class="recommendation-card low-conviction">

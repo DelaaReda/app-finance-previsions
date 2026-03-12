@@ -1873,6 +1873,88 @@ function loadRenderPortfolioHealthFullDetails(portfolioHealth) {
   return { sandbox, elements };
 }
 
+function loadRenderRebalanceProposalCard({ playbooksPayload, appDataOverride = {} } = {}) {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractSection(
+    source,
+    'async function renderRebalanceProposalCard(',
+    '\n\nfunction renderLiveDashboardWidgets('
+  );
+  const elements = {
+    rebalanceProposalCard: { dataset: {} },
+    rebalanceProposalBadge: createElementStub(),
+    rebalanceProposalTitle: createElementStub(),
+    rebalanceProposalMetrics: createInteractiveElementStub(),
+    rebalanceProposalSummary: createElementStub(),
+    rebalanceProposalPrimaryAction: createElementStub(),
+    rebalanceProposalSecondaryAction: createElementStub(),
+  };
+  const calls = [];
+  const sandbox = {
+    console,
+    window: {
+      FinanceAPI: {
+        async getStrategyPlaybooks(params) {
+          calls.push(params);
+          return playbooksPayload;
+        },
+      },
+    },
+    appData: {
+      portfolioHealth: {
+        portfolioId: 'portfolio-123',
+        riskLabel: 'High',
+        suggestion: 'Trim concentrated equity exposure.',
+        allocationProgress: 70,
+        allocationDriftAlerts: {
+          active: true,
+          alerts: [
+            {
+              symbol: 'NVDA',
+              severity: 'high',
+              thresholdPct: 25,
+              currentWeightPct: 33,
+              reason: 'NVDA is 33.00% of saved weights, above the 25.00% playbook concentration proxy.',
+            },
+          ],
+        },
+      },
+      portfolioRiskProfile: {
+        portfolio: {
+          id: 'portfolio-123',
+        },
+      },
+      ...appDataOverride,
+    },
+    document: {
+      getElementById(id) {
+        return elements[id] || null;
+      },
+    },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const normalized = Number(value);
+      return Number.isFinite(normalized) ? normalized : fallback;
+    },
+  };
+
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.renderRebalanceProposalCard = renderRebalanceProposalCard;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return { sandbox, elements, calls };
+}
+
 test('buildRobustnessGoNoGoDecision returns GO for healthy state', () => {
   const { sandbox } = loadRobustnessGoNoGoDecision(null);
   const result = sandbox.buildRobustnessGoNoGoDecision();
@@ -3342,6 +3424,64 @@ test('renderPortfolioHealthFullDetails maps portfolio state and risk profile int
   assert.equal(elements.portfolioHealthSuggestionSecondaryText.textContent, 'Volatility regime and breadth deterioration');
   assert.equal(elements.portfolioHealthSuggestionTertiary.className, 'suggestion-item high');
   assert.equal(elements.portfolioHealthSuggestionTertiaryText.textContent, 'Drift threshold 25% | Current 33%');
+});
+
+test('renderRebalanceProposalCard upgrades the existing recommendation card from rebalancing strategy playbooks', async () => {
+  const { sandbox, elements, calls } = loadRenderRebalanceProposalCard({
+    playbooksPayload: {
+      data: {
+        playbooks: [
+          {
+            ticker: 'IEF',
+            turnover: 10,
+            risk_delta: -2,
+            confidence: 0.74,
+            decision: 'hold',
+            horizon: '1m',
+            summary: ['Reduce drawdown concentration'],
+          },
+        ],
+      },
+    },
+  });
+
+  await sandbox.renderRebalanceProposalCard();
+
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    {
+      limit: 1,
+      min_confidence: 0,
+      profile: 'rebalancing_optimizer_lite',
+      portfolio_id: 'portfolio-123',
+      sort_by: 'confidence',
+      sort_order: 'desc',
+    },
+  ]);
+  assert.equal(elements.rebalanceProposalTitle.textContent, 'Rebalance Toward IEF');
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Turnover delta: 10%/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Risk delta: -2/);
+  assert.equal(elements.rebalanceProposalSummary.textContent, 'Reduce drawdown concentration | HOLD | 1M');
+  assert.equal(elements.rebalanceProposalBadge.textContent, '74% confidence');
+  assert.equal(elements.rebalanceProposalBadge.className, 'conviction-badge status status--warning');
+  assert.equal(elements.rebalanceProposalPrimaryAction.textContent, 'Open Plan');
+});
+
+test('renderRebalanceProposalCard keeps fallback turnover and risk deltas when optimizer playbooks are unavailable', async () => {
+  const { sandbox, elements } = loadRenderRebalanceProposalCard({
+    playbooksPayload: null,
+  });
+
+  await sandbox.renderRebalanceProposalCard();
+
+  assert.equal(elements.rebalanceProposalTitle.textContent, 'Rebalance NVDA Exposure');
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Turnover delta: 8%/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Risk delta: -2/);
+  assert.equal(
+    elements.rebalanceProposalSummary.textContent,
+    'NVDA is 33.00% of saved weights, above the 25.00% playbook concentration proxy.',
+  );
+  assert.equal(elements.rebalanceProposalBadge.textContent, 'Policy-aware fallback');
+  assert.equal(elements.rebalanceProposalSecondaryAction.textContent, 'Schedule');
 });
 
 test('sanitizeCopilotStart preserves starter tickers and normalizes brief open targets', () => {

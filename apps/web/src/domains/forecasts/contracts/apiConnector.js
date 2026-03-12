@@ -2173,7 +2173,16 @@ window.getLiveDashboardData = () => ({
 });
 
 async function getStrategyPlaybooks(params = {}) {
-  const { limit = 10, min_confidence = 0.5, ticker = '', profile = 'equity_1w', sort_by = 'confidence', sort_order = 'desc', debug = false } = params;
+  const {
+    limit = 10,
+    min_confidence = 0.5,
+    ticker = '',
+    portfolio_id = '',
+    profile = 'equity_1w',
+    sort_by = 'confidence',
+    sort_order = 'desc',
+    debug = false
+  } = params;
   const queryParams = new URLSearchParams({
     limit: String(limit),
     min_confidence: String(min_confidence),
@@ -2182,6 +2191,7 @@ async function getStrategyPlaybooks(params = {}) {
     sort_order
   });
   if (ticker) queryParams.append('ticker', ticker);
+  if (portfolio_id) queryParams.append('portfolio_id', portfolio_id);
   if (debug) queryParams.append('debug', 'true');
   
   try {
