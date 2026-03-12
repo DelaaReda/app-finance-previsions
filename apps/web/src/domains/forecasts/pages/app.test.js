@@ -3514,6 +3514,42 @@ test('renderRebalanceProposalCard keeps fallback copy for degraded empty rebalan
   assert.equal(elements.rebalanceProposalPrimaryAction.textContent, 'See Plan');
 });
 
+test('renderRebalanceProposalCard keeps fallback copy for degraded non-empty rebalancing envelopes', async () => {
+  const { sandbox, elements } = loadRenderRebalanceProposalCard({
+    playbooksPayload: {
+      status: 'degraded',
+      error: 'provider timeout',
+      data: {
+        status: 'degraded',
+        warnings: ['partial_data_provider_timeout'],
+        playbooks: [
+          {
+            ticker: 'IEF',
+            turnover: 10,
+            risk_delta: -2,
+            confidence: 0.74,
+            decision: 'hold',
+            horizon: '1m',
+            summary: ['Reduce drawdown concentration'],
+          },
+        ],
+      },
+    },
+  });
+
+  await sandbox.renderRebalanceProposalCard();
+
+  assert.equal(elements.rebalanceProposalTitle.textContent, 'Rebalance NVDA Exposure');
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Turnover delta: 8%/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Risk delta: -2/);
+  assert.equal(
+    elements.rebalanceProposalSummary.textContent,
+    'NVDA is 33.00% of saved weights, above the 25.00% playbook concentration proxy.',
+  );
+  assert.equal(elements.rebalanceProposalBadge.textContent, 'Policy-aware fallback');
+  assert.equal(elements.rebalanceProposalPrimaryAction.textContent, 'See Plan');
+});
+
 test('sanitizeCopilotStart preserves starter tickers and normalizes brief open targets', () => {
   const sandbox = loadSanitizeCopilotStart();
 

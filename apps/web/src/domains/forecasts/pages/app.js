@@ -3299,6 +3299,10 @@ async function renderRebalanceProposalCard() {
     }
 
     const payload = isObject(response) ? (response.data || response) : {};
+    const responseStatus = toString(response?.status || payload.status, '').trim().toLowerCase();
+    if (responseStatus === 'degraded') {
+      return;
+    }
     const playbooks = Array.isArray(payload)
       ? payload
       : toArray(payload.playbooks, toArray(payload.rows, toArray(payload.items, [])));
