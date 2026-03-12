@@ -155,6 +155,44 @@ test('getStrategyPlaybooks forwards portfolio_id for rebalancing optimizer slice
   assert.equal(payload.data.playbooks[0].risk_delta, -2);
 });
 
+test('getStrategyPlaybooks preserves degraded empty-playbook contract metadata', async () => {
+  const sandbox = loadConnector(async () => ({
+    ok: true,
+    async json() {
+      return {
+        ok: true,
+        status: 'degraded',
+        error: 'portfolio context unavailable',
+        freshness: '2026-03-12T12:10:00Z',
+        data: {
+          status: 'degraded',
+          warnings: ['portfolio_context_unavailable'],
+          playbooks: [],
+          count: 0,
+          filters_applied: {
+            profile: 'rebalancing_optimizer_lite',
+          },
+          source: ['judge_strategy_playbook_route'],
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getStrategyPlaybooks({
+    limit: 1,
+    profile: 'rebalancing_optimizer_lite',
+    portfolio_id: 'portfolio-123',
+  });
+
+  assert.equal(payload.status, 'degraded');
+  assert.equal(payload.error, 'portfolio context unavailable');
+  assert.deepEqual(payload.warnings, ['portfolio_context_unavailable']);
+  assert.equal(payload.freshness, '2026-03-12T12:10:00Z');
+  assert.deepEqual(payload.data.playbooks, []);
+  assert.equal(payload.data.count, 0);
+  assert.equal(payload.data.filters_applied.profile, 'rebalancing_optimizer_lite');
+});
+
 test('getStatus falls back to /health when /status is unavailable', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {

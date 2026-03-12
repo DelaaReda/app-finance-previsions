@@ -2201,11 +2201,15 @@ async function getStrategyPlaybooks(params = {}) {
     });
     if (!response.ok) return null;
     const payload = await response.json();
+    const data = payload.data || payload;
     return {
       ok: payload.ok ?? true,
-      data: payload.data || payload,
+      status: payload.status || data.status || 'ok',
+      data,
       freshness: payload.freshness || payload.data?.generated_at || new Date().toISOString(),
-      source: payload.data?.source || payload.source || ['judge_strategy_playbooks']
+      source: data.source || payload.source || ['judge_strategy_playbooks'],
+      error: payload.error || data.error || null,
+      warnings: extractArray(data, ['warnings'], extractArray(payload, ['warnings']))
     };
   } catch (error) {
     console.warn('[API] Error fetching strategy playbooks:', error.message);

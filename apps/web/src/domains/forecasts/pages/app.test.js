@@ -3484,6 +3484,36 @@ test('renderRebalanceProposalCard keeps fallback turnover and risk deltas when o
   assert.equal(elements.rebalanceProposalSecondaryAction.textContent, 'Schedule');
 });
 
+test('renderRebalanceProposalCard keeps fallback copy for degraded empty rebalancing envelopes', async () => {
+  const { sandbox, elements } = loadRenderRebalanceProposalCard({
+    playbooksPayload: {
+      status: 'degraded',
+      error: 'portfolio context unavailable',
+      data: {
+        status: 'degraded',
+        warnings: ['portfolio_context_unavailable'],
+        playbooks: [],
+        count: 0,
+        filters_applied: {
+          profile: 'rebalancing_optimizer_lite',
+        },
+      },
+    },
+  });
+
+  await sandbox.renderRebalanceProposalCard();
+
+  assert.equal(elements.rebalanceProposalTitle.textContent, 'Rebalance NVDA Exposure');
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Turnover delta: 8%/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Risk delta: -2/);
+  assert.equal(
+    elements.rebalanceProposalSummary.textContent,
+    'NVDA is 33.00% of saved weights, above the 25.00% playbook concentration proxy.',
+  );
+  assert.equal(elements.rebalanceProposalBadge.textContent, 'Policy-aware fallback');
+  assert.equal(elements.rebalanceProposalPrimaryAction.textContent, 'See Plan');
+});
+
 test('sanitizeCopilotStart preserves starter tickers and normalizes brief open targets', () => {
   const sandbox = loadSanitizeCopilotStart();
 
