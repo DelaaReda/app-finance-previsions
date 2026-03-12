@@ -132,6 +132,10 @@ test('getStrategyPlaybooks forwards portfolio_id for rebalancing optimizer slice
                 ticker: 'IEF',
                 turnover: 10,
                 risk_delta: -2,
+                cost_awareness: {
+                  total_cost_bps: 6.9,
+                  net_expected_return_pct: 0.01731,
+                },
               },
             ],
           },
@@ -153,6 +157,7 @@ test('getStrategyPlaybooks forwards portfolio_id for rebalancing optimizer slice
   assert.equal(payload.data.playbooks[0].ticker, 'IEF');
   assert.equal(payload.data.playbooks[0].turnover, 10);
   assert.equal(payload.data.playbooks[0].risk_delta, -2);
+  assert.equal(payload.data.playbooks[0].cost_awareness.total_cost_bps, 6.9);
 });
 
 test('getStrategyPlaybooks preserves degraded empty-playbook contract metadata', async () => {

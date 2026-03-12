@@ -240,6 +240,24 @@ def _coerce_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+REBALANCE_DEFAULT_FEE_BPS = max(
+    0.0,
+    _coerce_float(os.getenv("JUDGE_REBALANCE_FEE_BPS"), 5.0),
+)
+REBALANCE_DEFAULT_SLIPPAGE_BPS = max(
+    0.0,
+    _coerce_float(os.getenv("JUDGE_REBALANCE_SLIPPAGE_BPS"), 10.0),
+)
+REBALANCE_SHORT_TERM_TAX_RATE = min(
+    1.0,
+    max(0.0, _coerce_float(os.getenv("JUDGE_REBALANCE_SHORT_TERM_TAX_RATE"), 0.30)),
+)
+REBALANCE_LONG_TERM_TAX_RATE = min(
+    1.0,
+    max(0.0, _coerce_float(os.getenv("JUDGE_REBALANCE_LONG_TERM_TAX_RATE"), 0.15)),
+)
+
+
 def _load_personal_policy() -> Dict[str, Any]:
     raw = load_json(JUDGE_POLICY_STORAGE_KEY)
     if not isinstance(raw, dict):
@@ -1240,6 +1258,47 @@ def _estimate_rebalance_risk_delta(
     return _risk_level_rank(proposed_risk_level) - _risk_level_rank(current_risk_level)
 
 
+def _estimate_rebalance_cost_awareness(
+    *,
+    turnover_pct: float,
+    expected_return_pct: float,
+    horizon: str,
+) -> Dict[str, Any]:
+    normalized_turnover_pct = max(0.0, _coerce_float(turnover_pct, 0.0))
+    normalized_expected_return_pct = _coerce_float(expected_return_pct, 0.0)
+    normalized_horizon = str(horizon or "").strip().lower()
+    tax_bucket = "short_term" if normalized_horizon in {"1d", "1w", "1m", "3m"} else "long_term"
+    tax_rate = (
+        REBALANCE_SHORT_TERM_TAX_RATE
+        if tax_bucket == "short_term"
+        else REBALANCE_LONG_TERM_TAX_RATE
+    )
+
+    turnover_ratio = normalized_turnover_pct / 100.0
+    trading_cost_pct = turnover_ratio * (
+        (REBALANCE_DEFAULT_FEE_BPS + REBALANCE_DEFAULT_SLIPPAGE_BPS) / 10_000.0
+    )
+    estimated_tax_drag_pct = max(0.0, turnover_ratio * normalized_expected_return_pct * tax_rate)
+    total_cost_pct = trading_cost_pct + estimated_tax_drag_pct
+    net_expected_return_pct = normalized_expected_return_pct - total_cost_pct
+
+    return {
+        "turnover_pct": round(normalized_turnover_pct, 2),
+        "gross_expected_return_pct": round(normalized_expected_return_pct, 6),
+        "net_expected_return_pct": round(net_expected_return_pct, 6),
+        "trading_cost_pct": round(trading_cost_pct, 6),
+        "estimated_tax_drag_pct": round(estimated_tax_drag_pct, 6),
+        "total_cost_pct": round(total_cost_pct, 6),
+        "fee_bps": round(REBALANCE_DEFAULT_FEE_BPS, 2),
+        "slippage_bps": round(REBALANCE_DEFAULT_SLIPPAGE_BPS, 2),
+        "tax_rate_assumption": round(tax_rate, 4),
+        "tax_bucket": tax_bucket,
+        "trading_cost_bps": round(trading_cost_pct * 10_000.0, 1),
+        "estimated_tax_drag_bps": round(estimated_tax_drag_pct * 10_000.0, 1),
+        "total_cost_bps": round(total_cost_pct * 10_000.0, 1),
+    }
+
+
 def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[str, Any]:
     """Project a Judge verdict into a minimal strategy playbook payload."""
     ticker = normalize_ticker(str(verdict.get("ticker") or "").strip()) or "UNKNOWN"
@@ -1273,6 +1332,7 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
 
     portfolio_context = _extract_saved_portfolio_context(verdict)
     portfolio_weights = _normalize_portfolio_weights(portfolio_context.get("weights"))
+    turnover = _estimate_rebalance_turnover(portfolio_weights)
     expected_return = _coerce_float(verdict.get("expected_return"), 0.0)
     confidence = _coerce_float(verdict.get("confidence"), 0.0)
     risk_level = str(verdict.get("risk_level") or "medium").strip().lower()
@@ -1342,10 +1402,15 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
         "confidence": round(confidence, 4),
         "expected_return": round(expected_return, 6),
         "risk_level": risk_level,
-        "turnover": _estimate_rebalance_turnover(portfolio_weights),
+        "turnover": turnover,
         "risk_delta": _estimate_rebalance_risk_delta(
             portfolio_context=portfolio_context,
             proposed_risk_level=risk_level,
+        ),
+        "cost_awareness": _estimate_rebalance_cost_awareness(
+            turnover_pct=turnover,
+            expected_return_pct=expected_return,
+            horizon=horizon,
         ),
         "summary": _coerce_text_list(summary)[:2],
         "recommended_actions": _coerce_text_list(verdict.get("actions") or []),

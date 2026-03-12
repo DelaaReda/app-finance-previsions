@@ -240,6 +240,12 @@ class TestBuildStrategyPlaybook:
 
         assert playbook["turnover"] == pytest.approx(10.0, abs=1e-3)
         assert playbook["risk_delta"] == -2
+        assert playbook["cost_awareness"]["fee_bps"] == pytest.approx(5.0, abs=1e-3)
+        assert playbook["cost_awareness"]["slippage_bps"] == pytest.approx(10.0, abs=1e-3)
+        assert playbook["cost_awareness"]["tax_bucket"] == "short_term"
+        assert playbook["cost_awareness"]["estimated_tax_drag_bps"] == pytest.approx(5.4, abs=1e-3)
+        assert playbook["cost_awareness"]["total_cost_bps"] == pytest.approx(6.9, abs=1e-3)
+        assert playbook["cost_awareness"]["net_expected_return_pct"] == pytest.approx(0.01731, abs=1e-5)
 
     def test_build_playbook_unknown_ticker_fallback(self):
         """Test fallback for missing ticker."""

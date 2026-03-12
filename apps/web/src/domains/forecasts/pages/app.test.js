@@ -3439,6 +3439,10 @@ test('renderRebalanceProposalCard upgrades the existing recommendation card from
             decision: 'hold',
             horizon: '1m',
             summary: ['Reduce drawdown concentration'],
+            cost_awareness: {
+              total_cost_bps: 6.9,
+              net_expected_return_pct: 0.01731,
+            },
           },
         ],
       },
@@ -3460,7 +3464,8 @@ test('renderRebalanceProposalCard upgrades the existing recommendation card from
   assert.equal(elements.rebalanceProposalTitle.textContent, 'Rebalance Toward IEF');
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Turnover delta: 10%/);
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Risk delta: -2/);
-  assert.equal(elements.rebalanceProposalSummary.textContent, 'Reduce drawdown concentration | HOLD | 1M');
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Cost drag: 6.9 bps/);
+  assert.equal(elements.rebalanceProposalSummary.textContent, 'Reduce drawdown concentration | HOLD | 1M | Net edge 1.7%');
   assert.equal(elements.rebalanceProposalBadge.textContent, '74% confidence');
   assert.equal(elements.rebalanceProposalBadge.className, 'conviction-badge status status--warning');
   assert.equal(elements.rebalanceProposalPrimaryAction.textContent, 'Open Plan');
@@ -3531,6 +3536,10 @@ test('renderRebalanceProposalCard keeps fallback copy for degraded non-empty reb
             decision: 'hold',
             horizon: '1m',
             summary: ['Reduce drawdown concentration'],
+            cost_awareness: {
+              total_cost_bps: 6.9,
+              net_expected_return_pct: 0.01731,
+            },
           },
         ],
       },

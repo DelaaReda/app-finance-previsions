@@ -142,4 +142,19 @@ def test_rebalancing_strategy_playbooks_surface_turnover_and_risk_delta(monkeypa
     assert payload["data"]["count"] == 1
     assert payload["data"]["playbooks"][0]["turnover"] == 10.0
     assert payload["data"]["playbooks"][0]["risk_delta"] == -2
+    assert payload["data"]["playbooks"][0]["cost_awareness"] == {
+        "turnover_pct": 10.0,
+        "gross_expected_return_pct": 0.018,
+        "net_expected_return_pct": 0.01731,
+        "trading_cost_pct": 0.00015,
+        "estimated_tax_drag_pct": 0.00054,
+        "total_cost_pct": 0.00069,
+        "fee_bps": 5.0,
+        "slippage_bps": 10.0,
+        "tax_rate_assumption": 0.3,
+        "tax_bucket": "short_term",
+        "trading_cost_bps": 1.5,
+        "estimated_tax_drag_bps": 5.4,
+        "total_cost_bps": 6.9,
+    }
     assert payload["data"]["playbooks"][0]["profile"] == "rebalancing_optimizer_lite"

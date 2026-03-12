@@ -3218,6 +3218,10 @@ async function renderRebalanceProposalCard() {
     const normalized = Math.max(0, Math.round(toFiniteNumber(value, 0) * 10) / 10);
     return `${Number.isInteger(normalized) ? normalized.toFixed(0) : normalized.toFixed(1)}%`;
   };
+  const formatBpsValue = (value) => {
+    const normalized = Math.max(0, Math.round(toFiniteNumber(value, 0) * 10) / 10);
+    return `${Number.isInteger(normalized) ? normalized.toFixed(0) : normalized.toFixed(1)} bps`;
+  };
   const firstNonEmptyText = (items) => toArray(items, [])
     .map((item) => toString(item, '').trim())
     .find(Boolean) || '';
@@ -3230,9 +3234,15 @@ async function renderRebalanceProposalCard() {
       title.textContent = model.title || 'Rebalance Portfolio';
     }
     if (metrics) {
+      const metricParts = [
+        `<span>Turnover delta: ${formatPercentValue(model.turnover)}</span>`,
+        `<span>Risk delta: ${formatSignedValue(model.riskDelta)}</span>`,
+      ];
+      if (model.costLabel) {
+        metricParts.push(`<span>${model.costLabel}</span>`);
+      }
       metrics.innerHTML = `
-        <span>Turnover delta: ${formatPercentValue(model.turnover)}</span>
-        <span>Risk delta: ${formatSignedValue(model.riskDelta)}</span>
+        ${metricParts.join('')}
       `;
     }
     if (summary) {
@@ -3322,12 +3332,21 @@ async function renderRebalanceProposalCard() {
       || firstNonEmptyText(playbook.reasons)
       || fallbackModel.summary;
     const summarySuffix = [decision, horizon].filter(Boolean).join(' | ');
+    const costAwareness = isObject(playbook.cost_awareness) ? playbook.cost_awareness : {};
+    const totalCostBps = Math.max(0, toFiniteNumber(costAwareness.total_cost_bps, 0));
+    const netExpectedReturnPct = toFiniteNumber(costAwareness.net_expected_return_pct, NaN);
+    const costLabel = totalCostBps > 0 ? `Cost drag: ${formatBpsValue(totalCostBps)}` : '';
+    const netEdgeLabel = Number.isFinite(netExpectedReturnPct)
+      ? `Net edge ${formatPercentValue(Math.max(0, netExpectedReturnPct * 100))}`
+      : '';
+    const costSummary = [summarySuffix, netEdgeLabel].filter(Boolean).join(' | ');
 
     applyProposalModel({
       title: ticker && ticker !== 'UNKNOWN' ? `Rebalance Toward ${ticker}` : fallbackModel.title,
       turnover: toFiniteNumber(playbook.turnover, fallbackModel.turnover),
       riskDelta: toFiniteNumber(playbook.risk_delta ?? playbook.riskDelta, fallbackModel.riskDelta),
-      summary: summarySuffix ? `${liveSummary} | ${summarySuffix}` : liveSummary,
+      summary: costSummary ? `${liveSummary} | ${costSummary}` : liveSummary,
+      costLabel,
       badgeText: confidencePct > 0 ? `${confidencePct}% confidence` : 'Policy-aware',
       badgeClass: confidencePct >= 75 ? 'status--success' : confidencePct >= 55 ? 'status--warning' : 'status--info',
       primaryLabel: 'Open Plan',
