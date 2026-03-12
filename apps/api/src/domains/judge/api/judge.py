@@ -3673,6 +3673,59 @@ async def get_judge_verdicts(
 
 
 @router.get(
+    "/rebalancing-optimizer-lite",
+    response_model=JudgeResponse if JudgeResponse is not None else None,
+    response_model_exclude_none=True,
+)
+async def get_rebalancing_optimizer_lite_verdicts(
+    limit: int = Query(20, ge=1, le=100, description="Limite de résultats (1-100)"),
+    min_confidence: float = Query(
+        0.3, ge=0.0, le=1.0, description="Confiance minimum pour inclusion (0.0-1.0)"
+    ),
+    ticker: Optional[List[str]] = Query(
+        None, description="Filtre par ticker (plusieurs autorisés)"
+    ),
+    portfolio_id: Optional[str] = Query(
+        None,
+        description="Portfolio sauvegarde utilise pour injecter le contexte de rebalancing.",
+    ),
+    sort_by: JudgeSortBy = Query(
+        "confidence",
+        description="Tri par: confidence, expected_return, score, risk_level, timestamp",
+    ),
+    sort_order: JudgeSortOrder = Query("desc", description="Ordre de tri: asc, desc"),
+    debug: bool = Query(
+        False, description="Active les traces et le payload LLM dans la réponse"
+    ),
+    debug_full: bool = Query(
+        False,
+        description="Inclut le payload debug complet (reserve admin; necessite JUDGE_ALLOW_DEBUG_FULL=1).",
+    ),
+    x_debug_token: Optional[str] = Header(
+        default=None,
+        alias="X-Debug-Token",
+        description="Token admin requis pour debug_full si JUDGE_DEBUG_ADMIN_TOKEN est configure.",
+    ),
+):
+    """Preset Judge route for lightweight portfolio rebalancing guidance."""
+    from services.judge_endpoint_service import get_judge_verdicts_payload
+
+    return await get_judge_verdicts_payload(
+        limit=limit,
+        min_confidence=min_confidence,
+        ticker=ticker,
+        portfolio_id=portfolio_id,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        profile="rebalancing_optimizer_lite",
+        debug=debug,
+        debug_full=debug_full,
+        x_debug_token=x_debug_token,
+        compute_verdicts_fn=_legacy_get_judge_verdicts,
+    )
+
+
+@router.get(
     "/strategy-playbooks",
 )
 async def get_judge_strategy_playbooks(
