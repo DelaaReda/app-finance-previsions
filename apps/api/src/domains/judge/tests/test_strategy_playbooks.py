@@ -42,6 +42,8 @@ class TestBuildStrategyPlaybook:
         assert playbook["confidence"] == 0.75
         assert playbook["expected_return"] == 0.05
         assert playbook["risk_level"] == "medium"
+        assert playbook["turnover"] == 0.0
+        assert playbook["risk_delta"] == 0
         assert "Strong momentum" in playbook["reasons"]
         assert "Buy calls" in playbook["recommended_actions"]
         assert "playbook_id" in playbook
@@ -214,6 +216,30 @@ class TestBuildStrategyPlaybook:
         assert playbook["forecast_fusion"]["blended_score"] == pytest.approx(0.78, abs=1e-3)
         assert playbook["forecast_fusion"]["dominant_layer"] == "forecast_confidence"
         assert playbook["forecast_fusion"]["attribution"]["market_regime"] == "BULL_MARKET"
+
+    def test_build_playbook_projects_rebalancing_metrics_from_saved_portfolio_context(self):
+        """Rebalancing playbooks should expose turnover and risk delta from portfolio context."""
+        verdict = {
+            "ticker": "IEF",
+            "horizon": "1m",
+            "confidence": 0.74,
+            "expected_return": 0.018,
+            "risk_level": "low",
+            "go_no_go": {"decision": "hold", "reasons": ["Reduce drawdown concentration"]},
+            "debug_payload": {
+                "features": {
+                    "portfolio_context": {
+                        "risk_level": "high",
+                        "weights": {"SPY": 0.60, "IEF": 0.40},
+                    }
+                }
+            },
+        }
+
+        playbook = _build_strategy_playbook(verdict, profile="rebalancing_optimizer_lite")
+
+        assert playbook["turnover"] == pytest.approx(10.0, abs=1e-3)
+        assert playbook["risk_delta"] == -2
 
     def test_build_playbook_unknown_ticker_fallback(self):
         """Test fallback for missing ticker."""

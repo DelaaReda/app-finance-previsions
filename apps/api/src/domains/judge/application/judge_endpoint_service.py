@@ -1149,6 +1149,97 @@ def _build_geopolitical_graph_payload(*, region: Optional[str], limit: int) -> D
     }
 
 
+def _extract_saved_portfolio_context(verdict: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(verdict, dict):
+        return {}
+
+    direct_context = verdict.get("portfolio_context")
+    if isinstance(direct_context, dict):
+        return direct_context
+
+    meta = verdict.get("meta") if isinstance(verdict.get("meta"), dict) else {}
+    if isinstance(meta.get("portfolio_context"), dict):
+        return meta.get("portfolio_context") or {}
+
+    debug_payload = (
+        verdict.get("debug_payload")
+        if isinstance(verdict.get("debug_payload"), dict)
+        else {}
+    )
+    features = (
+        debug_payload.get("features")
+        if isinstance(debug_payload.get("features"), dict)
+        else {}
+    )
+    if isinstance(features.get("portfolio_context"), dict):
+        return features.get("portfolio_context") or {}
+
+    debug_meta = (
+        debug_payload.get("meta")
+        if isinstance(debug_payload.get("meta"), dict)
+        else {}
+    )
+    if isinstance(debug_meta.get("portfolio_context"), dict):
+        return debug_meta.get("portfolio_context") or {}
+
+    return {}
+
+
+def _normalize_portfolio_weights(raw_weights: Any) -> Dict[str, float]:
+    if not isinstance(raw_weights, dict):
+        return {}
+
+    normalized: Dict[str, float] = {}
+    numeric_values: List[float] = []
+    for raw_symbol, raw_weight in raw_weights.items():
+        symbol = normalize_ticker(raw_symbol or "")
+        if not symbol:
+            continue
+        try:
+            weight = float(raw_weight)
+        except Exception:
+            continue
+        if weight < 0:
+            continue
+        normalized[symbol] = weight
+        numeric_values.append(weight)
+
+    if not normalized:
+        return {}
+
+    scale = 100.0 if sum(numeric_values) <= 1.5 else 1.0
+    return {
+        symbol: round(weight * scale, 2)
+        for symbol, weight in normalized.items()
+    }
+
+
+def _estimate_rebalance_turnover(weights: Dict[str, float]) -> float:
+    if len(weights) < 2:
+        return 0.0
+    total_weight = sum(
+        weight
+        for weight in weights.values()
+        if isinstance(weight, (int, float))
+    )
+    if total_weight <= 0:
+        return 0.0
+    target_weight = total_weight / len(weights)
+    turnover = sum(abs(float(weight) - target_weight) for weight in weights.values()) / 2.0
+    return round(turnover, 2)
+
+
+def _estimate_rebalance_risk_delta(
+    *,
+    portfolio_context: Dict[str, Any],
+    proposed_risk_level: str,
+) -> int:
+    current_risk_level = str(portfolio_context.get("risk_level") or "").strip().lower()
+    if current_risk_level not in {"low", "medium", "high", "critical"}:
+        return 0
+    return _risk_level_rank(proposed_risk_level) - _risk_level_rank(current_risk_level)
+
+
 def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[str, Any]:
     """Project a Judge verdict into a minimal strategy playbook payload."""
     ticker = normalize_ticker(str(verdict.get("ticker") or "").strip()) or "UNKNOWN"
@@ -1180,6 +1271,8 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
     if not isinstance(summary, list):
         summary = []
 
+    portfolio_context = _extract_saved_portfolio_context(verdict)
+    portfolio_weights = _normalize_portfolio_weights(portfolio_context.get("weights"))
     expected_return = _coerce_float(verdict.get("expected_return"), 0.0)
     confidence = _coerce_float(verdict.get("confidence"), 0.0)
     risk_level = str(verdict.get("risk_level") or "medium").strip().lower()
@@ -1249,6 +1342,11 @@ def _build_strategy_playbook(verdict: Dict[str, Any], *, profile: str) -> Dict[s
         "confidence": round(confidence, 4),
         "expected_return": round(expected_return, 6),
         "risk_level": risk_level,
+        "turnover": _estimate_rebalance_turnover(portfolio_weights),
+        "risk_delta": _estimate_rebalance_risk_delta(
+            portfolio_context=portfolio_context,
+            proposed_risk_level=risk_level,
+        ),
         "summary": _coerce_text_list(summary)[:2],
         "recommended_actions": _coerce_text_list(verdict.get("actions") or []),
         "data_needed": _coerce_text_list(verdict.get("data_needed") or []),
