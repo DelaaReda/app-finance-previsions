@@ -89,13 +89,15 @@ class PlannerSubagentManagerTests(unittest.TestCase):
 
     def test_prompt_mentions_native_codex_multi_agent_helpers(self) -> None:
         prompt = _build_prompt("admin", "BATCH-61-ADMIN-01", "runtime", "Validate runtime truth.")
-        self.assertIn("planner-owned capability dispatch only", prompt)
+        self.assertIn("CODEX_NATIVE_ORCHESTRATION", prompt)
+        self.assertIn("Use native Codex multi-agent helpers when delegation is warranted", prompt)
         self.assertIn("`explorer` is exception-only", prompt)
-        self.assertIn("`monitor`", prompt)
+        self.assertIn("monitor agent", prompt)
+        self.assertNotIn("planner-owned capability dispatch only", prompt)
 
-    def test_config_defaults_to_worker_first_runtime_policy(self) -> None:
+    def test_config_defaults_to_native_codex_runtime_policy(self) -> None:
         self.assertFalse(self.config.allow_runtime_explorer)
-        self.assertEqual(self.config.default_helper_mode, "worker_first")
+        self.assertEqual(self.config.default_helper_mode, "native_codex")
 
     def test_admin_runtime_uses_full_backend_sandbox(self) -> None:
         result = plan_subagent(self.config, "planner", "admin", "BATCH-61-ADMIN-01", "runtime")
@@ -178,6 +180,97 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         snapshot = status_snapshot(self.config, "planner")
         self.assertEqual(snapshot["active_count"], 0)
         self.assertTrue(any(item["subagent_id"] == subagent_id for item in snapshot["recent"]))
+
+    def test_collect_recovers_result_when_registry_row_is_missing(self) -> None:
+        self.config.results_dir.mkdir(parents=True, exist_ok=True)
+        (self.config.results_dir / "planner_dev_recovered.result.json").write_text(
+            json.dumps(
+                {
+                    "subagent_id": "planner_dev_recovered",
+                    "target_role": "dev",
+                    "owner_task_id": "BATCH-61-DEV-77",
+                    "parent_role": "planner",
+                    "task_kind": "delivery",
+                    "status": "completed",
+                    "summary": "Recovered dev result",
+                    "root_cause": "context drift",
+                    "fix_applied": "connector normalized",
+                    "artifact": "mock://artifact",
+                    "verify": "before=a; after=b; test=c",
+                    "files_touched": "app.js",
+                    "tests_run": "SKIP(no_tests)",
+                    "commit_sha": "abc123",
+                    "architecture_check": "pass",
+                    "vision_alignment": "pass",
+                    "recommended_next": "none",
+                    "blocking_issue": "none",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        rc_collect, collected = collect_subagent(self.config, "planner", "", "BATCH-61-DEV-77", mark_merged=True)
+        self.assertEqual(rc_collect, 0)
+        self.assertTrue(collected["ok"])
+        self.assertEqual(collected["subagent_id"], "planner_dev_recovered")
+
+        snapshot = status_snapshot(self.config, "planner")
+        recent = next(item for item in snapshot["recent"] if item["subagent_id"] == "planner_dev_recovered")
+        self.assertEqual(recent["status"], "merged")
+
+    def test_collect_keeps_active_subagent_running_when_result_payload_missing(self) -> None:
+        record = PlannerSubagentRecord(
+            subagent_id="planner_dev_pending",
+            target_role="dev",
+            owner_task_id="BATCH-61-DEV-88",
+            parent_role="planner",
+            task_kind="delivery",
+            status="running",
+            created_at="2099-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="codex_exec",
+            last_update_at="2099-03-06T12:05:00Z",
+        )
+        _save_registry(self.config.registry_path, [record])
+        self.config.results_dir.mkdir(parents=True, exist_ok=True)
+
+        rc_collect, collected = collect_subagent(self.config, "planner", "planner_dev_pending", "", mark_merged=True)
+        self.assertNotEqual(rc_collect, 0)
+        self.assertFalse(collected["ok"])
+        self.assertEqual(collected["status"], "running")
+        self.assertIn("subagent_result_pending:missing_result_payload", str(collected.get("blocking_issue", "")))
+
+        snapshot = status_snapshot(self.config, "planner")
+        active = next(item for item in snapshot["active"] if item["subagent_id"] == "planner_dev_pending")
+        self.assertEqual(active["status"], "running")
+
+    def test_status_snapshot_marks_qwen_backend_as_degraded(self) -> None:
+        record = PlannerSubagentRecord(
+            subagent_id="planner_dev_qwen",
+            target_role="dev",
+            owner_task_id="BATCH-61-DEV-09",
+            parent_role="planner",
+            task_kind="delivery",
+            status="running",
+            created_at="2099-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="qwen",
+            last_update_at="2099-03-06T12:05:00Z",
+            metadata={
+                "purpose": "delivery",
+                "role": "dev",
+                "last_meaningful_delta": "degraded_backend:qwen_fallback",
+                "stalled": False,
+            },
+        )
+        _save_registry(self.config.registry_path, [record])
+        snapshot = status_snapshot(self.config, "planner")
+        self.assertTrue(snapshot["degraded_backend"])
+        self.assertEqual(snapshot["planner_state"], "degraded_backend")
+        self.assertEqual(snapshot["latest_backend"], "qwen")
+        self.assertEqual(snapshot["latest_last_meaningful_delta"], "degraded_backend:qwen_fallback")
 
     def test_save_registry_does_not_regress_merged_to_running(self) -> None:
         merged = PlannerSubagentRecord(
@@ -331,6 +424,10 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         cleaned = cleanup_subagents(self.config)
         self.assertTrue(cleaned["ok"])
         self.assertIn("planner_dev_stale", cleaned["removed"])
+        snapshot = status_snapshot(self.config, "planner")
+        recent = next(item for item in snapshot["recent"] if item["subagent_id"] == "planner_dev_stale")
+        self.assertEqual(recent["status"], "failed")
+        self.assertIn("stale_active_no_result", recent["blocking_issue"])
 
     def test_cleanup_removes_missing_openclaw_agent_immediately(self) -> None:
         record = PlannerSubagentRecord(
@@ -351,6 +448,10 @@ class PlannerSubagentManagerTests(unittest.TestCase):
             cleaned = cleanup_subagents(self.config)
         self.assertTrue(cleaned["ok"])
         self.assertIn("planner_dev_missing", cleaned["removed"])
+        snapshot = status_snapshot(self.config, "planner")
+        recent = next(item for item in snapshot["recent"] if item["subagent_id"] == "planner_dev_missing")
+        self.assertEqual(recent["status"], "failed")
+        self.assertEqual(recent["blocking_issue"], "openclaw_agent_missing")
 
     def test_plan_refuses_openclaw_backend_when_binary_missing(self) -> None:
         with patch.object(MODULE, "_openclaw_available", return_value=False):
@@ -596,7 +697,63 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["backend"], "qwen")
         self.assertEqual(payload["backend_ref"], "qwen:planner_dev_qwen")
+        self.assertEqual(payload["backend_route_reason"], "qwen_fallback")
         self.assertEqual(payload["model"], "qwen")
+
+    def test_run_codex_exec_rate_limit_falls_back_to_secondary_codex_before_qwen(self) -> None:
+        call_count = {"value": 0}
+
+        def _fake_run(cmd, **kwargs):
+            call_count["value"] += 1
+            out_path = Path(cmd[cmd.index("-o") + 1])
+            if call_count["value"] == 1:
+                out_path.write_text("", encoding="utf-8")
+                return type(
+                    "CompletedProcess",
+                    (),
+                    {"returncode": 1, "stdout": "", "stderr": "You've hit your usage limit for GPT-5.3-Codex-Spark. Switch to another model now."},
+                )()
+            out_path.write_text(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "summary": "secondary codex ok",
+                        "artifact": "artifact.txt",
+                        "verify": "proof=secondary",
+                        "files_touched": "src/app.py",
+                        "tests_run": "pytest -q",
+                        "commit_sha": "abc1234",
+                        "architecture_check": "layer=api",
+                        "vision_alignment": "batch=BATCH-61",
+                        "recommended_next": "planner_merge",
+                        "blocking_issue": "none",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return type("CompletedProcess", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        with (
+            patch.object(MODULE, "_openclaw_agent_ids", return_value=set()),
+            patch.object(MODULE.subprocess, "run", side_effect=_fake_run),
+        ):
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="dev",
+                owner_task_id="BATCH-61-DEV-07B",
+                task_kind="delivery",
+                message="Rate limit fallback path",
+                ttl_min=15,
+                backend="codex_exec",
+                timeout_seconds=30,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["backend"], "codex_exec")
+        self.assertEqual(payload["backend_route_reason"], "secondary_codex_fallback")
+        self.assertEqual(payload["model"], "gpt-5.4")
 
     def test_run_openclaw_rate_limit_falls_back_to_qwen(self) -> None:
         with (
@@ -633,7 +790,59 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["backend"], "qwen")
         self.assertEqual(payload["backend_ref"], "qwen:planner_dev_openclaw")
+        self.assertEqual(payload["backend_route_reason"], "qwen_fallback")
         self.assertEqual(payload["model"], "qwen")
+
+    def test_run_openclaw_cached_codex_rate_limit_uses_secondary_codex_before_qwen(self) -> None:
+        def _fake_run(cmd, **kwargs):
+            out_path = Path(cmd[cmd.index("-o") + 1])
+            out_path.write_text(
+                json.dumps(
+                    {
+                        "status": "completed",
+                        "summary": "secondary codex rescued openclaw cache path",
+                        "artifact": "artifact.txt",
+                        "verify": "proof=secondary-openclaw-cache",
+                        "files_touched": "platform/automation/planner_subagent_manager.py",
+                        "tests_run": "python3 -m unittest platform.automation.tests.test_planner_subagent_manager",
+                        "commit_sha": "abc1234",
+                        "architecture_check": "layer=platform",
+                        "vision_alignment": "batch=BATCH-61",
+                        "recommended_next": "planner_merge",
+                        "blocking_issue": "none",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return type("CompletedProcess", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        with (
+            patch.object(MODULE, "_openclaw_available", return_value=True),
+            patch.object(MODULE, "_active_rate_limit_reason", side_effect=lambda prefixes: "codex_cache_active" if prefixes == ("codex", "global") else ""),
+            patch.object(MODULE, "_secondary_codex_fallback", return_value=("gpt-5.4", "high")),
+            patch.object(MODULE, "_ensure_openclaw_agent") as ensure_mock,
+            patch.object(MODULE, "_run_qwen_subagent") as qwen_mock,
+            patch.object(MODULE.subprocess, "run", side_effect=_fake_run),
+        ):
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="dev",
+                owner_task_id="BATCH-61-DEV-08B",
+                task_kind="delivery",
+                message="OpenClaw cached codex rate limit fallback path",
+                ttl_min=15,
+                backend="openclaw",
+                timeout_seconds=120,
+            )
+
+        self.assertEqual(rc, 0)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["backend"], "codex_exec")
+        self.assertEqual(payload["backend_route_reason"], "secondary_codex_fallback")
+        self.assertEqual(payload["model"], "gpt-5.4")
+        ensure_mock.assert_not_called()
+        qwen_mock.assert_not_called()
 
     def test_qwen_fallback_ignores_interactive_oauth_prompt(self) -> None:
         with (

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 import yaml
 
-from orchestrator_paths import resolve_orchestrator_write_path, runtime_state_root
+from orchestrator_paths import canonical_docs_root, resolve_orchestrator_write_path, runtime_state_root
 from worker_manager import _ensure_agent as _ensure_openclaw_agent
 from worker_manager import _openclaw_env
 from worker_manager import shutil_which
@@ -25,6 +25,16 @@ ACTIVE_STATUSES = {"spawned", "running"}
 FINISHED_STATUSES = {"completed", "failed", "merged"}
 SUCCESS_RESULT_STATUSES = {"completed", "done", "pass", "ok", "success", "merged"}
 SUCCESS_OUTPUT_STATUSES = {"completed", "done", "pass", "ok", "success"}
+BLOCKED_RESULT_STATUSES = {"blocked"}
+RETRYABLE_BACKEND_FAILURE_MARKERS = {
+    "invalid_subagent_result:start_banner_only",
+    "invalid_subagent_result:structured_output_missing",
+    "invalid_subagent_result:output_schema_missing",
+}
+RETRYABLE_BACKEND_FAILURE_COOLDOWN_SECONDS = max(
+    60,
+    int(os.environ.get("FC_PLANNER_RETRYABLE_FAILURE_COOLDOWN_SECONDS", "300") or "300"),
+)
 ALLOWED_PARENT_ROLES = {"planner"}
 DEFAULT_MANAGED_ROLES = ("dev", "admin", "scrum_master")
 CODEX_STARTUP_NOISE_MARKERS = (
@@ -45,6 +55,7 @@ CODEX_STARTUP_NOISE_MARKERS = (
     "reconnecting...",
 )
 RATE_LIMIT_MARKERS = (
+    "you've hit your usage limit for gpt-5.3-codex-spark",
     "api-rate-limit-reached",
     "api rate limit reached",
     "insufficient_quota",
@@ -69,10 +80,12 @@ QWEN_AUTH_MARKERS = (
     "no auth type is selected",
     "please configure an auth type",
 )
+SECONDARY_CODEX_DEFAULT_MODEL = "gpt-5.4"
+SECONDARY_CODEX_DEFAULT_THINKING = "low"
 ROLE_MODELS = {
-    "dev": ("codex-full/gpt-5.3-codex-spark", "medium", "danger-full-access"),
-    "admin": ("codex-full/gpt-5.3-codex-spark", "medium", "danger-full-access"),
-    "scrum_master": ("gpt-5.3-codex-spark", "low", "read-only"),
+    "dev": ("codex-full/gpt-5.4", "medium", "danger-full-access"),
+    "admin": ("codex-full/gpt-5.4", "medium", "danger-full-access"),
+    "scrum_master": ("codex-full/gpt-5.4", "medium", "danger-full-access"),
 }
 ROLE_TASK_KINDS = {
     "dev": {"delivery", "implementation", "verification", "targeted_fix"},
@@ -92,6 +105,17 @@ STATUS_RANK = {
     "merged": 4,
 }
 EMPTY_FIELD_TOKENS = {"", "none", "n/a", "na", "null", "unknown"}
+NON_MEANINGFUL_DELTA_TOKENS = {
+    "",
+    "none",
+    "null",
+    "unknown",
+    "no_delta",
+    "heartbeat",
+    "heartbeat_only",
+    "monitor_updates",
+    "noop",
+}
 RESULT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
@@ -191,11 +215,74 @@ def _value_present(value: Any) -> bool:
     return bool(token and token not in {"none", "n/a", "na", "null", "unknown"})
 
 
+def _meaningful_issue(value: Any) -> str:
+    token = " ".join(str(value or "").strip().split())
+    if not token:
+        return ""
+    if token.lower() in EMPTY_FIELD_TOKENS:
+        return ""
+    return token
+
+
 def _looks_like_startup_noise(text: Any) -> bool:
     token = " ".join(str(text or "").strip().lower().split())
     if not token:
         return True
     return any(marker in token for marker in CODEX_STARTUP_NOISE_MARKERS)
+
+
+def _normalized_retryable_backend_issue(text: Any) -> str:
+    token = " ".join(str(text or "").strip().split())
+    if not token:
+        return "invalid_subagent_result:structured_output_missing"
+    if _looks_like_startup_noise(token):
+        return "invalid_subagent_result:start_banner_only"
+    return "invalid_subagent_result:structured_output_missing"
+
+
+def _apply_model_family(current_model: Any, replacement_model: Any) -> str:
+    current = str(current_model or "").strip()
+    replacement = str(replacement_model or "").strip()
+    if not replacement:
+        return ""
+    if "/" in current and "/" not in replacement:
+        prefix = current.split("/", 1)[0].strip()
+        if prefix:
+            return f"{prefix}/{replacement}"
+    return replacement
+
+
+def _secondary_codex_fallback(target_role: str, current_model: Any, current_thinking: Any) -> tuple[str, str]:
+    role = canonical_role(target_role)
+    if role == "planner":
+        return "", ""
+    enabled = str(
+        os.environ.get("FC_PLANNER_SECONDARY_CODEX_FALLBACK")
+        or os.environ.get("TMUX_ROLE_SECONDARY_CODEX_FALLBACK")
+        or "1"
+    ).strip().lower()
+    if enabled in {"0", "false", "no", "off", ""}:
+        return "", ""
+    role_token = role.upper().replace("-", "_")
+    model = str(
+        os.environ.get(f"LM_ROLE_{role_token}_FALLBACK_MODEL")
+        or os.environ.get("LM_USED_SECONDARY_FALLBACK_MODEL")
+        or os.environ.get("LM_FALLBACK_SECONDARY_MODEL")
+        or os.environ.get("LM_TIER_BUILD_SECONDARY_MODEL")
+        or SECONDARY_CODEX_DEFAULT_MODEL
+    ).strip()
+    effective_model = _apply_model_family(current_model, model)
+    current_model_token = str(current_model or "").strip()
+    if not effective_model or effective_model == current_model_token:
+        return "", ""
+    thinking = str(
+        os.environ.get(f"LM_ROLE_{role_token}_FALLBACK_THINKING")
+        or os.environ.get("LM_USED_SECONDARY_FALLBACK_THINKING")
+        or os.environ.get("LM_FALLBACK_SECONDARY_THINKING")
+        or os.environ.get("LM_TIER_BUILD_SECONDARY_THINKING")
+        or SECONDARY_CODEX_DEFAULT_THINKING
+    ).strip()
+    return effective_model, thinking or SECONDARY_CODEX_DEFAULT_THINKING
 
 
 def _semantic_result_gate(payload: dict[str, Any]) -> tuple[bool, str]:
@@ -236,6 +323,12 @@ def _subprocess_timeout_value(timeout_seconds: int) -> int | None:
 def _looks_like_rate_limited(text: str) -> bool:
     lowered = str(text or "").lower()
     return any(marker in lowered for marker in RATE_LIMIT_MARKERS)
+
+
+INVALID_RESULT_PREFIX = "invalid_subagent_result:"
+INVALID_RESULT_THRESHOLD = max(1, int(os.environ.get("FC_PLANNER_INVALID_RESULT_THRESHOLD", "3") or 3))
+INVALID_RESULT_WINDOW_SECONDS = max(60, int(os.environ.get("FC_PLANNER_INVALID_RESULT_WINDOW_SECONDS", str(15 * 60)) or (15 * 60)))
+INVALID_RESULT_COOLDOWN_SECONDS = max(60, int(os.environ.get("FC_PLANNER_INVALID_RESULT_COOLDOWN_SECONDS", str(30 * 60)) or (30 * 60)))
 
 
 def _looks_like_qwen_auth_prompt(text: str) -> bool:
@@ -289,6 +382,156 @@ def _active_rate_limit_reason(prefixes: tuple[str, ...]) -> str:
                 if reason and reason not in reasons:
                     reasons.append(reason)
     return " | ".join(reasons[:3])
+
+
+def _invalid_result_route_path(config: PlannerSubagentConfig) -> Path:
+    state_root = _canonical_runtime_root(config.root)
+    state_root.mkdir(parents=True, exist_ok=True)
+    return state_root / "planner-invalid-result-routes.json"
+
+
+def _parse_iso_dt(value: Any) -> datetime | None:
+    token = str(value or "").strip()
+    if not token:
+        return None
+    try:
+        return datetime.fromisoformat(token.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _load_invalid_result_routes(path: Path) -> dict[str, Any]:
+    payload = _read_structured(path, {"version": 1, "routes": {}})
+    if not isinstance(payload, dict):
+        payload = {"version": 1, "routes": {}}
+    if not isinstance(payload.get("routes", {}), dict):
+        payload["routes"] = {}
+    return payload
+
+
+def _save_invalid_result_routes(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+
+
+def _invalid_result_route_key(owner_task_id: str, target_role: str) -> str:
+    return f"{canonical_role(target_role)}::{str(owner_task_id or '').strip()}"
+
+
+def _is_invalid_result_reason(value: Any) -> bool:
+    return str(value or "").strip().lower().startswith(INVALID_RESULT_PREFIX)
+
+
+def _active_invalid_result_routes(config: PlannerSubagentConfig) -> list[dict[str, Any]]:
+    path = _invalid_result_route_path(config)
+    payload = _load_invalid_result_routes(path)
+    routes = payload.get("routes", {})
+    now = _now()
+    active: list[dict[str, Any]] = []
+    dirty = False
+    for key, entry in list(routes.items()):
+        if not isinstance(entry, dict):
+            routes.pop(key, None)
+            dirty = True
+            continue
+        cooldown_until = _parse_iso_dt(entry.get("cooldown_until"))
+        if cooldown_until is None or cooldown_until <= now:
+            routes.pop(key, None)
+            dirty = True
+            continue
+        current = dict(entry)
+        current["key"] = key
+        active.append(current)
+    if dirty:
+        _save_invalid_result_routes(path, payload)
+    active.sort(key=lambda item: str(item.get("updated_at", "")), reverse=True)
+    return active
+
+
+def _recent_invalid_result_records(
+    records: list["PlannerSubagentRecord"],
+    owner_task_id: str,
+    target_role: str,
+) -> list["PlannerSubagentRecord"]:
+    cutoff = _now() - timedelta(seconds=INVALID_RESULT_WINDOW_SECONDS)
+    matches: list[PlannerSubagentRecord] = []
+    role_token = canonical_role(target_role)
+    task_token = str(owner_task_id or "").strip()
+    for record in records:
+        if str(record.owner_task_id or "").strip() != task_token:
+            continue
+        if canonical_role(record.target_role) != role_token:
+            continue
+        if not _is_invalid_result_reason(record.blocking_issue):
+            continue
+        stamp = _parse_iso_dt(record.last_update_at) or _parse_iso_dt(record.created_at)
+        if stamp is None or stamp < cutoff:
+            continue
+        matches.append(record)
+    matches.sort(key=_record_sort_stamp, reverse=True)
+    return matches
+
+
+def _current_invalid_result_route(
+    config: PlannerSubagentConfig,
+    records: list["PlannerSubagentRecord"],
+    owner_task_id: str,
+    target_role: str,
+    current_failure_reason: str = "",
+) -> dict[str, Any]:
+    task_token = str(owner_task_id or "").strip()
+    role_token = canonical_role(target_role)
+    if not task_token or not role_token:
+        return {}
+    path = _invalid_result_route_path(config)
+    payload = _load_invalid_result_routes(path)
+    routes = payload.get("routes", {})
+    now = _now()
+    key = _invalid_result_route_key(task_token, role_token)
+    existing = routes.get(key, {})
+    if isinstance(existing, dict):
+        cooldown_until = _parse_iso_dt(existing.get("cooldown_until"))
+        if cooldown_until is not None and cooldown_until > now:
+            active = dict(existing)
+            active["key"] = key
+            return active
+    if key in routes:
+        routes.pop(key, None)
+        _save_invalid_result_routes(path, payload)
+    recent = _recent_invalid_result_records(records, task_token, role_token)
+    recent_count = len(recent) + (1 if _is_invalid_result_reason(current_failure_reason) else 0)
+    if recent_count < INVALID_RESULT_THRESHOLD:
+        return {}
+    latest_reason = str(current_failure_reason or (recent[0].blocking_issue if recent else INVALID_RESULT_PREFIX + "threshold")).strip()
+    entry = {
+        "owner_task_id": task_token,
+        "target_role": role_token,
+        "route_reason": "invalid_result_burst",
+        "backend": "qwen",
+        "failure_count": recent_count,
+        "last_reason": latest_reason,
+        "updated_at": _iso(now),
+        "cooldown_until": _iso(now + timedelta(seconds=INVALID_RESULT_COOLDOWN_SECONDS)),
+    }
+    routes[key] = entry
+    _save_invalid_result_routes(path, payload)
+    active = dict(entry)
+    active["key"] = key
+    return active
+
+
+def _clear_invalid_result_route(config: PlannerSubagentConfig, owner_task_id: str, target_role: str) -> None:
+    task_token = str(owner_task_id or "").strip()
+    role_token = canonical_role(target_role)
+    if not task_token or not role_token:
+        return
+    path = _invalid_result_route_path(config)
+    payload = _load_invalid_result_routes(path)
+    routes = payload.get("routes", {})
+    key = _invalid_result_route_key(task_token, role_token)
+    if key in routes:
+        routes.pop(key, None)
+        _save_invalid_result_routes(path, payload)
 
 
 def _qwen_bin() -> str:
@@ -379,6 +622,296 @@ def _maybe_run_qwen_fallback(
     return None
 
 
+def _run_secondary_codex_fallback(
+    config: PlannerSubagentConfig,
+    plan: dict[str, Any],
+    prompt: str,
+    timeout_seconds: int,
+    subagent_id: str,
+    reason: str,
+    source: str,
+    invoke_codex_exec: Any,
+) -> tuple[int, str, str, str] | None:
+    model, thinking = _secondary_codex_fallback(
+        str(plan.get("target_role", "")),
+        plan.get("model", ""),
+        plan.get("thinking", ""),
+    )
+    if not model:
+        return None
+    rc, stdout, stderr = invoke_codex_exec(timeout_seconds, model, thinking)
+    note = _compact(f"secondary_codex_fallback_from={source}; reason={reason}; model={model}", 220)
+    stderr_combined = "\n".join(part for part in (stderr, note) if str(part or "").strip())
+    return rc, stdout, stderr_combined, f"codex_exec:{subagent_id}:{model}"
+
+
+def _maybe_run_secondary_then_qwen_fallback(
+    config: PlannerSubagentConfig,
+    plan: dict[str, Any],
+    prompt: str,
+    timeout_seconds: int,
+    subagent_id: str,
+    reason: str,
+    source: str,
+    invoke_codex_exec: Any,
+) -> tuple[int, str, str, str] | None:
+    fallback_reason = str(reason or "").strip() or source
+    secondary_fallback = _run_secondary_codex_fallback(
+        config,
+        plan,
+        prompt,
+        timeout_seconds,
+        subagent_id,
+        fallback_reason,
+        source,
+        invoke_codex_exec,
+    )
+    if secondary_fallback is not None:
+        secondary_combined = "\n".join(part for part in secondary_fallback[1:3] if str(part or "").strip())
+        if not _looks_like_rate_limited(secondary_combined) and "invalid_subagent_result:" not in secondary_combined:
+            return secondary_fallback
+        fallback_reason = secondary_combined or fallback_reason
+    qwen_fallback = _maybe_run_qwen_fallback(
+        config,
+        prompt,
+        timeout_seconds,
+        subagent_id,
+        fallback_reason,
+        source,
+    )
+    if qwen_fallback is not None:
+        return qwen_fallback
+    return None
+
+
+def _effective_backend_details(
+    plan: dict[str, Any],
+    effective_backend: str,
+    backend_ref: str,
+    backend_route_reason: str,
+) -> tuple[str, str, str]:
+    route_reason = str(backend_route_reason or "none").strip() or "none"
+    model = str(plan.get("model", "") or "").strip()
+    thinking = str(plan.get("thinking", "") or "").strip()
+    backend_ref_token = str(backend_ref or "").strip()
+    lowered_ref = backend_ref_token.lower()
+    lowered_backend = str(effective_backend or "").strip().lower()
+
+    if route_reason in {"", "none"} and lowered_ref.startswith("codex_exec:") and backend_ref_token.count(":") >= 2:
+        route_reason = "secondary_codex_fallback"
+    elif route_reason in {"", "none"} and (lowered_ref.startswith("qwen:") or lowered_backend == "qwen"):
+        route_reason = "qwen_fallback"
+
+    if lowered_backend == "openclaw":
+        model = _openclaw_cli_model(plan.get("model", ""))
+    elif lowered_ref.startswith("qwen:") or lowered_backend == "qwen":
+        model = str(os.environ.get("FC_PLANNER_QWEN_MODEL", "qwen") or "qwen").strip() or "qwen"
+        thinking = "fallback"
+    elif lowered_ref.startswith("codex_exec:"):
+        parts = backend_ref_token.split(":", 2)
+        if len(parts) == 3 and str(parts[2] or "").strip():
+            model = str(parts[2]).strip()
+        if route_reason == "secondary_codex_fallback":
+            _model, secondary_thinking = _secondary_codex_fallback(
+                str(plan.get("target_role", "")),
+                plan.get("model", ""),
+                plan.get("thinking", ""),
+            )
+            if secondary_thinking:
+                thinking = secondary_thinking
+    return route_reason, model, thinking
+
+
+def _result_schema_score(payload: dict[str, Any]) -> tuple[int, int, int, int]:
+    schema_keys = tuple(RESULT_SCHEMA.get("required", []) or ())
+    present_count = sum(1 for key in schema_keys if key in payload)
+    meaningful_count = sum(1 for key in schema_keys if _value_present(payload.get(key)))
+    has_status = 1 if _value_present(payload.get("status")) else 0
+    try:
+        encoded_len = len(json.dumps(payload, ensure_ascii=True, sort_keys=True))
+    except Exception:
+        encoded_len = 0
+    return has_status, present_count, meaningful_count, encoded_len
+
+
+def _extract_first_json_object(text: str) -> dict[str, Any]:
+    raw = str(text or "").strip()
+    if not raw:
+        return {}
+    try:
+        payload, _ = json.JSONDecoder().raw_decode(raw)
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def _extract_last_json_object(text: str) -> dict[str, Any]:
+    raw = str(text or "").strip()
+    if not raw:
+        return {}
+    direct = _extract_first_json_object(raw)
+    candidates: list[dict[str, Any]] = [direct] if direct else []
+    decoder = json.JSONDecoder()
+    for idx, char in enumerate(raw):
+        if char != "{":
+            continue
+        try:
+            payload, _ = decoder.raw_decode(raw[idx:])
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            candidates.append(payload)
+    if not candidates:
+        return {}
+    candidates.sort(key=_result_schema_score, reverse=True)
+    return candidates[0]
+
+
+def _stringify_result_atom(value: Any, *, limit: int = 120) -> str:
+    if isinstance(value, dict):
+        try:
+            return _compact(json.dumps(value, ensure_ascii=True, sort_keys=True), limit)
+        except Exception:
+            return _compact(str(value), limit)
+    if isinstance(value, list):
+        parts = [_stringify_result_atom(item, limit=80) for item in value]
+        parts = [part for part in parts if _value_present(part)]
+        return _compact(" | ".join(parts), limit) if parts else ""
+    token = " ".join(str(value or "").split())
+    return _compact(token, limit) if token else ""
+
+
+def _normalize_result_field(value: Any, *, fallback: str, limit: int, field: str) -> str:
+    if isinstance(value, dict):
+        if field in {"artifact", "verify", "architecture_check", "vision_alignment"}:
+            parts = []
+            for key, item in value.items():
+                rendered = _stringify_result_atom(item, limit=120)
+                if _value_present(rendered):
+                    parts.append(f"{key}={rendered}")
+            if parts:
+                return _compact("; ".join(parts), limit)
+        rendered = _stringify_result_atom(value, limit=limit)
+        return rendered if _value_present(rendered) else fallback
+    if isinstance(value, list):
+        joiner = ", " if field == "files_touched" else " | "
+        parts = [_stringify_result_atom(item, limit=120) for item in value]
+        parts = [part for part in parts if _value_present(part)]
+        if parts:
+            return _compact(joiner.join(parts), limit)
+        return fallback
+    token = _compact(value, limit)
+    return token if _value_present(token) else fallback
+
+
+def _payload_needs_raw_recovery(payload: dict[str, Any]) -> bool:
+    status = str(payload.get("status", "")).strip().lower()
+    if status not in {"failed", "blocked"}:
+        return False
+    blocking_issue = _meaningful_issue(payload.get("blocking_issue"))
+    summary = " ".join(str(payload.get("summary", "")).split()).strip().lower()
+    if blocking_issue.startswith("invalid_subagent_result:"):
+        return True
+    if blocking_issue:
+        return False
+    tests_run = str(payload.get("tests_run", "")).strip().lower()
+    has_evidence = any(
+        _value_present(value)
+        for value in (
+            payload.get("root_cause"),
+            payload.get("fix_applied"),
+            payload.get("artifact"),
+            payload.get("verify"),
+            payload.get("files_touched"),
+            payload.get("commit_sha"),
+            payload.get("architecture_check"),
+            payload.get("vision_alignment"),
+            payload.get("recommended_next"),
+        )
+    )
+    if not has_evidence and tests_run not in {"", "none", "n/a", "na", "null", "unknown", "skip(no_tests)", "skip(no_code_runtime_fix)", "skip(no_result_payload)"}:
+        has_evidence = True
+    return not has_evidence or summary in {"", "none", "failed"} or not _value_present(summary)
+
+
+def _payload_signal_score(payload: dict[str, Any]) -> tuple[int, int, int]:
+    status_ok = 1 if _value_present(payload.get("status")) else 0
+    evidence_count = sum(
+        1
+        for key in (
+            "summary",
+            "root_cause",
+            "fix_applied",
+            "artifact",
+            "verify",
+            "files_touched",
+            "tests_run",
+            "commit_sha",
+            "architecture_check",
+            "vision_alignment",
+            "recommended_next",
+        )
+        if _value_present(payload.get(key))
+    )
+    issue_ok = 1 if _meaningful_issue(payload.get("blocking_issue")) else 0
+    return status_ok, evidence_count, issue_ok
+
+
+def _recover_payload_from_raw_output(
+    raw_text: str,
+    *,
+    subagent_id: str,
+    target_role: str,
+    owner_task_id: str,
+    parent_role: str,
+    task_kind: str,
+    backend: str,
+) -> dict[str, Any]:
+    text = str(raw_text or "").strip()
+    if not text:
+        return {}
+    result_source = text
+    if str(backend or "").strip().lower() == "openclaw":
+        wrapper = _extract_first_json_object(text)
+        if wrapper:
+            extracted_text, _ = _extract_openclaw_payload_text(json.dumps(wrapper, ensure_ascii=True))
+            if extracted_text:
+                result_source = extracted_text
+    recovered = _parse_result_payload(
+        result_source,
+        subagent_id,
+        target_role,
+        owner_task_id,
+        parent_role,
+        task_kind,
+        backend,
+    ).as_dict()
+    return recovered if isinstance(recovered, dict) else {}
+
+
+def _canonical_runtime_mirror_path(path: Path) -> Path | None:
+    marker = f"{os.sep}logs-codex-runs{os.sep}orchestrator-state{os.sep}"
+    raw = str(path)
+    if marker not in raw:
+        return None
+    prefix, suffix = raw.split(marker, 1)
+    root = Path(prefix)
+    return canonical_docs_root(root) / suffix
+
+
+def _load_structured_output(path: Path) -> str:
+    if not path.exists():
+        return ""
+    try:
+        raw = path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return ""
+    payload = _extract_last_json_object(raw)
+    if not payload or not str(payload.get("status", "")).strip():
+        return ""
+    return json.dumps(payload, ensure_ascii=True)
+
+
 def _read_json(path: Path, default: Any) -> Any:
     if not path.exists():
         return default
@@ -386,6 +919,13 @@ def _read_json(path: Path, default: Any) -> Any:
         return json.loads(path.read_text(encoding="utf-8", errors="ignore"))
     except Exception:
         return default
+
+
+def _read_text_if_exists(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return ""
 
 
 def _read_structured(path: Path, default: Any) -> Any:
@@ -465,6 +1005,33 @@ def _openclaw_delete_agent(agent_id: str) -> None:
     )
 
 
+def _subagent_launcher_alive(subagent_id: str) -> bool:
+    token = str(subagent_id or "").strip()
+    if not token:
+        return False
+    try:
+        proc = subprocess.run(
+            ["ps", "-eo", "pid=,args="],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except Exception:
+        return False
+    if int(getattr(proc, "returncode", 1) or 1) != 0:
+        return False
+    needle = f"--subagent-id {token}"
+    for line in str(getattr(proc, "stdout", "") or "").splitlines():
+        text = str(line or "").strip()
+        if not text or needle not in text:
+            continue
+        if "planner_subagent_manager.py" in text:
+            return True
+        if "openclaw agent" in text:
+            return True
+    return False
+
+
 def _extract_openclaw_payload_text(raw_text: str) -> tuple[str, str]:
     text = (raw_text or "").strip()
     if not text:
@@ -474,9 +1041,11 @@ def _extract_openclaw_payload_text(raw_text: str) -> tuple[str, str]:
     except Exception:
         return text, ""
 
-    result = payload.get("result") if isinstance(payload, dict) else None
-    if isinstance(result, dict):
-        payloads = result.get("payloads")
+    container = payload.get("result") if isinstance(payload, dict) else None
+    if not isinstance(container, dict) and isinstance(payload, dict) and isinstance(payload.get("payloads"), list):
+        container = payload
+    if isinstance(container, dict):
+        payloads = container.get("payloads")
         if isinstance(payloads, list):
             text_candidates = []
             for item in payloads:
@@ -485,7 +1054,9 @@ def _extract_openclaw_payload_text(raw_text: str) -> tuple[str, str]:
                     if isinstance(candidate, str) and candidate.strip():
                         text_candidates.append(candidate.strip())
             if text_candidates:
-                meta = result.get("meta")
+                meta = container.get("meta")
+                if not isinstance(meta, dict) and isinstance(payload, dict):
+                    meta = payload.get("meta")
                 refs: list[str] = []
                 if isinstance(meta, dict):
                     agent_meta = meta.get("agentMeta")
@@ -520,9 +1091,6 @@ def _extract_openclaw_payload_text(raw_text: str) -> tuple[str, str]:
         elif isinstance(obj, list):
             for value in obj:
                 walk(value)
-        elif isinstance(obj, str):
-            candidates.append(obj)
-
     walk(payload)
     return (candidates[-1] if candidates else text, ",".join(refs[:4]))
 
@@ -570,6 +1138,9 @@ class PlannerSubagentResult:
     blocking_issue: str = "none"
     started_at: str = ""
     finished_at: str = ""
+    backend_route_reason: str = "none"
+    model: str = ""
+    thinking: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -596,6 +1167,9 @@ class PlannerSubagentResult:
             "blocking_issue": self.blocking_issue,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
+            "backend_route_reason": self.backend_route_reason,
+            "model": self.model,
+            "thinking": self.thinking,
         }
 
 
@@ -629,12 +1203,22 @@ class PlannerSubagentRecord:
     merged_at: str = ""
 
     def as_dict(self) -> dict[str, Any]:
+        purpose = str(self.metadata.get("purpose", self.task_kind) or self.task_kind).strip()
+        role = str(self.metadata.get("role", self.target_role) or self.target_role).strip()
+        last_meaningful_delta = str(self.metadata.get("last_meaningful_delta", "none") or "none").strip() or "none"
+        monitor_agent_id = str(self.metadata.get("monitor_agent_id", "") or "").strip()
+        target_agent_id = str(self.metadata.get("target_agent_id", "") or "").strip()
+        stalled = bool(self.metadata.get("stalled", False))
+        backend_route_reason = str(self.metadata.get("backend_route_reason", "none") or "none").strip() or "none"
+        backend_cooldown_until = str(self.metadata.get("backend_cooldown_until", "") or "").strip()
         return {
             "subagent_id": self.subagent_id,
             "target_role": self.target_role,
+            "role": role,
             "owner_task_id": self.owner_task_id,
             "parent_role": self.parent_role,
             "task_kind": self.task_kind,
+            "purpose": purpose,
             "status": self.status,
             "created_at": self.created_at,
             "expires_at": self.expires_at,
@@ -654,12 +1238,33 @@ class PlannerSubagentRecord:
             "vision_alignment": self.vision_alignment,
             "recommended_next": self.recommended_next,
             "blocking_issue": self.blocking_issue,
+            "last_meaningful_delta": last_meaningful_delta,
+            "monitor_agent_id": monitor_agent_id,
+            "target_agent_id": target_agent_id,
+            "stalled": stalled,
+            "backend_route_reason": backend_route_reason,
+            "backend_cooldown_until": backend_cooldown_until,
             "metadata": self.metadata,
             "merged_at": self.merged_at,
         }
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "PlannerSubagentRecord":
+        raw_metadata = payload.get("metadata", {})
+        metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
+        projected_metadata = dict(metadata)
+        for key in (
+            "role",
+            "purpose",
+            "last_meaningful_delta",
+            "monitor_agent_id",
+            "target_agent_id",
+            "stalled",
+            "backend_route_reason",
+            "backend_cooldown_until",
+        ):
+            if key in payload and key not in projected_metadata:
+                projected_metadata[key] = payload.get(key)
         return cls(
             subagent_id=str(payload.get("subagent_id", "")).strip(),
             target_role=canonical_role(payload.get("target_role", "")),
@@ -685,7 +1290,7 @@ class PlannerSubagentRecord:
             vision_alignment=str(payload.get("vision_alignment", "none")).strip() or "none",
             recommended_next=str(payload.get("recommended_next", "none")).strip() or "none",
             blocking_issue=str(payload.get("blocking_issue", "none")).strip() or "none",
-            metadata=payload.get("metadata", {}) if isinstance(payload.get("metadata", {}), dict) else {},
+            metadata=projected_metadata,
             merged_at=str(payload.get("merged_at", "")).strip(),
         )
 
@@ -713,10 +1318,10 @@ def _load_config(root: Path) -> PlannerSubagentConfig:
     default_helper_mode = str(
         os.environ.get(
             "FC_PLANNER_ORCHESTRATOR_DEFAULT_HELPER_MODE",
-            orchestrator.get("default_helper_mode", "worker_first"),
+            orchestrator.get("default_helper_mode", "native_codex"),
         )
-        or "worker_first"
-    ).strip().lower() or "worker_first"
+        or "native_codex"
+    ).strip().lower() or "native_codex"
     backend_by_role: dict[str, str] = {}
     raw_backend_by_role = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_BACKEND_BY_ROLE", "") or "").strip()
     if not raw_backend_by_role:
@@ -888,6 +1493,11 @@ def _merge_record(existing: PlannerSubagentRecord, incoming: PlannerSubagentReco
     status = preferred.status or fallback.status
     if existing_rank == incoming_rank == _status_rank("merged") and not str(preferred.merged_at or "").strip():
         status = "merged"
+    status_token = str(status or "").strip().lower()
+    if status_token in SUCCESS_RESULT_STATUSES.union({"merged"}):
+        blocking_issue = _meaningful_issue(preferred.blocking_issue) or "none"
+    else:
+        blocking_issue = _coalesce_text(preferred.blocking_issue, fallback.blocking_issue, fallback="none")
 
     return PlannerSubagentRecord(
         subagent_id=preferred.subagent_id or fallback.subagent_id,
@@ -913,7 +1523,7 @@ def _merge_record(existing: PlannerSubagentRecord, incoming: PlannerSubagentReco
         architecture_check=_coalesce_text(preferred.architecture_check, fallback.architecture_check, fallback="none"),
         vision_alignment=_coalesce_text(preferred.vision_alignment, fallback.vision_alignment, fallback="none"),
         recommended_next=_coalesce_text(preferred.recommended_next, fallback.recommended_next, fallback="none"),
-        blocking_issue=_coalesce_text(preferred.blocking_issue, fallback.blocking_issue, fallback="none"),
+        blocking_issue=blocking_issue,
         metadata={**fallback.metadata, **preferred.metadata},
         merged_at=_choose_iso(existing.merged_at, incoming.merged_at, prefer_latest=True),
     )
@@ -939,7 +1549,11 @@ def _save_registry(path: Path, records: list[PlannerSubagentRecord]) -> None:
                     existing_by_id[token] = record
                     seen_ids.add(token)
                 merged_rows.append(record)
-        _write_json(path, {"updated_at": _iso(), "subagents": [record.as_dict() for record in merged_rows]})
+        payload = {"updated_at": _iso(), "subagents": [record.as_dict() for record in merged_rows]}
+        _write_json(path, payload)
+        mirror_path = _canonical_runtime_mirror_path(path)
+        if mirror_path is not None:
+            _write_json(mirror_path, payload)
 
 
 def _emit_event(config: PlannerSubagentConfig, event: str, record: PlannerSubagentRecord, extra: dict[str, Any] | None = None) -> None:
@@ -957,6 +1571,40 @@ def _emit_event(config: PlannerSubagentConfig, event: str, record: PlannerSubage
     if extra:
         payload.update(extra)
     _append_jsonl(config.events_path, payload)
+    mirror_path = _canonical_runtime_mirror_path(config.events_path)
+    if mirror_path is not None:
+        _append_jsonl(mirror_path, payload)
+
+
+def _cleanup_failure_record(
+    config: PlannerSubagentConfig,
+    record: PlannerSubagentRecord,
+    reason: str,
+    now: datetime,
+) -> PlannerSubagentRecord:
+    payload = record.as_dict()
+    metadata = dict(payload.get("metadata", {}))
+    metadata.update(
+        {
+            "cleanup_reason": str(reason or "").strip() or "cleanup",
+            "cleanup_recorded_at": _iso(now),
+            "last_meaningful_delta": f"cleanup:{str(reason or '').strip() or 'cleanup'}",
+            "stalled": True,
+        }
+    )
+    payload.update(
+        {
+            "status": "failed",
+            "last_update_at": _iso(now),
+            "summary": _compact(payload.get("summary") or f"Planner cleanup converted stalled subagent to failed: {reason}", 180),
+            "artifact": payload.get("artifact") or str(config.events_path.relative_to(config.root)),
+            "verify": payload.get("verify") or f"cleanup_reason={reason}",
+            "blocking_issue": str(reason or "").strip() or "planner_subagent_cleanup",
+            "recommended_next": payload.get("recommended_next") or "planner_repair_or_reroute",
+            "metadata": metadata,
+        }
+    )
+    return PlannerSubagentRecord.from_dict(payload)
 
 
 def _active_count(config: PlannerSubagentConfig, records: list[PlannerSubagentRecord]) -> int:
@@ -977,13 +1625,16 @@ def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagen
             and record.backend == "openclaw"
             and record.subagent_id not in active_openclaw_ids
             and not result_path.exists()
+            and not _subagent_launcher_alive(record.subagent_id)
         ):
+            reason = "openclaw_agent_missing"
             _emit_event(
                 config,
                 "planner_subagent_cleanup",
                 record,
-                {"reason": "openclaw_agent_missing"},
+                {"reason": reason},
             )
+            kept.append(_cleanup_failure_record(config, record, reason, now))
             removed.append(record.subagent_id)
             continue
         if (
@@ -992,12 +1643,14 @@ def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagen
             and last_seen is not None
             and int((now - last_seen).total_seconds()) >= stale_active_seconds
         ):
+            reason = f"stale_active_no_result>{stale_active_seconds}s"
             _emit_event(
                 config,
                 "planner_subagent_cleanup",
                 record,
-                {"reason": f"stale_active_no_result>{stale_active_seconds}s"},
+                {"reason": reason},
             )
+            kept.append(_cleanup_failure_record(config, record, reason, now))
             removed.append(record.subagent_id)
             continue
         expires_at = _parse_iso(record.expires_at)
@@ -1030,6 +1683,29 @@ def _find_duplicate(config: PlannerSubagentConfig, records: list[PlannerSubagent
     return None
 
 
+def _recent_retryable_failure(
+    records: list[PlannerSubagentRecord],
+    target_role: str,
+    owner_task_id: str,
+) -> PlannerSubagentRecord | None:
+    now = _now()
+    for record in reversed(records):
+        if record.target_role != target_role or record.owner_task_id != owner_task_id:
+            continue
+        if str(record.status or "").strip().lower() != "failed":
+            continue
+        issue = str(record.blocking_issue or "").strip().lower()
+        if issue not in RETRYABLE_BACKEND_FAILURE_MARKERS:
+            continue
+        ref = _parse_iso(record.last_update_at) or _parse_iso(record.created_at)
+        if ref is None:
+            continue
+        if (now - ref).total_seconds() <= RETRYABLE_BACKEND_FAILURE_COOLDOWN_SECONDS:
+            return record
+        break
+    return None
+
+
 def _role_runtime_defaults(config: PlannerSubagentConfig, target_role: str) -> tuple[str, str, str]:
     cfg_path = config.root / "platform" / "config" / "runner" / "runner.v1.yaml"
     if not cfg_path.exists():
@@ -1037,19 +1713,82 @@ def _role_runtime_defaults(config: PlannerSubagentConfig, target_role: str) -> t
     cfg = _read_json(cfg_path, {})
     roles = cfg.get("roles", {}) if isinstance(cfg, dict) else {}
     role_cfg = roles.get(target_role, {}) if isinstance(roles, dict) else {}
-    model_default, thinking_default, sandbox_default = ROLE_MODELS.get(target_role, ("gpt-5.4", "medium", "workspace-write"))
+    model_default, thinking_default, sandbox_default = ROLE_MODELS.get(target_role, ("gpt-5.3-codex-spark", "medium", "workspace-write"))
     model = str(role_cfg.get("model", model_default) or model_default).strip()
     thinking = str(role_cfg.get("thinking", thinking_default) or thinking_default).strip()
-    sandbox = "read-only" if target_role == "scrum_master" else sandbox_default
+    sandbox = sandbox_default
     return model, thinking, sandbox
 
 
 def _effective_task_sandbox(target_role: str, task_kind: str, sandbox: str) -> str:
     role = canonical_role(target_role)
     current = str(sandbox or "").strip().lower() or "workspace-write"
-    if role in {"dev", "admin"}:
+    if role in {"dev", "admin", "scrum_master"}:
         return "danger-full-access"
     return current
+
+
+def _normalize_meaningful_delta(value: Any, *, fallback: str = "none") -> str:
+    token = " ".join(str(value or "").strip().split())
+    if not token:
+        return fallback
+    if token.lower() in NON_MEANINGFUL_DELTA_TOKENS:
+        return fallback
+    return _compact(token, 220)
+
+
+def _result_meaningful_delta(result: PlannerSubagentResult) -> str:
+    if str(result.backend or "").strip().lower() == "qwen":
+        return "degraded_backend:qwen_fallback"
+    if _is_invalid_result_reason(result.blocking_issue):
+        return "none"
+    artifact = str(result.artifact or "").strip().lower()
+    if artifact and artifact not in {"none", "n/a", "na"}:
+        return "artifact_delta"
+    files_touched = str(result.files_touched or "").strip().lower()
+    if files_touched and files_touched not in {"none", "n/a", "na"}:
+        return "code_delta"
+    tests_run = str(result.tests_run or "").strip().lower()
+    if tests_run and tests_run not in {"none", "n/a", "na", "skip(no_tests)", "skip(no_code_runtime_fix)"}:
+        return "test_delta"
+    verify = str(result.verify or "").strip().lower()
+    if verify and verify not in {"none", "n/a", "na"}:
+        return "verify_delta"
+    status = str(result.status or "").strip().lower()
+    if status in SUCCESS_RESULT_STATUSES:
+        return "subagent_completed"
+    if status in BLOCKED_RESULT_STATUSES:
+        return str(result.blocking_issue or "blocked").strip() or "blocked"
+    if status in ACTIVE_STATUSES:
+        return "subagent_running"
+    return "none"
+
+
+def _payload_meaningful_delta(payload: dict[str, Any]) -> str:
+    backend = str(payload.get("backend", "")).strip().lower()
+    if backend == "qwen":
+        return "degraded_backend:qwen_fallback"
+    artifact = str(payload.get("artifact", "")).strip().lower()
+    if artifact and artifact not in {"none", "n/a", "na"}:
+        return "artifact_delta"
+    files_touched = str(payload.get("files_touched", "")).strip().lower()
+    if files_touched and files_touched not in {"none", "n/a", "na"}:
+        return "code_delta"
+    tests_run = str(payload.get("tests_run", "")).strip().lower()
+    if tests_run and tests_run not in {"none", "n/a", "na", "skip(no_tests)", "skip(no_code_runtime_fix)"}:
+        return "test_delta"
+    verify = str(payload.get("verify", "")).strip().lower()
+    if verify and verify not in {"none", "n/a", "na"}:
+        return "verify_delta"
+    blocking_issue = str(payload.get("blocking_issue", "")).strip()
+    if _is_invalid_result_reason(blocking_issue):
+        return "none"
+    status = str(payload.get("status", "")).strip().lower()
+    if status in SUCCESS_RESULT_STATUSES:
+        return "subagent_completed"
+    if status in BLOCKED_RESULT_STATUSES:
+        return blocking_issue or "blocked"
+    return "none"
 
 
 def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message: str) -> str:
@@ -1058,49 +1797,53 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         f"TARGET_ROLE={target_role}\n"
         f"OWNER_TASK_ID={owner_task_id}\n"
         f"TASK_KIND={task_kind}\n"
-        "Rules:\n"
-        "- Planner remains the only source of orchestration truth.\n"
-        "- Treat planner-only scheduling as current reality: planner is the sole scheduled role; dev/admin/scrum_master are planner capabilities.\n"
-        "- Do not call parallel_workstream.py claim/complete/handoff.\n"
-        "- Do not update queue/workboard/contracts directly.\n"
-        "- You may read the repo, edit files only if your role allows it, run bounded targeted commands, and return structured evidence.\n"
-        "- Use planner-owned capability dispatch only: never run raw shell commands named `worker`, `explorer`, `monitor`, or `SYSTEM_PROMPT`; use the configured planner wrappers only.\n"
-        "- `explorer` is exception-only: use it only for one narrow read-only question when the implementation path is already known. Do not chain explorers or replace delivery work with repo analysis.\n"
-        "- Any exploratory finding must end with a concrete implementation next step for the planner.\n"
-        "- Keep scope narrow to the owner task and the planner instruction.\n"
-        "- If blocked, say exactly what the planner should do next.\n"
-        "- Return ONLY one JSON object with keys: status, summary, root_cause, fix_applied, artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment, recommended_next, blocking_issue.\n"
-        "- If no file or test applies, use 'none' or 'SKIP(reason)' explicitly.\n"
+        "MODE=planner_capability\n"
+        "Operating model:\n"
+        "- Planner owns orchestration truth. dev/admin/scrum_master are planner capabilities, not standalone schedulers.\n"
+        "- Ignore older role habits that mutate queue/workboard or emulate collect/dispatch manually.\n"
+        "- Prioritize the highest product-value unblock inside the task scope.\n"
+        "- Prefer the smallest change that ships user-visible value now or removes the next delivery bottleneck.\n"
+        "- Stay inside the owner task. No repo-wide audit.\n"
+        "- Improve code, config, docs, prompts, proofs, or task artifacts directly when that is the shortest path to delivery.\n"
+        "- Leave the task easier to merge, review, or hand off than you found it when that is cheap.\n"
+        "- Do local work by default; use native sub-agents only for one bounded subtask when clearly faster.\n"
+        "- If blocked, return the exact next planner action.\n"
+        "Output contract:\n"
+        "- Return exactly one JSON object with keys: status, summary, root_cause, fix_applied, artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment, recommended_next, blocking_issue.\n"
+        "- Use 'none' or 'SKIP(reason)' explicitly when a field does not apply.\n"
         f"Planner instruction: {message.strip()}\n"
     )
     if target_role == "dev":
         return common + (
-            "Dev mission:\n"
-            "- Produce the smallest concrete patch or verification step that advances delivery.\n"
-            "- Do not inspect monitor, doctor, or unrelated architecture docs unless the task is explicitly blocked by runtime truth.\n"
-            "- Do not broaden the task into a repo-wide audit.\n"
+            "Dev role:\n"
+            "- Deliver one minimal slice or one targeted verification that increases user-facing value or unlocks the next slice.\n"
+            "- Make the slice mergeable, not just coded: include the smallest proof/doc/test update needed for fast review when useful.\n"
+            "- Prefer existing modules and task notes over architecture exploration.\n"
             "- Prefer one minimal vertical slice tied directly to the owner task notes.\n"
             "- Prefer targeted tests only.\n"
             "- If you changed code or config, commit it and return the real commit_sha.\n"
             "- verify must include before=..., after=..., test=...\n"
             "- architecture_check must include layer=..., imports_ok=..., path_target=...\n"
             "- vision_alignment must include batch=..., target=..., impact=...\n"
-            "- Return files_touched and tests_run precisely.\n"
         )
     if target_role == "admin":
         return common + (
-            "Admin mission:\n"
-            "- Use runtime probes only when they are directly required.\n"
-            "- Repair runtime truth, stale locks, stale blockers, or broken execution paths.\n"
+            "Admin role:\n"
+            "- Handle runtime truth, observability, orchestration drift, stale locks, dispatch/collect failures, or broken execution paths that block product delivery.\n"
+            "- Patch scripts, config, prompts, or control-plane code directly when that is the shortest unblock.\n"
+            "- Prefer the narrowest fix that resumes delivery, collect, QA, or dispatch for the active priority path within one planner tick.\n"
             "- Prefer reversible fixes and concrete verification.\n"
-            "- If the issue is not runtime/infra, point planner back to dev or scrum_master.\n"
+            "- If it is not a runtime/control-plane issue, say planner should route it to dev or scrum_master.\n"
         )
     return common + (
-        "Scrum mission:\n"
-        "- Act as unblock-first coordinator.\n"
-        "- Do not inspect the full repo or launch technical workers.\n"
-        "- Do not edit files or claim tasks.\n"
-        "- Return one precise unblock action or escalation.\n"
+        "Scrum role:\n"
+        "- Own delivery acceleration, flow clarity, and unblock coordination for this task.\n"
+        "- You may edit task-scoped docs, proofs, handoff notes, prompts, memory, coordination artifacts, acceptance criteria, dependency notes, or narrow supporting config/spec text when that increases deliverability.\n"
+        "- Prefer small changes that remove ambiguity, improve handoff quality, strengthen acceptance criteria, or fix stale orchestration guidance.\n"
+        "- Aim to make the next dev/admin move obvious, bounded, and mergeable.\n"
+        "- You may spawn one bounded worker if that removes ambiguity faster than doing the work yourself.\n"
+        "- Do not edit queue/workboard/contracts directly, and do not take over deep dev/admin implementation unless planner reroutes the task.\n"
+        "- Return one precise unblock action, or a small coordination artifact plus the next planner action.\n"
     )
 
 
@@ -1108,40 +1851,50 @@ def _parse_result_payload(raw_text: str, subagent_id: str, target_role: str, own
     text = (raw_text or "").strip()
     payload: dict[str, Any] = {}
     if text:
-        try:
-            payload = json.loads(text)
-            if not isinstance(payload, dict):
-                payload = {}
-        except Exception:
-            payload = {}
+        payload = _extract_last_json_object(text)
         if not payload:
-            markers = ('{"status"', '{\n"status"')
-            start = -1
-            for marker in markers:
-                pos = text.rfind(marker)
-                if pos > start:
-                    start = pos
-            if start >= 0:
-                candidate = text[start:].strip()
-                try:
-                    parsed = json.loads(candidate)
-                    if isinstance(parsed, dict):
-                        payload = parsed
-                except Exception:
-                    payload = {}
-    status = str(payload.get("status", "failed")).strip() or "failed"
-    summary = _compact(payload.get("summary", text or "no_summary"), 260)
-    root_cause = _compact(payload.get("root_cause", "none"), 220)
-    fix_applied = _compact(payload.get("fix_applied", "none"), 220)
-    artifact = _compact(payload.get("artifact", "none"), 220)
-    verify = _compact(payload.get("verify", "none"), 220)
-    files_touched = _compact(payload.get("files_touched", "none"), 220)
-    tests_run = _compact(payload.get("tests_run", "SKIP(no_tests)"), 220)
-    commit_sha = _compact(payload.get("commit_sha", "none"), 120)
-    architecture_check = _compact(payload.get("architecture_check", "none"), 220)
-    vision_alignment = _compact(payload.get("vision_alignment", "none"), 220)
-    recommended_next = _compact(payload.get("recommended_next", "none"), 220)
-    blocking_issue = _compact(payload.get("blocking_issue", "none"), 160)
+            line0 = str(text.splitlines()[0] if text.splitlines() else text).strip()
+            normalized_issue = ""
+            if line0.startswith("invalid_subagent_result:"):
+                normalized_issue = line0
+            elif _looks_like_startup_noise(text):
+                normalized_issue = "invalid_subagent_result:start_banner_only"
+            if normalized_issue:
+                return PlannerSubagentResult(
+                    subagent_id=subagent_id,
+                    target_role=target_role,
+                    owner_task_id=owner_task_id,
+                    parent_role=parent_role,
+                    task_kind=task_kind,
+                    status="failed",
+                    summary=normalized_issue,
+                    root_cause="none",
+                    fix_applied="none",
+                    artifact="none",
+                    verify="none",
+                    raw_output_ref="",
+                    backend=backend,
+                    files_touched="none",
+                    tests_run="SKIP(no_tests)",
+                    commit_sha="none",
+                    architecture_check="none",
+                    vision_alignment="none",
+                    recommended_next="planner_retry_or_fallback",
+                    blocking_issue=normalized_issue,
+                )
+    status = _normalize_result_field(payload.get("status", "failed"), fallback="failed", limit=80, field="status")
+    summary = _normalize_result_field(payload.get("summary", text or "no_summary"), fallback="none", limit=260, field="summary")
+    root_cause = _normalize_result_field(payload.get("root_cause", "none"), fallback="none", limit=220, field="root_cause")
+    fix_applied = _normalize_result_field(payload.get("fix_applied", "none"), fallback="none", limit=220, field="fix_applied")
+    artifact = _normalize_result_field(payload.get("artifact", "none"), fallback="none", limit=220, field="artifact")
+    verify = _normalize_result_field(payload.get("verify", "none"), fallback="none", limit=220, field="verify")
+    files_touched = _normalize_result_field(payload.get("files_touched", "none"), fallback="none", limit=220, field="files_touched")
+    tests_run = _normalize_result_field(payload.get("tests_run", "SKIP(no_tests)"), fallback="SKIP(no_tests)", limit=220, field="tests_run")
+    commit_sha = _normalize_result_field(payload.get("commit_sha", "none"), fallback="none", limit=120, field="commit_sha")
+    architecture_check = _normalize_result_field(payload.get("architecture_check", "none"), fallback="none", limit=220, field="architecture_check")
+    vision_alignment = _normalize_result_field(payload.get("vision_alignment", "none"), fallback="none", limit=220, field="vision_alignment")
+    recommended_next = _normalize_result_field(payload.get("recommended_next", "none"), fallback="none", limit=220, field="recommended_next")
+    blocking_issue = _normalize_result_field(payload.get("blocking_issue", "none"), fallback="none", limit=160, field="blocking_issue")
     return PlannerSubagentResult(
         subagent_id=subagent_id,
         target_role=target_role,
@@ -1174,82 +1927,144 @@ def _run_codex_exec_subagent(
     subagent_id: str,
 ) -> tuple[int, str, str, str]:
     cached_reason = _active_rate_limit_reason(("codex", "global"))
+    def _invoke_codex_exec(
+        timeout_override_seconds: int,
+        model_override: str = "",
+        thinking_override: str = "",
+    ) -> tuple[int, str, str]:
+        with tempfile.TemporaryDirectory(prefix="planner-subagent-") as td:
+            tmpdir = Path(td)
+            schema_path = tmpdir / "schema.json"
+            out_path = tmpdir / "last_message.json"
+            schema_path.write_text(json.dumps(RESULT_SCHEMA, ensure_ascii=True), encoding="utf-8")
+            sandbox_token = str(plan["sandbox"]).strip().lower()
+            cmd = [
+                "codex",
+                "exec",
+                "--enable",
+                "multi_agent",
+                "--enable",
+                "apps",
+                "--enable",
+                "js_repl",
+                "-C",
+                str(config.root),
+                "--skip-git-repo-check",
+                "--color",
+                "never",
+                "--output-schema",
+                str(schema_path),
+                "-o",
+                str(out_path),
+                "-m",
+                str(model_override or plan["model"]),
+                "-c",
+                f'model_reasoning_effort="{thinking_override or plan["thinking"]}"',
+            ]
+            if sandbox_token in {"off", "danger-full-access"}:
+                cmd.append("--dangerously-bypass-approvals-and-sandbox")
+            else:
+                cmd.extend(["--sandbox", str(plan["sandbox"])])
+            if sandbox_token == "workspace-write":
+                cmd.append("--full-auto")
+            timeout_value = _subprocess_timeout_value(timeout_override_seconds)
+            try:
+                proc = subprocess.run(
+                    cmd + [prompt],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    cwd=str(config.root),
+                    timeout=timeout_value,
+                )
+                rc = proc.returncode
+                stdout = _load_structured_output(out_path)
+                stderr = proc.stderr or ""
+                if not stdout:
+                    normalized_issue = _normalized_retryable_backend_issue(proc.stdout or stderr or "")
+                    stderr = "\n".join(part for part in (normalized_issue, stderr) if str(part or "").strip())
+                    stdout = proc.stdout or ""
+            except subprocess.TimeoutExpired as exc:
+                rc = 124
+                stdout = str(exc.stdout or "")
+                timeout_label = timeout_value if isinstance(timeout_value, int) else "unbounded"
+                stderr = str(exc.stderr or "") or f"codex_exec_timeout_after_{timeout_label}s"
+            return rc, stdout, stderr
+
     if cached_reason:
-        qwen_fallback = _maybe_run_qwen_fallback(
+        chained_fallback = _maybe_run_secondary_then_qwen_fallback(
             config,
+            plan,
             prompt,
             timeout_seconds,
             subagent_id,
             cached_reason,
             "codex_exec_cache",
+            _invoke_codex_exec,
         )
-        if qwen_fallback is not None:
-            return qwen_fallback
-    with tempfile.TemporaryDirectory(prefix="planner-subagent-") as td:
-        tmpdir = Path(td)
-        schema_path = tmpdir / "schema.json"
-        out_path = tmpdir / "last_message.json"
-        schema_path.write_text(json.dumps(RESULT_SCHEMA, ensure_ascii=True), encoding="utf-8")
-        sandbox_token = str(plan["sandbox"]).strip().lower()
-        cmd = [
-            "codex",
-            "exec",
-            "--enable",
-            "multi_agent",
-            "--enable",
-            "apps",
-            "--enable",
-            "js_repl",
-            "-C",
-            str(config.root),
-            "--skip-git-repo-check",
-            "--color",
-            "never",
-            "--output-schema",
-            str(schema_path),
-            "-o",
-            str(out_path),
-            "-m",
-            str(plan["model"]),
-            "-c",
-            f'model_reasoning_effort="{plan["thinking"]}"',
-        ]
-        if sandbox_token in {"off", "danger-full-access"}:
-            cmd.append("--dangerously-bypass-approvals-and-sandbox")
-        else:
-            cmd.extend(["--sandbox", str(plan["sandbox"])])
-        if sandbox_token == "workspace-write":
-            cmd.append("--full-auto")
-        timeout_value = _subprocess_timeout_value(timeout_seconds)
-        try:
-            proc = subprocess.run(
-                cmd + [prompt],
-                text=True,
-                capture_output=True,
-                check=False,
-                cwd=str(config.root),
-                timeout=timeout_value,
-            )
-            rc = proc.returncode
-            stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else (proc.stdout or "")
-            stderr = proc.stderr or ""
-        except subprocess.TimeoutExpired as exc:
-            rc = 124
-            stdout = out_path.read_text(encoding="utf-8", errors="ignore") if out_path.exists() else str(exc.stdout or "")
-            timeout_label = timeout_value if isinstance(timeout_value, int) else "unbounded"
-            stderr = str(exc.stderr or "") or f"codex_exec_timeout_after_{timeout_label}s"
-    combined = f"{stdout}\n{stderr}".strip()
+        if chained_fallback is not None:
+            return chained_fallback
+    rc, stdout, stderr = _invoke_codex_exec(timeout_seconds)
+    combined = "\n".join(part for part in (stdout, stderr) if str(part or "").strip())
     if _looks_like_rate_limited(combined):
+        chained_fallback = _maybe_run_secondary_then_qwen_fallback(
+            config,
+            plan,
+            prompt,
+            timeout_seconds,
+            subagent_id,
+            combined,
+            "codex_exec_rate_limit",
+            _invoke_codex_exec,
+        )
+        if chained_fallback is not None:
+            return chained_fallback
+    if "invalid_subagent_result:" in combined:
+        retry_timeout = min(max(45, int(timeout_seconds or 0) or 45), 90)
+        retry_rc, retry_stdout, retry_stderr = _invoke_codex_exec(retry_timeout)
+        retry_combined = "\n".join(part for part in (retry_stdout, retry_stderr) if str(part or "").strip())
+        if _looks_like_rate_limited(retry_combined):
+            qwen_fallback = _maybe_run_qwen_fallback(
+                config,
+                prompt,
+                timeout_seconds,
+                subagent_id,
+                retry_combined,
+                "codex_exec_retry",
+            )
+            if qwen_fallback is not None:
+                return qwen_fallback
+        if "invalid_subagent_result:" not in retry_combined:
+            return retry_rc, retry_stdout, retry_stderr, f"codex_exec:{subagent_id}"
+        secondary_fallback = _run_secondary_codex_fallback(
+            config,
+            plan,
+            prompt,
+            timeout_seconds,
+            subagent_id,
+            _normalized_retryable_backend_issue(retry_combined),
+            "codex_exec_invalid_result",
+            _invoke_codex_exec,
+        )
+        if secondary_fallback is not None:
+            secondary_combined = "\n".join(part for part in secondary_fallback[1:3] if str(part or "").strip())
+            if not _looks_like_rate_limited(secondary_combined) and "invalid_subagent_result:" not in secondary_combined:
+                return secondary_fallback
+            retry_combined = secondary_combined or retry_combined
+            retry_rc = secondary_fallback[0]
+            retry_stdout = secondary_fallback[1]
+            retry_stderr = secondary_fallback[2]
         qwen_fallback = _maybe_run_qwen_fallback(
             config,
             prompt,
             timeout_seconds,
             subagent_id,
-            combined,
-            "codex_exec",
+            _normalized_retryable_backend_issue(retry_combined),
+            "codex_exec_invalid_result",
         )
         if qwen_fallback is not None:
             return qwen_fallback
+        return max(retry_rc, 65), retry_stdout, retry_stderr, f"codex_exec:{subagent_id}"
     return rc, stdout, stderr, f"codex_exec:{subagent_id}"
 
 
@@ -1285,16 +2100,21 @@ def plan_subagent(
     elif duplicate is not None:
         allowed = False
         reason = f"duplicate_active:{duplicate.subagent_id}"
-    elif active_count >= config.max_active:
+    else:
+        recent_retryable = _recent_retryable_failure(records, target, owner_task_id)
+        if recent_retryable is not None:
+            allowed = False
+            reason = f"recent_retryable_failure:{recent_retryable.subagent_id}"
+    if allowed and active_count >= config.max_active:
         allowed = False
         reason = f"max_active_reached:{active_count}/{config.max_active}"
-    elif chosen_backend == "codex_exec" and not _codex_available():
+    elif allowed and chosen_backend == "codex_exec" and not _codex_available():
         allowed = False
         reason = "codex_missing"
-    elif chosen_backend == "openclaw" and not _openclaw_available():
+    elif allowed and chosen_backend == "openclaw" and not _openclaw_available():
         allowed = False
         reason = "openclaw_missing"
-    elif chosen_backend not in {"codex_exec", "openclaw", "mock"}:
+    elif allowed and chosen_backend not in {"codex_exec", "openclaw", "mock"}:
         allowed = False
         reason = f"unsupported_backend:{chosen_backend}"
     model, thinking, sandbox = _role_runtime_defaults(config, target)
@@ -1349,7 +2169,7 @@ def run_subagent(
         expires_at=_iso(now + timedelta(minutes=ttl)),
         ttl_min=ttl,
         backend=plan["backend"],
-        metadata={"model": plan["model"], "thinking": plan["thinking"], "sandbox": plan["sandbox"]},
+        metadata={"model": plan["model"], "thinking": plan["thinking"], "sandbox": plan["sandbox"], "purpose": task_kind, "role": plan["target_role"], "monitor_agent_id": "", "target_agent_id": "", "last_meaningful_delta": "spawned", "stalled": False, "backend_route_reason": "none", "backend_cooldown_until": ""},
     )
     records.append(record)
     _save_registry(config.registry_path, records)
@@ -1358,6 +2178,8 @@ def run_subagent(
     chosen_backend = plan["backend"]
     record.status = "running"
     record.last_update_at = _iso()
+    record.metadata["last_meaningful_delta"] = "subagent_running"
+    record.metadata["stalled"] = False
     _save_registry(config.registry_path, records)
     _emit_event(config, "planner_subagent_start", record, {"backend": chosen_backend})
 
@@ -1367,8 +2189,30 @@ def run_subagent(
     backend_ref = subagent_id
     effective_backend = chosen_backend
     prompt = _build_prompt(plan["target_role"], owner_task_id, task_kind, message)
+    active_invalid_route = _current_invalid_result_route(config, records, owner_task_id, plan["target_role"])
+    backend_route_reason = str(active_invalid_route.get("route_reason", "none") or "none").strip() or "none"
+    backend_cooldown_until = str(active_invalid_route.get("cooldown_until", "") or "").strip()
+    record.metadata["backend_route_reason"] = backend_route_reason
+    record.metadata["backend_cooldown_until"] = backend_cooldown_until
 
-    if chosen_backend == "mock":
+    if active_invalid_route and chosen_backend != "mock":
+        chosen_backend = "qwen"
+        effective_backend = "qwen"
+        backend_ref = f"qwen:{subagent_id}"
+        if not _planner_qwen_fallback_enabled():
+            rc = 5
+            stderr = f"qwen_route_disabled:{backend_route_reason}"
+        elif _active_rate_limit_reason(("qwen",)):
+            rc = 5
+            stderr = f"qwen_rate_limited:{backend_route_reason}"
+        else:
+            rc, stdout, stderr, backend_ref = _run_qwen_subagent(
+                config,
+                prompt,
+                timeout_seconds,
+                subagent_id,
+            )
+    elif chosen_backend == "mock":
         stdout = json.dumps(
             {
                 "status": "completed",
@@ -1389,19 +2233,80 @@ def run_subagent(
         )
     elif chosen_backend == "openclaw":
         cached_reason = _active_rate_limit_reason(("codex", "global"))
-        qwen_fallback = None
+        fallback_backend = None
+        def _invoke_openclaw_secondary(timeout_override_seconds: int, model_override: str = "", thinking_override: str = "") -> tuple[int, str, str]:
+            with tempfile.TemporaryDirectory(prefix="planner-subagent-") as td:
+                tmpdir = Path(td)
+                schema_path = tmpdir / "schema.json"
+                out_path = tmpdir / "last_message.json"
+                schema_path.write_text(json.dumps(RESULT_SCHEMA, ensure_ascii=True), encoding="utf-8")
+                cmd = [
+                    "codex",
+                    "exec",
+                    "--enable",
+                    "multi_agent",
+                    "--enable",
+                    "apps",
+                    "--enable",
+                    "js_repl",
+                    "-C",
+                    str(config.root),
+                    "--skip-git-repo-check",
+                    "--color",
+                    "never",
+                    "--output-schema",
+                    str(schema_path),
+                    "-o",
+                    str(out_path),
+                    "-m",
+                    str(model_override or plan["model"]),
+                    "-c",
+                    f'model_reasoning_effort="{thinking_override or plan["thinking"]}"',
+                ]
+                sandbox_token = str(plan["sandbox"]).strip().lower()
+                if sandbox_token in {"off", "danger-full-access"}:
+                    cmd.append("--dangerously-bypass-approvals-and-sandbox")
+                else:
+                    cmd.extend(["--sandbox", str(plan["sandbox"])])
+                if sandbox_token == "workspace-write":
+                    cmd.append("--full-auto")
+                timeout_value = _subprocess_timeout_value(timeout_override_seconds)
+                try:
+                    proc = subprocess.run(
+                        cmd + [prompt],
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                        cwd=str(config.root),
+                        timeout=timeout_value,
+                    )
+                    rc_local = proc.returncode
+                    stdout_local = _load_structured_output(out_path)
+                    stderr_local = proc.stderr or ""
+                    if not stdout_local:
+                        normalized_issue = _normalized_retryable_backend_issue(proc.stdout or stderr_local or "")
+                        stderr_local = "\n".join(part for part in (normalized_issue, stderr_local) if str(part or "").strip())
+                        stdout_local = proc.stdout or ""
+                except subprocess.TimeoutExpired as exc:
+                    rc_local = 124
+                    stdout_local = str(exc.stdout or "")
+                    timeout_label = timeout_value if isinstance(timeout_value, int) else "unbounded"
+                    stderr_local = str(exc.stderr or "") or f"codex_exec_timeout_after_{timeout_label}s"
+                return rc_local, stdout_local, stderr_local
         if cached_reason:
-            qwen_fallback = _maybe_run_qwen_fallback(
+            fallback_backend = _maybe_run_secondary_then_qwen_fallback(
                 config,
+                plan,
                 prompt,
                 timeout_seconds,
                 subagent_id,
                 cached_reason,
                 "openclaw_cache",
+                _invoke_openclaw_secondary,
             )
-        if qwen_fallback is not None:
-            rc, stdout, stderr, backend_ref = qwen_fallback
-            effective_backend = "qwen"
+        if fallback_backend is not None:
+            rc, stdout, stderr, backend_ref = fallback_backend
+            effective_backend = "qwen" if str(backend_ref or "").strip().lower().startswith("qwen:") else "codex_exec"
         else:
             openclaw_model = _openclaw_runtime_model(plan["model"], plan["sandbox"])
             ok, backend_ref = _ensure_openclaw_agent(
@@ -1449,17 +2354,19 @@ def run_subagent(
                     stderr = proc.stderr or ""
                     openclaw_failure_blob = f"{stdout}\n{stderr}".strip()
                     if _looks_like_rate_limited(openclaw_failure_blob):
-                        qwen_fallback = _maybe_run_qwen_fallback(
+                        fallback_backend = _maybe_run_secondary_then_qwen_fallback(
                             config,
+                            plan,
                             prompt,
                             timeout_seconds,
                             subagent_id,
                             openclaw_failure_blob,
                             "openclaw",
+                            _invoke_openclaw_secondary,
                         )
-                        if qwen_fallback is not None:
-                            rc, stdout, stderr, backend_ref = qwen_fallback
-                            effective_backend = "qwen"
+                        if fallback_backend is not None:
+                            rc, stdout, stderr, backend_ref = fallback_backend
+                            effective_backend = "qwen" if str(backend_ref or "").strip().lower().startswith("qwen:") else "codex_exec"
                     if effective_backend != "qwen" and rc != 0 and (
                         "Unknown agent id" in openclaw_failure_blob
                         or "Gateway agent failed" in openclaw_failure_blob
@@ -1500,8 +2407,15 @@ def run_subagent(
 
     config.results_dir.mkdir(parents=True, exist_ok=True)
     raw_path = config.results_dir / f"{subagent_id}.raw.txt"
-    raw_path.write_text(stdout if stdout else stderr, encoding="utf-8")
-    result_source = stdout if stdout else stderr
+    raw_blob = "\n".join(part for part in (stdout, stderr) if str(part or "").strip())
+    raw_path.write_text(raw_blob, encoding="utf-8")
+    normalized_error = ""
+    for candidate in (stderr, stdout):
+        line0 = str(candidate or "").splitlines()[0].strip() if str(candidate or "").splitlines() else ""
+        if line0.startswith("invalid_subagent_result:"):
+            normalized_error = line0
+            break
+    result_source = normalized_error or (stdout if stdout else stderr)
     if effective_backend == "openclaw" and stdout:
         extracted_text, extracted_ref = _extract_openclaw_payload_text(stdout)
         result_source = extracted_text or stdout
@@ -1520,11 +2434,24 @@ def run_subagent(
     result.backend_ref = backend_ref
     result.started_at = record.created_at
     result.finished_at = _iso()
+    route_reason_value, result_model, result_thinking = _effective_backend_details(
+        plan,
+        effective_backend,
+        backend_ref,
+        backend_route_reason,
+    )
+    result.backend_route_reason = route_reason_value
+    result.model = result_model
+    result.thinking = result_thinking
     if rc != 0:
         result.status = "failed"
-        if result.blocking_issue == "none":
+        if normalized_error:
+            result.blocking_issue = normalized_error
+        elif result.blocking_issue == "none":
             result.blocking_issue = _compact(stderr or f"{effective_backend}_rc_{rc}", 160)
-        if result.summary == "none":
+        if normalized_error and (_looks_like_startup_noise(result.summary) or result.summary == "none"):
+            result.summary = normalized_error
+        elif result.summary == "none":
             result.summary = _compact(stderr or f"{effective_backend}_failed", 220)
     else:
         status_token = str(result.status).strip().lower()
@@ -1553,8 +2480,24 @@ def run_subagent(
                     result.blocking_issue = invalid_reason
                 if result.summary == "none" or _looks_like_startup_noise(result.summary):
                     result.summary = _compact(invalid_reason, 220)
+                if effective_backend == "codex_exec" and _is_invalid_result_reason(invalid_reason):
+                    triggered_route = _current_invalid_result_route(
+                        config,
+                        records,
+                        owner_task_id,
+                        plan["target_role"],
+                        current_failure_reason=invalid_reason,
+                    )
+                    if triggered_route:
+                        backend_route_reason = str(triggered_route.get("route_reason", "invalid_result_burst") or "invalid_result_burst").strip()
+                        backend_cooldown_until = str(triggered_route.get("cooldown_until", "") or "").strip()
+                        if result.recommended_next == "none":
+                            result.recommended_next = "planner_retry_with_qwen_after_invalid_result_burst"
     result_path = config.results_dir / f"{subagent_id}.result.json"
     result_path.write_text(json.dumps(result.as_dict(), indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    if effective_backend == "qwen" and str(result.status).strip().lower() in SUCCESS_RESULT_STATUSES:
+        _clear_invalid_result_route(config, owner_task_id, plan["target_role"])
+        backend_cooldown_until = ""
 
     for idx, existing in enumerate(records):
         if existing.subagent_id == subagent_id:
@@ -1574,6 +2517,16 @@ def run_subagent(
             records[idx].vision_alignment = result.vision_alignment
             records[idx].recommended_next = result.recommended_next
             records[idx].blocking_issue = result.blocking_issue
+            records[idx].metadata["purpose"] = existing.task_kind or task_kind
+            records[idx].metadata["role"] = existing.target_role or plan["target_role"]
+            records[idx].metadata["model"] = result_model
+            records[idx].metadata["thinking"] = result_thinking
+            records[idx].metadata["last_meaningful_delta"] = _result_meaningful_delta(result)
+            records[idx].metadata["stalled"] = bool(result.status in BLOCKED_RESULT_STATUSES or str(result.blocking_issue).strip().lower() not in {"", "none"})
+            records[idx].metadata["monitor_agent_id"] = str(records[idx].metadata.get("monitor_agent_id", "") or "")
+            records[idx].metadata["target_agent_id"] = str(records[idx].metadata.get("target_agent_id", "") or "")
+            records[idx].metadata["backend_route_reason"] = route_reason_value
+            records[idx].metadata["backend_cooldown_until"] = backend_cooldown_until
             break
     _save_registry(config.registry_path, records)
     emitted = next((row for row in records if row.subagent_id == subagent_id), record)
@@ -1583,18 +2536,94 @@ def run_subagent(
     payload = result.as_dict()
     payload["ok"] = rc == 0 and str(result.status).strip().lower() in SUCCESS_RESULT_STATUSES
     payload["rc"] = rc
-    if effective_backend == "openclaw":
-        payload["model"] = _openclaw_cli_model(plan["model"])
-    elif effective_backend == "qwen":
-        payload["model"] = str(os.environ.get("FC_PLANNER_QWEN_MODEL", "qwen")).strip() or "qwen"
+    payload["backend_route_reason"] = route_reason_value
+    payload["model"] = result_model
+    payload["thinking"] = result_thinking
     if stderr:
         payload["stderr"] = _compact(stderr, 220)
     return (0 if payload["ok"] else 6), payload
 
 
+def _recover_subagent_from_results(
+    config: PlannerSubagentConfig,
+    role: str,
+    subagent_id: str,
+    owner_task_id: str,
+) -> tuple[PlannerSubagentRecord | None, dict[str, Any]]:
+    candidate_paths: list[Path] = []
+    if subagent_id:
+        candidate_paths.append(config.results_dir / f"{subagent_id}.result.json")
+    else:
+        candidate_paths.extend(sorted(config.results_dir.glob("*.result.json")))
+    parent_role = canonical_role(role)
+    for candidate in candidate_paths:
+        payload = _read_json(candidate, {})
+        if not isinstance(payload, dict) or not payload:
+            continue
+        candidate_subagent_id = str(payload.get("subagent_id") or candidate.name.removesuffix(".result.json")).strip()
+        candidate_owner_task_id = str(payload.get("owner_task_id", "")).strip()
+        candidate_parent_role = canonical_role(payload.get("parent_role") or role)
+        if subagent_id and candidate_subagent_id != subagent_id:
+            continue
+        if owner_task_id and candidate_owner_task_id != owner_task_id:
+            continue
+        if candidate_parent_role != parent_role:
+            continue
+        target_role = canonical_role(payload.get("target_role") or payload.get("role"))
+        if not target_role:
+            token = candidate_subagent_id.lower()
+            if token.startswith("planner_dev_"):
+                target_role = "dev"
+            elif token.startswith("planner_admin_"):
+                target_role = "admin"
+            elif token.startswith("planner_scrum_master_") or token.startswith("planner_sm_"):
+                target_role = "scrum_master"
+        if not target_role:
+            continue
+        status = str(payload.get("status", "completed")).strip() or "completed"
+        created_at = str(payload.get("started_at") or payload.get("created_at") or _iso()).strip() or _iso()
+        try:
+            ttl_min = max(1, int(payload.get("ttl_min") or 30))
+        except Exception:
+            ttl_min = 30
+        expires_at = str(payload.get("expires_at") or _iso((_parse_iso(created_at) or _now()) + timedelta(minutes=ttl_min))).strip()
+        if not expires_at:
+            expires_at = _iso((_parse_iso(created_at) or _now()) + timedelta(minutes=ttl_min))
+        record = PlannerSubagentRecord(
+            subagent_id=candidate_subagent_id,
+            target_role=target_role,
+            owner_task_id=candidate_owner_task_id,
+            parent_role=candidate_parent_role,
+            task_kind=str(payload.get("task_kind") or payload.get("purpose") or "delivery").strip() or "delivery",
+            status=status,
+            created_at=created_at,
+            expires_at=expires_at,
+            ttl_min=ttl_min,
+            backend=str(payload.get("backend") or "codex_exec").strip() or "codex_exec",
+            backend_ref=str(payload.get("backend_ref") or "").strip(),
+            last_update_at=str(payload.get("finished_at") or payload.get("updated_at") or created_at).strip() or created_at,
+            summary=str(payload.get("summary") or "").strip(),
+            root_cause=str(payload.get("root_cause") or "").strip(),
+            fix_applied=str(payload.get("fix_applied") or "").strip(),
+            artifact=str(payload.get("artifact") or "").strip(),
+            verify=str(payload.get("verify") or "").strip(),
+            files_touched=str(payload.get("files_touched") or "none").strip() or "none",
+            tests_run=str(payload.get("tests_run") or "SKIP(no_tests)").strip() or "SKIP(no_tests)",
+            commit_sha=str(payload.get("commit_sha") or "none").strip() or "none",
+            architecture_check=str(payload.get("architecture_check") or "none").strip() or "none",
+            vision_alignment=str(payload.get("vision_alignment") or "none").strip() or "none",
+            recommended_next=str(payload.get("recommended_next") or "none").strip() or "none",
+            blocking_issue=str(payload.get("blocking_issue") or "none").strip() or "none",
+            metadata={"recovered_from_result": True},
+        )
+        return record, payload
+    return None, {}
+
+
 def collect_subagent(config: PlannerSubagentConfig, role: str, subagent_id: str, owner_task_id: str, mark_merged: bool) -> tuple[int, dict[str, Any]]:
     records = _records_from_registry(_load_registry(config.registry_path))
     target: PlannerSubagentRecord | None = None
+    recovered_payload: dict[str, Any] = {}
     for record in records:
         if subagent_id and record.subagent_id == subagent_id:
             target = record
@@ -1602,41 +2631,122 @@ def collect_subagent(config: PlannerSubagentConfig, role: str, subagent_id: str,
         if owner_task_id and record.owner_task_id == owner_task_id and record.parent_role == canonical_role(role):
             target = record
     if target is None:
-        return 3, {"ok": False, "reason": "subagent_not_found"}
+        target, recovered_payload = _recover_subagent_from_results(config, role, subagent_id, owner_task_id)
+        if target is None:
+            return 3, {"ok": False, "reason": "subagent_not_found"}
+        if not any(record.subagent_id == target.subagent_id for record in records):
+            records.append(target)
     if canonical_role(role) != target.parent_role:
         return 4, {"ok": False, "reason": "parent_role_mismatch"}
     result_path = config.results_dir / f"{target.subagent_id}.result.json"
-    payload = _read_json(result_path, {})
+    raw_path = config.results_dir / f"{target.subagent_id}.raw.txt"
+    payload = recovered_payload or _read_json(result_path, {})
     if not isinstance(payload, dict):
         payload = {}
+    if payload and raw_path.exists() and _payload_needs_raw_recovery(payload):
+        recovered_from_raw = _recover_payload_from_raw_output(
+            _read_text_if_exists(raw_path),
+            subagent_id=target.subagent_id,
+            target_role=target.target_role,
+            owner_task_id=target.owner_task_id,
+            parent_role=target.parent_role,
+            task_kind=target.task_kind,
+            backend=target.backend,
+        )
+        if _payload_signal_score(recovered_from_raw) > _payload_signal_score(payload):
+            payload = recovered_from_raw
+            _write_json(result_path, payload)
     if not payload:
-        payload = {
-            "status": "failed",
-            "summary": "invalid_subagent_result:missing_result_payload",
-            "blocking_issue": "invalid_subagent_result:missing_result_payload",
-        }
+        if str(target.status).strip().lower() in ACTIVE_STATUSES:
+            payload = {
+                "subagent_id": target.subagent_id,
+                "target_role": target.target_role,
+                "owner_task_id": target.owner_task_id,
+                "parent_role": target.parent_role,
+                "task_kind": target.task_kind,
+                "status": str(target.status).strip().lower() or "running",
+                "summary": "subagent_result_pending:missing_result_payload",
+                "root_cause": "pending_result_payload",
+                "fix_applied": "pending_result_payload",
+                "artifact": target.artifact or "none",
+                "verify": target.verify or "none",
+                "files_touched": target.files_touched or "none",
+                "tests_run": target.tests_run or "SKIP(no_result_payload)",
+                "commit_sha": target.commit_sha or "none",
+                "architecture_check": target.architecture_check or "none",
+                "vision_alignment": target.vision_alignment or "none",
+                "recommended_next": "await_result_payload",
+                "blocking_issue": "subagent_result_pending:missing_result_payload",
+            }
+        else:
+            payload = {
+                "subagent_id": target.subagent_id,
+                "target_role": target.target_role,
+                "owner_task_id": target.owner_task_id,
+                "parent_role": target.parent_role,
+                "task_kind": target.task_kind,
+                "status": "failed",
+                "summary": "invalid_subagent_result:missing_result_payload",
+                "root_cause": "missing_result_payload",
+                "fix_applied": "none",
+                "artifact": target.artifact or "none",
+                "verify": target.verify or "none",
+                "files_touched": target.files_touched or "none",
+                "tests_run": target.tests_run or "SKIP(no_result_payload)",
+                "commit_sha": target.commit_sha or "none",
+                "architecture_check": target.architecture_check or "none",
+                "vision_alignment": target.vision_alignment or "none",
+                "recommended_next": "repair_result_payload",
+                "blocking_issue": "invalid_subagent_result:missing_result_payload",
+            }
     status_token = str(payload.get("status", "")).strip().lower()
     mergeable, invalid_reason = _semantic_result_gate(payload)
+    pending_result = str(payload.get("blocking_issue", "")).strip().lower().startswith("subagent_result_pending:")
     if mark_merged:
         for record in records:
             if record.subagent_id == target.subagent_id:
                 record.last_update_at = _iso()
                 record.summary = str(payload.get("summary", record.summary)).strip()
-                record.blocking_issue = str(payload.get("blocking_issue", record.blocking_issue)).strip() or record.blocking_issue
-                if mergeable and status_token in SUCCESS_OUTPUT_STATUSES:
+                record.root_cause = str(payload.get("root_cause", record.root_cause)).strip() or record.root_cause
+                record.fix_applied = str(payload.get("fix_applied", record.fix_applied)).strip() or record.fix_applied
+                record.artifact = str(payload.get("artifact", record.artifact)).strip() or record.artifact
+                record.verify = str(payload.get("verify", record.verify)).strip() or record.verify
+                record.files_touched = str(payload.get("files_touched", record.files_touched)).strip() or record.files_touched
+                record.tests_run = str(payload.get("tests_run", record.tests_run)).strip() or record.tests_run
+                record.commit_sha = str(payload.get("commit_sha", record.commit_sha)).strip() or record.commit_sha
+                record.architecture_check = str(payload.get("architecture_check", record.architecture_check)).strip() or record.architecture_check
+                record.vision_alignment = str(payload.get("vision_alignment", record.vision_alignment)).strip() or record.vision_alignment
+                record.recommended_next = str(payload.get("recommended_next", record.recommended_next)).strip() or record.recommended_next
+                payload_issue = _meaningful_issue(payload.get("blocking_issue"))
+                if payload_issue:
+                    record.blocking_issue = payload_issue
+                record.metadata["last_meaningful_delta"] = _payload_meaningful_delta(payload)
+                if pending_result and str(record.status).strip().lower() in ACTIVE_STATUSES:
+                    record.status = str(record.status).strip().lower() or "running"
+                    record.metadata["stalled"] = False
+                elif mergeable and status_token in SUCCESS_OUTPUT_STATUSES:
                     record.status = "merged"
                     record.merged_at = _iso()
+                    record.blocking_issue = "none"
+                    record.metadata["stalled"] = False
                     _emit_event(config, "planner_subagent_merge", record, {"merged_by": canonical_role(role)})
                 else:
                     record.status = "failed" if status_token != "blocked" else "blocked"
-                    record.blocking_issue = invalid_reason if invalid_reason != "none" else (record.blocking_issue or f"subagent_status_{status_token or 'unknown'}")
+                    record.blocking_issue = (
+                        invalid_reason
+                        if invalid_reason != "none"
+                        else _meaningful_issue(record.blocking_issue) or f"subagent_status_{status_token or 'unknown'}"
+                    )
+                    record.metadata["stalled"] = bool(record.status == "blocked")
                     _emit_event(config, "planner_subagent_rejected", record, {"merged_by": canonical_role(role), "reason": record.blocking_issue})
                 break
         _save_registry(config.registry_path, records)
     payload["mergeable"] = mergeable
     payload["ok"] = bool(mergeable and status_token in SUCCESS_OUTPUT_STATUSES)
-    if invalid_reason != "none" and not str(payload.get("blocking_issue", "")).strip():
+    if invalid_reason != "none" and not _meaningful_issue(payload.get("blocking_issue")):
         payload["blocking_issue"] = invalid_reason
+    elif not payload["ok"] and not _meaningful_issue(payload.get("blocking_issue")):
+        payload["blocking_issue"] = f"subagent_status_{status_token or 'unknown'}"
     return (0 if payload["ok"] else 6), payload
 
 
@@ -1654,8 +2764,89 @@ def status_snapshot(config: PlannerSubagentConfig, role: str = "") -> dict[str, 
         _save_registry(config.registry_path, records)
     role_token = canonical_role(role) if role else ""
     filtered = [record for record in records if not role_token or record.parent_role == role_token]
+
     active = [record.as_dict() for record in filtered if _record_effectively_active(config, record)]
-    recent = [record.as_dict() for record in filtered if record.status in FINISHED_STATUSES][-8:]
+    active.sort(key=lambda row: str(row.get("last_update_at") or row.get("created_at") or ""), reverse=True)
+    recent = [record.as_dict() for record in filtered if record.status in FINISHED_STATUSES]
+    recent.sort(key=lambda row: str(row.get("merged_at") or row.get("last_update_at") or row.get("created_at") or ""), reverse=True)
+    recent = recent[:8]
+
+    active_openclaw_ids = _openclaw_agent_ids()
+    anomaly_after_seconds = max(300, int(os.environ.get("FC_PLANNER_NATIVE_DELTA_STALE_SECONDS", "1800")))
+    now = _now()
+    anomalies: list[dict[str, Any]] = []
+    known_ids = {str(row.get("subagent_id", "")).strip() for row in active + recent if str(row.get("subagent_id", "")).strip()}
+    for row in active:
+        subagent_id = str(row.get("subagent_id", "")).strip()
+        backend = str(row.get("backend", "")).strip().lower()
+        target_agent_id = str(row.get("target_agent_id", "")).strip()
+        monitor_agent_id = str(row.get("monitor_agent_id", "")).strip()
+        last_update_at = _parse_iso(str(row.get("last_update_at", "")).strip()) or _parse_iso(str(row.get("created_at", "")).strip())
+        age_seconds = int((now - last_update_at).total_seconds()) if last_update_at else -1
+        delta = _normalize_meaningful_delta(row.get("last_meaningful_delta"), fallback="none")
+        if backend == "openclaw" and subagent_id and subagent_id not in active_openclaw_ids and not _subagent_launcher_alive(subagent_id):
+            anomalies.append({"code": "agent_referenced_missing", "subagent_id": subagent_id})
+        if monitor_agent_id and target_agent_id and target_agent_id not in known_ids:
+            anomalies.append({"code": "monitor_without_target", "subagent_id": subagent_id, "target_agent_id": target_agent_id})
+        if age_seconds >= anomaly_after_seconds and delta == "none":
+            anomalies.append({"code": "no_meaningful_delta", "subagent_id": subagent_id, "age_s": age_seconds})
+
+    recent_success_count = sum(1 for row in recent if str(row.get("status", "")).strip().lower() in SUCCESS_RESULT_STATUSES)
+    recent_failed_count = sum(1 for row in recent if str(row.get("status", "")).strip().lower() == "failed")
+    recent_blocked_count = sum(1 for row in recent if str(row.get("status", "")).strip().lower() in BLOCKED_RESULT_STATUSES)
+    recent_fallback_like_count = sum(1 for row in recent if str(row.get("backend", "")).strip().lower() == "qwen")
+    recent_invalid_result_count = sum(1 for row in recent if "invalid_subagent_result" in str(row.get("blocking_issue", "")).strip().lower())
+    recent_timeout_like_count = sum(1 for row in recent if "timeout" in str(row.get("blocking_issue", "")).strip().lower())
+    monitor_active_count = sum(
+        1
+        for row in active
+        if str(row.get("monitor_agent_id", "")).strip() or str(row.get("role", "")).strip().lower() == "monitor"
+    )
+    recent_by_role: dict[str, dict[str, int]] = {}
+    for row in recent:
+        role_name = str(row.get("role", row.get("target_role", "unknown"))).strip() or "unknown"
+        bucket = recent_by_role.setdefault(role_name, {"total": 0, "success": 0, "failed": 0, "blocked": 0, "fallback_like": 0})
+        bucket["total"] += 1
+        status_token = str(row.get("status", "")).strip().lower()
+        if status_token in SUCCESS_RESULT_STATUSES:
+            bucket["success"] += 1
+        elif status_token == "failed":
+            bucket["failed"] += 1
+        elif status_token in BLOCKED_RESULT_STATUSES:
+            bucket["blocked"] += 1
+        if str(row.get("backend", "")).strip().lower() == "qwen":
+            bucket["fallback_like"] += 1
+
+    latest = active[0] if active else (recent[0] if recent else {})
+    active_invalid_routes = _active_invalid_result_routes(config)
+    latest_invalid_route = active_invalid_routes[0] if active_invalid_routes else {}
+    latest_status = str(latest.get("status", "")).strip().lower()
+    latest_backend = str(latest.get("backend", "")).strip().lower()
+    latest_failure_mode = str(latest.get("blocking_issue", "")).strip().lower() or "none"
+    latest_last_meaningful_delta = _normalize_meaningful_delta(latest.get("last_meaningful_delta"), fallback="none")
+    if _is_invalid_result_reason(latest_failure_mode):
+        latest_last_meaningful_delta = "none"
+    monitor_without_target_count = sum(1 for item in anomalies if str(item.get("code", "")).strip() == "monitor_without_target")
+    collect_timeout_without_agents = any(
+        str(item.get("code", "")).strip() == "collect_timeout_without_agents" for item in anomalies
+    )
+    backend_route_reason = str(latest_invalid_route.get("route_reason", "none") or "none").strip() or "none"
+    backend_cooldown_until = str(latest_invalid_route.get("cooldown_until", "") or "").strip()
+    degraded_backend = latest_backend == "qwen" or backend_route_reason != "none"
+    if degraded_backend:
+        planner_state = "degraded_backend"
+    elif monitor_active_count > 0:
+        planner_state = "monitoring"
+    elif active:
+        planner_state = "waiting_on_agents"
+    elif _is_invalid_result_reason(latest_failure_mode):
+        planner_state = "blocked"
+    elif anomalies or latest_status in BLOCKED_RESULT_STATUSES.union({"failed"}):
+        planner_state = "blocked"
+    else:
+        planner_state = "working"
+    success_denominator = recent_success_count + recent_failed_count + recent_blocked_count
+    recent_success_rate = (recent_success_count / success_denominator) if success_denominator > 0 else 1.0
     return {
         "ok": True,
         "enabled": config.enabled,
@@ -1665,6 +2856,35 @@ def status_snapshot(config: PlannerSubagentConfig, role: str = "") -> dict[str, 
         "max_active": config.max_active,
         "active": active,
         "recent": recent,
+        "recent_total": len(recent),
+        "recent_success_count": recent_success_count,
+        "recent_failed_count": recent_failed_count,
+        "recent_blocked_count": recent_blocked_count,
+        "recent_fallback_like_count": recent_fallback_like_count,
+        "recent_invalid_result_count": recent_invalid_result_count,
+        "recent_timeout_like_count": recent_timeout_like_count,
+        "recent_success_rate": recent_success_rate,
+        "recent_by_role": recent_by_role,
+        "latest_status": latest_status,
+        "latest_backend": latest_backend,
+        "latest_owner_task_id": str(latest.get("owner_task_id", "")).strip(),
+        "latest_update_at": str(latest.get("last_update_at", "")).strip(),
+        "latest_last_meaningful_delta": latest_last_meaningful_delta,
+        "latest_monitor_agent_id": str(latest.get("monitor_agent_id", "")).strip(),
+        "latest_purpose": str(latest.get("purpose", "")).strip(),
+        "latest_fallback_like": latest_backend == "qwen",
+        "latest_failure_mode": latest_failure_mode,
+        "monitor_active_count": monitor_active_count,
+        "monitoring_count": monitor_active_count,
+        "monitor_without_target_count": monitor_without_target_count,
+        "degraded_backend": degraded_backend,
+        "backend_route_reason": backend_route_reason,
+        "backend_cooldown_until": backend_cooldown_until,
+        "last_meaningful_delta": latest_last_meaningful_delta,
+        "collect_timeout_without_agents": collect_timeout_without_agents,
+        "planner_state": planner_state,
+        "status": planner_state,
+        "anomalies": anomalies[:8],
         "events_path": str(config.events_path.relative_to(config.root)),
         "registry_path": str(config.registry_path.relative_to(config.root)),
     }
