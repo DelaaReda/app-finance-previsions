@@ -5747,6 +5747,10 @@ function normalizeCopilotStartOpenTarget(target, id = '') {
     || normalizedTarget === '/copilot/ask'
     || normalizedTarget === 'copilot/ask'
     || normalizedTarget === 'copilot'
+    || normalizedTarget === 'personal-finance'
+    || normalizedTarget === '/personal-finance'
+    || normalizedTarget.startsWith('/personal-finance/')
+    || normalizedTarget.startsWith('personal-finance/')
   ) {
     return 'copilot';
   }
@@ -5973,6 +5977,18 @@ function runCopilotStartPrompt(prompt, tickers = []) {
 function resolveCopilotStartOpenDestination(target) {
   const normalizedTarget = normalizeCopilotStartOpenTarget(target);
   if (!normalizedTarget) return null;
+
+  if (
+    normalizedTarget === 'personal-finance'
+    || normalizedTarget === '/personal-finance'
+    || normalizedTarget.startsWith('/personal-finance/')
+    || normalizedTarget.startsWith('personal-finance/')
+  ) {
+    return {
+      target: 'copilot',
+      tab: 'copilot'
+    };
+  }
 
   const destination = {
     brief: {

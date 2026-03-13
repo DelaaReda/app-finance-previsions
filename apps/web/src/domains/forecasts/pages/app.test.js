@@ -3351,6 +3351,18 @@ test('runCopilotStartOpen opens the overlay for a trailing-slash copilot target'
   assert.deepEqual(calls.toasts, []);
 });
 
+test('runCopilotStartOpen opens the overlay for a personal-finance namespace target', () => {
+  const { sandbox, overlay, calls } = loadRunCopilotStartOpen();
+
+  sandbox.runCopilotStartOpen('/personal-finance');
+
+  assert.equal(calls.toggled, 1);
+  assert.equal(calls.focused, 1);
+  assert.equal(overlay.style.display, 'block');
+  assert.deepEqual(calls.switched, []);
+  assert.deepEqual(calls.toasts, []);
+});
+
 test('runCopilotStartOpen routes the landing brief to overview and scrolls the live brief widget', () => {
   const { sandbox, overlay, calls } = loadRunCopilotStartOpen();
 
