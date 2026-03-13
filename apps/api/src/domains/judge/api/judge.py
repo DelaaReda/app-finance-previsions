@@ -3909,6 +3909,81 @@ async def get_judge_options():
     return await get_judge_options_payload(risk_levels_fn=_judge_risk_levels)
 
 
+@router.get("/personal-finance/start")
+async def get_judge_personal_finance_start(
+    tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+    debug: bool = Query(False, description="Expose debug metadata for development."),
+    debug_full: bool = Query(
+        False,
+        description="Includes debug internals (admin-gated).",
+    ),
+    x_debug_token: Optional[str] = Header(
+        default=None,
+        alias="X-Debug-Token",
+        description="Token admin requis pour debug_full si JUDGE_DEBUG_ADMIN_TOKEN est configure.",
+    ),
+):
+    from services.judge_endpoint_service import (
+        get_judge_personal_finance_start_payload,
+    )
+
+    normalized_tickers = normalize_tickers(tickers or [])
+    now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    debug_full_enabled, debug_full_reason = _resolve_debug_full_access(
+        debug=debug,
+        debug_full=debug_full,
+        debug_token=x_debug_token,
+    )
+    if debug and debug_full and not debug_full_enabled:
+        return {
+            "ok": True,
+            "data": {
+                "brief_of_day": {
+                    "summary": "Debug payload unavailable.",
+                    "market_sentiment": "UNKNOWN",
+                    "top_signals": [],
+                    "top_risks": [],
+                    "macro_signals": [],
+                    "sector_rotation": {"top": [], "bottom": []},
+                    "generated_at": now_iso,
+                    "freshness": now_iso,
+                    "source": ["judge_personal_finance_start_route", "debug_full_denied"],
+                },
+                "ask": [],
+                "open": [],
+                "source": ["judge_personal_finance_start_route", "debug_full_denied"],
+                "sources": ["judge_personal_finance_start_route", "debug_full_denied"],
+                "generated_at": now_iso,
+                "freshness": now_iso,
+                "stats": {
+                    "ask_count": 0,
+                    "open_count": 0,
+                },
+                "filters_applied": {"tickers": list(normalized_tickers)},
+                "warnings": ["debug_full requires JUDGE_ALLOW_DEBUG_FULL=1"],
+                "error": debug_full_reason,
+            },
+        }
+
+    response = await get_judge_personal_finance_start_payload(tickers=normalized_tickers)
+
+    data = response.get("data") if isinstance(response, dict) else {}
+    if isinstance(data, dict) and debug:
+        debug_metadata = {
+            "cache_hit": False,
+            "path": "judge_personal_finance_start",
+            "requested_tickers": list(normalized_tickers),
+            "debug_full_enabled": bool(debug_full_enabled),
+            "debug_full": bool(debug_full),
+            "debug_full_reason": debug_full_reason,
+        }
+        if isinstance(data.get("warnings"), list):
+            data["warnings"].append("debug_mode_active")
+        data["debug_pipeline"] = debug_metadata
+
+    return response
+
+
 @router.get("/decision-journal")
 async def get_judge_decision_journal(
     decision_id: Optional[str] = Query(default=None, description="Filter by decision id"),

@@ -1225,3 +1225,71 @@ def test_judge_event_impact_horizon_matrix_route_delegates_to_service(monkeypatc
     assert payload["ok"] is True
     assert payload["data"]["matrix"][0]["event_type"] == "sanctions"
     assert captured == {"event_type": "sanctions", "limit": 2}
+
+
+def test_judge_personal_finance_start_route_delegates_to_service(monkeypatch):
+    captured = {}
+
+    async def fake_get_judge_personal_finance_start_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "data": {
+                "brief_of_day": {
+                    "summary": "Market calm, no high-impact headlines today.",
+                    "market_sentiment": "NEUTRAL",
+                    "top_signals": [],
+                    "top_risks": [],
+                    "macro_signals": [],
+                    "generated_at": "2026-03-12T09:00:00Z",
+                    "freshness": "2026-03-12T09:00:00Z",
+                    "source": ["judge_personal_finance_start_service"],
+                },
+                "ask": [
+                    {
+                        "id": "ask_copilot",
+                        "prompt": "What should I do today?",
+                        "target": "/copilot/ask",
+                    }
+                ],
+                "open": [
+                    {
+                        "id": "briefing",
+                        "label": "Open market view",
+                        "target": "/brief/daily",
+                    }
+                ],
+                "generated_at": "2026-03-12T09:00:00Z",
+                "freshness": "2026-03-12T09:00:00Z",
+                "source": ["judge_personal_finance_start_service", "copilot_route"],
+                "sources": ["judge_personal_finance_start_service", "copilot_route"],
+                "filters_applied": {"tickers": ["MSFT", "NVDA"]},
+                "stats": {
+                    "ask_count": 1,
+                    "open_count": 1,
+                },
+                "warnings": [],
+            },
+            "freshness": "2026-03-12T09:00:00Z",
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_personal_finance_start_payload",
+        fake_get_judge_personal_finance_start_payload,
+    )
+
+    client = _client()
+    resp = client.get(
+        "/api/judge/personal-finance/start?tickers=nvda&tickers=msft&debug=true"
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["brief_of_day"]["summary"]
+    assert data["ask"][0]["id"] == "ask_copilot"
+    assert data["open"][0]["id"] == "briefing"
+    assert data["stats"]["ask_count"] == 1
+    assert sorted(captured["tickers"]) == ["MSFT", "NVDA"]

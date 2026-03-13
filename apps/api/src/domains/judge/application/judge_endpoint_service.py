@@ -3132,6 +3132,163 @@ async def get_judge_options_payload(
         )
 
 
+async def get_judge_personal_finance_start_payload(
+    *,
+    tickers: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Build personal-finance copilot starter payload used by judge API routes."""
+    from importlib import import_module
+
+    now_iso = utc_now_iso()
+    normalized_tickers = normalize_tickers(tickers or [])
+    scope = {"tickers": normalized_tickers} if normalized_tickers else None
+
+    try:
+        try:
+            copilot_service = import_module("domains.copilot.application.copilot_service")
+        except Exception:
+            copilot_service = import_module("services")
+
+        try:
+            context_module = import_module("domains.copilot.application.context_service")
+            context_service_cls = getattr(context_module, "ContextService", None)
+        except Exception:
+            try:
+                context_module = import_module("services.context_service")
+                context_service_cls = getattr(context_module, "ContextService", None)
+            except Exception:
+                context_service_cls = None
+
+        if hasattr(copilot_service, "build_context_payload"):
+            payload = await copilot_service.build_context_payload(
+                context_service_cls=context_service_cls,
+                scope=scope,
+            )
+        else:
+            payload = {}
+
+        copilot_start = (
+            payload.get("copilot_start")
+            if isinstance(payload, dict)
+            else None
+        )
+        if not isinstance(copilot_start, dict) or not copilot_start:
+            build_start_payload = getattr(
+                copilot_service,
+                "_build_copilot_start_payload",
+                None,
+            ) or getattr(copilot_service, "_legacy_copilot_start_payload", None)
+            if callable(build_start_payload):
+                copilot_start = build_start_payload(
+                    daily_brief=payload.get("daily_brief") if isinstance(payload, dict) else None,
+                    entry_points=payload.get("entry_points") if isinstance(payload, dict) else None,
+                    scope=scope,
+                )
+            else:
+                daily_brief = {
+                    "summary": "No daily brief available yet.",
+                    "market_sentiment": "UNKNOWN",
+                    "top_signals": [],
+                    "top_risks": [],
+                    "macro_signals": [],
+                    "sector_rotation": {"top": [], "bottom": []},
+                    "generated_at": now_iso,
+                    "freshness": now_iso,
+                    "source": ["judge_personal_finance_fallback"],
+                }
+                copilot_start = {
+                    "brief_of_day": daily_brief,
+                    "ask": [],
+                    "open": [],
+                }
+
+        resolved_start = dict(copilot_start) if isinstance(copilot_start, dict) else {}
+        brief = (
+            dict(resolved_start.get("brief_of_day"))
+            if isinstance(resolved_start.get("brief_of_day"), dict)
+            else {}
+        )
+        ask_items = [dict(item) for item in resolved_start.get("ask") if isinstance(item, dict)]
+        open_items = [dict(item) for item in resolved_start.get("open") if isinstance(item, dict)]
+
+        result: Dict[str, Any] = {
+            "brief_of_day": brief,
+            "ask": ask_items,
+            "open": open_items,
+            "generated_at": brief.get("generated_at") or now_iso,
+            "freshness": brief.get("freshness") or brief.get("generated_at") or now_iso,
+            "source": ensure_source_list(
+                (payload.get("source") if isinstance(payload, dict) else None),
+                default_source="judge_personal_finance_start_service",
+            ),
+            "sources": ensure_source_list(
+                (payload.get("sources") if isinstance(payload, dict) else None),
+                default_source="judge_personal_finance_start_service",
+            ),
+            "filters_applied": {"tickers": list(normalized_tickers)},
+            "stats": {
+                "ask_count": len(ask_items),
+                "open_count": len(open_items),
+            },
+            "warnings": [],
+        }
+
+        if (payload or {}).get("context_influence") is not None:
+            result["context_influence"] = payload.get("context_influence")
+        if (payload or {}).get("portfolio_context") is not None:
+            result["portfolio_context"] = payload.get("portfolio_context")
+        if (payload or {}).get("regime_detection") is not None:
+            result["regime_detection"] = payload.get("regime_detection")
+        if (payload or {}).get("allocation_drift_alerts") is not None:
+            result["allocation_drift_alerts"] = payload.get("allocation_drift_alerts")
+        if not (result.get("source") or [])[0:1] and not result.get("sources"):
+            result["source"] = ["judge_personal_finance_start_service", "copilot_route_fallback"]
+            result["sources"] = ["judge_personal_finance_start_service", "copilot_route_fallback"]
+
+        if (payload or {}).get("regime") == "fallback":
+            result.setdefault("warnings", []).append("Market context service temporarily unavailable.")
+
+        return service_response_with_metadata(
+            result,
+            default_source="judge_personal_finance_start_service",
+            freshness=result.get("freshness"),
+        )
+    except Exception as exc:
+        return service_response_with_metadata(
+            {
+                "brief_of_day": {
+                    "summary": "No daily brief available yet.",
+                    "market_sentiment": "UNKNOWN",
+                    "top_signals": [],
+                    "top_risks": [],
+                    "macro_signals": [],
+                    "sector_rotation": {"top": [], "bottom": []},
+                    "generated_at": now_iso,
+                    "freshness": now_iso,
+                    "source": ["judge_personal_finance_fallback"],
+                },
+                "ask": [],
+                "open": [],
+                "generated_at": now_iso,
+                "freshness": now_iso,
+                "source": ["judge_personal_finance_start_service", "critical_error_fallback"],
+                "sources": ["judge_personal_finance_start_service", "critical_error_fallback"],
+                "filters_applied": {"tickers": list(normalized_tickers)},
+                "stats": {
+                    "ask_count": 0,
+                    "open_count": 0,
+                },
+                "warnings": ["Fell back to judge personal finance starter defaults."],
+                "error": str(exc),
+                "message": "personal-finance start fallback response",
+            },
+            default_source="judge_personal_finance_start_service",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
+        )
+
+
 async def get_judge_geopolitical_risk_graph_payload(
     *,
     region: Optional[str],
