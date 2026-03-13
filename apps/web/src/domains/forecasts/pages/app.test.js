@@ -5317,6 +5317,11 @@ test('renderAlertTimeline includes policy summary copy in the visible card body'
 
 test('renderAlertTimeline surfaces top queue summary and urgency tier badges', () => {
   const { sandbox, timelineContainer } = loadAlertTimelineHelpers();
+  sandbox.alertTimelineMeta = {
+    suppressedCount: 3,
+    suppressionWindowMinutes: 15,
+    topPriorityBand: 'urgent',
+  };
 
   sandbox.renderAlertTimeline([
     {
@@ -5327,6 +5332,10 @@ test('renderAlertTimeline surfaces top queue summary and urgency tier badges', (
       description: 'Cloud margin drift now requires a portfolio review.',
       severity: 'medium',
       priority_band: 'urgent',
+      priority_rank: 1,
+      suppression: {
+        repeat_count: 4,
+      },
       confidence: 0.88,
       timestamp: '2026-03-10T09:00:00Z',
     },
@@ -5346,5 +5355,7 @@ test('renderAlertTimeline surfaces top queue summary and urgency tier badges', (
   assert.match(timelineContainer.innerHTML, /Top queue: MSFT Risk • Urgent queue/);
   assert.match(timelineContainer.innerHTML, /Urgent 1/);
   assert.match(timelineContainer.innerHTML, /Action 1/);
-  assert.match(timelineContainer.innerHTML, /Urgent queue • alerts engine • 88% confidence • 2 minutes ago/);
+  assert.match(timelineContainer.innerHTML, /Held 3/);
+  assert.match(timelineContainer.innerHTML, /15m window/);
+  assert.match(timelineContainer.innerHTML, /Urgent queue • repeat 4x • alerts engine • 88% confidence • 2 minutes ago/);
 });

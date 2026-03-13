@@ -861,6 +861,65 @@ test('askCopilot infers degraded memo state from quality metadata without explic
   assert.equal(payload.data.quality_status, 'degraded');
 });
 
+test('askCopilot preserves rich alerting memo risk metadata for the brief path', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          answer: 'Urgent risk remains concentrated into one catalyst.',
+          memo: {
+            summary: 'Urgent risk remains concentrated into one catalyst.',
+            top_risk_items: [
+              {
+                ticker: 'NVDA',
+                priority: 'high',
+                suppression_reason: 'duplicate_fatigue',
+                urgent_bypass: true,
+              },
+            ],
+            suppressed_risks: [
+              {
+                ticker: 'QQQ',
+                suppression_reason: 'duplicate_fatigue',
+              },
+            ],
+            alerting_metadata: {
+              suppressed_risk_count: 1,
+              suppression_window_minutes: 15,
+            },
+            freshness: '2026-03-13T06:00:00Z',
+          },
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.askCopilot('What is the urgent risk?');
+
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.data.memo.top_risks)), ['NVDA']);
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.data.memo.top_risk_items)), [
+    {
+      ticker: 'NVDA',
+      priority: 'high',
+      suppression_reason: 'duplicate_fatigue',
+      urgent_bypass: true,
+      label: 'NVDA',
+    },
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.data.memo.suppressed_risks)), [
+    {
+      ticker: 'QQQ',
+      suppression_reason: 'duplicate_fatigue',
+      label: 'QQQ',
+    },
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.data.memo.alerting_metadata)), {
+    suppressed_risk_count: 1,
+    suppression_window_minutes: 15,
+  });
+});
+
 test('startAutoRefresh clears scoped copilot starter cache entries before reloading the brief', async () => {
   const copilotStartCalls = [];
   let scheduledRefresh = null;

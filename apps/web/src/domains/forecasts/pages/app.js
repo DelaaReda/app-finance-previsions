@@ -2654,6 +2654,25 @@ function describeAlertPriorityBand(value) {
   return 'Background';
 }
 
+function getAlertTimelineMeta() {
+  if (isObject(globalThis.alertTimelineMeta)) {
+    return globalThis.alertTimelineMeta;
+  }
+  if (isObject(globalThis.window) && isObject(globalThis.window.alertTimelineMeta)) {
+    return globalThis.window.alertTimelineMeta;
+  }
+  return {};
+}
+
+function sanitizeAlertTimelineMeta(meta) {
+  const source = isObject(meta) ? meta : {};
+  return {
+    suppressedCount: Math.max(0, Math.floor(toFiniteNumber(source.suppressedCount ?? source.suppressed_count, 0))),
+    suppressionWindowMinutes: Math.max(0, Math.floor(toFiniteNumber(source.suppressionWindowMinutes ?? source.suppression_window_minutes, 0))),
+    topPriorityBand: normalizeAlertPriorityBand(source.topPriorityBand || source.top_priority_band, 'medium'),
+  };
+}
+
 function formatAlertSourceLabel(value) {
   return toString(value, 'market')
     .replace(/[_-]+/g, ' ')
@@ -2664,6 +2683,7 @@ function formatAlertSourceLabel(value) {
 
 function buildAlertQueueSummary(rows) {
   const items = toArray(rows, []);
+  const meta = sanitizeAlertTimelineMeta(getAlertTimelineMeta());
   const counts = {
     urgent: 0,
     high: 0,
@@ -2680,6 +2700,9 @@ function buildAlertQueueSummary(rows) {
   return {
     counts,
     topItem,
+    suppressedCount: meta.suppressedCount,
+    suppressionWindowMinutes: meta.suppressionWindowMinutes,
+    topPriorityBand: meta.topPriorityBand,
     headline: topItem
       ? `${topItem.title} • ${topItem.priorityBandLabel} queue`
       : 'Live queue updating'
@@ -2722,6 +2745,8 @@ function sanitizeAlertTimeline(items) {
     const summary = toString(source.summary || source.description || source.detail || source.message, 'Alerte marché détectée');
     const timestamp = toString(source.timestamp || source.generated_at || source.generatedAt, new Date().toISOString());
     const signature = [toString(source.ticker, 'MARKET'), source.type || 'signal', summary].join('|');
+    const suppression = isObject(source.suppression) ? source.suppression : {};
+    const repeatCount = Math.max(1, Math.floor(toFiniteNumber(suppression.repeat_count ?? suppression.repeatCount, 1)));
     const policySignals = isObject(source.signals) ? source.signals : {};
     const policyStatus = toString(policySignals.status, '').trim().toLowerCase();
     const policyJurisdiction = toString(policySignals.jurisdiction, '').trim().toUpperCase();
@@ -2736,7 +2761,7 @@ function sanitizeAlertTimeline(items) {
       severity,
       severityLabel: toString(severity, 'medium').toUpperCase(),
       priority,
-      priorityRank: ALERT_SEVERITY_ORDER[severity],
+      priorityRank: Math.max(1, Math.floor(toFiniteNumber(source.priority_rank ?? source.priorityRank, ALERT_SEVERITY_ORDER[severity] + 1))),
       priorityBand,
       priorityBandLabel: describeAlertPriorityBand(priorityBand),
       priorityBandRank: ALERT_PRIORITY_BAND_ORDER[priorityBand],
@@ -2750,6 +2775,7 @@ function sanitizeAlertTimeline(items) {
       signalSource: source.category || source.type || 'market',
       signalSourceLabel: formatAlertSourceLabel(source.source || source.category || source.type || 'market'),
       actionHint: type === 'news' ? 'Voir news' : 'Act now',
+      repeatCount,
       signature
     };
   });
@@ -2800,6 +2826,8 @@ function renderAlertTimeline(alerts = liveAlerts) {
         <span class="priority-badge high">Action ${queueSummary.counts.high}</span>
         <span class="priority-badge medium">Monitor ${queueSummary.counts.medium}</span>
         <span class="priority-badge low">Background ${queueSummary.counts.low}</span>
+        ${queueSummary.suppressedCount > 0 ? `<span class="priority-badge low">Held ${queueSummary.suppressedCount}</span>` : ''}
+        ${queueSummary.suppressionWindowMinutes > 0 ? `<span class="priority-badge low">${queueSummary.suppressionWindowMinutes}m window</span>` : ''}
       </div>
     </div>
     ${rows.map((item) => `
@@ -2808,7 +2836,7 @@ function renderAlertTimeline(alerts = liveAlerts) {
       <div class="alert-content">
         <h3>${item.title}</h3>
         <p>${item.summary}</p>
-        <p>${item.priorityBandLabel} queue • ${item.signalSourceLabel} • ${item.confidenceLabel} confidence • ${item.timeLabel}</p>
+        <p>${item.priorityBandLabel} queue${item.repeatCount > 1 ? ` • repeat ${item.repeatCount}x` : ''} • ${item.signalSourceLabel} • ${item.confidenceLabel} confidence • ${item.timeLabel}</p>
       </div>
       <div class="alert-actions" style="display: none;">
         <button class="alert-action-btn primary" onclick="showToast('Applying ${item.actionHint} for ${item.ticker}')">${item.actionHint}</button>
