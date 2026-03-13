@@ -2072,7 +2072,10 @@ function sanitizeTradeIdeas(items) {
   return rows.map((item) => {
     const rawCostAwareness = isObject(item.costAwareness)
       ? item.costAwareness
-      : (isObject(item.cost_awareness) ? item.cost_awareness : null);
+      : (isObject(item.cost_awareness)
+        ? item.cost_awareness
+        : (isObject(item.costBreakdown) ? item.costBreakdown : (isObject(item.cost_breakdown) ? item.cost_breakdown : null)));
+    const normalizedCostAwareness = normalizeExecutionCostAwareness(rawCostAwareness);
     const rawTaxImpact = isObject(item.taxImpact)
       ? item.taxImpact
       : (isObject(item.tax_impact) ? item.tax_impact : null);
@@ -2095,58 +2098,148 @@ function sanitizeTradeIdeas(items) {
       attributionLabel: toString(item.attributionLabel || item.attribution_label, ''),
       attributionDetail: toString(item.attributionDetail || item.attribution_detail, ''),
       feeBps: Math.max(0, toFiniteNumber(
-        item.feeBps ?? item.fee_bps ?? rawCostAwareness?.fee_bps ?? rawCostAwareness?.feeBps,
+        item.feeBps ?? item.fee_bps ?? normalizedCostAwareness.feeBps,
         5,
       )),
       slippageBps: Math.max(0, toFiniteNumber(
-        item.slippageBps ?? item.slippage_bps ?? rawCostAwareness?.slippage_bps ?? rawCostAwareness?.slippageBps,
+        item.slippageBps ?? item.slippage_bps ?? normalizedCostAwareness.slippageBps,
         10,
       )),
       totalCostBps: Math.max(0, toFiniteNumber(
-        item.totalCostBps ?? item.total_cost_bps ?? rawCostAwareness?.total_cost_bps ?? rawCostAwareness?.totalCostBps,
+        item.totalCostBps ?? item.total_cost_bps ?? normalizedCostAwareness.totalCostBps,
         NaN,
       )),
       estimatedTaxDragBps: Math.max(0, toFiniteNumber(
         item.estimatedTaxDragBps
           ?? item.estimated_tax_drag_bps
-          ?? rawCostAwareness?.estimated_tax_drag_bps
-          ?? rawCostAwareness?.estimatedTaxDragBps,
+          ?? normalizedCostAwareness.estimatedTaxDragBps,
         NaN,
       )),
       grossExpectedReturnPct: toFiniteNumber(
         item.grossExpectedReturnPct
           ?? item.gross_expected_return_pct
-          ?? rawCostAwareness?.gross_expected_return_pct
-          ?? rawCostAwareness?.grossExpectedReturnPct,
+          ?? normalizedCostAwareness.grossExpectedReturnPct,
         NaN,
       ),
       netExpectedReturnPct: toFiniteNumber(
         item.netExpectedReturnPct
           ?? item.net_expected_return_pct
-          ?? rawCostAwareness?.net_expected_return_pct
-          ?? rawCostAwareness?.netExpectedReturnPct,
+          ?? normalizedCostAwareness.netExpectedReturnPct,
         NaN,
       ),
       taxBucket: toString(
         item.taxBucket
           ?? item.tax_bucket
-          ?? rawCostAwareness?.tax_bucket
-          ?? rawCostAwareness?.taxBucket
-          ?? rawCostAwareness?.tax_treatment
-          ?? rawCostAwareness?.taxTreatment
-          ?? rawCostAwareness?.tax_assumptions?.holding_period_bucket,
+          ?? normalizedCostAwareness.taxBucket,
         '',
       ),
       taxRateAssumption: Math.max(0, toFiniteNumber(
         item.taxRateAssumption
           ?? item.tax_rate_assumption
-          ?? rawCostAwareness?.tax_rate_assumption
-          ?? rawCostAwareness?.taxRateAssumption,
+          ?? normalizedCostAwareness.taxRateAssumption,
         NaN,
       )),
-      taxImpact: taxImpact || 'Tax impact depends on holding period'
+      taxImpact: taxImpact || normalizedCostAwareness.taxImpact || 'Tax impact depends on holding period'
     };
   });
+}
+
+function normalizeExecutionCostAwareness(rawCostAwareness) {
+  const costAwareness = isObject(rawCostAwareness) ? rawCostAwareness : {};
+  const costBreakdown = isObject(costAwareness.cost_breakdown)
+    ? costAwareness.cost_breakdown
+    : (isObject(costAwareness.costBreakdown) ? costAwareness.costBreakdown : {});
+  const costBands = isObject(costAwareness.costs_bps) ? costAwareness.costs_bps : {};
+  const feeBands = isObject(costBands.fees) ? costBands.fees : {};
+  const slippageBands = isObject(costBands.slippage) ? costBands.slippage : {};
+  const taxDragBands = isObject(costBands.tax_drag) ? costBands.tax_drag : {};
+  const totalBands = isObject(costBands.total) ? costBands.total : {};
+  const taxAssumptions = isObject(costAwareness.tax_assumptions) ? costAwareness.tax_assumptions : {};
+  const taxRateBand = isObject(taxAssumptions.tax_rate_band) ? taxAssumptions.tax_rate_band : {};
+
+  return {
+    feeBps: toFiniteNumber(
+      costAwareness.fee_bps ?? costAwareness.feeBps ?? costBreakdown.fee_bps ?? costBreakdown.feeBps ?? feeBands.base,
+      NaN,
+    ),
+    slippageBps: toFiniteNumber(
+      costAwareness.slippage_bps
+        ?? costAwareness.slippageBps
+        ?? costBreakdown.slippage_bps
+        ?? costBreakdown.slippageBps
+        ?? slippageBands.base,
+      NaN,
+    ),
+    totalCostBps: toFiniteNumber(
+      costAwareness.total_cost_bps
+        ?? costAwareness.totalCostBps
+        ?? costBreakdown.total_cost_bps
+        ?? costBreakdown.totalCostBps
+        ?? totalBands.base,
+      NaN,
+    ),
+    estimatedTaxDragBps: toFiniteNumber(
+      costAwareness.estimated_tax_drag_bps
+        ?? costAwareness.estimatedTaxDragBps
+        ?? costAwareness.tax_drag_bps
+        ?? costAwareness.taxDragBps
+        ?? costBreakdown.estimated_tax_drag_bps
+        ?? costBreakdown.estimatedTaxDragBps
+        ?? costBreakdown.tax_drag_bps
+        ?? costBreakdown.taxDragBps
+        ?? taxDragBands.base,
+      NaN,
+    ),
+    grossExpectedReturnPct: toFiniteNumber(
+      costAwareness.gross_expected_return_pct
+        ?? costAwareness.grossExpectedReturnPct
+        ?? costAwareness.gross_expected_return
+        ?? costAwareness.grossExpectedReturn
+        ?? costBreakdown.gross_expected_return_pct
+        ?? costBreakdown.grossExpectedReturnPct
+        ?? costBreakdown.gross_expected_return
+        ?? costBreakdown.grossExpectedReturn,
+      NaN,
+    ),
+    netExpectedReturnPct: toFiniteNumber(
+      costAwareness.net_expected_return_pct
+        ?? costAwareness.netExpectedReturnPct
+        ?? costAwareness.net_expected_return
+        ?? costAwareness.netExpectedReturn
+        ?? costBreakdown.net_expected_return_pct
+        ?? costBreakdown.netExpectedReturnPct
+        ?? costBreakdown.net_expected_return
+        ?? costBreakdown.netExpectedReturn,
+      NaN,
+    ),
+    taxBucket: toString(
+      costAwareness.tax_bucket
+        ?? costAwareness.taxBucket
+        ?? costAwareness.tax_treatment
+        ?? costAwareness.taxTreatment
+        ?? costBreakdown.tax_bucket
+        ?? costBreakdown.taxBucket
+        ?? costBreakdown.tax_treatment
+        ?? costBreakdown.taxTreatment
+        ?? taxAssumptions.holding_period_bucket,
+      '',
+    ),
+    taxRateAssumption: toFiniteNumber(
+      costAwareness.tax_rate_assumption
+        ?? costAwareness.taxRateAssumption
+        ?? costBreakdown.tax_rate_assumption
+        ?? costBreakdown.taxRateAssumption
+        ?? taxRateBand.base,
+      NaN,
+    ),
+    taxImpact: toString(
+      costAwareness.tax_impact
+        ?? costAwareness.taxImpact
+        ?? costBreakdown.tax_impact
+        ?? costBreakdown.taxImpact,
+      '',
+    ).replace(/_/g, ' ').trim(),
+  };
 }
 
 function normalizePercentValue(value, fallback = 0) {
@@ -2247,7 +2340,10 @@ function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecomm
       const attribution = isObject(fusion.attribution) ? fusion.attribution : {};
       const costAwareness = isObject(item.cost_awareness)
         ? item.cost_awareness
-        : (isObject(item.costAwareness) ? item.costAwareness : {});
+        : (isObject(item.costAwareness)
+          ? item.costAwareness
+          : (isObject(item.cost_breakdown) ? item.cost_breakdown : (isObject(item.costBreakdown) ? item.costBreakdown : {})));
+      const normalizedCostAwareness = normalizeExecutionCostAwareness(costAwareness);
       const rawTaxImpact = isObject(item.tax_impact)
         ? item.tax_impact
         : (isObject(item.taxImpact) ? item.taxImpact : null);
@@ -2278,14 +2374,13 @@ function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecomm
         attributionLabel: blendedScore > 0 ? `Fusion ${blendedScore}%` : 'Fusion tracked',
         attributionDetail: detailParts.join(' • '),
         feeBps: toFiniteNumber(
-          item.fee_bps ?? item.feeBps ?? costAwareness.fee_bps ?? costAwareness.feeBps ?? fusion.fee_bps ?? fusion.feeBps,
+          item.fee_bps ?? item.feeBps ?? normalizedCostAwareness.feeBps ?? fusion.fee_bps ?? fusion.feeBps,
           5,
         ),
         slippageBps: toFiniteNumber(
           item.slippage_bps
             ?? item.slippageBps
-            ?? costAwareness.slippage_bps
-            ?? costAwareness.slippageBps
+            ?? normalizedCostAwareness.slippageBps
             ?? fusion.slippage_bps
             ?? fusion.slippageBps,
           10,
@@ -2293,8 +2388,7 @@ function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecomm
         totalCostBps: toFiniteNumber(
           item.total_cost_bps
             ?? item.totalCostBps
-            ?? costAwareness.total_cost_bps
-            ?? costAwareness.totalCostBps
+            ?? normalizedCostAwareness.totalCostBps
             ?? fusion.total_cost_bps
             ?? fusion.totalCostBps,
           NaN,
@@ -2302,8 +2396,7 @@ function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecomm
         estimatedTaxDragBps: toFiniteNumber(
           item.estimated_tax_drag_bps
             ?? item.estimatedTaxDragBps
-            ?? costAwareness.estimated_tax_drag_bps
-            ?? costAwareness.estimatedTaxDragBps
+            ?? normalizedCostAwareness.estimatedTaxDragBps
             ?? fusion.estimated_tax_drag_bps
             ?? fusion.estimatedTaxDragBps,
           NaN,
@@ -2311,8 +2404,7 @@ function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecomm
         grossExpectedReturnPct: toFiniteNumber(
           item.gross_expected_return_pct
             ?? item.grossExpectedReturnPct
-            ?? costAwareness.gross_expected_return_pct
-            ?? costAwareness.grossExpectedReturnPct
+            ?? normalizedCostAwareness.grossExpectedReturnPct
             ?? fusion.gross_expected_return_pct
             ?? fusion.grossExpectedReturnPct,
           NaN,
@@ -2320,8 +2412,7 @@ function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecomm
         netExpectedReturnPct: toFiniteNumber(
           item.net_expected_return_pct
             ?? item.netExpectedReturnPct
-            ?? costAwareness.net_expected_return_pct
-            ?? costAwareness.netExpectedReturnPct
+            ?? normalizedCostAwareness.netExpectedReturnPct
             ?? fusion.net_expected_return_pct
             ?? fusion.netExpectedReturnPct,
           NaN,
@@ -2329,24 +2420,18 @@ function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecomm
         taxBucket: toString(
           item.tax_bucket
             ?? item.taxBucket
-            ?? costAwareness.tax_bucket
-            ?? costAwareness.taxBucket
-            ?? costAwareness.tax_treatment
-            ?? costAwareness.taxTreatment
-            ?? costAwareness.tax_assumptions?.holding_period_bucket,
+            ?? normalizedCostAwareness.taxBucket,
           '',
         ),
         taxRateAssumption: toFiniteNumber(
           item.tax_rate_assumption
             ?? item.taxRateAssumption
-            ?? costAwareness.tax_rate_assumption
-            ?? costAwareness.taxRateAssumption,
+            ?? normalizedCostAwareness.taxRateAssumption,
           NaN,
         ),
         taxImpact: toString(
           (rawTaxImpact && (rawTaxImpact.summary || rawTaxImpact.label || rawTaxImpact.status))
-            || costAwareness.tax_impact
-            || costAwareness.taxImpact
+            || normalizedCostAwareness.taxImpact
             || item.tax_status
             || item.taxStatus
             || item.tax_impact
@@ -3518,28 +3603,24 @@ async function renderRebalanceProposalCard() {
       || firstNonEmptyText(playbook.reasons)
       || fallbackModel.summary;
     const summarySuffix = [decision, horizon].filter(Boolean).join(' | ');
-    const costAwareness = isObject(playbook.cost_awareness) ? playbook.cost_awareness : {};
-    const totalCostBps = Math.max(0, toFiniteNumber(costAwareness.total_cost_bps, 0));
-    const feeBps = Math.max(0, toFiniteNumber(costAwareness.fee_bps, NaN));
-    const slippageBps = Math.max(0, toFiniteNumber(costAwareness.slippage_bps, NaN));
-    const estimatedTaxDragBps = Math.max(0, toFiniteNumber(costAwareness.estimated_tax_drag_bps, NaN));
+    const costAwareness = normalizeExecutionCostAwareness(playbook.cost_awareness);
+    const totalCostBps = Math.max(0, toFiniteNumber(costAwareness.totalCostBps, 0));
+    const feeBps = Math.max(0, toFiniteNumber(costAwareness.feeBps, NaN));
+    const slippageBps = Math.max(0, toFiniteNumber(costAwareness.slippageBps, NaN));
+    const estimatedTaxDragBps = Math.max(0, toFiniteNumber(costAwareness.estimatedTaxDragBps, NaN));
     const taxRateAssumption = Math.max(
       0,
-      toFiniteNumber(costAwareness.tax_rate_assumption ?? costAwareness.taxRateAssumption, NaN),
+      toFiniteNumber(costAwareness.taxRateAssumption, NaN),
     );
-    const taxBucketRaw = costAwareness.tax_bucket
-      ?? costAwareness.taxBucket
-      ?? costAwareness.tax_treatment
-      ?? costAwareness.taxTreatment
-      ?? costAwareness.tax_assumptions?.holding_period_bucket;
-    const taxBucketLabel = formatTaxBucketLabel(taxBucketRaw);
+    const taxBucketRaw = costAwareness.taxBucket;
     const taxBucketMetric = formatTaxBucketMetric(taxBucketRaw);
+    const taxBucketSummaryLabel = taxBucketMetric.replace(/^Tax bucket\s+/, '').trim();
     const grossExpectedReturnPct = normalizePercentValue(
-      toFiniteNumber(costAwareness.gross_expected_return_pct ?? costAwareness.grossExpectedReturnPct, NaN),
+      toFiniteNumber(costAwareness.grossExpectedReturnPct, NaN),
       NaN,
     );
     const netExpectedReturnPct = normalizePercentValue(
-      toFiniteNumber(costAwareness.net_expected_return_pct ?? costAwareness.netExpectedReturnPct, NaN),
+      toFiniteNumber(costAwareness.netExpectedReturnPct, NaN),
       NaN,
     );
     const grossEdgeLabel = Number.isFinite(grossExpectedReturnPct)
@@ -3566,9 +3647,21 @@ async function renderRebalanceProposalCard() {
       && grossExpectedReturnPct > 0
       && Number.isFinite(netExpectedReturnPct)
       && (netExpectedReturnPct <= 0 || netExpectedReturnPct <= grossExpectedReturnPct * 0.25);
-    const warningLabel = lowNetEdge
-      ? (netExpectedReturnPct <= 0 ? 'Costs overwhelm edge' : 'Low net edge after costs')
+    const taxDominatesCosts = Number.isFinite(estimatedTaxDragBps)
+      && estimatedTaxDragBps > 0
+      && estimatedTaxDragBps >= Math.max(
+        Number.isFinite(feeBps) ? feeBps : 0,
+        Number.isFinite(slippageBps) ? slippageBps : 0,
+      );
+    const taxWarningLabel = lowNetEdge && taxDominatesCosts
+      ? `${taxBucketSummaryLabel ? `${taxBucketSummaryLabel} tax drag` : 'Tax drag'} dominates costs`
       : '';
+    const warningLabel = [
+      lowNetEdge
+        ? (netExpectedReturnPct <= 0 ? 'Costs overwhelm edge' : 'Low net edge after costs')
+        : '',
+      taxWarningLabel,
+    ].filter(Boolean).join(' | ');
     const costSummary = [summarySuffix, edgeLabel, warningLabel].filter(Boolean).join(' | ');
 
     applyProposalModel({

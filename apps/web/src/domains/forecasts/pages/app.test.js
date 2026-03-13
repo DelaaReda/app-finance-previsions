@@ -1949,6 +1949,71 @@ function loadRenderRebalanceProposalCard({ playbooksPayload, appDataOverride = {
       if (!Number.isFinite(normalized)) return fallback;
       return Math.abs(normalized) <= 1 ? normalized * 100 : normalized;
     },
+    normalizeExecutionCostAwareness(value) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {};
+      }
+      const costBreakdown = value.cost_breakdown ?? value.costBreakdown ?? {};
+      return {
+        totalCostBps: value.total_cost_bps ?? value.totalCostBps ?? costBreakdown.total_cost_bps ?? costBreakdown.totalCostBps,
+        feeBps: value.fee_bps ?? value.feeBps ?? costBreakdown.fee_bps ?? costBreakdown.feeBps,
+        slippageBps: value.slippage_bps ?? value.slippageBps ?? costBreakdown.slippage_bps ?? costBreakdown.slippageBps,
+        estimatedTaxDragBps: value.estimated_tax_drag_bps ?? value.estimatedTaxDragBps ?? value.tax_drag_bps ?? value.taxDragBps ?? costBreakdown.estimated_tax_drag_bps ?? costBreakdown.estimatedTaxDragBps ?? costBreakdown.tax_drag_bps ?? costBreakdown.taxDragBps,
+        taxRateAssumption: value.tax_rate_assumption ?? value.taxRateAssumption ?? costBreakdown.tax_rate_assumption ?? costBreakdown.taxRateAssumption,
+        taxBucket: value.tax_bucket ?? value.taxBucket ?? costBreakdown.tax_bucket ?? costBreakdown.taxBucket,
+        grossExpectedReturnPct: value.gross_expected_return_pct ?? value.grossExpectedReturnPct ?? costBreakdown.gross_expected_return_pct ?? costBreakdown.grossExpectedReturnPct,
+        netExpectedReturnPct: value.net_expected_return_pct ?? value.netExpectedReturnPct ?? costBreakdown.net_expected_return_pct ?? costBreakdown.netExpectedReturnPct,
+      };
+    },
+    formatTaxBucketLabel(value) {
+      const normalized = typeof value === 'string' ? value.trim() : '';
+      if (!normalized) return '';
+      return normalized
+        .split('_')
+        .map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : '')
+        .join(' ');
+    },
+    formatTaxBucketMetric(value) {
+      const normalized = typeof value === 'string' ? value.trim() : '';
+      const label = normalized
+        ? normalized
+          .split('_')
+          .map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : '')
+          .join(' ')
+        : '';
+      return label ? `Tax bucket ${label}` : '';
+    },
+    formatBpsValue(value) {
+      const normalized = Number(value);
+      if (!Number.isFinite(normalized)) return '';
+      return `${Number.isInteger(normalized) ? normalized : normalized.toFixed(1).replace(/\.0$/, '')} bps`;
+    },
+    formatEdgePercentValue(value) {
+      const normalized = Number(value);
+      if (!Number.isFinite(normalized)) return '';
+      return `${normalized.toFixed(1).replace(/\.0$/, '')}%`;
+    },
+    formatPercentValue(value) {
+      const normalized = Number(value);
+      if (!Number.isFinite(normalized)) return '0%';
+      return `${normalized.toFixed(1).replace(/\.0$/, '')}%`;
+    },
+    formatSignedValue(value) {
+      const normalized = Number(value);
+      if (!Number.isFinite(normalized)) return '0';
+      if (normalized > 0) return `+${normalized}`;
+      return `${normalized}`;
+    },
+    firstNonEmptyText(value) {
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+      if (Array.isArray(value)) {
+        const first = value.find((entry) => typeof entry === 'string' && entry.trim());
+        return first ? first.trim() : '';
+      }
+      return '';
+    },
   };
 
   sandbox.globalThis = sandbox;
@@ -2625,6 +2690,88 @@ test('buildTradeIdeasFromForecasts prefers recommendation forecast fusion attrib
   assert.equal(ideas[0].taxImpact, 'Short-term gains likely');
 });
 
+test('buildTradeIdeasFromForecasts normalizes nested judge cost awareness payloads', () => {
+  const { sandbox } = loadTradeIdeaHelpers();
+  const ideas = sandbox.buildTradeIdeasFromForecasts([], [
+    {
+      ticker: 'AAPL',
+      decision_id: 'dec-aapl-raw',
+      action: 'BUY',
+      confidence: 0.76,
+      score: 0.74,
+      current_price: 192,
+      target_price: 202,
+      cost_awareness: {
+        gross_expected_return: 0.05,
+        net_expected_return: 0.0389,
+        costs_bps: {
+          fees: { low: 2, base: 3, high: 4 },
+          slippage: { low: 6, base: 8, high: 12 },
+          tax_drag: { low: 7.5, base: 10, high: 12.5 },
+          total: { low: 15.5, base: 21, high: 28.5 },
+        },
+        tax_assumptions: {
+          holding_period_bucket: 'short_term',
+          tax_rate_band: { low: 0.15, base: 0.2, high: 0.25 },
+        },
+      },
+      forecast_fusion: {
+        blended_score: 0.74,
+        dominant_layer: 'forecast_confidence',
+        attribution: {
+          forecast_direction: 'up',
+          expected_return: 0.05,
+        },
+      },
+    },
+  ]);
+
+  assert.equal(ideas.length, 1);
+  assert.equal(ideas[0].feeBps, 3);
+  assert.equal(ideas[0].slippageBps, 8);
+  assert.equal(ideas[0].estimatedTaxDragBps, 10);
+  assert.equal(ideas[0].totalCostBps, 21);
+  assert.equal(ideas[0].grossExpectedReturnPct, 0.05);
+  assert.equal(ideas[0].netExpectedReturnPct, 0.0389);
+  assert.equal(ideas[0].taxBucket, 'short_term');
+  assert.equal(ideas[0].taxRateAssumption, 0.2);
+  assert.equal(ideas[0].taxImpact, 'Tax impact depends on holding period');
+});
+
+test('sanitizeTradeIdeas reuses nested cost_breakdown payloads from recommendation responses', () => {
+  const { sandbox } = loadTradeIdeaHelpers();
+
+  const ideas = sandbox.sanitizeTradeIdeas([
+    {
+      ticker: 'IEF',
+      action: 'HOLD',
+      confidence: 0.74,
+      cost_breakdown: {
+        fee_bps: 4,
+        slippage_bps: 5,
+        tax_drag_bps: 9,
+        total_cost_bps: 18,
+        gross_expected_return_pct: 0.012,
+        net_expected_return_pct: 0.0018,
+        tax_bucket: 'short_term',
+        tax_rate_assumption: 0.3,
+        tax_impact: 'Short-term tax drag likely',
+      },
+    },
+  ]);
+
+  assert.equal(ideas.length, 1);
+  assert.equal(ideas[0].feeBps, 4);
+  assert.equal(ideas[0].slippageBps, 5);
+  assert.equal(ideas[0].estimatedTaxDragBps, 9);
+  assert.equal(ideas[0].totalCostBps, 18);
+  assert.equal(ideas[0].grossExpectedReturnPct, 0.012);
+  assert.equal(ideas[0].netExpectedReturnPct, 0.0018);
+  assert.equal(ideas[0].taxBucket, 'short_term');
+  assert.equal(ideas[0].taxRateAssumption, 0.3);
+  assert.equal(ideas[0].taxImpact, 'Short-term tax drag likely');
+});
+
 test('renderTradeIdeas renders attribution badge and detail when present', () => {
   const { sandbox, container } = loadTradeIdeaHelpers();
   sandbox.tradeIdeas = [
@@ -2690,8 +2837,41 @@ test('renderTradeIdeas exposes gross versus net edge and warns on thin edge afte
   sandbox.renderTradeIdeas();
 
   assert.match(container.innerHTML, /Short Term tax 30%/);
+  assert.match(container.innerHTML, /Short-term tax drag likely/);
   assert.match(container.innerHTML, /Cost drag 16 bps/);
   assert.match(container.innerHTML, /Tax drag 5 bps/);
+  assert.match(container.innerHTML, /Gross edge 1\.2% -> Net edge 0\.2%/);
+  assert.match(container.innerHTML, /Low net edge after costs/);
+});
+
+test('renderTradeIdeas uses nested cost_breakdown payloads for cost-awareness messaging', () => {
+  const { sandbox, container } = loadTradeIdeaHelpers();
+  sandbox.tradeIdeas = sandbox.sanitizeTradeIdeas([
+    {
+      symbol: 'GLD',
+      signalType: 'BUY',
+      entry: 210,
+      target: 224,
+      confidence: 74,
+      cost_breakdown: {
+        fee_bps: 4,
+        slippage_bps: 5,
+        tax_drag_bps: 9,
+        total_cost_bps: 18,
+        gross_expected_return_pct: 0.012,
+        net_expected_return_pct: 0.0018,
+        tax_bucket: 'short_term',
+        tax_rate_assumption: 0.3,
+        tax_impact: 'Short-term tax drag likely',
+      },
+    },
+  ]);
+
+  sandbox.renderTradeIdeas();
+
+  assert.match(container.innerHTML, /Short Term tax 30%/);
+  assert.match(container.innerHTML, /Cost drag 18 bps/);
+  assert.match(container.innerHTML, /Tax drag 9 bps/);
   assert.match(container.innerHTML, /Gross edge 1\.2% -> Net edge 0\.2%/);
   assert.match(container.innerHTML, /Low net edge after costs/);
 });
@@ -3588,11 +3768,93 @@ test('renderRebalanceProposalCard preserves negative net edge when costs exceed 
 
   assert.equal(
     elements.rebalanceProposalSummary.textContent,
-    'Reduce drawdown concentration | HOLD | 1M | Gross edge 0.1% -> Net edge -0.2% | Costs overwhelm edge',
+    'Reduce drawdown concentration | HOLD | 1M | Gross edge 0.1% -> Net edge -0.2% | Costs overwhelm edge | Tax drag dominates costs',
   );
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Cost drag: 30 bps/);
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Gross edge 0.1%/);
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Net edge -0.2%/);
+});
+
+test('renderRebalanceProposalCard calls out short-term tax drag when it is the main cost headwind', async () => {
+  const { sandbox, elements } = loadRenderRebalanceProposalCard({
+    playbooksPayload: {
+      data: {
+        playbooks: [
+          {
+            ticker: 'IEF',
+            turnover: 10,
+            risk_delta: -2,
+            confidence: 0.74,
+            decision: 'hold',
+            horizon: '1m',
+            summary: ['Reduce drawdown concentration'],
+            cost_awareness: {
+              total_cost_bps: 18,
+              fee_bps: 4,
+              slippage_bps: 5,
+              estimated_tax_drag_bps: 9,
+              tax_bucket: 'short_term',
+              gross_expected_return_pct: 0.012,
+              net_expected_return_pct: 0.0018,
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  await sandbox.renderRebalanceProposalCard();
+
+  assert.equal(
+    elements.rebalanceProposalSummary.textContent,
+    'Reduce drawdown concentration | HOLD | 1M | Gross edge 1.2% -> Net edge 0.2% | Low net edge after costs | Short Term tax drag dominates costs',
+  );
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Tax 9 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Tax bucket Short Term/);
+});
+
+test('renderRebalanceProposalCard reuses nested cost_breakdown fields when playbooks adopt the decision-response shape', async () => {
+  const { sandbox, elements } = loadRenderRebalanceProposalCard({
+    playbooksPayload: {
+      data: {
+        playbooks: [
+          {
+            ticker: 'IEF',
+            turnover: 10,
+            risk_delta: -2,
+            confidence: 0.74,
+            decision: 'hold',
+            horizon: '1m',
+            summary: ['Reduce drawdown concentration'],
+            cost_awareness: {
+              cost_breakdown: {
+                total_cost_bps: 18,
+                fee_bps: 4,
+                slippage_bps: 5,
+                tax_drag_bps: 9,
+                tax_bucket: 'short_term',
+                tax_rate_assumption: 0.3,
+                gross_expected_return_pct: 0.012,
+                net_expected_return_pct: 0.0018,
+              },
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  await sandbox.renderRebalanceProposalCard();
+
+  assert.equal(
+    elements.rebalanceProposalSummary.textContent,
+    'Reduce drawdown concentration | HOLD | 1M | Gross edge 1.2% -> Net edge 0.2% | Low net edge after costs | Short Term tax drag dominates costs',
+  );
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Cost drag: 18 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Fees 4 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Slippage 5 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Tax 9 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Tax rate 30%/);
 });
 
 test('renderRebalanceProposalCard normalizes percent-style gross and net edge payloads', async () => {
