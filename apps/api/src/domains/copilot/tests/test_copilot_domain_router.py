@@ -421,3 +421,189 @@ def test_copilot_context_includes_playbook_enrichment(monkeypatch):
     assert data["data"]["playbook_id"] == "bull_moderate_001"
     assert "playbook_context" in data["data"]
     assert data["data"]["playbook_context"]["name"] == "Bull Market Growth Strategy"
+
+
+def test_personal_finance_start_alias_reuses_copilot_start_payload(monkeypatch):
+    async def _fake_build_context_payload(*_args, **kwargs):
+        return {
+            "daily_brief": {
+                "summary": "Scoped brief ready.",
+                "source": ["copilot_domain_router_personal_finance_test"],
+            },
+            "entry_points": [
+                {
+                    "id": "brief_of_day",
+                    "kind": "open",
+                    "label": "Brief du jour",
+                    "target": "/brief/daily",
+                },
+                {
+                    "id": "ask_copilot",
+                    "kind": "ask",
+                    "label": "Poser une question",
+                    "target": "/copilot/ask",
+                },
+            ],
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "Scoped brief ready.",
+                    "source": ["copilot_domain_router_personal_finance_test"],
+                },
+                "ask": [],
+                "open": [],
+            },
+            "scope_tickers": ["NVDA", "MSFT"],
+        }
+
+    monkeypatch.setattr(copilot_service, "build_context_payload", _fake_build_context_payload)
+
+    client = _client()
+    response_start = client.get("/api/copilot/start?tickers=nvda&tickers=msft")
+    response_finance = client.get("/api/personal-finance/start?tickers=nvda&tickers=msft")
+
+    assert response_start.status_code == 200
+    assert response_finance.status_code == 200
+    payload_start = response_start.json()
+    payload_finance = response_finance.json()
+
+    assert payload_start.get("ok") is True
+    assert payload_finance.get("ok") is True
+    start_data = dict(payload_start.get("data") or {})
+    finance_data = dict(payload_finance.get("data") or {})
+
+    # Ensure stable contract parity while allowing runtime timestamps to differ.
+    start_data.pop("generated_at", None)
+    start_data.pop("freshness", None)
+    finance_data.pop("generated_at", None)
+    finance_data.pop("freshness", None)
+    assert finance_data == start_data
+
+
+def test_personal_finance_ask_alias_reuses_copilot_ask_payload(monkeypatch):
+    async def fake_build_ask_payload(**_kwargs):
+        return {
+            "answer": "Hold NVDA and watch CPI before adding.",
+            "action": "hold",
+            "horizon": "1w",
+            "confidence": 0.62,
+            "reasoning": [
+                "Positioning remains constructive.",
+            ],
+            "risk_caveat": "Insufficient volume in near-term call flow.",
+            "freshness": "2026-03-12T14:00:00Z",
+            "generated_at": "2026-03-12T14:00:00Z",
+            "sources": [{"type": "news", "ticker": "NVDA"}],
+            "sources_count": 1,
+            "quality_status": "insufficient_sources",
+            "requirements_met": {"min_sources_2": False, "quality_threshold": True},
+        }
+
+    monkeypatch.setattr(copilot_service, "build_ask_payload", fake_build_ask_payload)
+
+    client = _client()
+    payload = {"question": "What should I do with NVDA?", "tickers": ["NVDA"]}
+
+    response_start = client.post("/api/copilot/ask", json=payload)
+    response_finance = client.post("/api/personal-finance/ask", json=payload)
+
+    assert response_start.status_code == 200
+    assert response_finance.status_code == 200
+    assert response_finance.json() == response_start.json()
+
+
+def test_personal_finance_context_alias_reuses_copilot_context_payload(monkeypatch):
+    captured = {}
+
+    async def _fake_build_context_payload(*_args, **kwargs):
+        captured["scope"] = kwargs.get("scope")
+        return {
+            "daily_brief": {
+                "summary": "Scoped daily macro snapshot.",
+                "market_sentiment": "NEUTRAL",
+                "source": ["copilot_domain_router_personal_finance_context_test"],
+                "generated_at": "2026-03-13T12:00:00Z",
+                "freshness": "2026-03-13T12:00:00Z",
+            },
+            "entry_points": [
+                {
+                    "id": "brief_of_day",
+                    "kind": "open",
+                    "label": "Brief du jour",
+                    "target": "/brief/daily",
+                },
+                {
+                    "id": "ask_copilot",
+                    "kind": "ask",
+                    "label": "Poser une question",
+                    "target": "/copilot/ask",
+                },
+                {
+                    "id": "open_copilot",
+                    "kind": "open",
+                    "label": "Ouvrir Copilot",
+                    "target": "/copilot",
+                },
+            ],
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "Scoped daily macro snapshot.",
+                    "market_sentiment": "NEUTRAL",
+                },
+                "ask": [
+                    {
+                        "id": "ask_copilot",
+                        "kind": "ask",
+                        "target": "/copilot/ask",
+                    }
+                ],
+                "open": [
+                    {
+                        "id": "brief_of_day",
+                        "kind": "open",
+                        "target": "/brief/daily",
+                    },
+                    {
+                        "id": "open_copilot",
+                        "kind": "open",
+                        "target": "/copilot",
+                    },
+                ],
+            },
+            "scope_tickers": ["MSFT", "NVDA"],
+        }
+
+    monkeypatch.setattr(copilot_service, "build_context_payload", _fake_build_context_payload)
+
+    client = _client()
+    response_context = client.get("/api/copilot/context?tickers=nvda&tickers=msft")
+    response_finance = client.get("/api/personal-finance/context?tickers=nvda&tickers=msft")
+
+    assert response_context.status_code == 200
+    assert response_finance.status_code == 200
+    assert captured.get("scope") == {"tickers": ["NVDA", "MSFT"]}
+
+    payload_context = response_context.json()
+    payload_finance = response_finance.json()
+    assert payload_context.get("ok") is True
+    assert payload_finance.get("ok") is True
+
+    data_context = dict(payload_context.get("data") or {})
+    data_finance = dict(payload_finance.get("data") or {})
+    assert data_finance == data_context
+
+    data = data_finance
+    assert data.get("scope_tickers") == ["MSFT", "NVDA"]
+
+    entry_points = data.get("entry_points") or []
+    assert [item.get("id") for item in entry_points] == [
+        "brief_of_day",
+        "ask_copilot",
+        "open_copilot",
+    ]
+
+    copilot_start = data.get("copilot_start") or {}
+    assert [item.get("id") for item in (copilot_start.get("ask") or [])] == ["ask_copilot"]
+    assert [item.get("id") for item in (copilot_start.get("open") or [])] == [
+        "brief_of_day",
+        "open_copilot",
+    ]
