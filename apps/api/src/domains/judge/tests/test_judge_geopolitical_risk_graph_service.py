@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 import sys
 from pathlib import Path
 
@@ -90,19 +91,21 @@ def test_geopolitical_risk_graph_payload_returns_never_empty_fallback(monkeypatc
 
 
 def test_geopolitical_risk_graph_payload_limits_alerts_to_returned_nodes(monkeypatch):
+    recent_iso = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat().replace("+00:00", "Z")
+    slightly_older_iso = (datetime.now(timezone.utc) - timedelta(hours=4)).isoformat().replace("+00:00", "Z")
     news_feed = {
         "articles": [
             {
                 "title": "Ukraine conflict intensifies",
                 "summary": "New military activity raises sanctions risk.",
-                "published_at": "2026-03-10T10:00:00Z",
+                "published_at": recent_iso,
                 "geopolitics": ["ukraine"],
                 "event_types": ["sanctions", "military"],
             },
             {
                 "title": "Taiwan tensions hit chip routes",
                 "summary": "Export control chatter returns across the region.",
-                "published_at": "2026-03-10T09:00:00Z",
+                "published_at": slightly_older_iso,
                 "geopolitics": ["taiwan"],
                 "event_types": ["sanctions", "export_controls"],
             },

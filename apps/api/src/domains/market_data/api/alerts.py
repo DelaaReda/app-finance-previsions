@@ -27,12 +27,12 @@ for p in (backend_root,):
         sys.path.insert(0, p_str)
 
 try:
-    from services.alert_rules import alert_rules_service
+    from domains.market_data.application.alert_rules import alert_rules_service
 except ImportError:  # pragma: no cover
-    from src.services.alert_rules import alert_rules_service  # type: ignore
+    from src.domains.market_data.application.alert_rules import alert_rules_service  # type: ignore
 
 try:
-    from services.alerts_service import (
+    from domains.market_data.application.alerts_service import (
         get_alerts_service,
         Alert,
         AlertCondition,
@@ -40,19 +40,30 @@ try:
         AlertStatus,
     )
 except ImportError:  # pragma: no cover
-    get_alerts_service = None  # type: ignore
-    Alert = AlertCondition = AlertType = AlertStatus = None  # type: ignore
+    from src.domains.market_data.application.alerts_service import (  # type: ignore
+        get_alerts_service,
+        Alert,
+        AlertCondition,
+        AlertType,
+        AlertStatus,
+    )
 
 try:
-    from services.cache_layer import load_or_compute
+    from domains.market_data.application.cache_layer import load_or_compute
 except ImportError:  # pragma: no cover
-    def load_or_compute(key, compute_fn, **_): return compute_fn()
+    try:
+        from src.domains.market_data.application.cache_layer import load_or_compute  # type: ignore
+    except Exception:  # pragma: no cover
+        def load_or_compute(key, compute_fn, **_): return compute_fn()
 
 try:
-    from jobs.alerts import get_latest_alerts, run_alerts_job
+    from platform.legacy.jobs.alerts import get_latest_alerts, run_alerts_job
 except Exception:  # pragma: no cover
-    get_latest_alerts = lambda: {"alerts": [], "count": 0}
-    run_alerts_job = None
+    try:
+        from src.platform.legacy.jobs.alerts import get_latest_alerts, run_alerts_job  # type: ignore
+    except Exception:  # pragma: no cover
+        get_latest_alerts = lambda: {"alerts": [], "count": 0}
+        run_alerts_job = None
 
 
 router = APIRouter(prefix="/api", tags=["alerts"])

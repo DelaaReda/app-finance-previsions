@@ -10,16 +10,16 @@ from typing import Dict, List, Optional
 from datetime import datetime
 
 # Add backend root to path for imports
-backend_root = Path(__file__).resolve().parents[1]  # .../backend
+backend_root = Path(__file__).resolve().parents[3]
 for p in (backend_root,):
     p_str = str(p)
     if p_str not in sys.path:
         sys.path.insert(0, p_str)
 
 try:
-    from services.service_standard import utc_now_iso
+    from platform.legacy.services.service_standard import utc_now_iso
 except Exception:  # pragma: no cover
-    from src.services.service_standard import utc_now_iso  # type: ignore
+    from src.platform.legacy.services.service_standard import utc_now_iso  # type: ignore
 
 
 class AlertRulesService:

@@ -807,6 +807,76 @@ def _build_event_horizon_interpretation(
     }
 
 
+def _build_event_horizon_alert(
+    *,
+    row: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    dominant_horizon = str(row.get("dominant_horizon") or "").strip() or "1w"
+    horizons = row.get("horizons") if isinstance(row.get("horizons"), dict) else {}
+    dominant_snapshot = (
+        horizons.get(dominant_horizon)
+        if isinstance(horizons.get(dominant_horizon), dict)
+        else {}
+    )
+    impact_score = _coerce_float(dominant_snapshot.get("impact_score"), 0.0)
+    recent_count = safe_int(row.get("recent_count"), 0)
+    article_count = safe_int(row.get("article_count"), 0)
+    divergence = _coerce_float(row.get("cross_horizon_divergence"), 0.0)
+    sentiment_bias = _coerce_float(row.get("sentiment_bias"), 0.0)
+    if recent_count <= 0:
+        return None
+
+    urgency = None
+    if impact_score >= 0.75 or divergence >= 0.2:
+        urgency = "high"
+    elif impact_score >= 0.6 or article_count >= 2:
+        urgency = "elevated"
+    if urgency is None:
+        return None
+
+    if divergence >= 0.2:
+        recommended_action = (
+            "Validate whether the short-term shock is becoming a durable thesis change before resizing exposure."
+        )
+    elif dominant_horizon == "1d":
+        recommended_action = (
+            "Monitor immediate repricing and tighten near-term risk limits while the event digests."
+        )
+    elif dominant_horizon == "1w":
+        recommended_action = (
+            "Review one-week exposure for follow-through while the signal remains elevated."
+        )
+    else:
+        recommended_action = (
+            "Reassess medium-term positioning if the signal persists beyond the initial headline reaction."
+        )
+    if sentiment_bias <= -0.2 and "downside hedges" not in recommended_action.lower():
+        recommended_action = (
+            f"{recommended_action.rstrip('.')} Keep downside hedges live while sentiment stays risk-off."
+        )
+
+    sample_headlines = row.get("sample_headlines") if isinstance(row.get("sample_headlines"), list) else []
+    sample_headline = str(sample_headlines[0]).strip() if sample_headlines else None
+    if not sample_headline:
+        sample_headline = None
+
+    return {
+        "event_type": str(row.get("event_type") or "").strip() or "general_tension",
+        "urgency": urgency,
+        "impact_band": str(dominant_snapshot.get("impact_band") or "low"),
+        "impact_score": round(impact_score, 4),
+        "dominant_horizon": dominant_horizon,
+        "cross_horizon_divergence": round(divergence, 4),
+        "article_count": article_count,
+        "recent_count": recent_count,
+        "sentiment_bias": round(sentiment_bias, 4),
+        "timestamp": row.get("latest_at"),
+        "interpretation": str(row.get("interpretation") or "").strip() or None,
+        "recommended_action": recommended_action,
+        "sample_headline": sample_headline,
+    }
+
+
 def _build_event_impact_horizon_matrix_payload(
     *,
     event_type: Optional[str],
@@ -858,6 +928,7 @@ def _build_event_impact_horizon_matrix_payload(
                     "article_count": 0,
                     "recent_count": 0,
                     "sentiment_sum": 0.0,
+                    "latest_at": None,
                     "sample_headlines": [],
                 },
             )
@@ -865,6 +936,10 @@ def _build_event_impact_horizon_matrix_payload(
             state["sentiment_sum"] += sentiment_value
             if recency_multiplier >= 0.85:
                 state["recent_count"] += 1
+            if isinstance(published_at, datetime):
+                latest_at = state.get("latest_at")
+                if latest_at is None or published_at > latest_at:
+                    state["latest_at"] = published_at
             if headline and len(state["sample_headlines"]) < 3:
                 state["sample_headlines"].append(headline)
 
@@ -908,6 +983,11 @@ def _build_event_impact_horizon_matrix_payload(
                 "cross_horizon_divergence": divergence,
                 "dominant_horizon": interpretation["dominant_horizon"],
                 "interpretation": interpretation["summary"],
+                "latest_at": (
+                    state["latest_at"].isoformat()
+                    if isinstance(state.get("latest_at"), datetime)
+                    else None
+                ),
                 "horizons": horizons,
                 "sample_headlines": state["sample_headlines"],
             }
@@ -921,6 +1001,22 @@ def _build_event_impact_horizon_matrix_payload(
         )
     )
     matrix = matrix[:limit]
+
+    alerts = [
+        alert
+        for alert in (
+            _build_event_horizon_alert(row=row)
+            for row in matrix
+        )
+        if alert is not None
+    ]
+    alerts.sort(
+        key=lambda item: (
+            0 if item["urgency"] == "high" else 1,
+            -float(item["impact_score"]),
+            str(item["event_type"]),
+        )
+    )
 
     dominant_template = (
         "Cross-horizon divergence is highest when the event creates immediate repricing but slower fundamental confirmation."
@@ -951,9 +1047,11 @@ def _build_event_impact_horizon_matrix_payload(
         "stats": {
             "article_count": len(articles),
             "event_types_returned": len(matrix),
+            "alerts_count": len(alerts),
             "horizons": list(_EVENT_HORIZON_KEYS),
         },
         "matrix": matrix,
+        "alerts": alerts,
         "templates": {
             "cross_horizon_divergence": dominant_template,
         },
@@ -3113,9 +3211,11 @@ async def get_judge_event_impact_horizon_matrix_payload(
                 "stats": {
                     "article_count": 0,
                     "event_types_returned": 0,
+                    "alerts_count": 0,
                     "horizons": list(_EVENT_HORIZON_KEYS),
                 },
                 "matrix": [],
+                "alerts": [],
                 "templates": {
                     "cross_horizon_divergence": "Event horizon matrix unavailable; no interpretation template generated.",
                 },

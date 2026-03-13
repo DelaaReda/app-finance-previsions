@@ -47,6 +47,7 @@ def test_event_impact_horizon_matrix_builds_cross_horizon_rows(monkeypatch):
     assert payload["ok"] is True
     data = payload["data"]
     assert data["stats"]["event_types_returned"] == 2
+    assert data["stats"]["alerts_count"] >= 1
     assert data["stats"]["horizons"] == ["1d", "1w", "1m"]
     first_row = data["matrix"][0]
     assert {"1d", "1w", "1m"} == set(first_row["horizons"].keys())
@@ -54,6 +55,9 @@ def test_event_impact_horizon_matrix_builds_cross_horizon_rows(monkeypatch):
     assert first_row["horizons"]["1w"]["impact_band"] in {"minimal", "low", "medium", "high"}
     assert first_row["dominant_horizon"] in {"1d", "1w", "1m"}
     assert "signal" in first_row["interpretation"]
+    assert isinstance(first_row["latest_at"], str)
+    assert data["alerts"][0]["urgency"] in {"high", "elevated"}
+    assert data["alerts"][0]["recommended_action"]
     assert data["templates"]["cross_horizon_divergence"]
 
 
@@ -92,6 +96,8 @@ def test_event_impact_horizon_matrix_filters_event_type(monkeypatch):
     assert len(data["matrix"]) == 1
     assert data["matrix"][0]["event_type"] == "merger"
     assert data["matrix"][0]["interpretation"].startswith("merger has its strongest")
+    assert data["alerts"][0]["event_type"] == "merger"
+    assert data["stats"]["alerts_count"] == 1
 
 
 def test_event_impact_horizon_matrix_returns_never_empty_fallback(monkeypatch):
@@ -111,5 +117,7 @@ def test_event_impact_horizon_matrix_returns_never_empty_fallback(monkeypatch):
     assert payload["status"] == "degraded"
     data = payload["data"]
     assert data["matrix"] == []
+    assert data["alerts"] == []
     assert data["stats"]["event_types_returned"] == 0
+    assert data["stats"]["alerts_count"] == 0
     assert data["message"] == "Event impact horizon matrix unavailable; fallback returned."
