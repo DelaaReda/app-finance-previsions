@@ -108,6 +108,99 @@ def _normalize_ask_payload(payload: Any) -> Dict[str, Any]:
     return copilot_service.normalize_ask_payload_contract(payload)
 
 
+def _normalized_action_target(
+    target: str,
+    kind: str,
+    namespace: Optional[str],
+) -> Optional[str]:
+    if not namespace:
+        return None
+
+    namespace_slug = str(namespace).strip().strip("/")
+    namespace_path = f"/{namespace_slug}"
+    if not namespace_path or namespace_path == "/":
+        return None
+
+    normalized_kind = str(kind or "").strip().lower()
+    normalized_target = str(target or "").strip().lower()
+    if not normalized_target:
+        if normalized_kind == "ask":
+            return f"{namespace_path}/ask"
+        if normalized_kind == "open":
+            return namespace_path
+        return None
+
+    if not normalized_target.startswith("/"):
+        normalized_target = f"/{normalized_target}"
+
+    if normalized_target.startswith(f"{namespace_path}/") or normalized_target in {
+        namespace_path,
+        f"{namespace_path}/",
+    }:
+        return target.strip()
+
+    if normalized_target in {"/copilot", "copilot", "/copilot/", "copilot/"}:
+        if normalized_kind == "ask":
+            return f"{namespace_path}/ask"
+        return namespace_path
+
+    if normalized_target.startswith("/copilot/") or normalized_target.startswith("copilot/"):
+        normalized = normalized_target.lstrip("/")
+        tail = normalized[len("copilot/") :].strip("/")
+        if not tail:
+            if normalized_kind == "ask":
+                return f"{namespace_path}/ask"
+            if normalized_kind == "open":
+                return namespace_path
+            return None
+        if tail == "ask":
+            return f"{namespace_path}/ask"
+        if normalized_kind in {"ask", "open"}:
+            return f"{namespace_path}/{tail}"
+        return None
+
+    if normalized_kind == "ask" and normalized_target in {"/copilot/ask", "copilot/ask"}:
+        return f"{namespace_path}/ask"
+
+    if normalized_kind == "open" and normalized_target in {"/copilot", "copilot", "/copilot/", "copilot/"}:
+        return namespace_path
+
+    return None
+
+
+def _rewrite_namespace_targets(payload: Any, namespace: Optional[str]) -> Any:
+    if namespace is None:
+        return payload
+
+    if not isinstance(payload, dict):
+        return payload
+
+    rewritten: Dict[str, Any] = dict(payload)
+    for key in ("ask", "open"):
+        items = rewritten.get(key)
+        if not isinstance(items, list):
+            continue
+        updated_items = []
+        for item in items:
+            if not isinstance(item, dict):
+                updated_items.append(item)
+                continue
+
+            resolved_kind = str(item.get("kind") or key)
+            target = item.get("target")
+            mapped = _normalized_action_target(
+                str(target if target is not None else ""),
+                resolved_kind,
+                namespace,
+            )
+            if mapped:
+                item = dict(item)
+                item["target"] = mapped
+            updated_items.append(item)
+        rewritten[key] = updated_items
+    return rewritten
+
+
 def _normalize_scope(
     tickers: Optional[List[str]],
 ) -> Optional[Dict[str, List[str]]]:
@@ -265,6 +358,7 @@ async def copilot_context(
 @router.get("/copilot/start")
 async def copilot_start(
     tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+    namespace: Optional[str] = None,
 ):
     scope = _normalize_scope(tickers)
 
@@ -274,17 +368,28 @@ async def copilot_start(
             scope=scope,
         )
         effective_scope = _resolve_effective_scope(scope, payload)
+        start_payload = (
+            payload.get("copilot_start")
+            if isinstance(payload, dict)
+            else None
+        )
+        if isinstance(start_payload, dict):
+            start_payload = _rewrite_namespace_targets(start_payload, namespace)
         note = None
         if isinstance(payload, dict) and payload.get("regime") == "fallback":
             note = "Market context service temporarily unavailable."
 
-        start_payload = payload.get("copilot_start") if isinstance(payload, dict) else None
         if not isinstance(start_payload, dict) or not start_payload:
-            start_payload = copilot_service._build_copilot_start_payload(
-                daily_brief=payload.get("daily_brief") if isinstance(payload, dict) else None,
-                entry_points=payload.get("entry_points") if isinstance(payload, dict) else None,
-                scope=effective_scope,
+            start_payload = (
+                copilot_service._build_copilot_start_payload(
+                    daily_brief=payload.get("daily_brief") if isinstance(payload, dict) else None,
+                    entry_points=payload.get("entry_points") if isinstance(payload, dict) else None,
+                    scope=effective_scope,
+                )
+                if isinstance(payload, dict)
+                else None
             )
+            start_payload = _rewrite_namespace_targets(start_payload, namespace)
         return {
             "ok": True,
             "data": _build_start_response(
@@ -306,7 +411,6 @@ async def copilot_start(
             None,
         ) or getattr(copilot_service, "_legacy_copilot_start_payload", None)
 
-        fallback_start: Dict[str, Any]
         if callable(build_start_payload):
             fallback_start = build_start_payload(
                 daily_brief=daily_brief,
@@ -319,6 +423,7 @@ async def copilot_start(
                 "ask": [],
                 "open": [],
             }
+        fallback_start = _rewrite_namespace_targets(fallback_start, namespace)
         fallback_payload = {
             "context_influence": None,
             "portfolio_context": None,
@@ -338,6 +443,28 @@ async def copilot_start(
                 allocation_drift_alerts=fallback_payload.get("allocation_drift_alerts"),
             ),
         }
+
+
+@router.get("/personal-finance/start")
+async def personal_finance_start(
+    tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+):
+    """Alias entrypoint for the personal finance copilot starter."""
+    return await copilot_start(tickers=tickers, namespace="personal-finance")
+
+
+@router.get("/personal-finance/context")
+async def personal_finance_context(
+    tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+):
+    """Alias entrypoint for the personal finance context view."""
+    return await copilot_context(tickers=tickers)
+
+
+@router.post("/personal-finance/ask")
+async def personal_finance_ask(req: CopilotAskRequest):
+    """Alias ask endpoint for the personal finance copilot."""
+    return await copilot_ask(req)
 
 
 class CopilotReportRequest(BaseModel):

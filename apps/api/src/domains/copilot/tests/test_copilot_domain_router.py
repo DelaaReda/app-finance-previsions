@@ -449,8 +449,20 @@ def test_personal_finance_start_alias_reuses_copilot_start_payload(monkeypatch):
                     "summary": "Scoped brief ready.",
                     "source": ["copilot_domain_router_personal_finance_test"],
                 },
-                "ask": [],
-                "open": [],
+                "ask": [
+                    {
+                        "id": "ask_copilot",
+                        "kind": "ask",
+                        "target": "/copilot/ask",
+                    }
+                ],
+                "open": [
+                    {
+                        "id": "open_copilot",
+                        "kind": "open",
+                        "target": "/copilot",
+                    }
+                ],
             },
             "scope_tickers": ["NVDA", "MSFT"],
         }
@@ -471,11 +483,27 @@ def test_personal_finance_start_alias_reuses_copilot_start_payload(monkeypatch):
     start_data = dict(payload_start.get("data") or {})
     finance_data = dict(payload_finance.get("data") or {})
 
+    # Keep runtime timestamps out of parity check but ensure action routing remains namespaced.
+    start_data_ask_targets = [item.get("target") for item in start_data.get("ask", [])]
+    finance_data_ask_targets = [item.get("target") for item in finance_data.get("ask", [])]
+    start_data_open_targets = [item.get("target") for item in start_data.get("open", [])]
+    finance_data_open_targets = [item.get("target") for item in finance_data.get("open", [])]
+
+    assert start_data_ask_targets == ["/copilot/ask"]
+    assert finance_data_ask_targets == ["/personal-finance/ask"]
+    assert start_data_open_targets == ["/copilot"]
+    assert finance_data_open_targets == ["/personal-finance"]
+
     # Ensure stable contract parity while allowing runtime timestamps to differ.
     start_data.pop("generated_at", None)
     start_data.pop("freshness", None)
     finance_data.pop("generated_at", None)
     finance_data.pop("freshness", None)
+    start_data.pop("ask", None)
+    finance_data.pop("ask", None)
+    start_data.pop("open", None)
+    finance_data.pop("open", None)
+
     assert finance_data == start_data
 
 
