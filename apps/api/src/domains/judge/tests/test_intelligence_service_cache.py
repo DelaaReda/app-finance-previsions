@@ -114,6 +114,24 @@ class IntelligenceServiceCacheTests(unittest.TestCase):
         self.assertEqual(copilot_start.get("ask", [])[0]["prompt"], "What should I do with my portfolio today?")
         self.assertEqual(copilot_start.get("open", [])[0]["target"], "market")
 
+    def test_load_brief_supports_canonical_daily_snapshot(self) -> None:
+        with mock.patch.object(
+            MODULE,
+            "load_json",
+            return_value={
+                "data": {
+                    "daily": {
+                        "summary": "Daily brief ready.",
+                        "market_sentiment": "BULLISH",
+                    }
+                }
+            },
+        ):
+            brief = MODULE._load_brief()
+
+        self.assertEqual(brief.get("summary"), "Daily brief ready.")
+        self.assertEqual(brief.get("market_sentiment"), "BULLISH")
+
 
 if __name__ == "__main__":
     unittest.main()

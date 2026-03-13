@@ -292,7 +292,13 @@ def _load_forecasts() -> List[Dict[str, Any]]:
 
 def _load_brief() -> Dict[str, Any]:
     payload = load_json("brief_daily") or {}
-    return payload.get("data") or {}
+    data = payload.get("data")
+    if isinstance(data, dict):
+        daily = data.get("daily")
+        if isinstance(daily, dict):
+            return daily
+        return data
+    return payload if isinstance(payload, dict) else {}
 
 def _load_news() -> List[Dict[str, Any]]:
     payload = load_json("news_feed") or {}
