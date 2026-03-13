@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -1293,6 +1294,62 @@ def test_judge_personal_finance_start_route_delegates_to_service(monkeypatch):
     assert data["open"][0]["id"] == "briefing"
     assert data["stats"]["ask_count"] == 1
     assert sorted(captured["tickers"]) == ["MSFT", "NVDA"]
+
+
+def test_judge_personal_finance_start_service_rewrites_copilot_targets(monkeypatch):
+    async def fake_build_context_payload(**_kwargs):
+        return {
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "Daily brief ready.",
+                    "generated_at": "2026-03-13T15:00:00Z",
+                    "freshness": "2026-03-13T15:00:00Z",
+                    "source": ["copilot_context_test"],
+                },
+                "ask": [
+                    {
+                        "id": "ask_copilot",
+                        "kind": "ask",
+                        "target": "/copilot/ask",
+                    }
+                ],
+                "open": [
+                    {
+                        "id": "open_copilot",
+                        "kind": "open",
+                        "target": "/copilot/overview",
+                    },
+                    {
+                        "id": "brief_of_day",
+                        "kind": "open",
+                        "target": "/brief/daily",
+                    },
+                ],
+            },
+            "source": ["judge_personal_finance_start_service", "copilot_route"],
+            "sources": ["judge_personal_finance_start_service", "copilot_route"],
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_resolve_copilot_services",
+        lambda: (type("CopilotService", (), {"build_context_payload": fake_build_context_payload}), None),
+    )
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_personal_finance_start_payload(
+            tickers=["nvda", "msft"]
+        )
+    )
+
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert [item["target"] for item in data["ask"]] == ["/personal-finance/ask"]
+    assert [item["target"] for item in data["open"]] == [
+        "/personal-finance",
+        "/brief/daily",
+    ]
+    assert data["filters_applied"] == {"tickers": ["NVDA", "MSFT"]}
 
 
 def test_judge_personal_finance_context_route_delegates_to_service(monkeypatch):

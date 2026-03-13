@@ -166,6 +166,47 @@ def _resolve_personal_finance_scope(
     return resolved_scope
 
 
+def _rewrite_personal_finance_start_targets(payload: Any) -> Any:
+    if not isinstance(payload, dict):
+        return payload
+
+    rewritten = dict(payload)
+    target_map = {
+        "/copilot": "/personal-finance",
+        "copilot": "/personal-finance",
+        "/copilot/": "/personal-finance",
+        "copilot/": "/personal-finance",
+        "/copilot/ask": "/personal-finance/ask",
+        "copilot/ask": "/personal-finance/ask",
+    }
+
+    for key in ("ask", "open"):
+        items = rewritten.get(key)
+        if not isinstance(items, list):
+            continue
+        updated_items: List[Any] = []
+        for item in items:
+            if not isinstance(item, dict):
+                updated_items.append(item)
+                continue
+            normalized_target = str(item.get("target") or "").strip().lower()
+            if normalized_target.startswith("/copilot/") and normalized_target not in {"/copilot/ask"}:
+                mapped_target = "/personal-finance"
+            elif normalized_target.startswith("copilot/") and normalized_target not in {"copilot/ask"}:
+                mapped_target = "/personal-finance"
+            else:
+                mapped_target = target_map.get(normalized_target)
+            if mapped_target:
+                updated_item = dict(item)
+                updated_item["target"] = mapped_target
+                updated_items.append(updated_item)
+                continue
+            updated_items.append(item)
+        rewritten[key] = updated_items
+
+    return rewritten
+
+
 def _default_risk_levels() -> List[str]:
     return ["low", "medium", "high", "critical"]
 
@@ -3187,27 +3228,14 @@ async def get_judge_personal_finance_start_payload(
     tickers: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Build personal-finance copilot starter payload used by judge API routes."""
-    from importlib import import_module
-
     now_iso = utc_now_iso()
     normalized_tickers = normalize_tickers(tickers or [])
     scope = {"tickers": normalized_tickers} if normalized_tickers else None
 
     try:
-        try:
-            copilot_service = import_module("domains.copilot.application.copilot_service")
-        except Exception:
-            copilot_service = import_module("services")
-
-        try:
-            context_module = import_module("domains.copilot.application.context_service")
-            context_service_cls = getattr(context_module, "ContextService", None)
-        except Exception:
-            try:
-                context_module = import_module("services.context_service")
-                context_service_cls = getattr(context_module, "ContextService", None)
-            except Exception:
-                context_service_cls = None
+        copilot_service, context_service_cls = _resolve_copilot_services()
+        if copilot_service is None:
+            raise RuntimeError("Copilot service unavailable")
 
         if hasattr(copilot_service, "build_context_payload"):
             payload = await copilot_service.build_context_payload(
@@ -3252,7 +3280,8 @@ async def get_judge_personal_finance_start_payload(
                     "open": [],
                 }
 
-        resolved_start = dict(copilot_start) if isinstance(copilot_start, dict) else {}
+        resolved_start = _rewrite_personal_finance_start_targets(copilot_start)
+        resolved_start = dict(resolved_start) if isinstance(resolved_start, dict) else {}
         brief = (
             dict(resolved_start.get("brief_of_day"))
             if isinstance(resolved_start.get("brief_of_day"), dict)
