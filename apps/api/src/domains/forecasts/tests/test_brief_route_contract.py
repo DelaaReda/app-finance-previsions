@@ -241,3 +241,36 @@ def test_brief_daily_contract_refreshes_stale_snapshot_before_serving(monkeypatc
     assert data["summary"] == "Refreshed brief"
     assert data["market_regime"] == "RISK_ON"
     assert data["sources"] == ["brief_generator"]
+
+
+def test_brief_daily_contract_keeps_degraded_payload_flags(monkeypatch):
+    snapshots = {
+        "brief_daily": {
+            "data": {
+                "daily": {
+                    "summary": "Sources partielles, visibilité réduite.",
+                    "market_regime": "CAUTION",
+                    "degraded": True,
+                    "degraded_reason": "forecasts_failed,news_failed",
+                    "sources": ["brief_generator", "forecast_service", "news_service"],
+                    "generated_at": "2026-03-13T09:05:00Z",
+                    "freshness": "2026-03-13T09:05:00Z",
+                    "generation_metadata": {
+                        "artifact_key": "brief_daily",
+                        "artifact_path": "runtime/data/brief_daily.json",
+                        "refreshed_at": "2026-03-13T09:05:00Z",
+                    },
+                }
+            }
+        },
+        "brief_weekly": None,
+    }
+
+    monkeypatch.setattr(brief_api.storage_io, "load_json", lambda key: snapshots.get(key))
+
+    data = (brief_api.get_daily_brief().get("data") or {})
+
+    assert data["summary"] == "Sources partielles, visibilité réduite."
+    assert data["degraded"] is True
+    assert data["degraded_reason"] == "forecasts_failed,news_failed"
+    assert data["sources"] == ["brief_generator", "forecast_service", "news_service"]

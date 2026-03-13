@@ -39,6 +39,17 @@ def _normalize_list(*values: Any) -> list[Any]:
     return []
 
 
+def _normalize_action_list(*values: Any) -> list[dict[str, Any]]:
+    for value in values:
+        if isinstance(value, list):
+            normalized: list[dict[str, Any]] = []
+            for item in value:
+                if isinstance(item, dict):
+                    normalized.append(dict(item))
+            return normalized
+    return []
+
+
 def _normalize_source_list(*values: Any) -> list[str]:
     for value in values:
         if isinstance(value, (list, tuple)):
@@ -193,14 +204,23 @@ def _normalize_brief_payload(
 
     top_opportunities = _normalize_list(
         payload.get("top_opportunities"),
+        payload.get("top_actions"),
         payload.get("top_signals"),
         payload.get("picks"),
     )
-    top_risks = _normalize_list(payload.get("top_risks"))
+    top_actions = _normalize_action_list(payload.get("top_actions"), payload.get("top_signals"))
+    top_risks = _normalize_list(payload.get("top_risks"), payload.get("main_risks"))
+    main_risks = _normalize_action_list(payload.get("main_risks"), payload.get("top_risks"))
     suppressed_risks = _normalize_list(payload.get("suppressed_risks"))
     alerting_metadata = payload.get("alerting_metadata")
     if not isinstance(alerting_metadata, dict):
         alerting_metadata = {}
+    action_metadata = payload.get("action_metadata")
+    if not isinstance(action_metadata, dict):
+        generation_metadata = payload.get("generation_metadata")
+        action_metadata = generation_metadata.get("action_metadata") if isinstance(generation_metadata, dict) else {}
+    if not isinstance(action_metadata, dict):
+        action_metadata = {}
 
     generated_at = str(payload.get("generated_at") or "").strip()
     if not generated_at:
@@ -227,9 +247,12 @@ def _normalize_brief_payload(
     payload["regime"] = market_regime
     payload["top_signals"] = top_opportunities
     payload["top_opportunities"] = top_opportunities
+    payload["top_actions"] = top_actions
     payload["top_risks"] = top_risks
+    payload["main_risks"] = main_risks
     payload["suppressed_risks"] = suppressed_risks
     payload["alerting_metadata"] = alerting_metadata
+    payload["action_metadata"] = action_metadata
     payload["key_events"] = _normalize_list(payload.get("key_events"))
     payload["macro_signals"] = macro_signals
     payload["sector_rotation"] = sector_rotation
@@ -238,8 +261,14 @@ def _normalize_brief_payload(
     payload["sources"] = source_list
     payload["source"] = source_list
     payload["generation_metadata"] = generation_metadata
-    payload["degraded"] = degraded_reason is not None
-    payload["degraded_reason"] = degraded_reason
+    source_degraded = bool(payload.get("degraded"))
+    source_degraded_reason = payload.get("degraded_reason")
+    resolved_degraded_reason = degraded_reason or source_degraded_reason
+    if resolved_degraded_reason is None and source_degraded:
+        resolved_degraded_reason = "degraded_payload_without_reason"
+
+    payload["degraded"] = bool(resolved_degraded_reason) or source_degraded
+    payload["degraded_reason"] = resolved_degraded_reason
     return payload
 
 

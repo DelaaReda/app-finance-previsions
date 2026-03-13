@@ -1,0 +1,22 @@
+proof_id: "PRF-BATCH-25-BATCH-25-DEV-03-20260313T133000Z-200"
+stream_id: "BATCH-25"
+task_id: "BATCH-25-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-13T13:30:00Z"
+inputs:
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+fix_applied: "Preserved degraded payload flags from stored brief snapshots in the daily-brief normalizer. The route now keeps `degraded`/`degraded_reason` from the source artifact when present and only supplies a synthetic reason when degraded data lacks one, avoiding false nominal success on degraded snapshots."
+verify:
+  before: "`/api/brief/daily` forced `degraded` false when a saved snapshot had `degraded: true`, hiding explicit downtime behavior from consumers."
+  after: "Stored snapshot fields now flow through: degraded snapshots retain `degraded=true` and explicit `degraded_reason` through `get_daily_brief`, while weekly/empty fallbacks remain unchanged."
+  tests:
+    - "pytest repo/apps/api/src/domains/forecasts/tests/test_brief_route_contract.py::test_brief_daily_contract_keeps_degraded_payload_flags"
+architecture_check:
+  layer: "api-route"
+  imports_ok: true
+  path_target: "repo/apps/api/src/domains/forecasts/api/brief.py"
+vision_alignment:
+  batch: "BATCH-25"
+  target: "Autonomous Morning Brief Pipeline — DEV-03 degraded-mode contract cleanup"
+  impact: "Keeps degraded brief mode explicit and user-visible on the existing brief route while preserving schema compatibility and bounded scope."
+recommended_next: "Dispatch to ADMIN-01 with brief contract evidence for nominal + degraded behavior proof capture."
