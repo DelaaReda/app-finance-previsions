@@ -25,9 +25,58 @@ except ImportError:
     get_macro_indicators = None
 
 
+try:
+    from services.intelligence_service import get_market_intelligence_snapshot
+except Exception:  # pragma: no cover
+    get_market_intelligence_snapshot = None
+
+
 def _utc_now_iso() -> str:
     """Return current UTC time in ISO format with Z suffix."""
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _coerce_float(value: Any, *, min_value: float = 0.0, max_value: float = 1.0) -> float:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if max_value > 1 and max_value <= 2 and numeric > max_value:
+        numeric = numeric / max_value
+    if numeric > 1 and numeric <= 100:
+        numeric = numeric / 100
+    return max(min_value, min(max_value, numeric))
+
+
+def _safe_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _safe_str(value: Any, *, fallback: str = "") -> str:
+    text = str(value or "").strip()
+    return text or fallback
+
+
+def _extract_judge_snapshot() -> Dict[str, Any]:
+    if not get_market_intelligence_snapshot:
+        return {}
+    try:
+        snapshot = get_market_intelligence_snapshot(use_cache=True, persist=False)
+        return snapshot if isinstance(snapshot, dict) else {}
+    except Exception as e:  # pragma: no cover
+        logger.warning(f"Error loading judge intelligence snapshot: {e}")
+        return {}
+
+
+def _normalize_judge_action_direction(action: str) -> str:
+    normalized = action.strip().upper()
+    if normalized in {"UP", "BULLISH", "BULL", "BUY"}:
+        return "BUY"
+    if normalized in {"DOWN", "BEARISH", "BEAR", "SELL"}:
+        return "SELL"
+    if normalized in {"NEUTRAL", "HOLD", "SKIP"}:
+        return "HOLD"
+    return normalized or "BUY"
 
 
 def build_daily_brief_snapshot(brief: Dict[str, Any]) -> Dict[str, Any]:
@@ -60,13 +109,13 @@ def build_daily_brief_snapshot(brief: Dict[str, Any]) -> Dict[str, Any]:
 def _generate_market_summary(forecasts: List[Dict], news: List[Dict], macro: Dict) -> str:
     """Generate a concise market summary (< 200 words) from live data."""
     summary_parts = []
-    
+
     # Analyze forecast sentiment
     if forecasts:
         bullish = sum(1 for f in forecasts if f.get('direction') == 'up' and f.get('confidence', 0) > 0.5)
         bearish = sum(1 for f in forecasts if f.get('direction') == 'down' and f.get('confidence', 0) > 0.5)
         total_confident = bullish + bearish
-        
+
         if total_confident > 0:
             sentiment_ratio = bullish / total_confident
             if sentiment_ratio > 0.6:
@@ -75,7 +124,7 @@ def _generate_market_summary(forecasts: List[Dict], news: List[Dict], macro: Dic
                 summary_parts.append("Les forecasts IA penchent vers la prudence avec des signaux baissiers.")
             else:
                 summary_parts.append("Les forecasts IA montrent un marché mitigé sans direction claire.")
-    
+
     # Add macro context
     if macro and macro.get('indicators'):
         indicators = macro['indicators']
@@ -85,14 +134,14 @@ def _generate_market_summary(forecasts: List[Dict], news: List[Dict], macro: Dic
                 summary_parts.append("Le VIX élevé signale une volatilité accrue sur les marchés.")
             elif vix < 15:
                 summary_parts.append("Le VIX bas indique un marché calme et confiant.")
-        
+
         if indicators.get('dxy'):
             dxy = indicators['dxy']
             if dxy > 105:
                 summary_parts.append("Le dollar fort pèse sur les marchés émergents.")
             elif dxy < 100:
                 summary_parts.append("Le dollar faible soutient les actifs à risque.")
-    
+
     # Add news sentiment
     if news:
         positive_news = sum(1 for n in news if n.get('sentiment') == 'positive')
@@ -101,11 +150,201 @@ def _generate_market_summary(forecasts: List[Dict], news: List[Dict], macro: Dic
             summary_parts.append("Les news récentes sont majoritairement positives.")
         elif negative_news > positive_news * 1.5:
             summary_parts.append("Les news récentes signalent des risques à surveiller.")
-    
+
     if not summary_parts:
         summary_parts.append("Le marché reste actif avec une lecture mitigée. Surveillez les secteurs en rotation.")
-    
+
     return " ".join(summary_parts)
+
+
+def _extract_top_actions(forecasts: List[Dict], limit: int = 5) -> List[Dict[str, Any]]:
+    """Extract top actionable opportunities from forecasts with confidence.
+
+    DEV-02 preparation: action-oriented brief using existing forecast/judge context.
+    """
+    if not forecasts:
+        return []
+
+    # Filter high-confidence forecasts
+    confident = [
+        f for f in forecasts
+        if f.get('confidence', 0) >= 0.6 and f.get('direction') in ('up', 'down')
+    ]
+
+    # Sort by confidence descending
+    confident.sort(key=lambda x: x.get('confidence', 0), reverse=True)
+
+    actions = []
+    for f in confident[:limit]:
+        ticker = f.get('ticker', 'UNKNOWN')
+        direction = f.get('direction', 'flat')
+        confidence = f.get('confidence', 0.5)
+        horizon = f.get('horizon', '1w')
+        action_label = f"Forecast {direction}"
+
+        action_type = 'BUY' if direction == 'up' else 'SELL'
+        actions.append({
+            'ticker': ticker,
+            'action': action_type,
+            'confidence': round(confidence, 2),
+            'horizon': horizon,
+            'summary': f"{action_type} {ticker} {round(confidence * 100)}% {horizon}".strip(),
+            'label': ticker,
+            'rationale': f"{action_label} with {confidence:.0%} confidence",
+        })
+
+    return actions
+
+
+def _extract_main_risks(forecasts: List[Dict], news: List[Dict], macro: Dict, limit: int = 5) -> List[Dict[str, Any]]:
+    """Extract main risks from forecasts, news, and macro data.
+
+    DEV-02 preparation: explicit risk framing with confidence levels.
+    """
+    risks = []
+
+    # Risk from bearish forecasts
+    if forecasts:
+        bearish = [
+            f for f in forecasts
+            if f.get('direction') == 'down' and f.get('confidence', 0) >= 0.5
+        ]
+        for f in bearish[:2]:
+            risks.append({
+                'type': 'forecast_risk',
+                'ticker': f.get('ticker', 'UNKNOWN'),
+                'label': f.get('ticker', 'UNKNOWN'),
+                'summary': f"{f.get('ticker', 'UNKNOWN')} downside forecast",
+                'description': f"Forecast down with {f.get('confidence', 0):.0%} confidence",
+                'confidence': round(f.get('confidence', 0), 2),
+                'severity': 'high' if f.get('confidence', 0) > 0.7 else 'medium',
+            })
+
+    # Risk from macro volatility
+    if macro and macro.get('indicators'):
+        indicators = macro['indicators']
+        if indicators.get('vix', 0) > 20:
+            risks.append({
+                'type': 'macro_risk',
+                'ticker': 'SPY',
+                'label': 'SPY',
+                'summary': 'High volatility regime',
+                'description': f"High volatility regime (VIX={indicators['vix']:.1f})",
+                'confidence': 0.8,
+                'severity': 'high',
+            })
+        if indicators.get('dxy', 0) > 105:
+            risks.append({
+                'type': 'macro_risk',
+                'ticker': 'EEM',
+                'label': 'EEM',
+                'summary': 'Strong dollar pressure',
+                'description': f"Strong dollar pressure (DXY={indicators['dxy']:.1f})",
+                'confidence': 0.7,
+                'severity': 'medium',
+            })
+
+    # Risk from negative news
+    if news:
+        negative_news = [n for n in news if n.get('sentiment') == 'negative']
+        if negative_news:
+            risks.append({
+                'type': 'news_risk',
+                'ticker': 'MARKET',
+                'label': 'MARKET',
+                'summary': f'{len(negative_news)} negative news items',
+                'description': f"{len(negative_news)} negative news items detected",
+                'confidence': 0.6,
+                'severity': 'medium',
+            })
+
+    # Sort by confidence and limit
+    risks.sort(key=lambda x: x.get('confidence', 0), reverse=True)
+    return risks[:limit]
+
+
+def _extract_judge_actions(judge_snapshot: Dict[str, Any], limit: int = 5) -> List[Dict[str, Any]]:
+    insights = judge_snapshot.get("insights")
+    opportunities = _safe_list(insights.get("opportunities") if isinstance(insights, dict) else None)
+
+    actions = []
+    for opp in opportunities:
+        if not isinstance(opp, dict):
+            continue
+        ticker = _safe_str(opp.get("ticker") or opp.get("symbol"), fallback="UNKNOWN")
+        if not ticker:
+            continue
+        confidence = _coerce_float(opp.get("confidence"), max_value=1.0)
+        raw_action = _safe_str(opp.get("action") or opp.get("verdict") or opp.get("direction"), fallback="BUY")
+        action = _normalize_judge_action_direction(raw_action)
+        horizon = _safe_str(opp.get("horizon"), fallback="short")
+        summary = _safe_str(
+            opp.get("summary"),
+            fallback=f"{action} {ticker} {int(confidence * 100)}% {horizon}",
+        )
+        rationale = _safe_str(opp.get("reasoning"), fallback=summary)
+        actions.append({
+            'ticker': ticker,
+            'action': action,
+            'confidence': round(confidence, 2),
+            'horizon': horizon,
+            'label': _safe_str(opp.get("ticker"), fallback=ticker),
+            'summary': summary,
+            'rationale': rationale,
+            'source': 'judge',
+        })
+        if len(actions) >= limit:
+            break
+
+    return actions
+
+
+def _extract_judge_risks(judge_snapshot: Dict[str, Any], limit: int = 5) -> List[Dict[str, Any]]:
+    insights = judge_snapshot.get("insights")
+    risks_source = _safe_list(insights.get("risks") if isinstance(insights, dict) else None)
+
+    risks = []
+    for risk in risks_source:
+        if not isinstance(risk, dict):
+            continue
+        risk_label = _safe_str(
+            risk.get("label") or risk.get("ticker") or risk.get("risk") or risk.get("title") or risk.get("type"),
+            fallback="MARKET"
+        )
+        severity = _safe_str(risk.get("severity"), fallback="medium").lower()
+        description = _safe_str(risk.get("description") or risk.get("summary"), fallback="Market risk identified")
+        confidence = _coerce_float(risk.get("confidence"), max_value=1.0)
+        risks.append({
+            'type': _safe_str(risk.get("type"), fallback="macro_risk").upper(),
+            'ticker': risk_label,
+            'label': risk_label,
+            'priority': severity.upper() if severity in {'high', 'medium', 'low', 'critical'} else 'MEDIUM',
+            'summary': _safe_str(risk.get("summary"), fallback=description),
+            'description': description,
+            'confidence': round(confidence, 2),
+            'severity': severity if severity in {'low', 'medium', 'high', 'critical'} else 'medium',
+            'source': 'judge',
+        })
+        if len(risks) >= limit:
+            break
+
+    return risks
+
+
+def _dedup_items(base: List[Dict[str, Any]], additions: List[Dict[str, Any]], limit: int, key_fn) -> List[Dict[str, Any]]:
+    merged = list(base)
+    seen = {key_fn(item) for item in merged if key_fn(item)}
+
+    for item in additions:
+        if len(merged) >= limit:
+            break
+        dedup_key = key_fn(item)
+        if not dedup_key or dedup_key in seen:
+            continue
+        merged.append(item)
+        seen.add(dedup_key)
+
+    return merged
 
 
 def _compute_sector_rotation(forecasts: List[Dict]) -> Dict[str, List[str]]:
@@ -266,6 +505,24 @@ def generate_daily_brief() -> Dict[str, Any]:
     # Get macro signals
     macro_signals = _get_macro_signals()
 
+    # Enrich with existing judge intelligence signals when available
+    judge_snapshot = _extract_judge_snapshot()
+    judge_actions = _extract_judge_actions(judge_snapshot, limit=5)
+    judge_risks = _extract_judge_risks(judge_snapshot, limit=5)
+
+    # DEV-02 preparation: Extract action-oriented content
+    top_actions = _extract_top_actions(forecasts, limit=5)
+    judge_enhanced_actions = _dedup_items(top_actions, judge_actions, 5, lambda item: f"{item.get('ticker')}:{item.get('action')}")
+
+    top_actions = judge_enhanced_actions
+
+    main_risks = _extract_main_risks(forecasts, news, macro, limit=5)
+    judge_enhanced_risks = _dedup_items(main_risks, judge_risks, 5, lambda item: item.get('ticker'))
+    main_risks = judge_enhanced_risks
+
+    if judge_snapshot and judge_snapshot.get('insights'):
+        source_tags.append('judge_intelligence')
+
     # Determine market sentiment
     sentiment = 'neutral'
     if forecasts:
@@ -284,8 +541,10 @@ def generate_daily_brief() -> Dict[str, Any]:
         'sentiment': sentiment,
         'macro_signals': macro_signals,
         'sector_rotation': sector_rotation,
-        'top_signals': [],
-        'top_risks': [],
+        'top_actions': top_actions,  # DEV-02: action-oriented opportunities
+        'main_risks': main_risks,  # DEV-02: explicit risks with confidence
+        'top_signals': top_actions,  # Alias for backward compatibility
+        'top_risks': main_risks,  # Alias for backward compatibility
         'key_events': [],
         'generated_at': generated_at,
         'freshness': generated_at,
@@ -305,6 +564,16 @@ def generate_daily_brief() -> Dict[str, Any]:
                 'forecasts_count': len(forecasts),
                 'news_count': len(news),
                 'macro_indicators': len(macro.get('indicators', {})) if macro else 0,
+                'actions_count': len(top_actions),
+                'risks_count': len(main_risks),
+                'judge_actions_count': len(judge_actions),
+                'judge_risks_count': len(judge_risks),
+            },
+            'action_metadata': {  # DEV-02: explicit hooks for action-oriented brief
+                'actions_available': len(top_actions) > 0,
+                'risks_available': len(main_risks) > 0,
+                'min_action_confidence': min((a['confidence'] for a in top_actions), default=0),
+                'max_action_confidence': max((a['confidence'] for a in top_actions), default=0),
             }
         }
     }
@@ -351,6 +620,8 @@ def _fallback_degraded_brief(*, error: str) -> Dict[str, Any]:
         'sentiment': 'unknown',
         'macro_signals': [],
         'sector_rotation': {'top': [], 'bottom': []},
+        'top_actions': [],  # DEV-02: explicit empty when degraded
+        'main_risks': [],  # DEV-02: explicit empty when degraded
         'top_signals': [],
         'top_risks': [],
         'key_events': [],
@@ -369,6 +640,12 @@ def _fallback_degraded_brief(*, error: str) -> Dict[str, Any]:
             'artifact_path': 'runtime/data/brief_daily.json',
             'refreshed_at': generated_at,
             'error': error,
+            'action_metadata': {  # DEV-02: explicit empty state
+                'actions_available': False,
+                'risks_available': False,
+                'min_action_confidence': 0,
+                'max_action_confidence': 0,
+            }
         }
     }
 
