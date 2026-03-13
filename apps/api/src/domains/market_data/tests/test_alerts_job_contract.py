@@ -225,6 +225,8 @@ def test_compute_alerts_keeps_escalated_duplicate_visible_within_window(monkeypa
     assert alert["priority_band"] in {"urgent", "high"}
     assert alert["suppression"]["suppressed"] is False
     assert alert["suppression"]["repeat_count"] == 3
+    assert alert["urgent_bypass"] is True
+    assert payload["alerting_metadata"]["urgent_bypass_count"] == 1
 
 
 def test_compute_alerts_reuses_suppressed_snapshot_state(monkeypatch):
@@ -413,3 +415,144 @@ def test_compute_alerts_normalizes_naive_now_for_timezone_aware_news(monkeypatch
     assert payload["count"] == 1
     assert payload["alerts"][0]["type"] == "oversold-bearish"
     assert payload["warnings"] == []
+
+
+def test_batch_24_dev_01_additive_contract_fields(monkeypatch):
+    """
+    BATCH-24-DEV-01: Verify all additive fields required for DEV-02 consumption.
+    
+    Per-alert fields:
+    - priority (via priority_band)
+    - priority_score
+    - horizon
+    - alert_fingerprint
+    - suppression_window_minutes
+    - suppressed
+    - suppression_reason
+    - duplicate_count
+    - urgent_bypass
+    - priority_rank
+    
+    Batch-level fields:
+    - suppressed_risks
+    - alerting_metadata
+    """
+    run_at = datetime(2026, 3, 4, 6, 20, 0, tzinfo=timezone.utc)
+
+    def fake_load_json(name: str) -> Dict[str, Any]:
+        if name == "forecasts":
+            return {
+                "payload": {
+                    "rows": [
+                        {"ticker": "AAPL", "direction": "down", "confidence": 0.74, "expected_return": -0.031, "horizon": "1w"},
+                        {"ticker": "MSFT", "direction": "up", "confidence": 0.61, "expected_return": 0.021, "horizon": "1w"},
+                    ]
+                }
+            }
+        if name == "news_feed":
+            return {
+                "payload": {
+                    "articles": [
+                        {
+                            "tickers": ["AAPL"],
+                            "sentiment_score": -0.65,
+                            "title": "AAPL update",
+                            "pubDate": "2026-03-04T06:10:00Z",
+                        },
+                    ]
+                }
+            }
+        if name == "alerts":
+            return {}
+        return {}
+
+    def fake_seeded_float(seed: str) -> float:
+        if seed.startswith("alerts:rsi:AAPL:2026030406"):
+            return 0.05  # force oversold
+        if seed.startswith("alerts:rsi:MSFT:2026030406"):
+            return 0.95  # force overbought
+        if seed.startswith("alerts:vol:"):
+            return 0.55  # deterministic high volatility
+        return 0.5
+
+    monkeypatch.setattr(ALERTS_JOB, "load_json", fake_load_json)
+    monkeypatch.setattr(ALERTS_JOB, "_seeded_float", fake_seeded_float)
+
+    payload = ALERTS_JOB.compute_alerts(now=run_at)
+
+    # Batch-level fields
+    assert "suppressed_risks" in payload
+    assert isinstance(payload["suppressed_risks"], list)
+    assert "alerting_metadata" in payload
+    assert isinstance(payload["alerting_metadata"], dict)
+    
+    metadata = payload["alerting_metadata"]
+    assert "suppression_window_minutes" in metadata
+    assert "fatigue_threshold" in metadata
+    assert "escalation_delta_bps" in metadata
+    assert "total_processed" in metadata
+    assert "total_active" in metadata
+    assert "total_suppressed" in metadata
+    assert "urgent_bypass_count" in metadata
+
+    # Per-alert fields for all active alerts
+    for alert in payload["alerts"]:
+        # Priority fields
+        assert "priority_band" in alert
+        assert alert["priority_band"] in {"urgent", "high", "medium", "low"}
+        assert "priority_score" in alert
+        assert isinstance(alert["priority_score"], (int, float)) and alert["priority_score"] >= 0
+        assert "priority_rank" in alert
+        assert isinstance(alert["priority_rank"], int) and alert["priority_rank"] >= 1
+        
+        # BATCH-24-DEV-01 additive fields
+        assert "horizon" in alert
+        assert isinstance(alert["horizon"], str) and alert["horizon"]
+        
+        assert "alert_fingerprint" in alert
+        assert isinstance(alert["alert_fingerprint"], str) and alert["alert_fingerprint"]
+        
+        assert "suppression_window_minutes" in alert
+        assert isinstance(alert["suppression_window_minutes"], int) and alert["suppression_window_minutes"] > 0
+        
+        assert "suppressed" in alert
+        assert isinstance(alert["suppressed"], bool)
+        
+        assert "suppression_reason" in alert
+        assert isinstance(alert["suppression_reason"], str)
+        
+        assert "duplicate_count" in alert
+        assert isinstance(alert["duplicate_count"], int) and alert["duplicate_count"] >= 1
+        
+        assert "urgent_bypass" in alert
+        assert isinstance(alert["urgent_bypass"], bool)
+        
+        # Nested suppression object (existing)
+        assert "suppression" in alert
+        assert isinstance(alert["suppression"], dict)
+        assert "suppressed" in alert["suppression"]
+        assert "repeat_count" in alert["suppression"]
+        assert "reason" in alert["suppression"]
+        assert "window_minutes" in alert["suppression"]
+
+    # Verify suppressed alerts also have the contract fields
+    for alert in payload["suppressed_alerts"]:
+        assert "alert_fingerprint" in alert
+        assert "suppression_window_minutes" in alert
+        assert "suppressed" in alert and alert["suppressed"] is True
+        assert "suppression_reason" in alert
+        assert "duplicate_count" in alert
+        assert "urgent_bypass" in alert
+        assert "horizon" in alert
+        assert "priority_score" in alert
+        assert "priority_band" in alert
+        assert "priority_rank" in alert
+
+    # Verify suppressed_risks structure
+    for risk in payload["suppressed_risks"]:
+        assert "alert_fingerprint" in risk
+        assert "ticker" in risk
+        assert "summary" in risk
+        assert "severity" in risk
+        assert "suppression_reason" in risk
+        assert "duplicate_count" in risk
