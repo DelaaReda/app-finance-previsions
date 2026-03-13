@@ -260,6 +260,71 @@ function loadPersonalPolicySettingsHelpers() {
   return sandbox;
 }
 
+function loadCopilotFocusHelpers() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const buildPromptSource = extractFunction(source, 'buildCopilotFocusPrompt', '\n\nfunction deriveCopilotStartFocusItems');
+  const deriveItemsSource = extractFunction(source, 'deriveCopilotStartFocusItems', '\n\nfunction normalizeCopilotStartEventTiming');
+  const sandbox = {
+    console,
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    normalizeCopilotStarterTickers(value) {
+      const seen = new Set();
+      return (Array.isArray(value) ? value : [])
+        .map((item) => (typeof item === 'string' ? item.trim().toUpperCase() : ''))
+        .filter((item) => {
+          if (!item || seen.has(item)) return false;
+          seen.add(item);
+          return true;
+        });
+    },
+    normalizeCopilotStartList(value) {
+      return (Array.isArray(value) ? value : [])
+        .map((item) => (typeof item === 'string'
+          ? item.trim()
+          : (item && typeof item === 'object'
+            ? String(item.label || item.title || item.name || item.sector || '').trim()
+            : '')))
+        .filter(Boolean)
+        .slice(0, 3);
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${buildPromptSource}\n${deriveItemsSource}\nthis.buildCopilotFocusPrompt = buildCopilotFocusPrompt;\nthis.deriveCopilotStartFocusItems = deriveCopilotStartFocusItems;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  return sandbox;
+}
+
+function loadHeroBriefInlineActionHelpers() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const escapeSource = extractFunction(source, 'escapeInlineJsSingleQuotedString', '\n\nfunction buildInlineCopilotTickerArgument');
+  const buildSource = extractFunction(source, 'buildInlineCopilotTickerArgument', '\n\n/**\n * Format relative time from ISO timestamp');
+  const sandbox = { console, String, Array };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${escapeSource}\n${buildSource}\nthis.escapeInlineJsSingleQuotedString = escapeInlineJsSingleQuotedString;\nthis.buildInlineCopilotTickerArgument = buildInlineCopilotTickerArgument;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  return sandbox;
+}
+
 function loadMacroRegimeCardsRenderer() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const functionSource = extractFunction(source, 'renderMacroRegimeCardsWidget', '\n\nfunction renderForecastScenarioWidget');
@@ -1020,6 +1085,11 @@ function loadSanitizeCopilotStart() {
 
 function loadRenderHeroCopilotBriefWithHeroIds(resolvedState) {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const focusHelperSource = extractSection(
+    source,
+    'function buildCopilotFocusPrompt(',
+    '\n\nfunction normalizeCopilotStartEventTiming('
+  );
   const functionSource = extractFunction(source, 'renderHeroCopilotBrief', '\n\nfunction renderCopilotStartActions(');
   const elements = {
     heroBriefTitle: createInteractiveElementStub(),
@@ -1147,7 +1217,7 @@ function loadRenderHeroCopilotBriefWithHeroIds(resolvedState) {
 
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  vm.runInContext(`${functionSource}\nthis.renderHeroCopilotBrief = renderHeroCopilotBrief;`, sandbox, {
+  vm.runInContext(`${focusHelperSource}\n${functionSource}\nthis.renderHeroCopilotBrief = renderHeroCopilotBrief;`, sandbox, {
     filename: 'app.js',
   });
 
@@ -4296,24 +4366,24 @@ test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actio
   assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['market']);
 
   assert.equal(elements.heroSuggestionChips.children.length, 3);
-  assert.equal(elements.heroSuggestionChips.children[0].textContent, 'Regime: RISK ON');
-  assert.equal(elements.heroSuggestionChips.children[1].textContent, 'Watch next');
-  assert.equal(elements.heroSuggestionChips.children[2].textContent, 'Open opportunities');
+  const suggestionLabels = Array.from(elements.heroSuggestionChips.children).map((node) => node.textContent);
+  assert.equal(suggestionLabels[0], 'Regime: RISK ON');
+  assert.equal(suggestionLabels.length, 3);
+  assert.equal(
+    suggestionLabels.filter((label) => label.startsWith('Open ')).length,
+    2,
+  );
 
-  elements.heroSuggestionChips.children[1].click();
-  elements.heroSuggestionChips.children[2].click();
+  Array.from(elements.heroSuggestionChips.children)
+    .filter((node) => typeof node.click === 'function' && node.textContent.startsWith('Open '))
+    .forEach((node) => node.click());
 
-  assert.deepEqual(JSON.parse(JSON.stringify(promptCalls)), [
-    {
-      prompt: 'What matters most today?',
-      tickers: ['NVDA', 'MSFT'],
-    },
-    {
-      prompt: 'What should I watch next?',
-      tickers: [],
-    },
-  ]);
-  assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['market', 'opportunities']);
+  const normalizedPromptCalls = JSON.parse(JSON.stringify(promptCalls));
+  assert.equal(normalizedPromptCalls[0].prompt, 'What matters most today?');
+  assert.deepEqual(normalizedPromptCalls[0].tickers, ['NVDA', 'MSFT']);
+  assert.equal(normalizedPromptCalls.length, 3);
+  assert.ok(normalizedPromptCalls.some((item) => item.prompt.startsWith('Open a deep dive on ')));
+  assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['market']);
 });
 
 test('renderHeroCopilotBrief accepts normalized backend snake_case brief fields and falls back to opportunities', () => {
@@ -5457,4 +5527,52 @@ test('renderAlertTimeline surfaces top queue summary and urgency tier badges', (
   assert.match(timelineContainer.innerHTML, /Held 3/);
   assert.match(timelineContainer.innerHTML, /15m window/);
   assert.match(timelineContainer.innerHTML, /Urgent queue • repeat 4x • alerts engine • 88% confidence • 2 minutes ago/);
+});
+
+test('deriveCopilotStartFocusItems surfaces brief-driven ticker and theme starter chips', () => {
+  const sandbox = loadCopilotFocusHelpers();
+
+  const items = sandbox.deriveCopilotStartFocusItems({
+    scope_tickers: ['nvda'],
+    brief: {
+      topOpportunities: ['AI Infrastructure'],
+      topRisks: ['Rates'],
+    },
+    ask: [{ label: 'Ask About Today' }],
+    open: [{ label: 'Open Live Brief' }],
+  });
+
+  assert.equal(items.length, 2);
+  assert.equal(items[0].label, 'Open NVDA');
+  assert.equal(items[0].prompt, "Open a deep dive on NVDA and explain today's setup, verdict, risks, confidence, freshness, and sources.");
+  assert.deepEqual(Array.from(items[0].tickers), ['NVDA']);
+  assert.equal(items[1].label, 'Open AI Infrastructure');
+  assert.deepEqual(Array.from(items[1].tickers), []);
+});
+
+test('deriveCopilotStartFocusItems skips duplicates already exposed by ask/open actions', () => {
+  const sandbox = loadCopilotFocusHelpers();
+
+  const items = sandbox.deriveCopilotStartFocusItems({
+    scope_tickers: ['msft'],
+    brief: {
+      topSignals: ['MSFT', 'Cloud'],
+    },
+    ask: [{ label: 'Ask About Today' }],
+    open: [{ label: 'Open MSFT' }],
+  });
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].label, 'Open Cloud');
+  assert.deepEqual(Array.from(items[0].tickers), []);
+});
+
+test('buildInlineCopilotTickerArgument keeps inline copilot chip onclick payloads attribute-safe', () => {
+  const sandbox = loadHeroBriefInlineActionHelpers();
+
+  assert.equal(
+    sandbox.buildInlineCopilotTickerArgument(['AAPL', `BRK.B`, `O'Reilly`]),
+    ", ['AAPL', 'BRK.B', 'O\\'Reilly']"
+  );
+  assert.equal(sandbox.buildInlineCopilotTickerArgument([]), '');
 });

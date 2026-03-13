@@ -5719,6 +5719,30 @@ function normalizeCopilotStartOpen(value) {
     .filter((item) => item.target);
 }
 
+function ensureCopilotStartEventCalendarOpen(openItems, eventTiming) {
+  if (!eventTiming || !Array.isArray(eventTiming.events) || !eventTiming.events.length) {
+    return openItems;
+  }
+
+  const normalizedItems = Array.isArray(openItems) ? [...openItems] : [];
+  const hasCalendarAction = normalizedItems.some((item) => {
+    if (!isObject(item)) return false;
+    const normalizedId = toString(item.id, '').trim().toLowerCase();
+    const normalizedTarget = normalizeCopilotStartOpenTarget(item.target, item.id);
+    return normalizedId === 'event_calendar' || normalizedTarget === 'calendar';
+  });
+  if (hasCalendarAction) {
+    return normalizedItems;
+  }
+
+  normalizedItems.push({
+    id: 'event_calendar',
+    label: 'Open event calendar',
+    target: 'calendar'
+  });
+  return normalizedItems;
+}
+
 function normalizeCopilotStartOpenTarget(target, id = '') {
   const normalizedTarget = toString(target, '')
     .trim()
@@ -5738,6 +5762,15 @@ function normalizeCopilotStartOpenTarget(target, id = '') {
     || normalizedTarget === 'daily_brief'
   ) {
     return 'market';
+  }
+  if (
+    normalizedId === 'event_calendar'
+    || normalizedTarget === '/calendar'
+    || normalizedTarget === 'calendar'
+    || normalizedTarget === 'market-calendar'
+    || normalizedTarget === 'event_calendar'
+  ) {
+    return 'calendar';
   }
   if (
     normalizedId === 'ask_copilot'
@@ -5764,6 +5797,49 @@ function normalizeCopilotStartList(value) {
     .map((item) => toString(isObject(item) ? (item.label || item.title || item.name || item.sector) : item, '').trim())
     .filter(Boolean)
     .slice(0, 3);
+}
+
+function buildCopilotFocusPrompt(topic) {
+  const normalizedTopic = toString(topic, '').trim();
+  if (!normalizedTopic) return '';
+  return `Open a deep dive on ${normalizedTopic} and explain today's setup, verdict, risks, confidence, freshness, and sources.`;
+}
+
+function deriveCopilotStartFocusItems(state) {
+  const source = isObject(state) ? state : {};
+  const brief = isObject(source.brief) ? source.brief : {};
+  const existingLabels = new Set([
+    ...toArray(source.ask, []).map((item) => toString(item && item.label, '').trim().toLowerCase()),
+    ...toArray(source.open, []).map((item) => toString(item && item.label, '').trim().toLowerCase())
+  ].filter(Boolean));
+  const scopeTickers = normalizeCopilotStarterTickers(source.scope_tickers || source.scopeTickers);
+  const candidates = [
+    ...scopeTickers,
+    ...normalizeCopilotStartList(brief.topSignals || brief.top_signals),
+    ...normalizeCopilotStartList(brief.topOpportunities || brief.top_opportunities),
+    ...normalizeCopilotStartList(brief.topRisks || brief.top_risks)
+  ];
+  const seenTopics = new Set();
+
+  return candidates
+    .map((candidate) => toString(candidate, '').trim())
+    .filter(Boolean)
+    .filter((topic) => {
+      const normalizedTopic = topic.toLowerCase();
+      if (seenTopics.has(normalizedTopic) || existingLabels.has(`open ${normalizedTopic}`)) {
+        return false;
+      }
+      seenTopics.add(normalizedTopic);
+      return true;
+    })
+    .slice(0, 2)
+    .map((topic, index) => ({
+      id: `copilot_focus_${index}`,
+      label: `Open ${topic}`,
+      prompt: buildCopilotFocusPrompt(topic),
+      tickers: /^[A-Z][A-Z0-9.-]{0,9}$/.test(topic) ? [topic] : []
+    }))
+    .filter((item) => item.prompt);
 }
 
 function normalizeCopilotStartEventTiming(value) {
@@ -5815,7 +5891,6 @@ function buildCopilotStartState(raw) {
       ? copilotStart.briefOfDay
       : (isObject(data.daily_brief) ? data.daily_brief : {}));
   const ask = normalizeCopilotStartAsk(copilotStart.ask, scopeTickers);
-  const open = normalizeCopilotStartOpen(copilotStart.open);
   const marketRegime = toString(
     briefSource.market_regime
       || briefSource.marketRegime
@@ -5830,6 +5905,10 @@ function buildCopilotStartState(raw) {
   );
   const topRisks = normalizeCopilotStartList(briefSource.top_risks || briefSource.risks);
   const eventTiming = normalizeCopilotStartEventTiming(briefSource.event_timing || briefSource.eventTiming);
+  const open = ensureCopilotStartEventCalendarOpen(
+    normalizeCopilotStartOpen(copilotStart.open),
+    eventTiming
+  );
   const sourceLabels = normalizeCopilotSourceLabels(briefSource.sources || briefSource.source);
   const generatedAt = toString(
     briefSource.generated_at || briefSource.generatedAt || briefSource.freshness,
@@ -5999,6 +6078,10 @@ function resolveCopilotStartOpenDestination(target) {
     },
     overview: {
       tab: 'overview'
+    },
+    calendar: {
+      tab: 'market',
+      anchorId: 'market-calendar-widget-container'
     },
     market: {
       tab: 'market'
@@ -6225,6 +6308,7 @@ function renderHeroCopilotBrief(state) {
   const briefSources = normalizeCopilotSourceLabels(brief.sources || brief.source);
   const briefTopSignals = normalizeCopilotStartList(brief.topSignals || brief.top_signals);
   const briefTopOpportunities = normalizeCopilotStartList(brief.topOpportunities || brief.top_opportunities);
+  const derivedFocusItems = deriveCopilotStartFocusItems(state);
   const briefAlertingMetadata = isObject(brief.alertingMetadata || brief.alerting_metadata)
     ? (brief.alertingMetadata || brief.alerting_metadata)
     : {};
@@ -6414,6 +6498,12 @@ function renderHeroCopilotBrief(state) {
     });
 
     const suggestionItems = [
+      ...derivedFocusItems.map((item) => ({
+        label: item.label,
+        run() {
+          runCopilotStartPrompt(item.prompt, item.tickers);
+        }
+      })),
       ...askItems.slice(1).map((item) => ({
         label: toString(item.label, 'Ask copilot'),
         run() {
@@ -9000,6 +9090,215 @@ function filterNews(filter) {
 
 function loadMoreNews() {
   showToast('Loading more news...');
+}
+
+// ============================================================================
+// BATCH-63-DEV-02: Brief of the Day - Load from /copilot/start API
+// ============================================================================
+
+/**
+ * Load brief of the day from /copilot/start endpoint and render to hero section.
+ * This is the minimal vertical slice for the personal finance copilot.
+ */
+async function loadAndRenderHeroBrief() {
+  const API_BASE = window.API_BASE_URL || 'http://localhost:8050/api';
+  
+  const summaryEl = document.getElementById('heroBriefSummary');
+  const signalsEl = document.getElementById('heroBriefSignals');
+  const risksEl = document.getElementById('heroBriefRisks');
+  const timestampEl = document.getElementById('heroBriefTimestamp');
+  const titleEl = document.getElementById('heroBriefTitle');
+  const leadEl = document.getElementById('heroBriefLead');
+  const actionsEl = document.getElementById('heroBriefActions');
+  const chipsEl = document.getElementById('heroSuggestionChips');
+
+  // Set loading state
+  if (summaryEl) {
+    summaryEl.textContent = 'Loading your daily brief...';
+    summaryEl.style.opacity = '0.7';
+  }
+  if (titleEl) titleEl.textContent = 'Brief of the day';
+  if (leadEl) leadEl.textContent = 'A 30-second portfolio memo before you dive deeper.';
+
+  try {
+    const response = await fetch(`${API_BASE}/copilot/start`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+    const data = result.data || {};
+    const brief = data.brief_of_day || data.daily_brief || {};
+
+    // Render brief summary
+    if (summaryEl) {
+      summaryEl.textContent = brief.summary || 'No brief available yet. Check back soon!';
+      summaryEl.style.opacity = '1';
+    }
+
+    // Render signals (top_signals)
+    if (signalsEl) {
+      const signals = brief.top_signals || [];
+      if (signals.length > 0) {
+        const signalText = signals.slice(0, 3).map(s => {
+          if (typeof s === 'string') return s;
+          return s.label || s.name || s.ticker || 'Signal';
+        }).join(' • ');
+        signalsEl.textContent = `📈 Signals: ${signalText}`;
+        signalsEl.style.display = 'block';
+      } else {
+        signalsEl.style.display = 'none';
+      }
+    }
+
+    // Render risks (top_risks)
+    if (risksEl) {
+      const risks = brief.top_risks || [];
+      if (risks.length > 0) {
+        const riskText = risks.slice(0, 3).map(r => {
+          if (typeof r === 'string') return r;
+          return r.label || r.ticker || r.summary || 'Risk';
+        }).join(' • ');
+        risksEl.textContent = `⚠️ Risks: ${riskText}`;
+        risksEl.style.display = 'block';
+      } else {
+        risksEl.style.display = 'none';
+      }
+    }
+
+    // Render timestamp
+    if (timestampEl) {
+      const freshness = brief.freshness || brief.generated_at;
+      const relative = freshness ? formatRelativeTime(freshness) : 'just now';
+      timestampEl.textContent = `Updated ${relative}`;
+    }
+
+    // Update title with sentiment if available
+    if (titleEl) {
+      const sentiment = brief.market_sentiment || brief.sentiment;
+      const sentimentIcon = sentiment === 'BULLISH' ? '🟢' : sentiment === 'BEARISH' ? '🔴' : '🟡';
+      titleEl.textContent = `${sentimentIcon} Brief of the day`;
+    }
+
+    // Update lead with sentiment context
+    if (leadEl) {
+      const sentiment = brief.market_sentiment || brief.sentiment || 'UNKNOWN';
+      const sentimentText = sentiment === 'BULLISH' ? 'bullish bias' : sentiment === 'BEARISH' ? 'cautious outlook' : 'mixed signals';
+      leadEl.textContent = `Market shows ${sentimentText}. A 30-second portfolio memo before you dive deeper.`;
+    }
+
+    // Render suggestion chips from brief actions
+    if (chipsEl && brief.ask && Array.isArray(brief.ask) && brief.ask.length > 0) {
+      const askItems = brief.ask.slice(0, 3);
+      chipsEl.innerHTML = askItems.map((item, idx) => {
+        const prompt = item.prompt || `Tell me about ${item.target || 'this'}`;
+        const label = item.label || item.target || `Suggestion ${idx + 1}`;
+        const tickerArgument = buildInlineCopilotTickerArgument(item.tickers);
+        return `<button class="suggestion-chip" onclick="runCopilotStartPrompt('${escapeInlineJsSingleQuotedString(prompt)}'${tickerArgument})">${escapeHtml(label)}</button>`;
+      }).join('');
+      chipsEl.style.display = 'flex';
+    } else if (chipsEl) {
+      // Default suggestions if none from API
+      chipsEl.innerHTML = `
+        <button class="suggestion-chip" onclick="runCopilotStartPrompt('Explain what matters in today\\'s portfolio brief and what I should watch next.')">Ask copilot about today's brief</button>
+        <button class="suggestion-chip" onclick="safeSwitchTab(document.querySelector('[data-tab=&quot;overview&quot;]'), 'overview'); setTimeout(function() { var target = document.getElementById('market-calendar-widget-container'); if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 120);">Open this week's earnings calendar</button>
+        <button class="suggestion-chip" onclick="safeSwitchTab(document.querySelector('[data-tab=&quot;overview&quot;]'), 'overview'); setTimeout(function() { var target = document.getElementById('quick-actions-widget-container'); if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 120);">Open today's portfolio actions</button>
+      `;
+      chipsEl.style.display = 'flex';
+    }
+
+    // Store for later use
+    window.copilotStart = data;
+
+    console.log('[Brief] Loaded successfully:', {
+      summary: brief.summary?.substring(0, 50) + '...',
+      sentiment: brief.market_sentiment,
+      signals: (brief.top_signals || []).length,
+      risks: (brief.top_risks || []).length,
+      freshness: brief.freshness
+    });
+
+  } catch (error) {
+    console.error('[Brief] Failed to load:', error);
+    
+    // Fallback state
+    if (summaryEl) {
+      summaryEl.textContent = 'Unable to load brief. Please check your connection and try again.';
+      summaryEl.style.opacity = '1';
+      summaryEl.style.color = '#ef4444';
+    }
+    if (timestampEl) {
+      timestampEl.textContent = 'Update failed';
+    }
+    if (titleEl) {
+      titleEl.textContent = '⚠️ Brief unavailable';
+    }
+    
+    // Trigger fallback brief generation
+    try {
+      await fetch(`${API_BASE}/brief/daily`, { method: 'POST' });
+      console.log('[Brief] Triggered fallback generation, retrying...');
+      setTimeout(() => loadAndRenderHeroBrief(), 2000);
+    } catch (retryError) {
+      console.warn('[Brief] Fallback generation also failed:', retryError);
+    }
+  }
+}
+
+function escapeInlineJsSingleQuotedString(value) {
+  return String(value ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+function buildInlineCopilotTickerArgument(value) {
+  if (!Array.isArray(value) || !value.length) return '';
+  const serializedTickers = value
+    .map((ticker) => `'${escapeInlineJsSingleQuotedString(ticker)}'`)
+    .join(', ');
+  return `, [${serializedTickers}]`;
+}
+
+/**
+ * Format relative time from ISO timestamp
+ */
+function formatRelativeTime(isoString) {
+  if (!isoString) return 'just now';
+  
+  try {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  } catch {
+    return 'just now';
+  }
+}
+
+/**
+ * Escape HTML for safe rendering
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Expose globally for index.html callback
+if (typeof window !== 'undefined') {
+  window.loadAndRenderHeroBrief = loadAndRenderHeroBrief;
 }
 
 // V13: Draw Win Rate Circle
