@@ -1178,6 +1178,47 @@ test('getCopilotStart unwraps the dedicated starter contract and normalizes open
   assert.deepEqual(payload.stats, { ask_count: 1, open_count: 2 });
 });
 
+test('getCopilotStart normalizes personal-finance open target to the copilot destination', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          brief_of_day: {
+            title: 'Brief of the day',
+            summary: 'Personal finance alias should open in copilot.',
+            generated_at: '2026-03-13T09:00:00.000Z',
+          },
+          ask: [],
+          open: [
+            {
+              id: 'open_personal_finance',
+              label: 'Open personal finance',
+              target: '/personal-finance',
+            },
+            {
+              id: 'open_personal_finance_ask',
+              label: 'Open personal finance ask',
+              target: 'personal-finance/ask',
+            },
+          ],
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotStart();
+  const open = payload.copilot_start && payload.copilot_start.open ? payload.copilot_start.open : [];
+
+  assert.deepEqual(
+    open.map((item) => ({ id: item.id, target: item.target })),
+    [
+      { id: 'open_personal_finance', target: 'copilot' },
+      { id: 'open_personal_finance_ask', target: 'copilot' },
+    ]
+  );
+});
+
 test('getCopilotStart uses FINANCECOPILOT_NAMESPACE for personal-finance start route', async () => {
   const calls = [];
   const sandbox = loadConnector(

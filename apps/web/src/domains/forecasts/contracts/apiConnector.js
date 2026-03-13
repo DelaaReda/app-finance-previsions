@@ -1505,6 +1505,10 @@ function normalizeCopilotOpenTarget(target, id) {
     || normalizedTarget === '/copilot/'
     || normalizedTarget === 'copilot'
     || normalizedTarget === 'copilot/'
+    || normalizedTarget === '/personal-finance'
+    || normalizedTarget === 'personal-finance'
+    || normalizedTarget.startsWith('/personal-finance/')
+    || normalizedTarget.startsWith('personal-finance/')
   ) {
     return 'copilot';
   }
