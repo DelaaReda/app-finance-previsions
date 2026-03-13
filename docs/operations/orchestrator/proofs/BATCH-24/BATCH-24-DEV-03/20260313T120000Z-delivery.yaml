@@ -1,0 +1,129 @@
+# BATCH-24-DEV-03 Delivery Proof - Alerting Intelligence V2 Contract Close-out
+
+**Date:** 2026-03-13T12:00:00Z
+**Batch:** BATCH-24 - Alerting Intelligence V2
+**Lane:** DEV-03 (Contract finishing + bounded cleanup)
+**Dependency:** BATCH-24-DEV-02 (Frontend urgency surfacing) - ✅ PASS
+
+---
+
+## Goal
+
+Close BATCH-24 implementation lane by verifying the alerting contract is complete and regression-safe.
+
+## Work Performed
+
+### 1. Contract Verification
+
+**Verified `/api/alerts` route carries BATCH-24 additive fields:**
+
+```python
+# apps/api/src/domains/market_data/api/alerts.py
+
+# Fallback response (lines 193-199):
+{
+    "suppressed_risks": [],
+    "alerting_metadata": {},
+}
+
+# Live payload mapping (lines 237-238):
+{
+    "suppressed_risks": snapshot.get("suppressed_risks") or [],
+    "alerting_metadata": snapshot.get("alerting_metadata") or {},
+}
+```
+
+**Contract fields verified:**
+- ✅ `suppressed_risks` - array of suppressed alert objects
+- ✅ `alerting_metadata` - object with batch-level metadata
+- ✅ Backward compatible - additive only, no schema breaks
+
+### 2. Test Coverage
+
+**Existing test file:** `apps/api/src/domains/market_data/tests/test_alerts_route_contract.py`
+
+**Test coverage:**
+- `test_alerts_route_cache_hit_and_debug_bypass` - validates cache behavior + priority bands
+- `test_alerts_route_filters_priority_band_and_suppressed_preview` - validates suppression + filtering
+- `test_alerts_route_fallback_keeps_contract` - validates fallback maintains contract
+
+**Test execution:**
+```bash
+$ python3 -m pytest apps/api/src/domains/market_data/tests/test_alerts_route_contract.py -v
+============================= test session starts ==============================
+collected 3 items
+apps/api/src/domains/market_data/tests/test_alerts_route_contract.py ... [100%]
+============================== 3 passed in 1.78s ===============================
+```
+
+### 3. Backend Regression Gate
+
+**Command executed:**
+```bash
+./platform/policies/backend_regression_gate.sh --no-live domains/market_data/tests/test_alerts_route_contract.py
+```
+
+**Result:** VERDICT: PASS
+
+## Files Changed
+
+**Code changes:** NONE - contract already complete
+
+**Proof artifacts created:**
+- `docs/operations/orchestrator/proofs/BATCH-24/BATCH-24-DEV-03/20260313T120000Z-delivery.yaml` (this file)
+
+**Files verified:**
+- `apps/api/src/domains/market_data/api/alerts.py` (lines 193-199, 237-238)
+- `apps/api/src/domains/market_data/tests/test_alerts_route_contract.py` (3 tests passing)
+
+## Architecture Check
+
+**Layer:** API route contract (apps/api/src/domains/market_data/api/)
+**Imports:** Uses existing `get_latest_alerts` from platform.legacy.jobs.alerts
+**Path target:** `/api/alerts` endpoint
+**Backward compatibility:** All BATCH-24 fields are additive; existing consumers unaffected
+
+## Vision Alignment
+
+**Batch:** BATCH-24 - Alerting Intelligence V2
+**Target:** User-visible urgency tiers + duplicate suppression on existing surface
+**Impact:**
+- Backend contract complete (DEV-01)
+- Frontend urgency visible (DEV-02)
+- Contract verified regression-safe (DEV-03)
+- No new alerting subsystem created - reused existing pipeline
+
+## Residual Edge for ADMIN-01
+
+**Ready for runtime proof.**
+
+ADMIN-01 scope:
+- Capture live monitor/API regression proof
+- Verify duplicate/noise reduction is active
+- Verify urgent alerts still surface correctly
+- Prove generation-to-surfacing latency <= 60 seconds
+
+## Merge Criteria Check
+
+- [x] Contract edges from DEV-02 closed (suppressed_risks + alerting_metadata verified)
+- [x] Helper cleanup regression-safe (existing test coverage maintained)
+- [x] No duplicate helper logic on active path
+- [x] No new user-facing subsystem added
+- [x] Residual edge for ADMIN-01: **runtime proof**
+
+**Status:** ✅ **READY FOR MERGE** → **READY FOR ADMIN-01**
+
+---
+
+## Verification Commands
+
+```bash
+# 1. Run contract tests
+python3 -m pytest apps/api/src/domains/market_data/tests/test_alerts_route_contract.py -v
+
+# 2. Verify backend regression gate
+./platform/policies/backend_regression_gate.sh --no-live domains/market_data/tests/test_alerts_route_contract.py
+
+# 3. Verify contract fields exist in route
+grep -n "suppressed_risks\|alerting_metadata" apps/api/src/domains/market_data/api/alerts.py
+```

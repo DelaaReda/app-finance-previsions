@@ -4371,11 +4371,6 @@ padding-top: 80px;
   border-top: 1px solid var(--glass-border);
 }
 
-.drawer-footer .widget-timestamp {
-  display: block;
-  margin-bottom: var(--space-md);
-}
-
 .mark-all-btn {
   width: 100%;
   background: var(--color-royal-blue);

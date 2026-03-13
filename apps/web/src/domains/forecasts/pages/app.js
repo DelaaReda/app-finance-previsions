@@ -2670,7 +2670,6 @@ function sanitizeAlertTimelineMeta(meta) {
     suppressedCount: Math.max(0, Math.floor(toFiniteNumber(source.suppressedCount ?? source.suppressed_count, 0))),
     suppressionWindowMinutes: Math.max(0, Math.floor(toFiniteNumber(source.suppressionWindowMinutes ?? source.suppression_window_minutes, 0))),
     topPriorityBand: normalizeAlertPriorityBand(source.topPriorityBand || source.top_priority_band, 'medium'),
-    generatedAt: toString(source.generatedAt ?? source.generated_at, '').trim(),
   };
 }
 
@@ -2708,31 +2707,6 @@ function buildAlertQueueSummary(rows) {
       ? `${topItem.title} • ${topItem.priorityBandLabel} queue`
       : 'Live queue updating'
   };
-}
-
-function renderAlertQueueChips(queueSummary) {
-  return `
-    <span class="priority-badge high">Urgent ${queueSummary.counts.urgent}</span>
-    <span class="priority-badge high">Action ${queueSummary.counts.high}</span>
-    <span class="priority-badge medium">Monitor ${queueSummary.counts.medium}</span>
-    <span class="priority-badge low">Background ${queueSummary.counts.low}</span>
-    ${queueSummary.suppressedCount > 0 ? `<span class="priority-badge low">Held ${queueSummary.suppressedCount}</span>` : ''}
-    ${queueSummary.suppressionWindowMinutes > 0 ? `<span class="priority-badge low">${queueSummary.suppressionWindowMinutes}m window</span>` : ''}
-  `;
-}
-
-function buildAlertQueueMetaText(meta) {
-  const parts = [];
-  if (meta.suppressedCount > 0) {
-    parts.push(`${meta.suppressedCount} duplicate${meta.suppressedCount === 1 ? '' : 's'} suppressed`);
-  }
-  if (meta.suppressionWindowMinutes > 0) {
-    parts.push(`${meta.suppressionWindowMinutes}m suppression window`);
-  }
-  if (meta.generatedAt) {
-    parts.push(`Updated ${formatRelativeTime(meta.generatedAt)}`);
-  }
-  return parts.join(' • ') || 'Alert center synced with the live queue';
 }
 
 function mapAlertType(rawType = '', rawCategory = '') {
@@ -2825,15 +2799,9 @@ function sanitizeAlertTimeline(items) {
 
 function renderAlertTimeline(alerts = liveAlerts) {
   const container = document.getElementById('timelineContainer');
-  const summary = document.getElementById('alertQueueSummary');
   if (!container) return;
 
   const rows = sanitizeAlertTimeline(alerts);
-  const queueSummary = buildAlertQueueSummary(rows);
-  if (summary) {
-    summary.textContent = `Top queue: ${queueSummary.headline}`;
-  }
-
   if (!rows.length) {
     container.innerHTML = `
       <div class="alert-item medium expandable" data-priority="low" data-type="news" onclick="toggleAlertDetails(this)">
@@ -2848,10 +2816,18 @@ function renderAlertTimeline(alerts = liveAlerts) {
     return;
   }
 
+  const queueSummary = buildAlertQueueSummary(rows);
+
   container.innerHTML = `
     <div class="alert-queue-overview">
+      <p class="widget-subtitle">Top queue: ${queueSummary.headline}</p>
       <div class="alert-queue-chips">
-        ${renderAlertQueueChips(queueSummary)}
+        <span class="priority-badge high">Urgent ${queueSummary.counts.urgent}</span>
+        <span class="priority-badge high">Action ${queueSummary.counts.high}</span>
+        <span class="priority-badge medium">Monitor ${queueSummary.counts.medium}</span>
+        <span class="priority-badge low">Background ${queueSummary.counts.low}</span>
+        ${queueSummary.suppressedCount > 0 ? `<span class="priority-badge low">Held ${queueSummary.suppressedCount}</span>` : ''}
+        ${queueSummary.suppressionWindowMinutes > 0 ? `<span class="priority-badge low">${queueSummary.suppressionWindowMinutes}m window</span>` : ''}
       </div>
     </div>
     ${rows.map((item) => `
@@ -3827,7 +3803,6 @@ function renderLiveDashboardWidgets() {
   renderMacroRegimeCardsWidget();
   renderHeroCopilotBrief(appData.copilotStart);
   renderAlertTimeline();
-  renderNotificationDrawer();
   renderJudgeDecisionJournal();
   syncDashboardCards();
   updateLiveProvenance(liveDataMeta);
@@ -6977,98 +6952,7 @@ function toggleTheme() {
   showToast(`Switched to ${appState.darkMode ? 'dark' : 'light'} mode`);
 }
 
-function getAlertNotificationReadState() {
-  if (!window.__financeCopilotAlertReadState || typeof window.__financeCopilotAlertReadState.add !== 'function') {
-    window.__financeCopilotAlertReadState = new Set();
-  }
-  return window.__financeCopilotAlertReadState;
-}
-
-function isAlertNotificationRead(alertId) {
-  const normalizedAlertId = toString(alertId, '').trim();
-  if (!normalizedAlertId) return false;
-  return getAlertNotificationReadState().has(normalizedAlertId);
-}
-
-function syncAlertNotificationBadges(alerts = liveAlerts) {
-  if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
-
-  const rows = sanitizeAlertTimeline(alerts);
-  const actionableCount = rows.filter((item) => {
-    const priorityBand = normalizeAlertPriorityBand(item.priorityBand, item.severity);
-    return !isAlertNotificationRead(item.id) && (priorityBand === 'urgent' || priorityBand === 'high');
-  }).length;
-
-  document.querySelectorAll('.notification-badge, .nav-badge').forEach((badge) => {
-    if (!badge) return;
-    if (actionableCount > 0) {
-      badge.textContent = String(actionableCount);
-      badge.style.display = '';
-      return;
-    }
-    badge.textContent = '';
-    badge.style.display = 'none';
-  });
-}
-
-function renderNotificationDrawer(alerts = liveAlerts) {
-  const summaryNode = document.getElementById('notificationDrawerSummary');
-  const chipsNode = document.getElementById('notificationDrawerChips');
-  const itemsNode = document.getElementById('notificationDrawerItems');
-  const metaNode = document.getElementById('notificationDrawerMeta');
-  const rows = sanitizeAlertTimeline(alerts).slice(0, 6);
-  const queueSummary = buildAlertQueueSummary(rows);
-  const meta = sanitizeAlertTimelineMeta(getAlertTimelineMeta());
-
-  if (summaryNode) {
-    summaryNode.textContent = `Top queue: ${queueSummary.headline}`;
-  }
-
-  if (chipsNode) {
-    chipsNode.innerHTML = renderAlertQueueChips(queueSummary);
-  }
-
-  if (itemsNode) {
-    if (!rows.length) {
-      itemsNode.innerHTML = `
-        <div class="notification-item low read">
-          <span class="notif-icon">🔎</span>
-          <div class="notif-content">
-            <h3>No active alerts</h3>
-            <p>The alert center is synced and waiting for the next decision-worthy signal.</p>
-            <span class="notif-time">Live queue idle</span>
-          </div>
-        </div>
-      `;
-    } else {
-      itemsNode.innerHTML = rows.map((item) => {
-        const read = isAlertNotificationRead(item.id);
-        const repeatLabel = item.repeatCount > 1 ? ` • Repeat ${item.repeatCount}x` : '';
-        return `
-          <div class="notification-item ${item.priority}${read ? ' read' : ''}" data-alert-id="${item.id}">
-            <span class="notif-icon">${item.icon}</span>
-            <div class="notif-content">
-              <h3>${item.title}</h3>
-              <p>${item.summary}</p>
-              <p>${item.priorityBandLabel} queue • ${item.signalSourceLabel}${repeatLabel} • ${item.confidenceLabel} confidence</p>
-              <span class="notif-time">${item.timeLabel}</span>
-            </div>
-            ${read ? '' : '<button class="mark-read" onclick="markAsRead(this)" aria-label="Mark as read">✓</button>'}
-          </div>
-        `;
-      }).join('');
-    }
-  }
-
-  if (metaNode) {
-    metaNode.textContent = buildAlertQueueMetaText(meta);
-  }
-
-  syncAlertNotificationBadges(rows);
-}
-
 function openNotifications() {
-  renderNotificationDrawer();
   const drawer = document.getElementById('notificationDrawer');
   if (drawer) {
     drawer.classList.add('active');
@@ -7084,31 +6968,35 @@ function closeNotifications() {
 
 function markAsRead(button) {
   const item = button.closest('.notification-item');
-  if (!item) return;
-  const alertId = toString(item.dataset?.alertId, '').trim();
-  if (alertId) {
-    getAlertNotificationReadState().add(alertId);
-  }
   item.classList.add('read');
-  button?.remove();
-  syncAlertNotificationBadges();
+  button.remove();
+
+  // Update badge count
+  const badges = document.querySelectorAll('.notification-badge, .nav-badge');
+  badges.forEach(badge => {
+    const currentCount = parseInt(badge.textContent || '0', 10);
+    if (!Number.isFinite(currentCount) || currentCount <= 0) {
+      return;
+    }
+    const next = currentCount - 1;
+    badge.textContent = next > 0 ? String(next) : '';
+    if (next <= 0) {
+      badge.style.display = 'none';
+    }
+  });
 }
 
 function markAllRead() {
-  const readState = getAlertNotificationReadState();
-  sanitizeAlertTimeline(liveAlerts).forEach((item) => {
-    if (item.id) {
-      readState.add(item.id);
-    }
-  });
-
   document.querySelectorAll('.notification-item').forEach(item => {
     item.classList.add('read');
     const btn = item.querySelector('.mark-read');
     if (btn) btn.remove();
   });
 
-  syncAlertNotificationBadges();
+  document.querySelectorAll('.notification-badge, .nav-badge').forEach(badge => {
+    badge.style.display = 'none';
+  });
+
   showToast('All notifications marked as read');
 }
 
