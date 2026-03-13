@@ -1944,6 +1944,11 @@ function loadRenderRebalanceProposalCard({ playbooksPayload, appDataOverride = {
       const normalized = Number(value);
       return Number.isFinite(normalized) ? normalized : fallback;
     },
+    normalizePercentValue(value, fallback = 0) {
+      const normalized = Number(value);
+      if (!Number.isFinite(normalized)) return fallback;
+      return Math.abs(normalized) <= 1 ? normalized * 100 : normalized;
+    },
   };
 
   sandbox.globalThis = sandbox;
@@ -2581,6 +2586,17 @@ test('buildTradeIdeasFromForecasts prefers recommendation forecast fusion attrib
       score: 0.78,
       current_price: 875,
       target_price: 940,
+      cost_awareness: {
+        fee_bps: 7,
+        slippage_bps: 12,
+        estimated_tax_drag_bps: 9,
+        total_cost_bps: 28,
+        gross_expected_return_pct: 0.123,
+        net_expected_return_pct: 0.095,
+        tax_bucket: 'short_term',
+        tax_rate_assumption: 0.3,
+        tax_impact: 'Short-term gains likely',
+      },
       forecast_fusion: {
         blended_score: 0.78,
         dominant_layer: 'forecast_confidence',
@@ -2600,6 +2616,13 @@ test('buildTradeIdeasFromForecasts prefers recommendation forecast fusion attrib
   assert.match(ideas[0].attributionDetail, /Layer: forecast confidence/i);
   assert.match(ideas[0].attributionDetail, /Regime: BULL MARKET/i);
   assert.match(ideas[0].attributionDetail, /Return: \+12\.3%/i);
+  assert.equal(ideas[0].feeBps, 7);
+  assert.equal(ideas[0].slippageBps, 12);
+  assert.equal(ideas[0].estimatedTaxDragBps, 9);
+  assert.equal(ideas[0].totalCostBps, 28);
+  assert.equal(ideas[0].taxBucket, 'short_term');
+  assert.equal(ideas[0].taxRateAssumption, 0.3);
+  assert.equal(ideas[0].taxImpact, 'Short-term gains likely');
 });
 
 test('renderTradeIdeas renders attribution badge and detail when present', () => {
@@ -2641,6 +2664,36 @@ test('renderTradeIdeas surfaces fee, slippage, and tax awareness defaults', () =
   assert.match(container.innerHTML, /Fees ~0\.05%/);
   assert.match(container.innerHTML, /Slippage ~0\.10%/);
   assert.match(container.innerHTML, /Tax impact depends on holding period/);
+});
+
+test('renderTradeIdeas exposes gross versus net edge and warns on thin edge after costs', () => {
+  const { sandbox, container } = loadTradeIdeaHelpers();
+  sandbox.tradeIdeas = [
+    {
+      symbol: 'GLD',
+      signalType: 'BUY',
+      entry: 210,
+      target: 224,
+      confidence: 74,
+      feeBps: 5,
+      slippageBps: 6,
+      estimatedTaxDragBps: 5,
+      totalCostBps: 16,
+      grossExpectedReturnPct: 0.012,
+      netExpectedReturnPct: 0.002,
+      taxBucket: 'short_term',
+      taxRateAssumption: 0.3,
+      taxImpact: 'Short-term tax drag likely',
+    },
+  ];
+
+  sandbox.renderTradeIdeas();
+
+  assert.match(container.innerHTML, /Short Term tax 30%/);
+  assert.match(container.innerHTML, /Cost drag 16 bps/);
+  assert.match(container.innerHTML, /Tax drag 5 bps/);
+  assert.match(container.innerHTML, /Gross edge 1\.2% -> Net edge 0\.2%/);
+  assert.match(container.innerHTML, /Low net edge after costs/);
 });
 
 test('renderTradeIdeas enables paper trade CTA when a linked decision journal entry exists', () => {
@@ -3464,6 +3517,8 @@ test('renderRebalanceProposalCard upgrades the existing recommendation card from
               fee_bps: 2,
               slippage_bps: 4,
               estimated_tax_drag_bps: 0.9,
+              tax_rate_assumption: 0.3,
+              tax_bucket: 'short_term',
               gross_expected_return_pct: 0.018,
               net_expected_return_pct: 0.01731,
             },
@@ -3492,6 +3547,10 @@ test('renderRebalanceProposalCard upgrades the existing recommendation card from
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Fees 2 bps/);
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Slippage 4 bps/);
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Tax 0.9 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Tax rate 30%/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Gross edge 1.8%/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Net edge 1.7%/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Tax bucket Short Term/);
   assert.equal(elements.rebalanceProposalSummary.textContent, 'Reduce drawdown concentration | HOLD | 1M | Gross edge 1.8% -> Net edge 1.7%');
   assert.equal(elements.rebalanceProposalBadge.textContent, '74% confidence');
   assert.equal(elements.rebalanceProposalBadge.className, 'conviction-badge status status--warning');
@@ -3532,6 +3591,87 @@ test('renderRebalanceProposalCard preserves negative net edge when costs exceed 
     'Reduce drawdown concentration | HOLD | 1M | Gross edge 0.1% -> Net edge -0.2% | Costs overwhelm edge',
   );
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Cost drag: 30 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Gross edge 0.1%/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Net edge -0.2%/);
+});
+
+test('renderRebalanceProposalCard normalizes percent-style gross and net edge payloads', async () => {
+  const { sandbox, elements } = loadRenderRebalanceProposalCard({
+    playbooksPayload: {
+      data: {
+        playbooks: [
+          {
+            ticker: 'IEF',
+            turnover: 10,
+            risk_delta: -2,
+            confidence: 0.74,
+            decision: 'hold',
+            horizon: '1m',
+            summary: ['Reduce drawdown concentration'],
+            cost_awareness: {
+              total_cost_bps: 6.9,
+              fee_bps: 2,
+              slippage_bps: 4,
+              estimated_tax_drag_bps: 0.9,
+              grossExpectedReturnPct: 1.8,
+              netExpectedReturnPct: 1.7,
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  await sandbox.renderRebalanceProposalCard();
+
+  assert.equal(
+    elements.rebalanceProposalSummary.textContent,
+    'Reduce drawdown concentration | HOLD | 1M | Gross edge 1.8% -> Net edge 1.7%',
+  );
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Cost drag: 6.9 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Gross edge 1.8%/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Net edge 1.7%/);
+});
+
+test('renderRebalanceProposalCard flags thin positive net edge after costs', async () => {
+  const { sandbox, elements } = loadRenderRebalanceProposalCard({
+    playbooksPayload: {
+      data: {
+        playbooks: [
+          {
+            ticker: 'IEF',
+            turnover: 10,
+            risk_delta: -2,
+            confidence: 0.74,
+            decision: 'hold',
+            horizon: '1m',
+            summary: ['Reduce drawdown concentration'],
+            cost_awareness: {
+              total_cost_bps: 16,
+              fee_bps: 5,
+              slippage_bps: 6,
+              estimated_tax_drag_bps: 5,
+              gross_expected_return_pct: 0.012,
+              net_expected_return_pct: 0.002,
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  await sandbox.renderRebalanceProposalCard();
+
+  assert.equal(
+    elements.rebalanceProposalSummary.textContent,
+    'Reduce drawdown concentration | HOLD | 1M | Gross edge 1.2% -> Net edge 0.2% | Low net edge after costs',
+  );
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Cost drag: 16 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Fees 5 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Slippage 6 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Tax 5 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Gross edge 1.2%/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Net edge 0.2%/);
 });
 
 test('renderRebalanceProposalCard keeps fallback turnover and risk deltas when optimizer playbooks are unavailable', async () => {
