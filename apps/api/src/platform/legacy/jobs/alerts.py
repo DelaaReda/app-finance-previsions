@@ -390,7 +390,13 @@ def _apply_priority_and_suppression(
         normalized["priority_reason"] = _priority_reason(normalized)
         normalized["priority_rank"] = base_rank
 
+        # Extract horizon from signals or default based on alert type
+        signals = normalized.get("signals", {})
+        horizon = str(signals.get("horizon", "15m"))
+        normalized["horizon"] = horizon
+
         fingerprint = _alert_fingerprint(normalized)
+        normalized["alert_fingerprint"] = fingerprint
         previous = previous_by_signature.get(fingerprint)
         suppression = {
             "window_minutes": config["window_minutes"],
@@ -418,6 +424,19 @@ def _apply_priority_and_suppression(
                     suppression["suppressed"] = True
                     suppression["reason"] = "fatigue_window_duplicate"
 
+        # Add top-level suppression fields for DEV-01 contract
+        normalized["suppressed"] = suppression["suppressed"]
+        normalized["suppression_reason"] = suppression["reason"] if suppression["suppressed"] else ""
+        normalized["suppression_window_minutes"] = config["window_minutes"]
+        normalized["duplicate_count"] = suppression["repeat_count"]
+
+        # Urgent bypass: allow high-priority alerts through suppression
+        urgent_bypass = (
+            band == "urgent"
+            or ALERT_SEVERITY_ORDER.get(str(normalized.get("severity", "medium")).lower(), 0) >= 4
+        )
+        normalized["urgent_bypass"] = urgent_bypass and suppression["suppressed"]
+
         normalized["suppression"] = suppression
         if suppression["suppressed"]:
             suppressed_alerts.append(normalized)
@@ -440,9 +459,35 @@ def _apply_priority_and_suppression(
     for rank, alert in enumerate(active_alerts, start=1):
         alert["priority_rank"] = rank
 
+    # Batch-level suppressed_risks for DEV-02 consumption
+    suppressed_risks = [
+        {
+            "alert_fingerprint": a.get("alert_fingerprint", ""),
+            "ticker": a.get("ticker", ""),
+            "summary": a.get("summary", ""),
+            "severity": a.get("severity", ""),
+            "suppression_reason": a.get("suppression_reason", ""),
+            "duplicate_count": a.get("duplicate_count", 1),
+        }
+        for a in suppressed_alerts
+    ]
+
+    # Alerting metadata for DEV-02 consumption
+    alerting_metadata = {
+        "suppression_window_minutes": config["window_minutes"],
+        "fatigue_threshold": config["fatigue_threshold"],
+        "escalation_delta_bps": config["escalation_delta_bps"],
+        "total_processed": len(ordered_alerts),
+        "total_active": len(active_alerts),
+        "total_suppressed": len(suppressed_alerts),
+        "urgent_bypass_count": sum(1 for a in active_alerts if a.get("urgent_bypass")),
+    }
+
     return {
         "active_alerts": active_alerts,
         "suppressed_alerts": suppressed_alerts,
+        "suppressed_risks": suppressed_risks,
+        "alerting_metadata": alerting_metadata,
         "priority_counts": dict(priority_counts),
         "suppressed_counts": dict(suppressed_counts),
         "config": config,
@@ -608,6 +653,8 @@ def compute_alerts(now: datetime | None = None) -> Dict[str, Any]:
         "priority_queue": priority_queue,
         "suppressed_count": suppressed_count,
         "suppressed_alerts": suppressed_alerts,
+        "suppressed_risks": prioritized.get("suppressed_risks", []),
+        "alerting_metadata": prioritized.get("alerting_metadata", {}),
         "stats": {
             "scanned_tickers": len(tickers),
             "forecasts_available": len(forecasts),
@@ -699,6 +746,8 @@ def get_latest_alerts():
                 ),
                 "suppressed_count": alerts_snapshot.get("suppressed_count", 0),
                 "suppressed_alerts": alerts_snapshot.get("suppressed_alerts", []),
+                "suppressed_risks": alerts_snapshot.get("suppressed_risks", []),
+                "alerting_metadata": alerts_snapshot.get("alerting_metadata", {}),
                 "generated_at": alerts_snapshot.get("generated_at", datetime.utcnow().isoformat() + "Z"),
                 "source": alerts_snapshot.get("source", []),
                 "pipeline": alerts_snapshot.get("pipeline", {}),
@@ -713,6 +762,8 @@ def get_latest_alerts():
             "priority_queue": [],
             "suppressed_count": 0,
             "suppressed_alerts": [],
+            "suppressed_risks": [],
+            "alerting_metadata": {},
             "generated_at": datetime.utcnow().isoformat() + "Z",
             "source": ["fallback_empty"],
             "pipeline": {

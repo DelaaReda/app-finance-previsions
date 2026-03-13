@@ -1079,6 +1079,9 @@ function loadRenderHeroCopilotBriefWithHeroIds(resolvedState) {
     isObject(value) {
       return !!value && typeof value === 'object' && !Array.isArray(value);
     },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
     toString(value, fallback = '') {
       return typeof value === 'string' ? value : fallback;
     },
@@ -4296,6 +4299,47 @@ test('renderHeroCopilotBrief accepts normalized backend snake_case brief fields 
   assert.equal(elements.heroBriefSignals.textContent, 'Opportunities: NVDA breakout • Semis leadership');
   assert.equal(elements.heroBriefSignals.style.display, 'block');
   assert.equal(elements.heroBriefRisks.textContent, 'Risks: CPI tomorrow');
+  assert.equal(elements.heroBriefRisks.style.display, 'block');
+});
+
+test('renderHeroCopilotBrief surfaces prioritized risk details and duplicate suppression summary', () => {
+  const state = {
+    brief: {
+      title: 'Daily Brief',
+      summary: 'Concentrated event risk remains on the tape.',
+      marketSentiment: 'RISK_OFF',
+      topRiskItems: [
+        {
+          ticker: 'NVDA',
+          priority: 'high',
+          suppression_reason: 'duplicate_fatigue',
+          urgent_bypass: true,
+        },
+      ],
+      suppressedRisks: [
+        {
+          ticker: 'QQQ',
+          suppression_reason: 'duplicate_fatigue',
+        },
+      ],
+      alertingMetadata: {
+        suppressed_risk_count: 2,
+        suppression_window_minutes: 15,
+      },
+      freshness: '2026-03-10T10:00:00Z',
+      sources: [],
+    },
+    ask: [],
+    open: [],
+  };
+  const { sandbox, elements } = loadRenderHeroCopilotBriefWithHeroIds(state);
+
+  sandbox.renderHeroCopilotBrief(state);
+
+  assert.equal(
+    elements.heroBriefRisks.textContent,
+    'Risks: HIGH · NVDA · reason duplicate fatigue · urgent bypass | Suppressed duplicates: 2 in 15m window'
+  );
   assert.equal(elements.heroBriefRisks.style.display, 'block');
 });
 

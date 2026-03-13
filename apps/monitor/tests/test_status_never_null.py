@@ -114,6 +114,10 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
         self.assertIsInstance(payload["delivery_control"], dict)
         for field in ("status", "integrity_status", "future_status", "needs_proof_backfill", "suspicious_completions", "pipeline_counts"):
             self.assertIn(field, payload["delivery_control"])
+        self.assertIn("alerts_overview", payload)
+        self.assertIsInstance(payload["alerts_overview"], dict)
+        for field in ("status", "snapshot_path", "active_count", "suppressed_count", "top_alert", "priority_bands", "suppression_reasons", "pipeline"):
+            self.assertIn(field, payload["alerts_overview"])
 
         agents = payload["agents"]
         for role in CORE_ROLES:
@@ -147,6 +151,64 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
         self.assertTrue(lite_payload["layers"].get("collectors_omitted"))
         self.assertEqual(lite_payload["layers"].get("mode"), "lite")
         self.assertNotIn("collectors", lite_payload["layers"])
+        self.assertIn("alerts_overview", lite_payload)
+        self.assertIsInstance(lite_payload["alerts_overview"], dict)
+
+    def test_status_surfaces_alert_priority_summary_from_runtime_snapshot(self) -> None:
+        alerts_dir = self.root / "apps" / "api" / "runtime" / "data"
+        alerts_dir.mkdir(parents=True, exist_ok=True)
+        (alerts_dir / "alerts.json").write_text(
+            json.dumps(
+                {
+                    "generated_at": "2026-03-13T08:10:00Z",
+                    "source": ["job:alerts", "multi_signal_v2"],
+                    "alerts": [
+                        {
+                            "id": "alert-urgent-aapl",
+                            "ticker": "AAPL",
+                            "summary": "breakout-news:AAPL:3",
+                            "severity": "high",
+                            "priority_band": "urgent",
+                            "priority_rank": 1,
+                            "priority_score": 410,
+                            "timestamp": "2026-03-13T08:10:00Z",
+                        }
+                    ],
+                    "suppressed_alerts": [
+                        {
+                            "id": "alert-suppressed-aapl",
+                            "ticker": "AAPL",
+                            "summary": "breakout-news:AAPL:3",
+                            "severity": "high",
+                            "priority_band": "urgent",
+                            "priority_rank": 2,
+                            "priority_score": 390,
+                            "timestamp": "2026-03-13T08:06:00Z",
+                            "suppression": {"reason": "fatigue_window_duplicate"},
+                        }
+                    ],
+                    "stats": {
+                        "priority_bands": {"urgent": 1},
+                        "suppression_reasons": {"fatigue_window_duplicate": 1},
+                    },
+                    "pipeline": {"suppression_window_minutes": 15, "fatigue_threshold": 2},
+                    "warnings": ["duplicate_alerts_suppressed"],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        payload = self.module.status()
+
+        alerts_overview = payload["alerts_overview"]
+        self.assertEqual(alerts_overview["status"], "ok")
+        self.assertEqual(alerts_overview["active_count"], 1)
+        self.assertEqual(alerts_overview["suppressed_count"], 1)
+        self.assertEqual(alerts_overview["top_alert"]["id"], "alert-urgent-aapl")
+        self.assertEqual(alerts_overview["top_alert"]["priority_band"], "urgent")
+        self.assertEqual(alerts_overview["priority_bands"], {"urgent": 1})
+        self.assertEqual(alerts_overview["suppression_reasons"], {"fatigue_window_duplicate": 1})
+        self.assertEqual(alerts_overview["pipeline"]["suppression_window_minutes"], 15)
 
     def test_runtime_diagnostics_keeps_agents_non_null(self) -> None:
         payload = self.module.runtime_diagnostics()

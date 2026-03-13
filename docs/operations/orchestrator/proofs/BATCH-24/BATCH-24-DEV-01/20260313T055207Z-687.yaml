@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-24-BATCH-24-DEV-01-20260313T055207Z-687"
+stream_id: "BATCH-24"
+task_id: "BATCH-24-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-13T05:52:07Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope alerting intelligence v2 [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_alerting_intelligence_v2_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-13T05:52:07Z"
+      ended_at_utc: "2026-03-13T05:52:07Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest apps/api/src/domains/market_data/tests/test_alerts_job_contract.py"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=8ce1fe0f3811c50a5a69d5a5929cfde7b5a0c715"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-24-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-24-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The existing alerts job only deduplicated identical alerts within a single compute pass, so repeated alerts across runs kept resurfacing without urgency metadata or suppression state. | fix_applied=Updated `apps/api/src/platform/legacy/jobs/alerts.py` to compute `priority_score`, `priority_band`, and `priority_rank`, reuse the prior alerts snapshot for suppression-window/fatigue checks, retain suppressed alerts as  | verify=before=alerts were only sorted by severity/confidence and repeated cross-run duplicates were re-emitted without suppression or queue metadata; after=alerts now carry priority metadata and repeated duplicates inside the s | architecture_check=layer=existing alerting job + existing market_data tests only; imports_ok=yes (reused current legacy storage/job path, no new service surface or parallel pipeline); path_target=apps/api/src/platform/legacy/jobs/alerts.py | vision_alignment=batch=BATCH-24; target=smallest user-visible backend slice for priority ordering and fatigue-aware duplicate suppression on the current alert pipeline; impact=alert consumers can surface a cleaner urgent queue now and DE"

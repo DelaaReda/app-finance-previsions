@@ -629,6 +629,61 @@ test('getCopilotContext preserves brief event timing metadata for the hero start
   ]);
 });
 
+test('getCopilotContext preserves additive alerting fields for brief risk surfacing', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          daily_brief: {
+            title: 'Brief of the day',
+            summary: 'Risk queue is condensed before the open.',
+            market_regime: 'NEUTRAL',
+            freshness: '2026-03-11T10:00:00Z',
+            top_risk_items: [
+              {
+                ticker: 'NVDA',
+                priority: 'urgent',
+                urgent_bypass: true,
+              },
+              {
+                risk: 'Rates gap risk',
+                priority: 'high',
+                suppression_reason: 'fatigue_window_duplicate',
+              },
+            ],
+            suppressed_risks: [
+              {
+                ticker: 'SOXX',
+                suppression_reason: 'fatigue_window_duplicate',
+              },
+            ],
+            alerting_metadata: {
+              suppressed_risk_count: 1,
+              suppression_window_minutes: 15,
+            },
+          },
+          entry_points: [],
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotContext();
+  const brief = payload.copilot_start?.brief_of_day || {};
+
+  assert.deepEqual(brief.top_risks, ['NVDA', 'Rates gap risk']);
+  assert.equal(brief.top_risk_items[0].label, 'NVDA');
+  assert.equal(brief.top_risk_items[0].priority, 'urgent');
+  assert.equal(brief.top_risk_items[0].urgent_bypass, true);
+  assert.equal(brief.top_risk_items[1].label, 'Rates gap risk');
+  assert.equal(brief.top_risk_items[1].suppression_reason, 'fatigue_window_duplicate');
+  assert.equal(brief.suppressed_risks[0].label, 'SOXX');
+  assert.equal(brief.suppressed_risks[0].suppression_reason, 'fatigue_window_duplicate');
+  assert.equal(brief.alerting_metadata.suppressed_risk_count, 1);
+  assert.equal(brief.alerting_metadata.suppression_window_minutes, 15);
+});
+
 test('getCopilotContext normalizes direct copilot_start open targets for the existing tabs', async () => {
   const sandbox = loadConnector(async () => ({
     async json() {

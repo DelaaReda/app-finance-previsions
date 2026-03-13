@@ -84,6 +84,139 @@ def _load_json_file(path: Path) -> dict:
     except Exception:
         return {}
 
+
+def _alerts_snapshot_candidates(root: Path) -> list[Path]:
+    return [
+        root / "apps" / "api" / "runtime" / "data" / "alerts.json",
+        root / "apps" / "api" / "src" / "platform" / "legacy" / "data" / "alerts.json",
+        root / "data" / "alerts.json",
+    ]
+
+
+def _alerts_snapshot_containers(payload: dict) -> list[dict]:
+    if not isinstance(payload, dict):
+        return []
+    containers = [payload]
+    nested_data = payload.get("data")
+    if isinstance(nested_data, dict):
+        containers.append(nested_data)
+    nested_payload = payload.get("payload")
+    if isinstance(nested_payload, dict):
+        containers.append(nested_payload)
+    nested_data_payload = nested_data.get("payload") if isinstance(nested_data, dict) else None
+    if isinstance(nested_data_payload, dict):
+        containers.append(nested_data_payload)
+    return containers
+
+
+def _alerts_snapshot_value(payload: dict, key: str, default):
+    for container in _alerts_snapshot_containers(payload):
+        value = container.get(key)
+        if value not in (None, "", [], {}):
+            return value
+    return default
+
+
+def _alerts_snapshot_rows(payload: dict, key: str) -> list[dict]:
+    rows: list[dict] = []
+    for container in _alerts_snapshot_containers(payload):
+        candidate = container.get(key)
+        if isinstance(candidate, list):
+            rows.extend(row for row in candidate if isinstance(row, dict))
+    return rows
+
+
+def _alert_overview_row(alert: dict) -> dict:
+    return {
+        "id": str(alert.get("id", "") or "").strip(),
+        "ticker": str(alert.get("ticker", "") or "").strip(),
+        "summary": str(alert.get("summary", "") or "").strip(),
+        "severity": str(alert.get("severity", "") or "").strip(),
+        "priority_band": str(alert.get("priority_band", "") or "").strip(),
+        "priority_rank": alert.get("priority_rank"),
+        "priority_score": alert.get("priority_score"),
+        "timestamp": str(alert.get("timestamp", "") or "").strip(),
+    }
+
+
+def _alerts_overview_snapshot(root: Path) -> dict:
+    candidates = _alerts_snapshot_candidates(root)
+    snapshot_path = next((path for path in candidates if path.exists()), candidates[0])
+    payload = _load_json_file(snapshot_path)
+    if not payload:
+        return {
+            "status": "missing",
+            "snapshot_path": str(snapshot_path),
+            "generated_at": "",
+            "active_count": 0,
+            "suppressed_count": 0,
+            "top_alert": {},
+            "priority_bands": {},
+            "suppression_reasons": {},
+            "warnings": [],
+            "pipeline": {},
+            "source": [],
+        }
+
+    active_alerts = _alerts_snapshot_rows(payload, "alerts")
+    suppressed_alerts = _alerts_snapshot_rows(payload, "suppressed_alerts")
+    top_alert = _alert_overview_row(active_alerts[0]) if active_alerts else {}
+    stats = _alerts_snapshot_value(payload, "stats", {})
+    if not isinstance(stats, dict):
+        stats = {}
+    warnings = _alerts_snapshot_value(payload, "warnings", [])
+    if not isinstance(warnings, list):
+        warnings = []
+    pipeline = _alerts_snapshot_value(payload, "pipeline", {})
+    if not isinstance(pipeline, dict):
+        pipeline = {}
+    source = _alerts_snapshot_value(payload, "source", [])
+    if isinstance(source, list):
+        source = [str(item).strip() for item in source if str(item).strip()]
+    elif str(source or "").strip():
+        source = [str(source).strip()]
+    else:
+        source = []
+
+    priority_bands = stats.get("priority_bands", {})
+    if not isinstance(priority_bands, dict):
+        priority_bands = {}
+    if not priority_bands:
+        counts = Counter()
+        for alert in active_alerts:
+            band = str(alert.get("priority_band", "") or "").strip().lower()
+            if band:
+                counts[band] += 1
+        priority_bands = dict(counts)
+
+    suppression_reasons = stats.get("suppression_reasons", {})
+    if not isinstance(suppression_reasons, dict):
+        suppression_reasons = {}
+    if not suppression_reasons:
+        counts = Counter()
+        for alert in suppressed_alerts:
+            suppression = alert.get("suppression", {})
+            if not isinstance(suppression, dict):
+                suppression = {}
+            reason = str(suppression.get("reason", "") or "").strip()
+            if reason:
+                counts[reason] += 1
+        suppression_reasons = dict(counts)
+
+    return {
+        "status": "ok" if active_alerts or suppressed_alerts else "empty",
+        "snapshot_path": str(snapshot_path),
+        "generated_at": str(_alerts_snapshot_value(payload, "generated_at", "") or "").strip(),
+        "active_count": len(active_alerts),
+        "suppressed_count": len(suppressed_alerts),
+        "top_alert": top_alert,
+        "priority_bands": priority_bands,
+        "suppression_reasons": suppression_reasons,
+        "warnings": warnings,
+        "pipeline": pipeline,
+        "source": source,
+    }
+
 def _probe_http_ok(url: str, timeout_s: float = 1.2) -> bool:
     try:
         req = urllib.request.Request(url, headers={"Accept": "application/json"})
@@ -3231,6 +3364,7 @@ def status(lite: int = 0):
         doctor = doctor_snapshot(force_refresh=False)
     planner_contract_health = parse_contract_fields("planner")
     planner_evidence_quality_score = _int_or_default(planner_contract_health.get("quality_score"), 0)
+    alerts_overview = _alerts_overview_snapshot(ROOT)
 
     queue_total = len(queue_items)
     queue_closed = len(queue_items) - len(qa)
@@ -3861,6 +3995,7 @@ def status(lite: int = 0):
             "planner_subagents": planner_subagents,
             "queue_workboard_integrity": queue_workboard_integrity,
             "planner_evidence_quality_score": planner_evidence_quality_score,
+            "alerts_overview": alerts_overview,
             "health_breakdown": health_breakdown,
             "issues_recent_by_role": issues_recent_by_role,
             "critical_open_count": critical_count,
@@ -4113,6 +4248,7 @@ def status(lite: int = 0):
             "delivery_integrity": delivery_integrity,
             "delivery_control": delivery_control,
             "product_value_metrics": product_value_metrics,
+            "alerts_overview": alerts_overview,
             "po_scrum_master": po_scrum_master,
             "agent_messages": agent_messages,
             "doctor": doctor,

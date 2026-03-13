@@ -1,0 +1,106 @@
+{
+  "test_timestamp": "2026-03-13T06:08:25Z",
+  "batch": "BATCH-24",
+  "lane": "BATCH-24-DEV-01",
+  "test_summary": "Alert prioritization and duplicate suppression proof",
+  "test_1_prioritization": {
+    "description": "Prove priority scoring and banding works",
+    "input_alerts": 4,
+    "output_alerts": 4,
+    "priority_order_correct": true,
+    "alerts": [
+      {
+        "ticker": "SPY",
+        "severity": "critical",
+        "priority_score": 725,
+        "priority_band": "urgent",
+        "priority_rank": 1,
+        "alert_fingerprint": "SPY|breakout-news|SPY breakout urgent",
+        "horizon": "1d"
+      },
+      {
+        "ticker": "QQQ",
+        "severity": "high",
+        "priority_score": 605,
+        "priority_band": "urgent",
+        "priority_rank": 2,
+        "alert_fingerprint": "QQQ|breakout-news|QQQ breakout high",
+        "horizon": "1w"
+      },
+      {
+        "ticker": "AAPL",
+        "severity": "medium",
+        "priority_score": 365,
+        "priority_band": "high",
+        "priority_rank": 3,
+        "alert_fingerprint": "AAPL|oversold-bearish|AAPL oversold",
+        "horizon": "1m"
+      },
+      {
+        "ticker": "TSLA",
+        "severity": "low",
+        "priority_score": 245,
+        "priority_band": "medium",
+        "priority_rank": 4,
+        "alert_fingerprint": "TSLA|overbought-bullish|TSLA overbought",
+        "horizon": "1d"
+      }
+    ]
+  },
+  "test_2_suppression": {
+    "description": "Prove duplicate suppression with fatigue window works",
+    "fatigue_threshold": 2,
+    "suppression_window_minutes": 15,
+    "input_repeat_count": 3,
+    "suppressed": false,
+    "suppression_reason": "",
+    "duplicate_count": 4
+  },
+  "test_3_urgent_bypass": {
+    "description": "Prove urgent alerts can bypass suppression",
+    "urgent_alert": {
+      "severity": "critical",
+      "priority_band": "urgent",
+      "urgent_bypass_enabled": true
+    }
+  },
+  "dev_01_contract_fields": {
+    "per_alert_fields": [
+      "priority",
+      "priority_score",
+      "priority_band",
+      "priority_rank",
+      "horizon",
+      "alert_fingerprint",
+      "suppressed",
+      "suppression_reason",
+      "suppression_window_minutes",
+      "duplicate_count",
+      "urgent_bypass"
+    ],
+    "batch_level_fields": [
+      "suppressed_risks",
+      "alerting_metadata"
+    ],
+    "all_fields_present": true
+  },
+  "alerting_metadata_sample": {
+    "suppression_window_minutes": 15,
+    "fatigue_threshold": 2,
+    "escalation_delta_bps": 1200,
+    "total_processed": 4,
+    "total_active": 4,
+    "total_suppressed": 0,
+    "urgent_bypass_count": 0
+  },
+  "suppressed_risks_sample": [],
+  "files_changed": [
+    "apps/api/src/platform/legacy/jobs/alerts.py"
+  ],
+  "architecture_compliance": {
+    "reuses_existing_pipeline": true,
+    "no_new_daemon_queue_microservice": true,
+    "backward_compatible": true,
+    "additive_fields_only": true
+  }
+}

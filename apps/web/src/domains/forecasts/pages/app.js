@@ -6207,7 +6207,22 @@ function renderHeroCopilotBrief(state) {
   const briefSources = normalizeCopilotSourceLabels(brief.sources || brief.source);
   const briefTopSignals = normalizeCopilotStartList(brief.topSignals || brief.top_signals);
   const briefTopOpportunities = normalizeCopilotStartList(brief.topOpportunities || brief.top_opportunities);
-  const briefTopRisks = normalizeCopilotStartList(brief.topRisks || brief.top_risks);
+  const briefAlertingMetadata = isObject(brief.alertingMetadata || brief.alerting_metadata)
+    ? (brief.alertingMetadata || brief.alerting_metadata)
+    : {};
+  const briefSuppressedRisks = toArray(brief.suppressedRisks || brief.suppressed_risks, []).filter(isObject);
+  const briefTopRiskItems = toArray(brief.topRiskItems || brief.top_risk_items, []).filter(isObject);
+  const briefTopRisks = briefTopRiskItems.length
+    ? briefTopRiskItems.map((item) => {
+      const label = toString(item.label || item.ticker || item.risk || item.title, '').trim();
+      const priority = toString(item.priority, '').trim().toUpperCase();
+      const suppressionReason = toString(item.suppression_reason || item.suppressionReason, '').replace(/_/g, ' ').trim();
+      const urgentBypass = item.urgent_bypass === true || item.urgentBypass === true;
+      return [priority, label, suppressionReason ? `reason ${suppressionReason}` : '', urgentBypass ? 'urgent bypass' : '']
+        .filter(Boolean)
+        .join(' · ');
+    }).filter(Boolean)
+    : normalizeCopilotStartList(brief.topRisks || brief.top_risks);
 
   if (titleEl) {
     titleEl.textContent = toString(brief.title, fallbackState.brief.title);
@@ -6263,8 +6278,23 @@ function renderHeroCopilotBrief(state) {
         .slice(0, 2)
         .join(' • ')
       : '';
+    const suppressedCount = Number(
+      briefAlertingMetadata.suppressed_risk_count
+        || briefAlertingMetadata.suppressedRiskCount
+        || briefSuppressedRisks.length
+        || 0
+    );
+    const suppressionWindow = Number(
+      briefAlertingMetadata.suppression_window_minutes
+        || briefAlertingMetadata.suppressionWindowMinutes
+        || 0
+    );
+    const suppressionSummary = suppressedCount > 0
+      ? `Suppressed duplicates: ${suppressedCount}${suppressionWindow > 0 ? ` in ${suppressionWindow}m window` : ''}`
+      : '';
     const text = [
       briefTopRisks.length ? `Risks: ${briefTopRisks.join(' • ')}` : '',
+      suppressionSummary,
       eventTimingSummary ? `Upcoming events: ${eventTimingSummary}` : ''
     ].filter(Boolean).join(' | ');
     risksEl.textContent = text;
