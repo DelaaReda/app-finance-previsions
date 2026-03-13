@@ -5157,8 +5157,17 @@ test('app.js exposes runCopilotStartOpen for the static landing brief CTA', () =
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 
+  assert.match(source, /window\.runCopilotStartPrompt = runCopilotStartPrompt;/);
   assert.match(source, /window\.runCopilotStartOpen = runCopilotStartOpen;/);
   assert.match(html, /onclick="runCopilotStartOpen\('brief'\)"/);
+});
+
+test('hero-what-need component reuses shared copilot starter helpers for ask/open actions', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../components/sections/hero-what-need.html'), 'utf8');
+
+  assert.match(html, /onclick="runCopilotStartPrompt\('Give me today\\\\'s portfolio brief as a short memo with verdict, main drivers, risks, confidence, freshness, and sources\.'\)"/);
+  assert.match(html, /onclick="runCopilotStartOpen\('brief'\)"/);
+  assert.match(html, /onclick="runCopilotStartPrompt\('Explain what matters in today\\\\'s portfolio brief and what I should watch next\.'\)"/);
 });
 
 test('index.html exposes the hero brief slots required by the copilot starter', () => {
