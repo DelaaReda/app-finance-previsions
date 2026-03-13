@@ -1944,6 +1944,75 @@ test('initLiveData merges policy-impact events into the shared alert timeline', 
   assert.equal(sandbox.window.getLiveDashboardData().sources.includes('forecasts_policy_change_impact'), true);
 });
 
+test('initLiveData preserves alert queue meta and suppression details from the alerts contract', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url.includes('/api/alerts')) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              alerts: [
+                {
+                  id: 'alert-1',
+                  ticker: 'MSFT',
+                  type: 'risk',
+                  severity: 'medium',
+                  description: 'Cloud margin drift now requires a portfolio review.',
+                  confidence: 0.88,
+                  priority_band: 'urgent',
+                  priority_rank: 1,
+                  priority_score: 98,
+                  suppression: {
+                    suppressed: false,
+                    repeat_count: 4,
+                    reason: '',
+                  },
+                },
+              ],
+              suppressed_count: 3,
+              queue: {
+                top_priority_band: 'urgent',
+              },
+              stats: {
+                priority_bands: {
+                  urgent: 1,
+                },
+                suppression_reasons: {
+                  fatigue_window_duplicate: 3,
+                },
+              },
+              pipeline: {
+                suppression_window_minutes: 15,
+              },
+            },
+          };
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      async json() {
+        return { ok: true, data: {} };
+      },
+    };
+  });
+
+  await sandbox.window.initLiveData();
+
+  assert.equal(sandbox.window.alertTimelineMeta.suppressedCount, 3);
+  assert.equal(sandbox.window.alertTimelineMeta.topPriorityBand, 'urgent');
+  assert.equal(sandbox.window.alertTimelineMeta.priorityBands.urgent, 1);
+  assert.equal(sandbox.window.alertTimelineMeta.suppressionReasons.fatigue_window_duplicate, 3);
+  assert.equal(sandbox.window.alertTimelineMeta.suppressionWindowMinutes, 15);
+  assert.equal(sandbox.window.alertTimeline[0].priority_band, 'urgent');
+  assert.equal(sandbox.window.alertTimeline[0].priority_rank, 1);
+  assert.equal(sandbox.window.alertTimeline[0].priority_score, 98);
+  assert.equal(sandbox.window.alertTimeline[0].suppression.repeat_count, 4);
+});
+
 test('initLiveData derives a 24h/48h critical event timeline from brief key events', async () => {
   const sandbox = loadConnector(async (url) => {
     if (url.includes('/api/copilot/start')) {

@@ -24,10 +24,10 @@ def test_compute_alerts_returns_deterministic_deduped_contract(monkeypatch):
             return {
                 "payload": {
                     "rows": [
-                        {"ticker": "AAPL", "direction": "down", "confidence": 0.74},
-                        {"ticker": "AAPL", "direction": "down", "confidence": 0.88},
-                        {"ticker": "MSFT", "direction": "up", "confidence": 0.61},
-                        {"ticker": "MSFT", "direction": "up", "confidence": 79},
+                        {"ticker": "AAPL", "direction": "down", "confidence": 0.74, "expected_return": -0.031, "horizon": "1w"},
+                        {"ticker": "AAPL", "direction": "down", "confidence": 0.88, "expected_return": -0.034, "horizon": "1w"},
+                        {"ticker": "MSFT", "direction": "up", "confidence": 0.61, "expected_return": 0.021, "horizon": "1w"},
+                        {"ticker": "MSFT", "direction": "up", "confidence": 79, "expected_return": 0.027, "horizon": "1w"},
                     ]
                 }
             }
@@ -74,6 +74,7 @@ def test_compute_alerts_returns_deterministic_deduped_contract(monkeypatch):
     assert isinstance(first.get("alerts"), list)
     assert first.get("count") == len(first["alerts"]) == first["stats"]["generated"]
     assert first["stats"]["scanned_tickers"] == 10
+    assert first["priority_queue"] == first["alerts"][: first["stats"]["priority_queue_size"]]
 
     signatures = {(item.get("ticker"), item.get("type"), item.get("summary", "")) for item in first["alerts"]}
     assert len(signatures) == len(first["alerts"])  # no duplicates by signature
@@ -84,10 +85,13 @@ def test_compute_alerts_returns_deterministic_deduped_contract(monkeypatch):
         assert alert["priority_score"] >= 0
         assert alert["priority_band"] in {"urgent", "high", "medium", "low"}
         assert alert["priority_rank"] >= 1
+        assert isinstance(alert["priority_reason"], str) and alert["priority_reason"]
         assert alert["suppression"]["suppressed"] is False
+        assert "news_impact_score" in alert["signals"]
 
     assert first["pipeline"]["priority_ordering"] is True
     assert first["pipeline"]["suppression_window_minutes"] == 15
+    assert "judge_reuse" in first["pipeline"]
     assert first["stats"]["candidate_alerts"] >= first["count"]
 
 
@@ -338,3 +342,74 @@ def test_compute_alerts_handles_sparse_direction_forecasts_without_crashing(monk
     assert payload["alerts"][0]["ticker"] == "AAPL"
     assert payload["alerts"][0]["type"] == "oversold-bearish"
     assert payload["suppressed_count"] == 0
+
+
+def test_get_latest_alerts_preserves_priority_queue_metadata(monkeypatch):
+    monkeypatch.setattr(
+        ALERTS_JOB,
+        "load_json",
+        lambda name: {
+            "alerts": [{"id": "alert-1", "ticker": "AAPL"}],
+            "count": 1,
+            "priority_queue": [{"id": "alert-1", "ticker": "AAPL"}],
+            "suppressed_count": 0,
+            "suppressed_alerts": [],
+            "generated_at": "2026-03-04T06:20:00Z",
+            "source": ["job:alerts"],
+            "pipeline": {"algorithm": "multi_signal_confluence_v2"},
+            "stats": {"priority_queue_size": 1},
+            "warnings": [],
+        }
+        if name == "alerts"
+        else {},
+    )
+
+    payload = ALERTS_JOB.get_latest_alerts()
+
+    assert payload["count"] == 1
+    assert payload["priority_queue"] == [{"id": "alert-1", "ticker": "AAPL"}]
+    assert payload["stats"]["priority_queue_size"] == 1
+
+
+def test_compute_alerts_normalizes_naive_now_for_timezone_aware_news(monkeypatch):
+    run_at = datetime(2026, 3, 4, 6, 20, 0)
+
+    def fake_load_json(name: str) -> Dict[str, Any]:
+        if name == "forecasts":
+            return {
+                "payload": {
+                    "rows": [
+                        {"ticker": "AAPL", "direction": "down", "confidence": 0.8},
+                    ]
+                }
+            }
+        if name == "news_feed":
+            return {
+                "payload": {
+                    "articles": [
+                        {
+                            "tickers": ["AAPL"],
+                            "sentiment_score": -0.6,
+                            "title": "AAPL update",
+                            "pubDate": "2026-03-04T06:10:00Z",
+                        },
+                    ]
+                }
+            }
+        if name == "alerts":
+            return {}
+        return {}
+
+    def fake_seeded_float(seed: str) -> float:
+        if seed.startswith("alerts:rsi:AAPL:2026030406"):
+            return 0.05
+        return 0.5
+
+    monkeypatch.setattr(ALERTS_JOB, "load_json", fake_load_json)
+    monkeypatch.setattr(ALERTS_JOB, "_seeded_float", fake_seeded_float)
+
+    payload = ALERTS_JOB.compute_alerts(now=run_at)
+
+    assert payload["count"] == 1
+    assert payload["alerts"][0]["type"] == "oversold-bearish"
+    assert payload["warnings"] == []

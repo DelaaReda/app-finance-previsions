@@ -201,7 +201,14 @@ async function getTopMovers() {
 
 async function getAlerts() {
   const payload = getResponseData(await fetchWithCache('/alerts', 'alerts'));
-  return extractArray(payload, ['alerts', 'data', 'rows']);
+  return {
+    alerts: extractArray(payload, ['alerts', 'data', 'rows']),
+    generatedAt: String(payload?.generated_at || payload?.generatedAt || ''),
+    suppressedCount: normalizeNumber(payload?.suppressed_count ?? payload?.suppressedCount, 0),
+    queue: extractObject(payload, ['queue']) || {},
+    stats: extractObject(payload, ['stats']) || {},
+    pipeline: extractObject(payload, ['pipeline']) || {},
+  };
 }
 
 async function getDashboardPerformance() {
@@ -1016,6 +1023,10 @@ function transformAlert(payload) {
     category: String(raw.category || '').toLowerCase(),
     description,
     detail: description,
+    priority_band: String(raw.priority_band || raw.priorityBand || '').toLowerCase(),
+    priority_rank: normalizeNumber(raw.priority_rank ?? raw.priorityRank, 0),
+    priority_score: normalizeNumber(raw.priority_score ?? raw.priorityScore, 0),
+    suppression: raw.suppression && typeof raw.suppression === 'object' && !Array.isArray(raw.suppression) ? raw.suppression : {},
     signals: raw.signals && typeof raw.signals === 'object' && !Array.isArray(raw.signals) ? raw.signals : {}
   };
 }
@@ -1728,8 +1739,21 @@ async function populateWindowGlobals() {
     }
 
     // Alerts
-    const rawAlerts = await getAlerts();
-    window.alertTimeline = (Array.isArray(rawAlerts) ? rawAlerts : []).map(transformAlert);
+    const alertsPayload = await getAlerts();
+    const rawAlerts = Array.isArray(alertsPayload?.alerts) ? alertsPayload.alerts : [];
+    window.alertTimelineMeta = {
+      generatedAt: String(alertsPayload?.generatedAt || ''),
+      suppressedCount: normalizeNumber(alertsPayload?.suppressedCount, 0),
+      topPriorityBand: String(alertsPayload?.queue?.top_priority_band || alertsPayload?.queue?.topPriorityBand || '').toLowerCase(),
+      priorityBands: extractObject(alertsPayload?.stats, ['priority_bands', 'priorityBands']) || {},
+      suppressionReasons: extractObject(alertsPayload?.stats, ['suppression_reasons', 'suppressionReasons']) || {},
+      suppressionWindowMinutes: normalizeNumber(
+        alertsPayload?.pipeline?.suppression_window_minutes
+          ?? alertsPayload?.pipeline?.suppressionWindowMinutes,
+        0
+      ),
+    };
+    window.alertTimeline = rawAlerts.map(transformAlert);
     if (window.alertTimeline.length > 0) {
       console.log('[API] ✅ ' + window.alertTimeline.length + ' alerts chargées depuis l\'API');
     }

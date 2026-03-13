@@ -7,12 +7,27 @@ import os
 import sys
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-# Add backend directory to path to properly import modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
+# Add backend directories to path to properly import legacy + canonical modules.
+for _candidate in (
+    str(Path(__file__).resolve().parents[2]),
+    str(Path(__file__).resolve().parents[3]),
+):
+    if _candidate not in sys.path:
+        sys.path.insert(0, _candidate)
 
 from storage.io import save_json, load_json
+
+try:
+    from domains.judge.application.judge_pipeline import (  # type: ignore
+        build_net_edge_assessment,
+        score_news,
+    )
+except ImportError:  # pragma: no cover
+    build_net_edge_assessment = None  # type: ignore
+    score_news = None  # type: ignore
 
 
 ALERT_SEVERITY_ORDER = {
@@ -30,6 +45,9 @@ ALERT_PRIORITY_BANDS = (
     (200, "medium"),
     (0, "low"),
 )
+ALERT_PRIORITY_QUEUE_LIMIT = max(
+    1, int(os.getenv("ALERTS_PRIORITY_QUEUE_LIMIT", "5") or "5")
+)
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -40,9 +58,14 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
 
 
 def _to_iso(ts: datetime) -> str:
-    if ts.tzinfo is not None:
-        ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
+    ts = _utc_naive(ts)
     return ts.replace(microsecond=0).isoformat() + "Z"
+
+
+def _utc_naive(ts: datetime) -> datetime:
+    if ts.tzinfo is not None:
+        return ts.astimezone(timezone.utc).replace(tzinfo=None)
+    return ts
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -127,6 +150,66 @@ def _extract_tickers(ticker: str, articles: List[Dict[str, Any]]) -> List[Dict[s
     return matches
 
 
+def _prepare_articles_for_judge_scoring(articles: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    prepared: List[Dict[str, Any]] = []
+    for article in articles:
+        if not isinstance(article, dict):
+            continue
+        row = dict(article)
+        if "published_at" not in row and isinstance(row.get("pubDate"), str):
+            row["published_at"] = row["pubDate"]
+        if "sent" not in row and row.get("sentiment_score") is not None:
+            row["sent"] = row.get("sentiment_score")
+        prepared.append(row)
+    return prepared
+
+
+def _judge_news_context(ticker_news: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if score_news is None:
+        return {}
+    try:
+        ranked_news = score_news(_prepare_articles_for_judge_scoring(ticker_news), cap=3)
+    except Exception:
+        return {}
+    if not ranked_news:
+        return {}
+    top_news = ranked_news[0] if isinstance(ranked_news[0], dict) else {}
+    news_age_hours = max(0.0, _safe_float(top_news.get("age_hours", 24.0), 24.0))
+    freshness_factor = max(0.0, 1.0 - min(news_age_hours, 24.0) / 24.0)
+    sentiment_factor = abs(_safe_float(top_news.get("sent", 0.0), 0.0))
+    return {
+        "headline": top_news.get("title"),
+        "age_hours": round(news_age_hours, 3),
+        "sentiment_abs": round(sentiment_factor, 4),
+        "impact_score": round(min(1.0, (sentiment_factor * 0.65) + (freshness_factor * 0.35)), 4),
+    }
+
+
+def _judge_net_edge_context(ticker_forecasts: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if build_net_edge_assessment is None or not ticker_forecasts:
+        return {}
+    ranked = sorted(
+        [forecast for forecast in ticker_forecasts if isinstance(forecast, dict)],
+        key=lambda forecast: _coerce_confidence(forecast.get("confidence", 0.0)),
+        reverse=True,
+    )
+    for forecast in ranked:
+        expected_return = forecast.get("expected_return")
+        if expected_return in (None, ""):
+            continue
+        try:
+            assessment = build_net_edge_assessment(
+                expected_return=expected_return,
+                horizon=forecast.get("horizon"),
+                direction=forecast.get("direction"),
+            )
+        except Exception:
+            continue
+        if isinstance(assessment, dict) and assessment:
+            return assessment
+    return {}
+
+
 def _normalize_alert(
     alert: Dict[str, Any],
     ts: str,
@@ -134,10 +217,23 @@ def _normalize_alert(
     ticker: str,
     alert_type: str,
     summary: str,
+    news_context: Dict[str, Any] | None = None,
+    net_edge_context: Dict[str, Any] | None = None,
 ) -> None:
     severity = str(alert.get("severity", "medium")).lower()
     severity = severity if severity in ALERT_SEVERITY_ORDER else "medium"
     confidence = _coerce_confidence(alert.get("confidence", 0.0))
+    signals = dict(alert.get("signals", {}) or {})
+    if isinstance(news_context, dict) and news_context:
+        signals["news_impact_score"] = news_context.get("impact_score", 0.0)
+        signals["news_headline"] = news_context.get("headline")
+        signals["news_age_hours"] = news_context.get("age_hours")
+        signals["news_sentiment_abs"] = news_context.get("sentiment_abs")
+    if isinstance(net_edge_context, dict) and net_edge_context:
+        signals["net_edge_status"] = net_edge_context.get("edge_status")
+        signals["net_edge_return"] = net_edge_context.get("net_edge_return")
+        signals["net_edge_alert"] = net_edge_context.get("alert")
+        signals["gross_expected_return"] = net_edge_context.get("gross_expected_return")
 
     fingerprint = f"{ticker}|{alert_type}|{summary}"
     if fingerprint in seen:
@@ -152,13 +248,14 @@ def _normalize_alert(
         "severity": severity,
         "confidence": confidence,
         "timestamp": ts,
-        "signals": alert.get("signals", {}),
+        "signals": signals,
         "signature": fingerprint,
         "fingerprint": fingerprint,
     }
 
 
 def _collect_recent_news_count(articles: Iterable[Dict[str, Any]], now: datetime) -> int:
+    now_utc = _utc_naive(now)
     count = 0
     for article in articles:
         if not isinstance(article, dict):
@@ -167,10 +264,10 @@ def _collect_recent_news_count(articles: Iterable[Dict[str, Any]], now: datetime
         if not isinstance(pub_date, str):
             continue
         try:
-            published_at = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
+            published_at = _utc_naive(datetime.fromisoformat(pub_date.replace("Z", "+00:00")))
         except ValueError:
             continue
-        if now - published_at <= timedelta(hours=1):
+        if now_utc - published_at <= timedelta(hours=1):
             count += 1
     return count
 
@@ -181,9 +278,22 @@ def _priority_score(alert: Dict[str, Any]) -> int:
     signals = alert.get("signals", {})
     if not isinstance(signals, dict):
         signals = {}
-    news_points = min(40, int(signals.get("recent_news_count", 0) or 0) * 10)
+    news_points = max(
+        min(40, int(signals.get("recent_news_count", 0) or 0) * 10),
+        int(round(_safe_float(signals.get("news_impact_score", 0.0), 0.0) * 50)),
+    )
     volatility_points = int(min(35, round(_safe_float(signals.get("volatility", 0.0)) * 1000)))
-    return severity_points + confidence_points + news_points + volatility_points
+    edge_status = str(signals.get("net_edge_status") or "").strip().lower()
+    net_edge_return = abs(_safe_float(signals.get("net_edge_return", 0.0), 0.0))
+    if edge_status == "healthy":
+        edge_points = int(min(35, round(net_edge_return * 1000)))
+    elif edge_status == "thin":
+        edge_points = -20
+    elif edge_status == "eroded":
+        edge_points = -35
+    else:
+        edge_points = 0
+    return severity_points + confidence_points + news_points + volatility_points + edge_points
 
 
 def _priority_band(score: int) -> str:
@@ -191,6 +301,22 @@ def _priority_band(score: int) -> str:
         if score >= floor:
             return label
     return "low"
+
+
+def _priority_reason(alert: Dict[str, Any]) -> str:
+    severity = str(alert.get("severity", "medium")).lower()
+    signals = alert.get("signals", {})
+    if not isinstance(signals, dict):
+        signals = {}
+    reasons = [severity]
+    if _safe_float(signals.get("news_impact_score", 0.0), 0.0) >= 0.45:
+        reasons.append("fresh_news")
+    edge_status = str(signals.get("net_edge_status") or "").strip().lower()
+    if edge_status == "healthy":
+        reasons.append("net_edge_intact")
+    elif edge_status in {"thin", "eroded"}:
+        reasons.append(f"costs_{edge_status}")
+    return "_".join(reasons[:3])
 
 
 def _suppression_config() -> Dict[str, int]:
@@ -244,7 +370,7 @@ def _apply_priority_and_suppression(
     previous_alerts: List[Dict[str, Any]],
     now: datetime,
 ) -> Dict[str, Any]:
-    now_dt = now.astimezone(timezone.utc).replace(tzinfo=None) if now.tzinfo is not None else now
+    now_dt = _utc_naive(now)
     config = _suppression_config()
     suppression_window = timedelta(minutes=config["window_minutes"])
     escalation_delta = config["escalation_delta_bps"] / 10000.0
@@ -261,6 +387,7 @@ def _apply_priority_and_suppression(
         band = _priority_band(score)
         normalized["priority_score"] = score
         normalized["priority_band"] = band
+        normalized["priority_reason"] = _priority_reason(normalized)
         normalized["priority_rank"] = base_rank
 
         fingerprint = _alert_fingerprint(normalized)
@@ -300,6 +427,16 @@ def _apply_priority_and_suppression(
         priority_counts[band] += 1
         active_alerts.append(normalized)
 
+    active_alerts.sort(
+        key=lambda item: (
+            item.get("priority_score", 0),
+            ALERT_SEVERITY_ORDER.get(str(item.get("severity", "medium")).lower(), 0),
+            item.get("confidence", 0.0),
+            item.get("timestamp", ""),
+        ),
+        reverse=True,
+    )
+
     for rank, alert in enumerate(active_alerts, start=1):
         alert["priority_rank"] = rank
 
@@ -320,7 +457,7 @@ def compute_alerts(now: datetime | None = None) -> Dict[str, Any]:
     3. Forecast direction
     """
 
-    now = now or datetime.utcnow()
+    now = _utc_naive(now or datetime.utcnow())
     now_iso = _to_iso(now)
 
     # Load forecasts to correlate with alerts
@@ -358,6 +495,8 @@ def compute_alerts(now: datetime | None = None) -> Dict[str, Any]:
             latest_direction[direction] = max(latest_direction[direction], _coerce_confidence(forecast.get("confidence", 0.5)))
 
         ticker_news = _extract_tickers(ticker, articles)
+        news_context = _judge_news_context(ticker_news)
+        net_edge_context = _judge_net_edge_context(ticker_forecasts)
         negative_sentiment = any(_safe_float(article.get("sentiment_score", 0.0), 0.0) < -0.3 for article in ticker_news)
         positive_sentiment = any(_safe_float(article.get("sentiment_score", 0.0), 0.0) > 0.3 for article in ticker_news)
         recent_news_count = _collect_recent_news_count(ticker_news, now)
@@ -387,6 +526,8 @@ def compute_alerts(now: datetime | None = None) -> Dict[str, Any]:
                     ticker,
                     "oversold-bearish",
                     f"oversold-bearish:{ticker}:down",
+                    news_context=news_context,
+                    net_edge_context=net_edge_context,
                 )
 
         # Rule 2: Overbought-Bullish alert
@@ -411,6 +552,8 @@ def compute_alerts(now: datetime | None = None) -> Dict[str, Any]:
                     ticker,
                     "overbought-bullish",
                     f"overbought-bullish:{ticker}:up",
+                    news_context=news_context,
+                    net_edge_context=net_edge_context,
                 )
 
         # Rule 3: Breakout News alert (high volatility + news activity)
@@ -432,6 +575,8 @@ def compute_alerts(now: datetime | None = None) -> Dict[str, Any]:
                 ticker,
                 "breakout-news",
                 f"breakout-news:{ticker}:{recent_news_count}",
+                news_context=news_context,
+                net_edge_context=net_edge_context,
             )
 
     ordered_alerts = list(alerts.values())
@@ -447,12 +592,20 @@ def compute_alerts(now: datetime | None = None) -> Dict[str, Any]:
     active_alerts = prioritized["active_alerts"]
     suppressed_alerts = prioritized["suppressed_alerts"]
     suppressed_count = len(suppressed_alerts)
+    priority_queue = active_alerts[:ALERT_PRIORITY_QUEUE_LIMIT]
     if suppressed_count:
         warnings.append("duplicate_alerts_suppressed")
+
+    source = ["technical_signals", "news_sentiment", "forecast_correlation", "market_regime"]
+    if score_news is not None:
+        source.append("judge_pipeline_score_news")
+    if build_net_edge_assessment is not None:
+        source.append("judge_pipeline_net_edge")
 
     return {
         "alerts": active_alerts,
         "count": len(active_alerts),
+        "priority_queue": priority_queue,
         "suppressed_count": suppressed_count,
         "suppressed_alerts": suppressed_alerts,
         "stats": {
@@ -463,10 +616,11 @@ def compute_alerts(now: datetime | None = None) -> Dict[str, Any]:
             "candidate_alerts": len(ordered_alerts),
             "suppressed_duplicates": suppressed_count,
             "priority_bands": prioritized["priority_counts"],
+            "priority_queue_size": len(priority_queue),
             "suppression_reasons": prioritized["suppressed_counts"],
         },
         "generated_at": now_iso,
-        "source": ["technical_signals", "news_sentiment", "forecast_correlation", "market_regime"],
+        "source": source,
         "pipeline": {
             "algorithm": "multi_signal_confluence_v2",
             "processed_at": now_iso,
@@ -474,6 +628,10 @@ def compute_alerts(now: datetime | None = None) -> Dict[str, Any]:
             "priority_ordering": True,
             "suppression_window_minutes": prioritized["config"]["window_minutes"],
             "fatigue_threshold": prioritized["config"]["fatigue_threshold"],
+            "judge_reuse": {
+                "score_news": score_news is not None,
+                "net_edge_assessment": build_net_edge_assessment is not None,
+            },
         },
         "warnings": warnings,
     }
@@ -504,6 +662,7 @@ def run_alerts_job():
         error_payload = {
             "alerts": [],
             "count": 0,
+            "priority_queue": [],
             "suppressed_count": 0,
             "suppressed_alerts": [],
             "generated_at": datetime.utcnow().isoformat() + "Z",
@@ -534,6 +693,10 @@ def get_latest_alerts():
             return {
                 "alerts": alerts_snapshot.get("alerts", []),
                 "count": alerts_snapshot.get("count", 0),
+                "priority_queue": alerts_snapshot.get(
+                    "priority_queue",
+                    alerts_snapshot.get("alerts", [])[:ALERT_PRIORITY_QUEUE_LIMIT],
+                ),
                 "suppressed_count": alerts_snapshot.get("suppressed_count", 0),
                 "suppressed_alerts": alerts_snapshot.get("suppressed_alerts", []),
                 "generated_at": alerts_snapshot.get("generated_at", datetime.utcnow().isoformat() + "Z"),
@@ -547,6 +710,7 @@ def get_latest_alerts():
         return {
             "alerts": [],
             "count": 0,
+            "priority_queue": [],
             "suppressed_count": 0,
             "suppressed_alerts": [],
             "generated_at": datetime.utcnow().isoformat() + "Z",
