@@ -9,6 +9,7 @@ from datetime import datetime
 import logging
 from pathlib import Path
 import sys
+from typing import Any, Dict, Optional
 
 # Add parent directory to path to import storage
 backend_path = str(Path(__file__).parent.parent)
@@ -17,18 +18,79 @@ if backend_path not in sys.path:
 
 logger = logging.getLogger(__name__)
 
+# Import cost awareness builder (BATCH-23-DEV-03: Tax, Fees, Slippage Awareness)
+try:
+    from domains.judge.application.judge_pipeline import build_net_edge_assessment
+except ImportError:
+    build_net_edge_assessment = None  # type: ignore
+
+
+def _build_cost_awareness_for_signal(forecast: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Build cost awareness fields for a brief signal using judge net-edge assessment."""
+    if build_net_edge_assessment is None:
+        return None
+
+    try:
+        horizon = str(forecast.get("horizon") or "1d").strip()
+        direction = str(forecast.get("direction") or "up").strip().lower()
+        expected_return = forecast.get("expected_return", 0)
+
+        assessment = build_net_edge_assessment(
+            expected_return=expected_return,
+            horizon=horizon,
+            direction=direction,
+        )
+
+        if not isinstance(assessment, dict) or not assessment:
+            return None
+
+        gross_expected_return_pct = round(float(assessment.get("gross_expected_return") or 0.0), 6)
+        net_expected_return_pct = round(float(assessment.get("net_expected_return") or 0.0), 6)
+        tax_bucket = (
+            "long_term"
+            if str(assessment.get("tax_treatment") or "").strip().lower().startswith("long_term")
+            else "short_term"
+        )
+        warning = None
+        if gross_expected_return_pct > 0 and net_expected_return_pct <= 0:
+            warning = "Costs overwhelm edge"
+        elif gross_expected_return_pct > 0 and net_expected_return_pct <= gross_expected_return_pct * 0.25:
+            warning = "Low net edge after costs"
+
+        return {
+            "gross_expected_return_pct": gross_expected_return_pct,
+            "net_expected_return_pct": net_expected_return_pct,
+            "fee_bps": round(float(assessment.get("fee_bps") or 0.0), 2),
+            "slippage_bps": round(float(assessment.get("slippage_bps") or 0.0), 2),
+            "estimated_tax_drag_bps": round(float(assessment.get("tax_drag") or 0.0) * 10_000.0, 2),
+            "total_cost_bps": round(float(assessment.get("total_drag") or 0.0) * 10_000.0, 2),
+            "tax_rate_assumption": round(float(assessment.get("tax_rate") or 0.0), 4),
+            "tax_bucket": tax_bucket,
+            "tax_impact": (
+                "Long-term tax drag assumed"
+                if tax_bucket == "long_term"
+                else "Short-term tax drag assumed"
+            ),
+            "warning": warning,
+            "alert": assessment.get("alert"),
+            "edge_status": assessment.get("edge_status"),
+        }
+    except Exception as e:
+        logger.debug(f"Cost awareness build failed for signal: {e}")
+        return None
+
 
 def generate_signal_from_forecast(forecast: dict) -> dict:
     """
     Convert a bullish forecast into a signal
-    
+
     Args:
         forecast: Forecast dictionary
-        
+
     Returns:
-        Signal dictionary
+        Signal dictionary with cost awareness fields (BATCH-23-DEV-03)
     """
-    return {
+    signal = {
         "ticker": forecast.get("ticker", ""),
         "type": "BULLISH",
         "confidence": forecast.get("confidence", 0.5),
@@ -40,6 +102,15 @@ def generate_signal_from_forecast(forecast: dict) -> dict:
         "source": "forecast_analysis",
         "generated_at": datetime.utcnow().isoformat() + "Z"
     }
+
+    # Add cost awareness: tax, fees, slippage (BATCH-23-DEV-03)
+    cost_awareness = _build_cost_awareness_for_signal(forecast)
+    if cost_awareness:
+        signal["cost_awareness"] = cost_awareness
+        # Flatten for easy UI access
+        signal.update(cost_awareness)
+
+    return signal
 
 
 def generate_risk_from_forecast(forecast: dict) -> dict:
