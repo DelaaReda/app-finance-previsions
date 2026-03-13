@@ -12,6 +12,96 @@ let playbookCache = null;
 let cacheTimestamp = null;
 const CACHE_TTL_MS = 120000; // 2 minutes
 
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function toFiniteNumber(value, fallback = NaN) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : fallback;
+}
+
+function normalizePercentValue(value, fallback = NaN) {
+  const numericValue = toFiniteNumber(value, fallback);
+  if (!Number.isFinite(numericValue)) {
+    return fallback;
+  }
+  return Math.abs(numericValue) > 1 ? numericValue / 100 : numericValue;
+}
+
+function formatPercentValue(value) {
+  const normalized = Math.round(toFiniteNumber(value, 0) * 10000) / 100;
+  const sign = normalized >= 0 ? '+' : '';
+  return `${sign}${normalized.toFixed(2)}%`;
+}
+
+function formatBpsValue(value) {
+  const normalized = Math.round(toFiniteNumber(value, 0) * 10) / 10;
+  return `${normalized.toFixed(Number.isInteger(normalized) ? 0 : 1)} bps`;
+}
+
+function describeCostAdjustedReturn(playbook) {
+  const expectedReturn = normalizePercentValue(playbook.expected_return, NaN);
+  const costAwareness = playbook && typeof playbook.cost_awareness === 'object'
+    ? playbook.cost_awareness
+    : null;
+
+  if (!costAwareness) {
+    return {
+      color: Number.isFinite(expectedReturn) && expectedReturn < 0 ? 'negative' : 'positive',
+      label: Number.isFinite(expectedReturn) ? formatPercentValue(expectedReturn) : '',
+      title: 'Expected return',
+    };
+  }
+
+  const grossExpectedReturnPct = normalizePercentValue(
+    costAwareness.gross_expected_return_pct,
+    expectedReturn,
+  );
+  const netExpectedReturnPct = normalizePercentValue(
+    costAwareness.net_expected_return_pct,
+    NaN,
+  );
+  const feeBps = toFiniteNumber(costAwareness.fee_bps, NaN);
+  const slippageBps = toFiniteNumber(costAwareness.slippage_bps, NaN);
+  const estimatedTaxDragBps = toFiniteNumber(costAwareness.estimated_tax_drag_bps, NaN);
+  const hasLowNetEdge = Number.isFinite(grossExpectedReturnPct)
+    && grossExpectedReturnPct > 0
+    && Number.isFinite(netExpectedReturnPct)
+    && (netExpectedReturnPct <= 0 || netExpectedReturnPct <= grossExpectedReturnPct * 0.25);
+
+  if (!Number.isFinite(netExpectedReturnPct)) {
+    return {
+      color: Number.isFinite(expectedReturn) && expectedReturn < 0 ? 'negative' : 'positive',
+      label: Number.isFinite(expectedReturn) ? formatPercentValue(expectedReturn) : '',
+      title: 'Expected return',
+    };
+  }
+
+  const titleParts = [
+    Number.isFinite(grossExpectedReturnPct)
+      ? `Gross edge ${formatPercentValue(grossExpectedReturnPct)} -> Net edge ${formatPercentValue(netExpectedReturnPct)}`
+      : `Net edge ${formatPercentValue(netExpectedReturnPct)}`,
+    Number.isFinite(feeBps) ? `Fees ${formatBpsValue(feeBps)}` : '',
+    Number.isFinite(slippageBps) ? `Slippage ${formatBpsValue(slippageBps)}` : '',
+    Number.isFinite(estimatedTaxDragBps) ? `Tax drag ${formatBpsValue(estimatedTaxDragBps)}` : '',
+    hasLowNetEdge
+      ? (netExpectedReturnPct <= 0 ? 'Costs overwhelm edge' : 'Low net edge after costs')
+      : '',
+  ].filter(Boolean);
+
+  return {
+    color: netExpectedReturnPct < 0 ? 'negative' : 'positive',
+    label: `${hasLowNetEdge && netExpectedReturnPct > 0 ? 'Low Net ' : 'Net '}${formatPercentValue(netExpectedReturnPct)}`,
+    title: titleParts.join(' | '),
+  };
+}
+
 /**
  * Fetch and cache strategy playbooks from the Judge API
  * @returns {Promise<Array>} Array of playbook objects
@@ -141,13 +231,13 @@ async function getExpectedReturn(ticker) {
   if (!playbook) {
     return '';
   }
-  
-  const { expected_return } = playbook;
-  const returnPct = (expected_return * 100).toFixed(2);
-  const sign = expected_return >= 0 ? '+' : '';
-  const color = expected_return >= 0 ? 'positive' : 'negative';
-  
-  return `<span class="playbook-return ${color}">${sign}${returnPct}%</span>`;
+
+  const returnSummary = describeCostAdjustedReturn(playbook);
+  if (!returnSummary.label) {
+    return '';
+  }
+
+  return `<span class="playbook-return ${returnSummary.color}" title="${escapeHtml(returnSummary.title)}">${escapeHtml(returnSummary.label)}</span>`;
 }
 
 /**
