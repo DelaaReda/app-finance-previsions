@@ -1178,6 +1178,81 @@ test('getCopilotStart unwraps the dedicated starter contract and normalizes open
   assert.deepEqual(payload.stats, { ask_count: 1, open_count: 2 });
 });
 
+test('getCopilotStart uses FINANCECOPILOT_NAMESPACE for personal-finance start route', async () => {
+  const calls = [];
+  const sandbox = loadConnector(
+    async (url) => {
+      calls.push(url);
+      if (url.endsWith('/api/personal-finance/start')) {
+        return {
+          async json() {
+            return {
+              ok: true,
+              data: {
+                brief_of_day: {
+                  title: 'Brief of the day',
+                  summary: 'Personal finance alias is active.',
+                  generated_at: '2026-03-13T08:00:00.000Z',
+                },
+                ask: [],
+                open: [],
+              },
+            };
+          },
+        };
+      }
+
+      return {
+        async json() {
+          return { ok: true, data: {} };
+        },
+      };
+    },
+    {
+      FINANCECOPILOT_NAMESPACE: 'personal-finance',
+    },
+  );
+
+  await sandbox.window.FinanceAPI.getCopilotStart();
+
+  assert.deepEqual(calls, ['http://localhost:8050/api/personal-finance/start']);
+});
+
+test('askCopilot uses FINANCECOPILOT_NAMESPACE for personal-finance ask route', async () => {
+  const calls = [];
+  const sandbox = loadConnector(
+    async (url, options = {}) => {
+      calls.push({ url, options });
+      if (url.endsWith('/api/personal-finance/ask')) {
+        return {
+          async json() {
+            return {
+              ok: true,
+              data: {
+                answer: 'Alias route is active.',
+              },
+            };
+          },
+        };
+      }
+
+      return {
+        async json() {
+          return { ok: true, data: {} };
+        },
+      };
+    },
+    {
+      FINANCECOPILOT_NAMESPACE: '/personal-finance',
+    },
+  );
+
+  const payload = await sandbox.window.FinanceAPI.askCopilot('How are markets today?');
+
+  assert.deepEqual(calls[0].url, 'http://localhost:8050/api/personal-finance/ask');
+  assert.equal(payload.data.answer, 'Alias route is active.');
+});
+
 test('getCopilotStart infers degraded brief state from status metadata', async () => {
   const sandbox = loadConnector(async () => ({
     async json() {

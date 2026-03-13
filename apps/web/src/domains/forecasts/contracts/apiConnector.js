@@ -230,12 +230,37 @@ function normalizeCopilotContextTickers(value) {
   return normalized;
 }
 
+function resolveCopilotNamespace(win = typeof window !== 'undefined' ? window : null) {
+  const configuredNamespace = normalizeApiBase(
+    win && typeof win === 'object'
+      ? (win.FINANCECOPILOT_NAMESPACE || win.__FINANCECOPILOT_NAMESPACE || '')
+      : '',
+  );
+  if (!configuredNamespace) {
+    return '/copilot';
+  }
+
+  const namespace = configuredNamespace.replace(/^\/+/, '').replace(/^api\//, '').replace(/\/+$/, '');
+  return namespace ? `/${namespace}` : '/copilot';
+}
+
+function buildCopilotPath(basePath) {
+  const namespace = resolveCopilotNamespace();
+  const path = String(basePath || '').trim().replace(/\/+$/, '');
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+
+  return normalizedPath.startsWith('/copilot')
+    ? `${namespace}${normalizedPath.slice('/copilot'.length)}`
+    : `${namespace}${normalizedPath}`;
+}
+
 function buildCopilotScopedEndpoint(basePath, tickers) {
+  const copilotPath = buildCopilotPath(basePath);
   const query = normalizeCopilotContextTickers(tickers)
     .map((ticker) => `tickers=${encodeURIComponent(ticker)}`)
     .join('&');
   return {
-    endpoint: query ? `${basePath}?${query}` : basePath,
+    endpoint: query ? `${copilotPath}?${query}` : copilotPath,
     query,
   };
 }
@@ -755,7 +780,7 @@ async function executePaperTrade(payload = {}) {
 async function askCopilot(question, tickers) {
   if (!tickers) tickers = [];
   try {
-    const response = await fetch(API_BASE + '/copilot/ask', {
+    const response = await fetch(API_BASE + buildCopilotPath('/copilot/ask'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, tickers, max_sources: 5 })
