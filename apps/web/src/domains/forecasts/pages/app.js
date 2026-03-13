@@ -8331,7 +8331,8 @@ function renderTradeIdeas(root = document) {
   const container = getFacetteWidgetSlot(root, 'tradeIdeasGrid');
   if (!container) return;
 
-  container.innerHTML = tradeIdeas.map((idea) => {
+  const normalizedTradeIdeas = sanitizeTradeIdeas(tradeIdeas);
+  container.innerHTML = normalizedTradeIdeas.map((idea) => {
     const decisionId = resolveTradeIdeaDecisionId(idea);
     const executionState = getTradeIdeaExecutionState({ ...idea, decisionId });
     const feeBps = Math.max(0, toFiniteNumber(idea.feeBps, 5));

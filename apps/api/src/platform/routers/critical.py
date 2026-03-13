@@ -35,6 +35,15 @@ except Exception:  # pragma: no cover
 EDGE_RECOMMENDATIONS_FLAG = "FC_API_EDGE_RECOMMENDATIONS"
 EDGE_STOCKS_FLAG = "FC_API_EDGE_STOCKS"
 
+# Cost estimation (BATCH-23-DEV-03: Tax, Fees, Slippage Awareness)
+try:
+    from domains.judge.application.execution_costs import estimate_execution_costs
+except Exception:
+    try:
+        from src.domains.judge.application.execution_costs import estimate_execution_costs  # type: ignore
+    except Exception:
+        estimate_execution_costs = None  # type: ignore
+
 
 def _ok(data: Any) -> Dict[str, Any]:
     return {"ok": True, "data": data}
@@ -59,6 +68,65 @@ def _fallback_market_context(message: str) -> Dict[str, Any]:
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "note": message,
     }
+
+
+def _build_cost_awareness(
+    *,
+    ticker: str,
+    forecast: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Build cost awareness breakdown for recommendation (BATCH-23-DEV-03)."""
+    if estimate_execution_costs is None:
+        return None
+
+    try:
+        cost_snapshot = estimate_execution_costs(
+            ticker=ticker,
+            expected_return=forecast.get("expected_return"),
+            horizon=str(forecast.get("horizon") or forecast.get("prediction_horizon") or "1w").strip() or "1w",
+            row=forecast,
+            features={},
+            price_features={},
+        )
+        if not isinstance(cost_snapshot, dict) or not cost_snapshot:
+            return None
+
+        costs_bps = cost_snapshot.get("costs_bps") if isinstance(cost_snapshot.get("costs_bps"), dict) else {}
+        tax_assumptions = (
+            cost_snapshot.get("tax_assumptions") if isinstance(cost_snapshot.get("tax_assumptions"), dict) else {}
+        )
+        holding_period_bucket = str(tax_assumptions.get("holding_period_bucket") or "short_term").strip().lower()
+
+        gross_expected_return_pct = round(float(cost_snapshot.get("gross_expected_return") or 0.0), 6)
+        net_expected_return_pct = round(float(cost_snapshot.get("net_expected_return") or 0.0), 6)
+
+        fee_bps = round(float((costs_bps.get("fees") or {}).get("base") or 0.0), 2)
+        slippage_bps = round(float((costs_bps.get("slippage") or {}).get("base") or 0.0), 2)
+        estimated_tax_drag_bps = round(float((costs_bps.get("tax_drag") or {}).get("base") or 0.0), 2)
+        total_cost_bps = round(float((costs_bps.get("total") or {}).get("base") or 0.0), 2)
+
+        warning = None
+        if gross_expected_return_pct > 0 and net_expected_return_pct <= 0:
+            warning = "Costs overwhelm edge"
+        elif gross_expected_return_pct > 0 and net_expected_return_pct <= gross_expected_return_pct * 0.25:
+            warning = "Low net edge after costs"
+
+        return {
+            "gross_expected_return_pct": gross_expected_return_pct,
+            "net_expected_return_pct": net_expected_return_pct,
+            "fee_bps": fee_bps,
+            "slippage_bps": slippage_bps,
+            "estimated_tax_drag_bps": estimated_tax_drag_bps,
+            "total_cost_bps": total_cost_bps,
+            "tax_rate_assumption": round(float(tax_assumptions.get("rate") or 0.0), 4),
+            "tax_bucket": holding_period_bucket,
+            "tax_impact": (
+                "Long-term tax drag assumed" if holding_period_bucket == "long_term" else "Short-term tax drag assumed"
+            ),
+            "warning": warning,
+        }
+    except Exception:
+        return None
 
 
 def _stocks_sheet_fallback_payload(ticker: str, message: str) -> Dict[str, Any]:
@@ -140,23 +208,33 @@ def create_critical_router() -> APIRouter:
                 conf = s.get("confidence")
                 score = int(round((conf or 0) * 100)) if isinstance(conf, (int, float)) else 0
                 risk_level = "LOW" if (conf or 0) >= 0.7 else "MEDIUM" if (conf or 0) >= 0.4 else "HIGH"
-                items.append(
-                    {
-                        "ticker": tkr,
-                        "action": "BUY",
-                        "score": score,
-                        "reasoning": s.get("reasoning") or "Forecasts and market brief indicate positive setup.",
-                        "catalysts": [],
-                        "risk_level": risk_level,
-                        "confidence": float(conf) if conf is not None else 0.0,
-                        "supporting_data": {
-                            "forecast_confidence": float(conf) if conf is not None else None,
-                            "news_sentiment": None,
-                            "momentum_score": None,
-                            "macro_alignment": None,
-                        },
-                    }
-                )
+
+                # Build cost awareness breakdown (BATCH-23-DEV-03)
+                forecast_stub = {
+                    "expected_return": s.get("expected_return"),
+                    "horizon": s.get("horizon") or "1w",
+                    "direction": "up" if typ == "BULLISH" else "down" if typ == "BEARISH" else "flat",
+                }
+                cost_awareness = _build_cost_awareness(ticker=tkr, forecast=forecast_stub)
+
+                rec_item = {
+                    "ticker": tkr,
+                    "action": "BUY",
+                    "score": score,
+                    "reasoning": s.get("reasoning") or "Forecasts and market brief indicate positive setup.",
+                    "catalysts": [],
+                    "risk_level": risk_level,
+                    "confidence": float(conf) if conf is not None else 0.0,
+                    "supporting_data": {
+                        "forecast_confidence": float(conf) if conf is not None else None,
+                        "news_sentiment": None,
+                        "momentum_score": None,
+                        "macro_alignment": None,
+                    },
+                }
+                if cost_awareness:
+                    rec_item["cost_awareness"] = cost_awareness
+                items.append(rec_item)
 
             items = items[:limit]
 
