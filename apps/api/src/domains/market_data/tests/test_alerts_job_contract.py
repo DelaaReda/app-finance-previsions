@@ -50,6 +50,8 @@ def test_compute_alerts_returns_deterministic_deduped_contract(monkeypatch):
                     ]
                 }
             }
+        if name == "alerts":
+            return {}
         return {}
 
     def fake_seeded_float(seed: str) -> float:
@@ -79,3 +81,75 @@ def test_compute_alerts_returns_deterministic_deduped_contract(monkeypatch):
     for alert in first["alerts"]:
         assert 0.0 <= alert["confidence"] <= 1.0
         assert alert["severity"] in {"critical", "high", "warning", "medium", "low", "info"}
+        assert alert["priority_score"] >= 0
+        assert alert["priority_band"] in {"urgent", "high", "medium", "low"}
+        assert alert["priority_rank"] >= 1
+        assert alert["suppression"]["suppressed"] is False
+
+    assert first["pipeline"]["priority_ordering"] is True
+    assert first["pipeline"]["suppression_window_minutes"] >= 5
+    assert first["stats"]["candidate_alerts"] >= first["count"]
+
+
+def test_compute_alerts_suppresses_fatigue_duplicates_within_window(monkeypatch):
+    run_at = datetime(2026, 3, 4, 6, 20, 0, tzinfo=timezone.utc)
+
+    def fake_load_json(name: str) -> Dict[str, Any]:
+        if name == "forecasts":
+            return {
+                "payload": {
+                    "rows": [
+                        {"ticker": "AAPL", "direction": "down", "confidence": 0.74},
+                        {"ticker": "AAPL", "direction": "down", "confidence": 0.88},
+                    ]
+                }
+            }
+        if name == "news_feed":
+            return {
+                "payload": {
+                    "articles": [
+                        {
+                            "tickers": ["AAPL"],
+                            "sentiment_score": -0.65,
+                            "title": "AAPL update",
+                            "pubDate": "2026-03-04T06:10:00Z",
+                        },
+                    ]
+                }
+            }
+        if name == "alerts":
+            return {
+                "alerts": [
+                    {
+                        "ticker": "AAPL",
+                        "type": "oversold-bearish",
+                        "summary": "oversold-bearish:AAPL:down",
+                        "severity": "medium",
+                        "confidence": 0.95,
+                        "timestamp": "2026-03-04T05:55:00Z",
+                        "signature": "AAPL|oversold-bearish|oversold-bearish:AAPL:down|0.950|medium",
+                        "suppression": {"repeat_count": 2},
+                    }
+                ]
+            }
+        return {}
+
+    def fake_seeded_float(seed: str) -> float:
+        if seed.startswith("alerts:rsi:AAPL:2026030406"):
+            return 0.05
+        return 0.5
+
+    monkeypatch.setattr(ALERTS_JOB, "load_json", fake_load_json)
+    monkeypatch.setattr(ALERTS_JOB, "_seeded_float", fake_seeded_float)
+
+    payload = ALERTS_JOB.compute_alerts(now=run_at)
+
+    assert payload["alerts"] == []
+    assert payload["count"] == 0
+    assert payload["suppressed_count"] == 1
+    assert payload["stats"]["suppressed_duplicates"] == 1
+    assert payload["warnings"] == ["duplicate_alerts_suppressed"]
+    suppressed = payload["suppressed_alerts"][0]
+    assert suppressed["suppression"]["suppressed"] is True
+    assert suppressed["suppression"]["reason"] == "fatigue_window_duplicate"
+    assert suppressed["suppression"]["repeat_count"] == 3
