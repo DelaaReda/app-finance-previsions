@@ -160,3 +160,84 @@ def test_brief_daily_contract_marks_empty_fallback_as_degraded(monkeypatch):
     }
     assert data["degraded"] is True
     assert data["degraded_reason"] == "daily_snapshot_missing"
+
+
+def test_brief_daily_contract_refreshes_missing_snapshot_via_generator(monkeypatch):
+    snapshots = {
+        "brief_daily": None,
+        "brief_weekly": None,
+    }
+    refresh_calls = []
+
+    def _fake_load_json(key):
+        return snapshots.get(key)
+
+    def _fake_refresh(reason):
+        refresh_calls.append(reason)
+        return {
+            "summary": "Fresh morning brief",
+            "market_regime": "RISK_ON",
+            "top_signals": [{"ticker": "MSFT", "thesis": "follow-through"}],
+            "sources": ["brief_generator", "scheduled_refresh"],
+            "generated_at": "2026-03-13T09:30:00Z",
+            "freshness": "2026-03-13T09:30:00Z",
+            "generation_metadata": {
+                "schedule_mode": "refreshable_script",
+                "artifact_key": "brief_daily",
+                "artifact_path": "runtime/data/brief_daily.json",
+                "refreshed_at": "2026-03-13T09:30:00Z",
+                "refreshed_by": "scripts/generate_brief.py",
+            },
+        }
+
+    monkeypatch.setattr(brief_api.storage_io, "load_json", _fake_load_json)
+    monkeypatch.setattr(brief_api, "_refresh_daily_brief_snapshot", _fake_refresh)
+
+    data = (brief_api.get_daily_brief().get("data") or {})
+
+    assert refresh_calls == ["snapshot_missing"]
+    assert data["summary"] == "Fresh morning brief"
+    assert data["market_regime"] == "RISK_ON"
+    assert data["top_opportunities"] == [{"ticker": "MSFT", "thesis": "follow-through"}]
+    assert data["sources"] == ["brief_generator", "scheduled_refresh"]
+    assert data["degraded"] is False
+
+
+def test_brief_daily_contract_refreshes_stale_snapshot_before_serving(monkeypatch):
+    stale_snapshot = {
+        "data": {
+            "daily": {
+                "summary": "Stale brief",
+                "market_regime": "DEFENSIVE",
+                "sources": ["stale_fixture"],
+                "generated_at": "2026-03-10T09:00:00Z",
+                "freshness": "2026-03-10T09:00:00Z",
+            }
+        }
+    }
+    refresh_calls = []
+
+    def _fake_load_json(key):
+        if key == "brief_daily":
+            return stale_snapshot
+        return None
+
+    def _fake_refresh(reason):
+        refresh_calls.append(reason)
+        return {
+            "summary": "Refreshed brief",
+            "market_regime": "RISK_ON",
+            "sources": ["brief_generator"],
+            "generated_at": "2026-03-13T09:35:00Z",
+            "freshness": "2026-03-13T09:35:00Z",
+        }
+
+    monkeypatch.setattr(brief_api.storage_io, "load_json", _fake_load_json)
+    monkeypatch.setattr(brief_api, "_refresh_daily_brief_snapshot", _fake_refresh)
+
+    data = (brief_api.get_daily_brief().get("data") or {})
+
+    assert refresh_calls == ["snapshot_stale"]
+    assert data["summary"] == "Refreshed brief"
+    assert data["market_regime"] == "RISK_ON"
+    assert data["sources"] == ["brief_generator"]

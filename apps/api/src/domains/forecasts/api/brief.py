@@ -3,7 +3,9 @@ Brief routes exposing daily/weekly market briefs generated offline.
 """
 from __future__ import annotations
 
-from datetime import datetime
+import logging
+import os
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 from fastapi import APIRouter
@@ -12,6 +14,11 @@ from core.response import ok
 from storage import io as storage_io
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+BRIEF_DAILY_REFRESH_MAX_AGE_MINUTES = max(
+    0,
+    int(os.getenv("BRIEF_DAILY_REFRESH_MAX_AGE_MINUTES", "720") or "720"),
+)
 
 
 def _trim_summary(value: Any, *, limit: int = 200) -> str:
@@ -66,6 +73,68 @@ def _looks_like_brief_payload(value: Any) -> bool:
         if str(candidate or "").strip():
             return True
     return False
+
+
+def _parse_timestamp(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(value), tz=timezone.utc)
+        except Exception:
+            return None
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(text)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def _brief_timestamp(brief: Dict[str, Any]) -> Optional[datetime]:
+    generation_metadata = brief.get("generation_metadata")
+    for candidate in (
+        brief.get("freshness"),
+        brief.get("generated_at"),
+        generation_metadata.get("refreshed_at") if isinstance(generation_metadata, dict) else None,
+    ):
+        parsed = _parse_timestamp(candidate)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _brief_is_stale(brief: Dict[str, Any]) -> bool:
+    if BRIEF_DAILY_REFRESH_MAX_AGE_MINUTES <= 0:
+        return False
+    timestamp = _brief_timestamp(brief)
+    if timestamp is None:
+        return True
+    age_seconds = max(0.0, (datetime.now(timezone.utc) - timestamp).total_seconds())
+    return age_seconds > BRIEF_DAILY_REFRESH_MAX_AGE_MINUTES * 60
+
+
+def _refresh_daily_brief_snapshot(reason: str) -> Optional[Dict[str, Any]]:
+    try:
+        from services.brief_generator import save_daily_brief
+    except Exception as exc:
+        logger.warning("brief_daily_refresh_import_failed reason=%s error=%s", reason, exc)
+        return None
+
+    try:
+        save_daily_brief()
+    except Exception as exc:
+        logger.warning("brief_daily_refresh_failed reason=%s error=%s", reason, exc)
+        return None
+    return _load_brief_snapshot("brief_daily", "daily")
 
 
 def _load_brief_snapshot(key: str, section: str) -> Optional[Dict[str, Any]]:
@@ -203,6 +272,10 @@ def _fallback_brief(message: str, *, source_token: str) -> Dict[str, Any]:
 @router.get("/brief/daily")
 def get_daily_brief() -> Dict[str, Any]:
     brief = _load_brief_snapshot("brief_daily", "daily")
+    if not brief:
+        brief = _refresh_daily_brief_snapshot("snapshot_missing")
+    elif _brief_is_stale(brief):
+        brief = _refresh_daily_brief_snapshot("snapshot_stale") or brief
     if brief:
         return ok(_normalize_brief_payload(brief, default_source="brief_daily"))
 
