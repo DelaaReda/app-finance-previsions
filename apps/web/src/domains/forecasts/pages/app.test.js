@@ -435,12 +435,15 @@ function loadAlertTimelineHelpers() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const helpersSource = extractSection(source, 'const ALERT_SEVERITY_ORDER = {', '\n\nfunction sanitizeMarketCalendar');
   const timelineContainer = { innerHTML: '' };
+  const queueSummary = { textContent: 'Top queue: loading priority bands...' };
   const sandbox = {
     console,
     Date,
     document: {
       getElementById(id) {
-        return id === 'timelineContainer' ? timelineContainer : null;
+        if (id === 'timelineContainer') return timelineContainer;
+        if (id === 'alertQueueSummary') return queueSummary;
+        return null;
       },
     },
     isObject(value) {
@@ -471,7 +474,67 @@ function loadAlertTimelineHelpers() {
     { filename: 'app.js' }
   );
 
-  return { sandbox, timelineContainer };
+  return { sandbox, timelineContainer, queueSummary };
+}
+
+function loadNotificationDrawerHelpers() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const alertHelpersSource = extractSection(source, 'const ALERT_SEVERITY_ORDER = {', '\n\nfunction sanitizeMarketCalendar');
+  const drawerHelpersSource = extractSection(source, 'function getAlertNotificationReadState()', '\n\nfunction closeNotifications');
+  const summaryNode = { textContent: '' };
+  const chipsNode = { innerHTML: '' };
+  const itemsNode = { innerHTML: '' };
+  const metaNode = { textContent: '' };
+  const badges = [
+    { textContent: '', style: {} },
+    { textContent: '', style: {} },
+  ];
+  const sandbox = {
+    console,
+    Date,
+    window: {},
+    document: {
+      getElementById(id) {
+        if (id === 'notificationDrawerSummary') return summaryNode;
+        if (id === 'notificationDrawerChips') return chipsNode;
+        if (id === 'notificationDrawerItems') return itemsNode;
+        if (id === 'notificationDrawerMeta') return metaNode;
+        return null;
+      },
+      querySelectorAll(selector) {
+        if (selector === '.notification-badge, .nav-badge') {
+          return badges;
+        }
+        return [];
+      },
+    },
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return value === null || value === undefined ? fallback : String(value);
+    },
+    toFiniteNumber(value, fallback = 0) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : fallback;
+    },
+    formatRelativeTime() {
+      return '2 minutes ago';
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${alertHelpersSource}\n${drawerHelpersSource}\nthis.renderNotificationDrawer = renderNotificationDrawer;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  return { sandbox, summaryNode, chipsNode, itemsNode, metaNode, badges };
 }
 
 function loadRenderMarketCalendar() {
@@ -5336,7 +5399,7 @@ test('sanitizeAlertTimeline prefers backend priority bands for queue ordering', 
 });
 
 test('renderAlertTimeline includes policy summary copy in the visible card body', () => {
-  const { sandbox, timelineContainer } = loadAlertTimelineHelpers();
+  const { sandbox, timelineContainer, queueSummary } = loadAlertTimelineHelpers();
 
   sandbox.renderAlertTimeline([
     {
@@ -5357,10 +5420,12 @@ test('renderAlertTimeline includes policy summary copy in the visible card body'
   assert.match(timelineContainer.innerHTML, /US Policy • PROPOSED/);
   assert.match(timelineContainer.innerHTML, /Disclosure rules proposed for cloud and semiconductor firms\./);
   assert.match(timelineContainer.innerHTML, /transmission: technology -> NVDA, MSFT/);
+  assert.equal(queueSummary.textContent, 'Top queue: US Policy • PROPOSED • Background queue');
+  assert.doesNotMatch(timelineContainer.innerHTML, /Top queue:/);
 });
 
 test('renderAlertTimeline surfaces top queue summary and urgency tier badges', () => {
-  const { sandbox, timelineContainer } = loadAlertTimelineHelpers();
+  const { sandbox, timelineContainer, queueSummary } = loadAlertTimelineHelpers();
   sandbox.alertTimelineMeta = {
     suppressedCount: 3,
     suppressionWindowMinutes: 15,
@@ -5396,10 +5461,60 @@ test('renderAlertTimeline surfaces top queue summary and urgency tier badges', (
     },
   ]);
 
-  assert.match(timelineContainer.innerHTML, /Top queue: MSFT Risk • Urgent queue/);
+  assert.equal(queueSummary.textContent, 'Top queue: MSFT Risk • Urgent queue');
   assert.match(timelineContainer.innerHTML, /Urgent 1/);
   assert.match(timelineContainer.innerHTML, /Action 1/);
   assert.match(timelineContainer.innerHTML, /Held 3/);
   assert.match(timelineContainer.innerHTML, /15m window/);
   assert.match(timelineContainer.innerHTML, /Urgent queue • repeat 4x • alerts engine • 88% confidence • 2 minutes ago/);
+});
+
+test('renderNotificationDrawer reuses the live queue and suppression context in the alert center', () => {
+  const { sandbox, summaryNode, chipsNode, itemsNode, metaNode, badges } = loadNotificationDrawerHelpers();
+  sandbox.window.alertTimelineMeta = {
+    suppressed_count: 3,
+    suppression_window_minutes: 15,
+    generated_at: '2026-03-10T09:00:00Z',
+  };
+
+  sandbox.renderNotificationDrawer([
+    {
+      id: 'alert-1',
+      ticker: 'MSFT',
+      type: 'risk',
+      category: 'market_data',
+      source: 'alerts_engine',
+      description: 'Cloud margin drift now requires a portfolio review.',
+      severity: 'medium',
+      priority_band: 'urgent',
+      confidence: 0.88,
+      timestamp: '2026-03-10T09:00:00Z',
+      suppression: {
+        repeat_count: 3,
+      },
+    },
+    {
+      id: 'alert-2',
+      ticker: 'QQQ',
+      type: 'news',
+      category: 'policy-impact',
+      source: 'policy_feed',
+      description: 'Semiconductor export wording remains under review.',
+      severity: 'info',
+      priority_band: 'high',
+      confidence: 0.42,
+      timestamp: '2026-03-10T08:00:00Z',
+    },
+  ]);
+
+  assert.equal(summaryNode.textContent, 'Top queue: MSFT Risk • Urgent queue');
+  assert.match(chipsNode.innerHTML, /Urgent 1/);
+  assert.match(chipsNode.innerHTML, /Action 1/);
+  assert.match(chipsNode.innerHTML, /Held 3/);
+  assert.match(chipsNode.innerHTML, /15m window/);
+  assert.match(itemsNode.innerHTML, /Repeat 3x/);
+  assert.match(itemsNode.innerHTML, /Urgent queue • alerts engine • Repeat 3x • 88% confidence/);
+  assert.match(metaNode.textContent, /3 duplicates suppressed • 15m suppression window • Updated 2 minutes ago/);
+  assert.equal(badges[0].textContent, '2');
+  assert.equal(badges[1].textContent, '2');
 });
