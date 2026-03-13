@@ -82,18 +82,27 @@ def _extract_rows(payload: Dict[str, Any] | None, rows_key: str) -> List[Dict[st
 def _extract_previous_alerts(payload: Dict[str, Any] | None) -> List[Dict[str, Any]]:
     if not isinstance(payload, dict):
         return []
-    candidates = [
-        payload.get("alerts"),
-        payload.get("data", {}).get("alerts") if isinstance(payload.get("data"), dict) else None,
-        payload.get("payload", {}).get("alerts") if isinstance(payload.get("payload"), dict) else None,
-        payload.get("data", {}).get("payload", {}).get("alerts")
-        if isinstance(payload.get("data"), dict) and isinstance(payload.get("data", {}).get("payload"), dict)
-        else None,
-    ]
-    for candidate in candidates:
-        if isinstance(candidate, list):
-            return [row for row in candidate if isinstance(row, dict)]
-    return []
+    containers: List[Dict[str, Any]] = [payload]
+
+    nested_data = payload.get("data")
+    if isinstance(nested_data, dict):
+        containers.append(nested_data)
+
+    nested_payload = payload.get("payload")
+    if isinstance(nested_payload, dict):
+        containers.append(nested_payload)
+
+    nested_data_payload = nested_data.get("payload") if isinstance(nested_data, dict) else None
+    if isinstance(nested_data_payload, dict):
+        containers.append(nested_data_payload)
+
+    previous_alerts: List[Dict[str, Any]] = []
+    for container in containers:
+        for key in ("alerts", "suppressed_alerts"):
+            candidate = container.get(key)
+            if isinstance(candidate, list):
+                previous_alerts.extend(row for row in candidate if isinstance(row, dict))
+    return previous_alerts
 
 
 def _extract_tickers(ticker: str, articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -130,11 +139,11 @@ def _normalize_alert(
     severity = severity if severity in ALERT_SEVERITY_ORDER else "medium"
     confidence = _coerce_confidence(alert.get("confidence", 0.0))
 
-    signature = f"{ticker}|{alert_type}|{summary}|{confidence:.3f}|{severity}"
-    if signature in seen:
+    fingerprint = f"{ticker}|{alert_type}|{summary}"
+    if fingerprint in seen:
         return
 
-    seen[signature] = {
+    seen[fingerprint] = {
         "id": f"{alert_type}-{ticker}-{ts}",
         "type": alert_type,
         "ticker": ticker,
@@ -144,7 +153,8 @@ def _normalize_alert(
         "confidence": confidence,
         "timestamp": ts,
         "signals": alert.get("signals", {}),
-        "signature": signature,
+        "signature": fingerprint,
+        "fingerprint": fingerprint,
     }
 
 
@@ -184,7 +194,7 @@ def _priority_band(score: int) -> str:
 
 
 def _suppression_config() -> Dict[str, int]:
-    window_minutes = max(5, int(_safe_float(os.getenv("ALERTS_SUPPRESSION_WINDOW_MINUTES", 90), 90)))
+    window_minutes = max(5, int(_safe_float(os.getenv("ALERTS_SUPPRESSION_WINDOW_MINUTES", 15), 15)))
     fatigue_threshold = max(1, int(_safe_float(os.getenv("ALERTS_FATIGUE_REPETITIONS", 2), 2)))
     escalation_bypass = max(0.0, _safe_float(os.getenv("ALERTS_SUPPRESSION_ESCALATION_DELTA", 0.12), 0.12))
     return {
@@ -194,27 +204,38 @@ def _suppression_config() -> Dict[str, int]:
     }
 
 
+def _alert_fingerprint(alert: Dict[str, Any]) -> str:
+    fingerprint = str(alert.get("fingerprint") or "").strip()
+    if fingerprint:
+        return fingerprint
+    signature = str(alert.get("signature") or "").strip()
+    if signature:
+        parts = signature.split("|")
+        if len(parts) >= 3:
+            return "|".join(parts[:3])
+        return signature
+    ticker = str(alert.get("ticker", "")).upper()
+    alert_type = str(alert.get("type", "")).strip()
+    summary = str(alert.get("summary", "")).strip()
+    if ticker and alert_type and summary:
+        return f"{ticker}|{alert_type}|{summary}"
+    return ""
+
+
 def _previous_alert_map(previous_alerts: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     latest: Dict[str, Dict[str, Any]] = {}
     for alert in previous_alerts:
-        signature = str(alert.get("signature") or "").strip()
-        if not signature:
-            ticker = str(alert.get("ticker", "")).upper()
-            alert_type = str(alert.get("type", "")).strip()
-            summary = str(alert.get("summary", "")).strip()
-            severity = str(alert.get("severity", "medium")).lower()
-            confidence = _coerce_confidence(alert.get("confidence", 0.0))
-            signature = f"{ticker}|{alert_type}|{summary}|{confidence:.3f}|{severity}"
-        if not signature:
+        fingerprint = _alert_fingerprint(alert)
+        if not fingerprint:
             continue
         last_seen = _parse_dt(alert.get("timestamp")) or datetime.min
-        existing = latest.get(signature)
+        existing = latest.get(fingerprint)
         if existing is None:
-            latest[signature] = dict(alert)
+            latest[fingerprint] = dict(alert)
             continue
         existing_seen = _parse_dt(existing.get("timestamp")) or datetime.min
         if last_seen >= existing_seen:
-            latest[signature] = dict(alert)
+            latest[fingerprint] = dict(alert)
     return latest
 
 
@@ -242,7 +263,8 @@ def _apply_priority_and_suppression(
         normalized["priority_band"] = band
         normalized["priority_rank"] = base_rank
 
-        previous = previous_by_signature.get(str(normalized.get("signature", "")))
+        fingerprint = _alert_fingerprint(normalized)
+        previous = previous_by_signature.get(fingerprint)
         suppression = {
             "window_minutes": config["window_minutes"],
             "fatigue_threshold": config["fatigue_threshold"],
@@ -341,9 +363,12 @@ def compute_alerts(now: datetime | None = None) -> Dict[str, Any]:
         recent_news_count = _collect_recent_news_count(ticker_news, now)
 
         # Rule 1: Oversold-Bearish alert
-        if rsi < 30 and latest_direction.get("down") > 0:
+        bearish_confidence = latest_direction.get("down", 0.0)
+        bullish_confidence = latest_direction.get("up", 0.0)
+
+        if rsi < 30 and bearish_confidence > 0:
             if negative_sentiment:
-                confidence = min(0.95, latest_direction.get("down") + 0.1)
+                confidence = min(0.95, bearish_confidence + 0.1)
                 _normalize_alert(
                     {
                         "id": f"oversold-bearish-{ticker}-{now_iso}",
@@ -365,9 +390,9 @@ def compute_alerts(now: datetime | None = None) -> Dict[str, Any]:
                 )
 
         # Rule 2: Overbought-Bullish alert
-        if rsi > 70 and latest_direction.get("up") > 0:
+        if rsi > 70 and bullish_confidence > 0:
             if positive_sentiment:
-                confidence = min(0.95, latest_direction.get("up") + 0.1)
+                confidence = min(0.95, bullish_confidence + 0.1)
                 _normalize_alert(
                     {
                         "id": f"overbought-bullish-{ticker}-{now_iso}",
