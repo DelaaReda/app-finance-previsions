@@ -137,6 +137,20 @@ def _normalize_brief_payload(
     if not generated_at:
         generated_at = datetime.utcnow().isoformat() + "Z"
     freshness = str(payload.get("freshness") or generated_at).strip() or generated_at
+    generation_metadata = payload.get("generation_metadata")
+    if not isinstance(generation_metadata, dict):
+        generation_metadata = {}
+    generation_metadata.setdefault("artifact_key", default_source)
+    artifact_path = str(
+        generation_metadata.get("artifact_path")
+        or payload.get("file_path")
+        or payload.get("loaded_from")
+        or f"runtime/data/{default_source}.json"
+    ).strip()
+    generation_metadata["artifact_path"] = artifact_path
+    generation_metadata.setdefault("refreshed_at", generated_at)
+    generation_metadata.setdefault("freshness", freshness)
+    generation_metadata.setdefault("schedule_mode", "snapshot")
 
     payload["summary"] = summary
     payload["market_sentiment"] = market_regime
@@ -154,6 +168,7 @@ def _normalize_brief_payload(
     payload["freshness"] = freshness
     payload["sources"] = source_list
     payload["source"] = source_list
+    payload["generation_metadata"] = generation_metadata
     payload["degraded"] = degraded_reason is not None
     payload["degraded_reason"] = degraded_reason
     return payload
@@ -175,6 +190,13 @@ def _fallback_brief(message: str, *, source_token: str) -> Dict[str, Any]:
         "freshness": generated_at,
         "source": [source_token],
         "sources": [source_token],
+        "generation_metadata": {
+            "artifact_key": source_token,
+            "artifact_path": f"runtime/data/{source_token}.json",
+            "refreshed_at": generated_at,
+            "freshness": generated_at,
+            "schedule_mode": "fallback",
+        },
     }
 
 

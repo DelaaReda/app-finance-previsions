@@ -1,9 +1,36 @@
 #!/usr/bin/env python3
-"""
-Generate daily brief and save to storage for /api/brief/daily endpoint
-"""
+"""Generate the canonical daily brief artifact for `/api/brief/daily`."""
 import sys
 import os
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _build_generation_metadata(*, script_path: str, artifact_key: str) -> dict:
+    target_hour = os.getenv("MORNING_BRIEF_TARGET_HOUR_LOCAL", "06:30").strip() or "06:30"
+    timezone_name = os.getenv("MORNING_BRIEF_TIMEZONE", os.getenv("TZ", "America/New_York")).strip() or "America/New_York"
+    return {
+        "schedule_mode": "refreshable_script",
+        "target_local_time": target_hour,
+        "target_timezone": timezone_name,
+        "artifact_key": artifact_key,
+        "artifact_path": f"runtime/data/{artifact_key}.json",
+        "refreshed_by": script_path,
+        "refreshed_at": _utc_now_iso(),
+    }
+
+
+def _with_generation_metadata(brief: dict, *, script_path: str, artifact_key: str = "brief_daily") -> dict:
+    payload = dict(brief or {})
+    payload["generation_metadata"] = _build_generation_metadata(
+        script_path=script_path,
+        artifact_key=artifact_key,
+    )
+    return payload
 
 # Add backend src to path
 backend_root = os.path.join(os.path.dirname(__file__), '..', 'apps', 'api', 'src')
@@ -17,15 +44,15 @@ os.environ['PYTHONPATH'] = backend_root
 
 try:
     from services.brief_generator import save_daily_brief
+    from storage import io as storage_io
 except ImportError as e:
     print(f"Import error: {e}")
     print(f"Backend root: {backend_root}")
     print(f"Path exists: {os.path.exists(backend_root)}")
     import json
-    
-    # Fallback: generate brief manually
-    from datetime import datetime
-    
+
+    script_ref = os.path.relpath(__file__, start=os.path.dirname(__file__))
+
     brief = {
         'summary': "Le marché reste actif avec une lecture mitigée. Les secteurs technologiques montrent une certaine force tandis que l'énergie reste sous pression. Surveillez les signaux macroéconomiques cette semaine.",
         'headline': f"Brief Marché - {datetime.now().strftime('%d/%m/%Y')}",
@@ -38,17 +65,18 @@ except ImportError as e:
         'top_signals': [],
         'top_risks': [],
         'key_events': [],
-        'generated_at': datetime.utcnow().isoformat() + 'Z',
+        'generated_at': _utc_now_iso(),
         'source': ['brief_generator', 'fallback']
     }
-    
-    # Save manually
-    data_dir = os.path.join(backend_root, 'data')
-    os.makedirs(data_dir, exist_ok=True)
-    filepath = os.path.join(data_dir, 'brief_daily.json')
+
+    brief = _with_generation_metadata(brief, script_path=script_ref)
+
+    runtime_data_dir = Path(backend_root).parent / "runtime" / "data"
+    runtime_data_dir.mkdir(parents=True, exist_ok=True)
+    filepath = runtime_data_dir / "brief_daily.json"
     with open(filepath, 'w', encoding='utf-8') as f:
         json.dump(brief, f, indent=2, ensure_ascii=False)
-    
+
     print(f"✅ Brief saved to {filepath}")
     print(f"\nSummary:")
     print(brief['summary'])
@@ -56,9 +84,17 @@ except ImportError as e:
 
 if __name__ == '__main__':
     print("Generating daily brief...")
+    script_ref = os.path.relpath(__file__, start=os.path.dirname(__file__))
     brief = save_daily_brief()
-    
+
     if brief:
+        snapshot = storage_io.load_json("brief_daily") or {}
+        persisted_payload = snapshot.get("data") if isinstance(snapshot.get("data"), dict) else snapshot
+        enriched_brief = _with_generation_metadata(
+            dict(persisted_payload or brief),
+            script_path=script_ref,
+        )
+        storage_io.save_json("brief_daily", enriched_brief, source=["brief_generator", "scheduled_refresh"])
         print("✅ Daily brief generated and saved successfully!")
         print(f"\nSummary ({len(brief['summary'].split())} words):")
         print(brief['summary'])
