@@ -1521,6 +1521,87 @@ function loadRunCopilotStartOpen() {
   return { sandbox, overlay, calls };
 }
 
+function loadAndRenderHeroBriefHarness(fetchResponse) {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractSection(
+    source,
+    'async function loadAndRenderHeroBrief(',
+    '\n\nfunction escapeInlineJsSingleQuotedString('
+  );
+  const elements = {
+    heroBriefSummary: createInteractiveElementStub(),
+    heroBriefTitle: createInteractiveElementStub(),
+    heroBriefLead: createInteractiveElementStub(),
+    heroBriefTimestamp: createInteractiveElementStub(),
+  };
+  const renderCalls = [];
+  const sandbox = {
+    console,
+    window: {
+      API_BASE_URL: 'http://localhost:8050/api',
+    },
+    document: {
+      getElementById(id) {
+        return elements[id] || null;
+      },
+    },
+    fetchCalls: [],
+    fetch(url) {
+      sandbox.fetchCalls.push(url);
+      if (fetchResponse instanceof Error) {
+        return Promise.reject(fetchResponse);
+      }
+      return Promise.resolve(fetchResponse);
+    },
+    buildCopilotStartState(result) {
+      return {
+        brief: {
+          summary: result.data?.brief_of_day?.summary || '',
+          marketSentiment: result.data?.brief_of_day?.market_sentiment || 'UNKNOWN',
+          topSignals: ['Breadth improving'],
+          topRisks: ['CPI tomorrow'],
+          freshness: result.data?.brief_of_day?.freshness || '',
+        },
+        ask: [
+          {
+            label: 'Ask About Today',
+            prompt: 'What matters most today?',
+            tickers: ['NVDA'],
+          },
+        ],
+        open: [
+          {
+            label: 'Open Live Brief',
+            target: '/brief/daily',
+          },
+        ],
+      };
+    },
+    renderHeroCopilotBrief(state) {
+      renderCalls.push(state);
+      sandbox.lastRenderedState = state;
+    },
+    sanitizeCopilotStart(value) {
+      return { sanitized: true, value };
+    },
+    formatRelativeTime() {
+      return '2 minutes ago';
+    },
+    setTimeout(fn) {
+      return 0;
+    },
+  };
+  sandbox.window.window = sandbox.window;
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.loadAndRenderHeroBrief = loadAndRenderHeroBrief;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return { sandbox, elements, renderCalls };
+}
+
 function loadBuildCopilotChatResponseHtml() {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const functionSource = extractFunction(source, 'buildCopilotChatResponseHtml', '\n\nlet copilotContextRequest = null;');
@@ -5258,6 +5339,43 @@ test('index.html exposes the hero brief slots required by the copilot starter', 
   ].forEach((snippet) => {
     assert.ok(html.includes(snippet), `Expected ${snippet} in index.html`);
   });
+});
+
+test('loadAndRenderHeroBrief reuses the shared starter renderer and stores the sanitized starter payload', async () => {
+  const responsePayload = {
+    ok: true,
+    data: {
+      brief_of_day: {
+        summary: 'Breadth improves while event risk stays elevated.',
+        market_sentiment: 'NEUTRAL',
+        freshness: '2026-03-10T10:00:00Z',
+      },
+      ask: [{ label: 'Ask About Today', prompt: 'What matters most today?' }],
+      open: [{ label: 'Open Live Brief', target: '/brief/daily' }],
+    },
+  };
+  const { sandbox, elements, renderCalls } = loadAndRenderHeroBriefHarness({
+    ok: true,
+    json: async () => responsePayload,
+  });
+
+  await sandbox.loadAndRenderHeroBrief();
+
+  assert.deepEqual(sandbox.fetchCalls, ['http://localhost:8050/api/copilot/start']);
+  assert.deepEqual(sandbox.window.copilotStart, responsePayload.data);
+  assert.equal(elements.heroBriefSummary.style.opacity, '1');
+});
+
+test('loadAndRenderHeroBrief keeps the failure fallback when the starter request fails', async () => {
+  const { sandbox, elements, renderCalls } = loadAndRenderHeroBriefHarness(new Error('network down'));
+
+  await sandbox.loadAndRenderHeroBrief();
+
+  assert.equal(renderCalls.length, 0);
+  assert.equal(elements.heroBriefSummary.textContent, 'Unable to load brief. Please check your connection and try again.');
+  assert.equal(elements.heroBriefSummary.style.color, '#ef4444');
+  assert.equal(elements.heroBriefTimestamp.textContent, 'Update failed');
+  assert.equal(elements.heroBriefTitle.textContent, '⚠️ Brief unavailable');
 });
 
 test('sanitizeForecastRows preserves forecast provenance SLA metadata for UI consumers', () => {
