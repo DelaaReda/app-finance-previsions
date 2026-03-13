@@ -2069,16 +2069,33 @@ function buildCopilotJudgePayload(raw) {
 
 function sanitizeTradeIdeas(items) {
   const rows = toArray(items, FALLBACK_TRADE_IDEAS);
-  return rows.map((item) => ({
-    symbol: toString(item.symbol || item.ticker || 'UNKNOWN', 'UNKNOWN').toUpperCase(),
-    signalType: toString(item.signalType || item.signal, 'Signal'),
-    entry: toFiniteNumber(item.entry, 0),
-    target: toFiniteNumber(item.target, 0),
-    confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, 70)))),
-    decisionId: toString(item.decisionId || item.decision_id, ''),
-    attributionLabel: toString(item.attributionLabel || item.attribution_label, ''),
-    attributionDetail: toString(item.attributionDetail || item.attribution_detail, '')
-  }));
+  return rows.map((item) => {
+    const rawTaxImpact = isObject(item.taxImpact)
+      ? item.taxImpact
+      : (isObject(item.tax_impact) ? item.tax_impact : null);
+    const taxImpact = toString(
+      (rawTaxImpact && (rawTaxImpact.summary || rawTaxImpact.label || rawTaxImpact.status))
+        || item.taxImpact
+        || item.tax_impact
+        || item.taxStatus
+        || item.tax_status,
+      ''
+    ).replace(/_/g, ' ').trim();
+
+    return {
+      symbol: toString(item.symbol || item.ticker || 'UNKNOWN', 'UNKNOWN').toUpperCase(),
+      signalType: toString(item.signalType || item.signal, 'Signal'),
+      entry: toFiniteNumber(item.entry, 0),
+      target: toFiniteNumber(item.target, 0),
+      confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, 70)))),
+      decisionId: toString(item.decisionId || item.decision_id, ''),
+      attributionLabel: toString(item.attributionLabel || item.attribution_label, ''),
+      attributionDetail: toString(item.attributionDetail || item.attribution_detail, ''),
+      feeBps: Math.max(0, toFiniteNumber(item.feeBps ?? item.fee_bps, 5)),
+      slippageBps: Math.max(0, toFiniteNumber(item.slippageBps ?? item.slippage_bps, 10)),
+      taxImpact: taxImpact || 'Tax impact depends on holding period'
+    };
+  });
 }
 
 function normalizePercentValue(value, fallback = 0) {
@@ -2177,6 +2194,9 @@ function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecomm
     return sanitizeTradeIdeas(recommendationRows.slice(0, 6).map((item) => {
       const fusion = isObject(item.forecast_fusion) ? item.forecast_fusion : {};
       const attribution = isObject(fusion.attribution) ? fusion.attribution : {};
+      const rawTaxImpact = isObject(item.tax_impact)
+        ? item.tax_impact
+        : (isObject(item.taxImpact) ? item.taxImpact : null);
       const dominantLayer = toString(fusion.dominant_layer || fusion.dominantLayer, '').replace(/[_-]+/g, ' ').trim();
       const blendedScore = Math.round(toFiniteNumber(fusion.blended_score || fusion.blendedScore, item.score) * 100);
       const direction = toString(attribution.forecast_direction || item.direction || item.action, '').trim().toUpperCase();
@@ -2202,7 +2222,17 @@ function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecomm
         confidence: Math.max(0, Math.min(100, Math.round(toFiniteNumber(item.confidence, item.score) * 100))),
         decisionId: toString(item.decision_id || item.decisionId, ''),
         attributionLabel: blendedScore > 0 ? `Fusion ${blendedScore}%` : 'Fusion tracked',
-        attributionDetail: detailParts.join(' • ')
+        attributionDetail: detailParts.join(' • '),
+        feeBps: toFiniteNumber(item.fee_bps ?? item.feeBps ?? fusion.fee_bps ?? fusion.feeBps, 5),
+        slippageBps: toFiniteNumber(item.slippage_bps ?? item.slippageBps ?? fusion.slippage_bps ?? fusion.slippageBps, 10),
+        taxImpact: toString(
+          (rawTaxImpact && (rawTaxImpact.summary || rawTaxImpact.label || rawTaxImpact.status))
+            || item.tax_status
+            || item.taxStatus
+            || item.tax_impact
+            || item.taxImpact,
+          'Tax impact depends on holding period'
+        )
       };
     }));
   }
@@ -2214,7 +2244,10 @@ function buildTradeIdeasFromForecasts(items, recommendations = window.liveRecomm
     signalType: item.action === 'buy' ? 'Buy' : item.action === 'sell' ? 'Sell' : 'Hold',
     entry: item.currentPrice || toFiniteNumber(item.targetPrice * 0.95, 0),
     target: item.targetPrice || item.currentPrice || 0,
-    confidence: item.confidence
+    confidence: item.confidence,
+    feeBps: 5,
+    slippageBps: 10,
+    taxImpact: 'Tax impact depends on holding period'
   }));
 }
 
@@ -3218,6 +3251,10 @@ async function renderRebalanceProposalCard() {
     const normalized = Math.max(0, Math.round(toFiniteNumber(value, 0) * 10) / 10);
     return `${Number.isInteger(normalized) ? normalized.toFixed(0) : normalized.toFixed(1)}%`;
   };
+  const formatEdgePercentValue = (value) => {
+    const normalized = Math.round(toFiniteNumber(value, 0) * 10) / 10;
+    return `${Number.isInteger(normalized) ? normalized.toFixed(0) : normalized.toFixed(1)}%`;
+  };
   const formatBpsValue = (value) => {
     const normalized = Math.max(0, Math.round(toFiniteNumber(value, 0) * 10) / 10);
     return `${Number.isInteger(normalized) ? normalized.toFixed(0) : normalized.toFixed(1)} bps`;
@@ -3334,12 +3371,32 @@ async function renderRebalanceProposalCard() {
     const summarySuffix = [decision, horizon].filter(Boolean).join(' | ');
     const costAwareness = isObject(playbook.cost_awareness) ? playbook.cost_awareness : {};
     const totalCostBps = Math.max(0, toFiniteNumber(costAwareness.total_cost_bps, 0));
+    const feeBps = Math.max(0, toFiniteNumber(costAwareness.fee_bps, NaN));
+    const slippageBps = Math.max(0, toFiniteNumber(costAwareness.slippage_bps, NaN));
+    const estimatedTaxDragBps = Math.max(0, toFiniteNumber(costAwareness.estimated_tax_drag_bps, NaN));
+    const grossExpectedReturnPct = toFiniteNumber(costAwareness.gross_expected_return_pct, NaN);
     const netExpectedReturnPct = toFiniteNumber(costAwareness.net_expected_return_pct, NaN);
-    const costLabel = totalCostBps > 0 ? `Cost drag: ${formatBpsValue(totalCostBps)}` : '';
-    const netEdgeLabel = Number.isFinite(netExpectedReturnPct)
-      ? `Net edge ${formatPercentValue(Math.max(0, netExpectedReturnPct * 100))}`
+    const costBreakdown = [
+      Number.isFinite(feeBps) ? `Fees ${formatBpsValue(feeBps)}` : '',
+      Number.isFinite(slippageBps) ? `Slippage ${formatBpsValue(slippageBps)}` : '',
+      Number.isFinite(estimatedTaxDragBps) ? `Tax ${formatBpsValue(estimatedTaxDragBps)}` : ''
+    ].filter(Boolean);
+    const costLabel = totalCostBps > 0
+      ? `Cost drag: ${formatBpsValue(totalCostBps)}${costBreakdown.length ? ` (${costBreakdown.join(' • ')})` : ''}`
       : '';
-    const costSummary = [summarySuffix, netEdgeLabel].filter(Boolean).join(' | ');
+    const edgeLabel = Number.isFinite(grossExpectedReturnPct) && Number.isFinite(netExpectedReturnPct)
+      ? `Gross edge ${formatEdgePercentValue(grossExpectedReturnPct * 100)} -> Net edge ${formatEdgePercentValue(netExpectedReturnPct * 100)}`
+      : Number.isFinite(netExpectedReturnPct)
+        ? `Net edge ${formatEdgePercentValue(netExpectedReturnPct * 100)}`
+        : '';
+    const lowNetEdge = Number.isFinite(grossExpectedReturnPct)
+      && grossExpectedReturnPct > 0
+      && Number.isFinite(netExpectedReturnPct)
+      && (netExpectedReturnPct <= 0 || netExpectedReturnPct <= grossExpectedReturnPct * 0.25);
+    const warningLabel = lowNetEdge
+      ? (netExpectedReturnPct <= 0 ? 'Costs overwhelm edge' : 'Low net edge after costs')
+      : '';
+    const costSummary = [summarySuffix, edgeLabel, warningLabel].filter(Boolean).join(' | ');
 
     applyProposalModel({
       title: ticker && ticker !== 'UNKNOWN' ? `Rebalance Toward ${ticker}` : fallbackModel.title,
@@ -8008,11 +8065,16 @@ function renderTradeIdeas(root = document) {
   container.innerHTML = tradeIdeas.map((idea) => {
     const decisionId = resolveTradeIdeaDecisionId(idea);
     const executionState = getTradeIdeaExecutionState({ ...idea, decisionId });
+    const feeBps = Math.max(0, toFiniteNumber(idea.feeBps, 5));
+    const slippageBps = Math.max(0, toFiniteNumber(idea.slippageBps, 10));
+    const taxImpact = toString(idea.taxImpact, 'Tax impact depends on holding period').replace(/_/g, ' ').trim()
+      || 'Tax impact depends on holding period';
     const executionMarkup = executionState && executionState.status === 'recorded'
       ? `<div class="trade-attribution"><span class="trade-attribution-badge">Paper ${toString(executionState.executionId, '').toUpperCase() || 'RECORDED'}</span><span class="trade-attribution-detail">Unrealized PnL ${toFiniteNumber(executionState.unrealizedPnl, 0) >= 0 ? '+' : ''}$${toFiniteNumber(executionState.unrealizedPnl, 0).toFixed(2)}</span></div>`
       : executionState && executionState.status === 'failed'
         ? `<div class="trade-attribution"><span class="trade-attribution-badge">Paper failed</span><span class="trade-attribution-detail">${toString(executionState.message, 'Retry unavailable')}</span></div>`
         : '';
+    const costAwarenessMarkup = `<div class="trade-attribution"><span class="trade-attribution-badge">Cost check</span><span class="trade-attribution-detail">Fees ~${(feeBps / 100).toFixed(2)}% • Slippage ~${(slippageBps / 100).toFixed(2)}% • ${taxImpact}</span></div>`;
     const buttonLabel = executionState && executionState.status === 'pending'
       ? 'Executing...'
       : executionState && executionState.status === 'recorded'
@@ -8043,6 +8105,7 @@ function renderTradeIdeas(root = document) {
             ${idea.attributionDetail ? `<span class="trade-attribution-detail">${idea.attributionDetail}</span>` : ''}
           </div>
         ` : ''}
+        ${costAwarenessMarkup}
         ${executionMarkup}
       </div>
       <div class="trade-meta">

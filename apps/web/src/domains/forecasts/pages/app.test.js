@@ -2623,6 +2623,26 @@ test('renderTradeIdeas renders attribution badge and detail when present', () =>
   assert.match(container.innerHTML, /Regime: RISK OFF/);
 });
 
+test('renderTradeIdeas surfaces fee, slippage, and tax awareness defaults', () => {
+  const { sandbox, container } = loadTradeIdeaHelpers();
+  sandbox.tradeIdeas = [
+    {
+      symbol: 'GLD',
+      signalType: 'BUY',
+      entry: 210,
+      target: 224,
+      confidence: 74,
+    },
+  ];
+
+  sandbox.renderTradeIdeas();
+
+  assert.match(container.innerHTML, /Cost check/);
+  assert.match(container.innerHTML, /Fees ~0\.05%/);
+  assert.match(container.innerHTML, /Slippage ~0\.10%/);
+  assert.match(container.innerHTML, /Tax impact depends on holding period/);
+});
+
 test('renderTradeIdeas enables paper trade CTA when a linked decision journal entry exists', () => {
   const { sandbox, container } = loadTradeIdeaHelpers();
   sandbox.copilotDecisionJournal = {
@@ -3441,6 +3461,10 @@ test('renderRebalanceProposalCard upgrades the existing recommendation card from
             summary: ['Reduce drawdown concentration'],
             cost_awareness: {
               total_cost_bps: 6.9,
+              fee_bps: 2,
+              slippage_bps: 4,
+              estimated_tax_drag_bps: 0.9,
+              gross_expected_return_pct: 0.018,
               net_expected_return_pct: 0.01731,
             },
           },
@@ -3465,10 +3489,49 @@ test('renderRebalanceProposalCard upgrades the existing recommendation card from
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Turnover delta: 10%/);
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Risk delta: -2/);
   assert.match(elements.rebalanceProposalMetrics.innerHTML, /Cost drag: 6.9 bps/);
-  assert.equal(elements.rebalanceProposalSummary.textContent, 'Reduce drawdown concentration | HOLD | 1M | Net edge 1.7%');
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Fees 2 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Slippage 4 bps/);
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Tax 0.9 bps/);
+  assert.equal(elements.rebalanceProposalSummary.textContent, 'Reduce drawdown concentration | HOLD | 1M | Gross edge 1.8% -> Net edge 1.7%');
   assert.equal(elements.rebalanceProposalBadge.textContent, '74% confidence');
   assert.equal(elements.rebalanceProposalBadge.className, 'conviction-badge status status--warning');
   assert.equal(elements.rebalanceProposalPrimaryAction.textContent, 'Open Plan');
+});
+
+test('renderRebalanceProposalCard preserves negative net edge when costs exceed expected return', async () => {
+  const { sandbox, elements } = loadRenderRebalanceProposalCard({
+    playbooksPayload: {
+      data: {
+        playbooks: [
+          {
+            ticker: 'IEF',
+            turnover: 10,
+            risk_delta: -2,
+            confidence: 0.74,
+            decision: 'hold',
+            horizon: '1m',
+            summary: ['Reduce drawdown concentration'],
+            cost_awareness: {
+              total_cost_bps: 30,
+              fee_bps: 10,
+              slippage_bps: 8,
+              estimated_tax_drag_bps: 12,
+              gross_expected_return_pct: 0.0011,
+              net_expected_return_pct: -0.0019,
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  await sandbox.renderRebalanceProposalCard();
+
+  assert.equal(
+    elements.rebalanceProposalSummary.textContent,
+    'Reduce drawdown concentration | HOLD | 1M | Gross edge 0.1% -> Net edge -0.2% | Costs overwhelm edge',
+  );
+  assert.match(elements.rebalanceProposalMetrics.innerHTML, /Cost drag: 30 bps/);
 });
 
 test('renderRebalanceProposalCard keeps fallback turnover and risk deltas when optimizer playbooks are unavailable', async () => {
