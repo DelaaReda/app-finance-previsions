@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Generate the canonical daily brief artifact for `/api/brief/daily`."""
+"""
+Generate the canonical daily brief artifact for `/api/brief/daily`.
+
+BATCH-25-DEV-01: Minimal scheduled generation slice
+- Produces durable artifact at runtime/data/brief_daily.json
+- Explicit freshness/degraded metadata in generation_metadata
+- Fallback to degraded brief on complete failure
+"""
 import sys
 import os
 from datetime import datetime, timezone
@@ -43,7 +50,7 @@ if os.path.exists(backend_root):
 os.environ['PYTHONPATH'] = backend_root
 
 try:
-    from services.brief_generator import save_daily_brief
+    from services.brief_generator import save_daily_brief, build_daily_brief_snapshot
     from storage import io as storage_io
 except ImportError as e:
     print(f"Import error: {e}")
@@ -53,29 +60,45 @@ except ImportError as e:
 
     script_ref = os.path.relpath(__file__, start=os.path.dirname(__file__))
 
+    # Explicit degraded fallback when service unavailable
     brief = {
-        'summary': "Le marché reste actif avec une lecture mitigée. Les secteurs technologiques montrent une certaine force tandis que l'énergie reste sous pression. Surveillez les signaux macroéconomiques cette semaine.",
-        'headline': f"Brief Marché - {datetime.now().strftime('%d/%m/%Y')}",
-        'sentiment': 'neutral',
+        'summary': "[Mode dégradé] Le générateur de brief n'est pas disponible. Les services de données ne sont pas installés.",
+        'headline': f"Brief Marché - {datetime.now().strftime('%d/%m/%Y')} (dégradé)",
+        'sentiment': 'unknown',
         'macro_signals': [
-            {'name': 'VIX', 'value': '14.5', 'signal': 'risk_on', 'impact': 'medium'},
-            {'name': 'DXY', 'value': '103.2', 'signal': 'neutral', 'impact': 'low'}
+            {'name': 'VIX', 'value': 'N/A', 'signal': 'unknown', 'impact': 'unknown'},
+            {'name': 'DXY', 'value': 'N/A', 'signal': 'unknown', 'impact': 'unknown'}
         ],
-        'sector_rotation': {'top': ['IA', 'Tech'], 'bottom': ['Énergie']},
+        'sector_rotation': {'top': [], 'bottom': []},
         'top_signals': [],
         'top_risks': [],
         'key_events': [],
         'generated_at': _utc_now_iso(),
-        'source': ['brief_generator', 'fallback']
+        'freshness': _utc_now_iso(),
+        'source': ['brief_generator', 'fallback_degraded'],
+        'sources': ['brief_generator', 'fallback_degraded'],
+        'warnings': ['services_unavailable', 'using_static_fallback'],
+        'degraded': True,
+        'degraded_reason': 'brief_generator_service_not_installed',
     }
 
     brief = _with_generation_metadata(brief, script_path=script_ref)
+    snapshot = {
+        "data": {"daily": brief},
+        "generated_at": brief["generated_at"],
+        "freshness": brief["freshness"],
+        "source": list(brief.get("source") or []),
+        "warnings": list(brief.get("warnings") or []),
+        "degraded": True,
+        "degraded_reason": brief.get("degraded_reason"),
+        "generation_metadata": dict(brief.get("generation_metadata") or {}),
+    }
 
     runtime_data_dir = Path(backend_root).parent / "runtime" / "data"
     runtime_data_dir.mkdir(parents=True, exist_ok=True)
     filepath = runtime_data_dir / "brief_daily.json"
     with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(brief, f, indent=2, ensure_ascii=False)
+        json.dump(snapshot, f, indent=2, ensure_ascii=False)
 
     print(f"✅ Brief saved to {filepath}")
     print(f"\nSummary:")
@@ -90,18 +113,36 @@ if __name__ == '__main__':
     if brief:
         snapshot = storage_io.load_json("brief_daily") or {}
         persisted_payload = snapshot.get("data") if isinstance(snapshot.get("data"), dict) else snapshot
+        if isinstance(persisted_payload, dict) and isinstance(persisted_payload.get("daily"), dict):
+            persisted_payload = persisted_payload.get("daily")
         enriched_brief = _with_generation_metadata(
             dict(persisted_payload or brief),
             script_path=script_ref,
         )
-        storage_io.save_json("brief_daily", enriched_brief, source=["brief_generator", "scheduled_refresh"])
+        storage_io.save_json(
+            "brief_daily",
+            build_daily_brief_snapshot(enriched_brief),
+            source=["brief_generator", "scheduled_refresh"],
+        )
+        
+        # Evidence output for planner verification
         print("✅ Daily brief generated and saved successfully!")
-        print(f"\nSummary ({len(brief['summary'].split())} words):")
-        print(brief['summary'])
+        print(f"\n--- Generation Evidence ---")
+        print(f"Artifact: runtime/data/brief_daily.json")
+        print(f"Degraded: {brief.get('degraded', False)}")
+        print(f"Warnings: {brief.get('warnings', [])}")
+        print(f"Freshness: {brief.get('freshness', 'N/A')}")
+        print(f"Summary ({len(brief['summary'].split())} words):")
+        print(brief['summary'][:200] + "..." if len(brief['summary']) > 200 else brief['summary'])
         print(f"\nSector Rotation - Top: {brief['sector_rotation']['top']}")
         print(f"Sector Rotation - Bottom: {brief['sector_rotation']['bottom']}")
         print(f"\nMacro Signals: {len(brief['macro_signals'])} indicators")
         print(f"Sentiment: {brief['sentiment']}")
+        
+        # Exit with degraded warning if applicable
+        if brief.get('degraded'):
+            print(f"\n⚠️  BRIEF DEGRADED: {brief.get('degraded_reason')}")
+            sys.exit(0)  # Still success - degraded brief is valid output
     else:
         print("❌ Failed to generate daily brief")
         sys.exit(1)
