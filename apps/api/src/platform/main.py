@@ -800,11 +800,45 @@ def _fallback_intelligence_snapshot(message: str) -> Dict[str, Any]:
             "news_age": "unknown",
         },
         "timestamp": now_iso,
+        "generated_at": now_iso,
+        "freshness": now_iso,
+        "last_update": now_iso,
         "drivers": [],
+        "alerts": [],
         "sources": {
             "forecasts": False,
             "brief": False,
             "news": False,
+        },
+        "source": [
+            "intelligence_snapshot",
+            "forecasts_unavailable",
+            "brief_daily_unavailable",
+            "news_feed_unavailable",
+            "critical_error_fallback",
+        ],
+        "filters_applied": {
+            "max_opportunities": 3,
+            "max_risks": 3,
+            "news_scan_limit": 200,
+        },
+        "stats": {
+            "opportunities_count": 0,
+            "risks_count": 0,
+            "alerts_count": 0,
+            "drivers_count": 0,
+            "forecast_rows_count": 0,
+            "source_health": {
+                "forecasts": False,
+                "brief": False,
+                "news": False,
+            },
+        },
+        "warnings": [message],
+        "cache": {
+            "hit": False,
+            "age_seconds": 0,
+            "ttl_seconds": 1800,
         },
     }
 
@@ -4007,6 +4041,9 @@ def register_routes(app: FastAPI):
             normalized.get("top_signals"),
             normalized.get("picks"),
         )
+        alerting_metadata = normalized.get("alerting_metadata")
+        if not isinstance(alerting_metadata, dict):
+            alerting_metadata = {}
 
         normalized["summary"] = summary
         normalized["market_regime"] = market_regime
@@ -4015,6 +4052,8 @@ def register_routes(app: FastAPI):
         normalized["top_opportunities"] = top_opportunities
         normalized["top_signals"] = top_opportunities
         normalized["top_risks"] = _normalize_brief_list(normalized.get("top_risks"))
+        normalized["suppressed_risks"] = _normalize_brief_list(normalized.get("suppressed_risks"))
+        normalized["alerting_metadata"] = alerting_metadata
         normalized["key_events"] = _normalize_brief_list(normalized.get("key_events"))
         normalized["macro_signals"] = _normalize_brief_list(
             normalized.get("macro_signals"),
@@ -4051,6 +4090,8 @@ def register_routes(app: FastAPI):
                 "summary": "Weekly brief is being prepared. Check back soon.",
                 "top_signals": [],
                 "top_risks": [],
+                "suppressed_risks": [],
+                "alerting_metadata": {},
                 "picks": [],
                 "generated_at": datetime.utcnow().isoformat(),
                 "freshness": "unknown",
@@ -4064,6 +4105,8 @@ def register_routes(app: FastAPI):
                 "summary": "Weekly brief temporarily unavailable.",
                 "top_signals": [],
                 "top_risks": [],
+                "suppressed_risks": [],
+                "alerting_metadata": {},
                 "picks": [],
                 "generated_at": datetime.utcnow().isoformat(),
                 "freshness": "error",
@@ -4119,6 +4162,8 @@ def register_routes(app: FastAPI):
                         "market_regime": "UNKNOWN",
                         "top_opportunities": [],
                         "top_risks": [],
+                        "suppressed_risks": [],
+                        "alerting_metadata": {},
                         "key_events": [],
                         "macro_signals": [],
                         "sector_rotation": {"top": [], "bottom": []},
@@ -4138,6 +4183,8 @@ def register_routes(app: FastAPI):
                     "market_regime": "UNKNOWN",
                     "top_opportunities": [],
                     "top_risks": [],
+                    "suppressed_risks": [],
+                    "alerting_metadata": {},
                     "key_events": [],
                     "macro_signals": [],
                     "sector_rotation": {"top": [], "bottom": []},

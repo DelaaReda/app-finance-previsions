@@ -975,6 +975,57 @@ test('askCopilot preserves rich alerting memo risk metadata for the brief path',
   });
 });
 
+test('askCopilot normalizes camelCase alerting memo aliases through the shared contract helper', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          memo: {
+            summary: 'Duplicate noise stays hidden while urgent risk remains visible.',
+            topOpportunities: ['Watch megacap follow-through'],
+            topRiskItems: [
+              {
+                ticker: 'TSLA',
+                priority: 'urgent',
+                urgentBypass: true,
+              },
+            ],
+            suppressedRisks: [
+              {
+                ticker: 'QQQ',
+                suppressionReason: 'fatigue_window_duplicate',
+              },
+            ],
+            alertingMetadata: {
+              suppressed_risk_count: 1,
+              suppression_window_minutes: 15,
+            },
+            generatedAt: '2026-03-13T06:15:00Z',
+            qualityStatus: 'degraded',
+            degradedReason: 'news_gap',
+          },
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.askCopilot('What risk still matters?');
+
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.data.memo.top_opportunities)), ['Watch megacap follow-through']);
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.data.memo.top_risks)), ['TSLA']);
+  assert.equal(payload.data.memo.top_risk_items[0].label, 'TSLA');
+  assert.equal(payload.data.memo.top_risk_items[0].urgentBypass, true);
+  assert.equal(payload.data.memo.suppressed_risks[0].suppressionReason, 'fatigue_window_duplicate');
+  assert.equal(payload.data.memo.generated_at, '2026-03-13T06:15:00Z');
+  assert.equal(payload.data.memo.degraded, true);
+  assert.equal(payload.data.memo.degraded_reason, 'news_gap');
+  assert.deepEqual(JSON.parse(JSON.stringify(payload.data.memo.alerting_metadata)), {
+    suppressed_risk_count: 1,
+    suppression_window_minutes: 15,
+  });
+});
+
 test('startAutoRefresh clears scoped copilot starter cache entries before reloading the brief', async () => {
   const copilotStartCalls = [];
   let scheduledRefresh = null;

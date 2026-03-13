@@ -12,6 +12,20 @@ from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
+try:
+    from platform.legacy.jobs.alerts import get_alerting_contract_defaults
+except Exception:  # pragma: no cover - fallback for older path layouts
+    try:
+        from src.platform.legacy.jobs.alerts import get_alerting_contract_defaults  # type: ignore
+    except Exception:  # pragma: no cover
+        def get_alerting_contract_defaults() -> Dict[str, Any]:
+            return {
+                "suppression_window_minutes": 15,
+                "fatigue_threshold": 2,
+                "duplicate_suppression_reason": "fatigue_window_duplicate",
+                "urgent_bypass_enabled": True,
+            }
+
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
     """Convert numeric-like values to float safely."""
@@ -182,20 +196,68 @@ def run_market_brief_job(filters: Dict = None) -> Dict[str, Any]:
                 }
             )
 
+        alerting_contract = get_alerting_contract_defaults()
+        suppression_window_minutes = max(
+            1,
+            int(alerting_contract.get("suppression_window_minutes", 15) or 15),
+        )
+        duplicate_suppression_reason = str(
+            alerting_contract.get("duplicate_suppression_reason") or "fatigue_window_duplicate"
+        )
+        urgent_bypass_enabled = bool(alerting_contract.get("urgent_bypass_enabled", True))
+
         top_risks = []
-        for row in bearish[:3]:
+        suppressed_risks = []
+        seen_risk_fingerprints = {}
+        for row in bearish:
+            ticker = _safe_text(row.get("ticker"), "MARKET")
+            confidence = _safe_float(row.get("confidence", 0.0))
+            expected_return = round(_safe_float(row.get("expected_return", 0.0)), 3)
+            horizon = _safe_text(row.get("horizon"), "1d")
+            severity = "high" if confidence > 0.7 else "medium"
+            priority = "urgent" if severity == "high" and expected_return <= -0.03 else severity
+            alert_fingerprint = f"{ticker}:{horizon}:bearish"
+            duplicate_count = int(seen_risk_fingerprints.get(alert_fingerprint, 0) or 0)
+            urgent_bypass = urgent_bypass_enabled and priority == "urgent" and duplicate_count > 0
+            base_risk = {
+                "ticker": ticker,
+                "risk": "bearish",
+                "severity": severity,
+                "priority": priority,
+                "priority_score": round((confidence * 100.0) + max(0.0, abs(min(expected_return, 0.0)) * 1000.0), 2),
+                "probability": round(confidence, 3),
+                "impact": _safe_text(row.get("sector", "equity"), "equity"),
+                "mitigation": _safe_text(row.get("reasoning", ""), "Revenir au monitorage technique."),
+                "expected_return": expected_return,
+                "source": _safe_text(row.get("model", "forecasts")),
+                "horizon": horizon,
+                "alert_fingerprint": alert_fingerprint,
+                "suppression_window_minutes": suppression_window_minutes,
+            }
+            seen_risk_fingerprints[alert_fingerprint] = duplicate_count + 1
+            if duplicate_count > 0 and not urgent_bypass:
+                suppressed_risks.append(
+                    {
+                        **base_risk,
+                        "suppressed": True,
+                        "suppression_reason": duplicate_suppression_reason,
+                        "duplicate_count": duplicate_count,
+                        "urgent_bypass": False,
+                    }
+                )
+                continue
             top_risks.append(
                 {
-                    "ticker": _safe_text(row.get("ticker"), "MARKET"),
-                    "risk": "bearish",
-                    "severity": "high" if _safe_float(row.get("confidence", 0.0)) > 0.7 else "medium",
-                    "probability": round(_safe_float(row.get("confidence", 0.5)), 3),
-                    "impact": _safe_text(row.get("sector", "equity"), "equity"),
-                    "mitigation": _safe_text(row.get("reasoning", ""), "Revenir au monitorage technique."),
-                    "expected_return": round(_safe_float(row.get("expected_return", 0.0)), 3),
-                    "source": _safe_text(row.get("model", "forecasts")),
+                    **base_risk,
+                    "priority_rank": len(top_risks) + 1,
+                    "suppressed": False,
+                    "suppression_reason": "",
+                    "duplicate_count": duplicate_count,
+                    "urgent_bypass": urgent_bypass,
                 }
             )
+            if len(top_risks) >= 3:
+                break
 
         bullish_count = len(bullish)
         bearish_count = len(bearish)
@@ -224,9 +286,16 @@ def run_market_brief_job(filters: Dict = None) -> Dict[str, Any]:
             "source": ["market_brief_job"],
             "top_signals": top_signals,
             "top_risks": top_risks,
+            "suppressed_risks": suppressed_risks,
             "picks": picks,
             "macro_signals": macro_signals,
             "sector_rotation": sectors,
+            "alerting_metadata": {
+                **alerting_contract,
+                "suppression_window_minutes": suppression_window_minutes,
+                "suppressed_risk_count": len(suppressed_risks),
+                "priority_model": "severity_plus_expected_return",
+            },
         }
 
         save_json(brief_data, "brief_daily.json", source=["job:market_brief", "forecasts", "news", "macro"])

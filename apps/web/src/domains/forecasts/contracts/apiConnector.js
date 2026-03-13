@@ -800,28 +800,12 @@ function normalizeAskMemoPayload(payload) {
     return {};
   }
 
-  const topOpportunities = normalizeConnectorStringList(
-    source.top_opportunities || source.topOpportunities || source.opportunities || source.top_signals || source.signals
-  );
-  const topRiskItems = normalizeBriefRiskEntries(
-    source.top_risk_items || source.topRiskItems || source.top_risks || source.topRisks || source.risks
-  );
-  const topRisks = topRiskItems.length
-    ? topRiskItems.map((entry) => String(entry.label || '').trim()).filter(Boolean)
-    : normalizeConnectorStringList(source.top_risks || source.topRisks || source.risks);
-  const suppressedRisks = normalizeBriefRiskEntries(source.suppressed_risks || source.suppressedRisks);
+  const normalizedAlerting = normalizeAlertingRichPayload(source, {
+    opportunityKeys: ['top_opportunities', 'topOpportunities', 'opportunities', 'top_signals', 'signals'],
+  });
   const mainReasons = normalizeConnectorStringList(
     source.main_reasons || source.mainReasons || source.reasons || source.drivers || source.why
   );
-  const sources = normalizeConnectorSourceList(source.sources || source.source);
-  const freshness = source.freshness || source.generated_at || source.generatedAt || '';
-  const degradedReason = source.degraded_reason || source.degradedReason || '';
-  const alertingMetadata = source.alerting_metadata && typeof source.alerting_metadata === 'object'
-    ? source.alerting_metadata
-    : (source.alertingMetadata && typeof source.alertingMetadata === 'object' ? source.alertingMetadata : {});
-  const degraded = source.degraded === true
-    || normalizeFreshnessStatus(source.status || source.quality_status || source.qualityStatus) === 'degraded'
-    || Boolean(degradedReason);
 
   return {
     ...source,
@@ -829,23 +813,23 @@ function normalizeAskMemoPayload(payload) {
     verdict: source.verdict || source.action || source.recommendation || '',
     market_regime: source.market_regime || source.marketRegime || source.regime || '',
     horizon: source.horizon || '',
-    top_opportunities: topOpportunities,
-    top_risks: topRisks,
-    top_risk_items: topRiskItems,
-    topRiskItems,
+    top_opportunities: normalizedAlerting.topOpportunities,
+    top_risks: normalizedAlerting.topRisks,
+    top_risk_items: normalizedAlerting.topRiskItems,
+    topRiskItems: normalizedAlerting.topRiskItems,
     main_reasons: mainReasons,
     next_steps: normalizeConnectorStringList(source.next_steps || source.nextSteps),
     invalidation: normalizeConnectorStringList(source.invalidation),
-    freshness,
-    generated_at: source.generated_at || source.generatedAt || freshness || '',
-    sources,
-    source: sources,
-    suppressed_risks: suppressedRisks,
-    suppressedRisks,
-    alerting_metadata: alertingMetadata,
-    alertingMetadata,
-    degraded,
-    degraded_reason: degradedReason
+    freshness: normalizedAlerting.freshness,
+    generated_at: source.generated_at || source.generatedAt || normalizedAlerting.freshness || '',
+    sources: normalizedAlerting.sources,
+    source: normalizedAlerting.sources,
+    suppressed_risks: normalizedAlerting.suppressedRisks,
+    suppressedRisks: normalizedAlerting.suppressedRisks,
+    alerting_metadata: normalizedAlerting.alertingMetadata,
+    alertingMetadata: normalizedAlerting.alertingMetadata,
+    degraded: normalizedAlerting.degraded,
+    degraded_reason: normalizedAlerting.degradedReason
   };
 }
 
@@ -1214,6 +1198,44 @@ function normalizeConnectorStringList(value) {
     .filter(Boolean);
 }
 
+function normalizeAlertingRichPayload(source, options = {}) {
+  const safeSource = source && typeof source === 'object' ? source : {};
+  const opportunityKeys = Array.isArray(options.opportunityKeys) && options.opportunityKeys.length
+    ? options.opportunityKeys
+    : ['top_opportunities', 'topOpportunities', 'top_signals', 'topSignals', 'signals'];
+  const topOpportunities = normalizeConnectorStringList(
+    opportunityKeys.map((key) => safeSource[key]).find((value) => value !== undefined)
+  );
+  const topRiskItems = normalizeBriefRiskEntries(
+    safeSource.top_risk_items || safeSource.topRiskItems || safeSource.top_risks || safeSource.topRisks || safeSource.risks
+  );
+  const topRisks = topRiskItems.length
+    ? topRiskItems.map((entry) => String(entry.label || '').trim()).filter(Boolean)
+    : normalizeConnectorStringList(safeSource.top_risks || safeSource.topRisks || safeSource.risks);
+  const suppressedRisks = normalizeBriefRiskEntries(safeSource.suppressed_risks || safeSource.suppressedRisks);
+  const sources = normalizeConnectorSourceList(safeSource.sources || safeSource.source);
+  const freshness = safeSource.freshness || safeSource.generated_at || safeSource.generatedAt || '';
+  const degradedReason = safeSource.degraded_reason || safeSource.degradedReason || '';
+  const alertingMetadata = safeSource.alerting_metadata && typeof safeSource.alerting_metadata === 'object'
+    ? safeSource.alerting_metadata
+    : (safeSource.alertingMetadata && typeof safeSource.alertingMetadata === 'object' ? safeSource.alertingMetadata : {});
+  const degraded = safeSource.degraded === true
+    || normalizeFreshnessStatus(safeSource.status || safeSource.quality_status || safeSource.qualityStatus) === 'degraded'
+    || Boolean(degradedReason);
+
+  return {
+    topOpportunities,
+    topRiskItems,
+    topRisks,
+    suppressedRisks,
+    sources,
+    freshness,
+    degradedReason,
+    alertingMetadata,
+    degraded,
+  };
+}
+
 function normalizeBriefRiskEntries(value) {
   const values = Array.isArray(value)
     ? value
@@ -1275,6 +1297,7 @@ function normalizeBriefOfDayPayload(payload) {
     return {};
   }
 
+  const normalizedAlerting = normalizeAlertingRichPayload(source);
   const marketRegime = String(
     source.market_regime
       || source.marketRegime
@@ -1284,25 +1307,6 @@ function normalizeBriefOfDayPayload(payload) {
       || source.sentiment
       || ''
   ).trim().toUpperCase();
-  const topOpportunities = normalizeConnectorStringList(
-    source.top_opportunities || source.topOpportunities || source.top_signals || source.topSignals || source.signals
-  );
-  const topRiskItems = normalizeBriefRiskEntries(
-    source.top_risk_items || source.topRiskItems || source.top_risks || source.topRisks || source.risks
-  );
-  const topRisks = topRiskItems.length
-    ? topRiskItems.map((entry) => String(entry.label || '').trim()).filter(Boolean)
-    : normalizeConnectorStringList(source.top_risks || source.topRisks || source.risks);
-  const suppressedRisks = normalizeBriefRiskEntries(source.suppressed_risks || source.suppressedRisks);
-  const sources = normalizeConnectorSourceList(source.sources || source.source);
-  const freshness = source.freshness || source.generated_at || source.generatedAt || '';
-  const degradedReason = source.degraded_reason || source.degradedReason || '';
-  const alertingMetadata = source.alerting_metadata && typeof source.alerting_metadata === 'object'
-    ? source.alerting_metadata
-    : (source.alertingMetadata && typeof source.alertingMetadata === 'object' ? source.alertingMetadata : {});
-  const degraded = source.degraded === true
-    || normalizeFreshnessStatus(source.status || source.quality_status || source.qualityStatus) === 'degraded'
-    || Boolean(degradedReason);
 
   return {
     ...source,
@@ -1310,21 +1314,21 @@ function normalizeBriefOfDayPayload(payload) {
     market_regime: marketRegime || String(source.market_regime || '').trim().toUpperCase(),
     market_sentiment: marketRegime || String(source.market_sentiment || source.sentiment || '').trim().toUpperCase(),
     regime: marketRegime || String(source.regime || '').trim().toUpperCase(),
-    top_opportunities: topOpportunities,
-    top_signals: topOpportunities,
-    top_risks: topRisks,
-    top_risk_items: topRiskItems,
-    topRiskItems,
-    suppressed_risks: suppressedRisks,
-    suppressedRisks,
-    freshness,
-    generated_at: source.generated_at || source.generatedAt || freshness || new Date().toISOString(),
-    sources,
-    source: sources,
-    alerting_metadata: alertingMetadata,
-    alertingMetadata,
-    degraded,
-    degraded_reason: degradedReason,
+    top_opportunities: normalizedAlerting.topOpportunities,
+    top_signals: normalizedAlerting.topOpportunities,
+    top_risks: normalizedAlerting.topRisks,
+    top_risk_items: normalizedAlerting.topRiskItems,
+    topRiskItems: normalizedAlerting.topRiskItems,
+    suppressed_risks: normalizedAlerting.suppressedRisks,
+    suppressedRisks: normalizedAlerting.suppressedRisks,
+    freshness: normalizedAlerting.freshness,
+    generated_at: source.generated_at || source.generatedAt || normalizedAlerting.freshness || new Date().toISOString(),
+    sources: normalizedAlerting.sources,
+    source: normalizedAlerting.sources,
+    alerting_metadata: normalizedAlerting.alertingMetadata,
+    alertingMetadata: normalizedAlerting.alertingMetadata,
+    degraded: normalizedAlerting.degraded,
+    degraded_reason: normalizedAlerting.degradedReason,
   };
 }
 
