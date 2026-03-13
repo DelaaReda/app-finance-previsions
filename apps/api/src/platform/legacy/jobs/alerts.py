@@ -45,6 +45,7 @@ ALERT_PRIORITY_BANDS = (
     (200, "medium"),
     (0, "low"),
 )
+ALERT_DUPLICATE_SUPPRESSION_REASON = "fatigue_window_duplicate"
 ALERT_PRIORITY_QUEUE_LIMIT = max(
     1, int(os.getenv("ALERTS_PRIORITY_QUEUE_LIMIT", "5") or "5")
 )
@@ -330,6 +331,16 @@ def _suppression_config() -> Dict[str, int]:
     }
 
 
+def get_alerting_contract_defaults() -> Dict[str, Any]:
+    config = _suppression_config()
+    return {
+        "suppression_window_minutes": config["window_minutes"],
+        "fatigue_threshold": config["fatigue_threshold"],
+        "duplicate_suppression_reason": ALERT_DUPLICATE_SUPPRESSION_REASON,
+        "urgent_bypass_enabled": True,
+    }
+
+
 def _alert_fingerprint(alert: Dict[str, Any]) -> str:
     fingerprint = str(alert.get("fingerprint") or "").strip()
     if fingerprint:
@@ -406,6 +417,8 @@ def _apply_priority_and_suppression(
             "reason": "",
             "last_emitted_at": None,
         }
+        suppression_candidate = False
+        escalated = False
 
         if previous:
             previous_repeat = int(previous.get("suppression", {}).get("repeat_count", 1))
@@ -420,9 +433,10 @@ def _apply_priority_and_suppression(
                     > ALERT_SEVERITY_ORDER.get(str(previous.get("severity", "medium")).lower(), 0)
                     or _coerce_confidence(normalized.get("confidence", 0.0)) >= previous_confidence + escalation_delta
                 )
-                if within_window and suppression["repeat_count"] > config["fatigue_threshold"] and not escalated:
+                suppression_candidate = within_window and suppression["repeat_count"] > config["fatigue_threshold"]
+                if suppression_candidate and not escalated:
                     suppression["suppressed"] = True
-                    suppression["reason"] = "fatigue_window_duplicate"
+                    suppression["reason"] = ALERT_DUPLICATE_SUPPRESSION_REASON
 
         # Add top-level suppression fields for DEV-01 contract
         normalized["suppressed"] = suppression["suppressed"]
@@ -431,11 +445,7 @@ def _apply_priority_and_suppression(
         normalized["duplicate_count"] = suppression["repeat_count"]
 
         # Urgent bypass: allow high-priority alerts through suppression
-        urgent_bypass = (
-            band == "urgent"
-            or ALERT_SEVERITY_ORDER.get(str(normalized.get("severity", "medium")).lower(), 0) >= 4
-        )
-        normalized["urgent_bypass"] = urgent_bypass and suppression["suppressed"]
+        normalized["urgent_bypass"] = suppression_candidate and escalated and not suppression["suppressed"]
 
         normalized["suppression"] = suppression
         if suppression["suppressed"]:
@@ -474,8 +484,7 @@ def _apply_priority_and_suppression(
 
     # Alerting metadata for DEV-02 consumption
     alerting_metadata = {
-        "suppression_window_minutes": config["window_minutes"],
-        "fatigue_threshold": config["fatigue_threshold"],
+        **get_alerting_contract_defaults(),
         "escalation_delta_bps": config["escalation_delta_bps"],
         "total_processed": len(ordered_alerts),
         "total_active": len(active_alerts),
