@@ -1,0 +1,220 @@
+{
+  "version": 1,
+  "updated_at": "2026-03-13T02:04:00Z",
+  "sprint": {
+    "id": "S-BOOTSTRAP",
+    "goal": "Acc\u00e9l\u00e9rer la livraison parall\u00e8le sans d\u00e9sordre",
+    "cadence_days": 14
+  },
+  "roles": {
+    "planner": {
+      "wip_limit": 1,
+      "can_edit": false,
+      "focus": "product-value sequencing, dispatch hygiene, scope/value decisions, and WIP/flow checks"
+    },
+    "backend_engineer": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "api and backend impl"
+    },
+    "frontend_engineer": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "ui and frontend impl"
+    },
+    "data_analyst": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "data quality and metrics"
+    },
+    "infra_engineer": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "infra and ci/cd"
+    },
+    "integrator": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "cross-team integration"
+    },
+    "dev": {
+      "wip_limit": 6,
+      "can_edit": true,
+      "focus": "build delivery \u2014 covers backend_engineer, frontend_engineer, data_analyst, infra_engineer, integrator, tester, qa"
+    },
+    "admin": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "runtime truth, orchestration stability, evidence flow, and unblock operations that restore delivery"
+    },
+    "scrum_master": {
+      "wip_limit": 2,
+      "can_edit": true,
+      "focus": "delivery acceleration through acceptance clarity, handoffs, prompts, docs, dependency notes, and escalation"
+    },
+    "tester": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "test automation and checks"
+    },
+    "qa": {
+      "wip_limit": 3,
+      "can_edit": true,
+      "focus": "quality gate and validation"
+    },
+    "clawsentinel": {
+      "wip_limit": 2,
+      "can_edit": false,
+      "focus": "anti-drift and safety"
+    }
+  },
+  "streams": [
+    {
+      "id": "BATCH-23",
+      "title": "Tax, Fees, and Slippage Awareness",
+      "priority": "P1",
+      "source_state": "READY_DEV",
+      "state": "READY_DEV",
+      "created_at": "2026-03-12T22:44:01Z",
+      "updated_at": "2026-03-13T02:04:00Z",
+      "next_action": "claim BATCH-23-DEV-01 (READY_DEV pour dev)"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "BATCH-23-DEV-01",
+      "stream_id": "BATCH-23",
+      "code": "DEV-01",
+      "title": "Tax, Fees, and Slippage Awareness [DEV-01]",
+      "role": "dev",
+      "state": "READY_DEV",
+      "priority": "P1",
+      "depends_on": [],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-03-12T22:44:01Z",
+      "updated_at": "2026-03-12T22:44:01Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-23-DEV-02",
+      "stream_id": "BATCH-23",
+      "code": "DEV-02",
+      "title": "Tax, Fees, and Slippage Awareness [DEV-02]",
+      "role": "dev",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-23-DEV-01"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing widgets (apps/web/src/domains/forecasts/components/*) + shared UI wiring (apps/web/src/platform) before creating new components."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-03-12T22:44:01Z",
+      "updated_at": "2026-03-12T22:44:01Z",
+      "started_at": "",
+      "completed_at": ""
+    },
+    {
+      "id": "BATCH-23-DEV-03",
+      "stream_id": "BATCH-23",
+      "code": "DEV-03",
+      "title": "Tax, Fees, and Slippage Awareness [DEV-03]",
+      "role": "dev",
+      "state": "DONE",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-23-DEV-02"
+      ],
+      "assignee": "dev",
+      "blocked_reason": "",
+      "artifacts": [
+        "apps/api/src/platform/tests/test_critical_cost_awareness.py",
+        "evidence/BATCH-23-DEV-03-DELIVERY.md"
+      ],
+      "notes": [
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: avoid duplicate helpers; search reuse catalog first; keep patches minimal and covered by targeted tests and scripts/backend_regression_gate.sh."
+      ],
+      "handoff_to": "BATCH-23-DEV-02 (frontend gross vs net UI)",
+      "created_at": "2026-03-12T22:44:01Z",
+      "updated_at": "2026-03-13T03:38:23Z",
+      "started_at": "2026-03-13T03:30:00Z",
+      "completed_at": "2026-03-13T03:38:23Z"
+    },
+    {
+      "id": "BATCH-23-ADMIN-01",
+      "stream_id": "BATCH-23",
+      "code": "ADMIN-01",
+      "title": "Tax, Fees, and Slippage Awareness [ADMIN-01]",
+      "role": "admin",
+      "state": "WAITING_DEP",
+      "priority": "P1",
+      "depends_on": [
+        "BATCH-23-DEV-03"
+      ],
+      "assignee": "",
+      "blocked_reason": "",
+      "artifacts": [],
+      "notes": [
+        "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: validate monitor/cron/runtime health after dev chain and capture explicit unblock or blocker evidence."
+      ],
+      "handoff_to": "",
+      "created_at": "2026-03-12T22:44:01Z",
+      "updated_at": "2026-03-12T22:44:01Z",
+      "started_at": "",
+      "completed_at": ""
+    }
+  ],
+  "handoffs": [],
+  "events": [
+    {
+      "at": "2026-03-12T22:44:01Z",
+      "kind": "sync_priority_queue",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "created_streams": 1,
+        "created_tasks": 4
+      }
+    },
+    {
+      "at": "2026-03-13T01:09:01Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-03-13T01:14:01Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "none",
+        "synced_queue_items": "1",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    }
+  ]
+}

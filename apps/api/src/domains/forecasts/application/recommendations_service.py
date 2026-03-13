@@ -33,6 +33,16 @@ except ImportError:
     get_intelligence_service = None
 
 try:
+    from domains.judge.application.execution_costs import estimate_execution_costs
+except ImportError:
+    estimate_execution_costs = None
+
+try:
+    from domains.judge.application.judge_pipeline import build_net_edge_assessment
+except ImportError:
+    build_net_edge_assessment = None
+
+try:
     from domains.copilot.application.context_service import get_context_service
 except ImportError:
     get_context_service = None
@@ -577,6 +587,166 @@ class RecommendationsService:
                 "macro_alignment": round(macro_alignment, 3),
             },
         }
+
+    @staticmethod
+    def _build_cost_awareness(
+        *,
+        ticker: str,
+        forecast: Dict[str, Any],
+        action: str,
+        data: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Flatten judge net-edge estimates for recommendations consumers."""
+        payload = data if isinstance(data, dict) else {}
+        features = payload.get("features") if isinstance(payload.get("features"), dict) else {}
+        price_features = (
+            payload.get("price_features")
+            if isinstance(payload.get("price_features"), dict)
+            else {}
+        )
+
+        if estimate_execution_costs is not None:
+            cost_snapshot = estimate_execution_costs(
+                ticker=ticker,
+                expected_return=forecast.get("expected_return"),
+                horizon=str(
+                    forecast.get("horizon") or forecast.get("prediction_horizon") or "1w"
+                ).strip() or "1w",
+                row=forecast,
+                features=features,
+                price_features=price_features,
+            )
+            if isinstance(cost_snapshot, dict) and cost_snapshot:
+                costs_bps = (
+                    cost_snapshot.get("costs_bps")
+                    if isinstance(cost_snapshot.get("costs_bps"), dict)
+                    else {}
+                )
+                tax_assumptions = (
+                    cost_snapshot.get("tax_assumptions")
+                    if isinstance(cost_snapshot.get("tax_assumptions"), dict)
+                    else {}
+                )
+                holding_period_bucket = str(
+                    tax_assumptions.get("holding_period_bucket") or "short_term"
+                ).strip().lower()
+                gross_expected_return_pct = round(
+                    float(cost_snapshot.get("gross_expected_return") or 0.0),
+                    6,
+                )
+                net_expected_return_pct = round(
+                    float(cost_snapshot.get("net_expected_return") or 0.0),
+                    6,
+                )
+                fee_bps = round(float((costs_bps.get("fees") or {}).get("base") or 0.0), 2)
+                slippage_bps = round(
+                    float((costs_bps.get("slippage") or {}).get("base") or 0.0),
+                    2,
+                )
+                estimated_tax_drag_bps = round(
+                    float((costs_bps.get("tax_drag") or {}).get("base") or 0.0),
+                    2,
+                )
+                total_cost_bps = round(
+                    float((costs_bps.get("total") or {}).get("base") or 0.0),
+                    2,
+                )
+                warning = None
+                if gross_expected_return_pct > 0 and net_expected_return_pct <= 0:
+                    warning = "Costs overwhelm edge"
+                elif (
+                    gross_expected_return_pct > 0
+                    and net_expected_return_pct <= gross_expected_return_pct * 0.25
+                ):
+                    warning = "Low net edge after costs"
+
+                return {
+                    "gross_expected_return_pct": gross_expected_return_pct,
+                    "net_expected_return_pct": net_expected_return_pct,
+                    "fee_bps": fee_bps,
+                    "slippage_bps": slippage_bps,
+                    "estimated_tax_drag_bps": estimated_tax_drag_bps,
+                    "total_cost_bps": total_cost_bps,
+                    "tax_rate_assumption": round(
+                        float((tax_assumptions.get("tax_rate_band") or {}).get("base") or 0.0),
+                        4,
+                    ),
+                    "tax_bucket": "long_term" if holding_period_bucket == "long_term" else "short_term",
+                    "tax_impact": (
+                        "Long-term tax drag assumed"
+                        if holding_period_bucket == "long_term"
+                        else "Short-term tax drag assumed"
+                    ),
+                    "warning": warning,
+                    "alert": "net_edge_eroded_by_costs"
+                    if warning == "Costs overwhelm edge"
+                    else (
+                        "net_edge_too_thin_after_costs"
+                        if warning == "Low net edge after costs"
+                        else None
+                    ),
+                    "edge_status": (
+                        "eroded"
+                        if warning == "Costs overwhelm edge"
+                        else "thin" if warning == "Low net edge after costs" else "healthy"
+                    ),
+                    "asset_class": cost_snapshot.get("asset_class"),
+                    "liquidity_bucket": cost_snapshot.get("liquidity_bucket"),
+                }
+
+        if build_net_edge_assessment is None:
+            return None
+
+        horizon = str(
+            forecast.get("horizon") or forecast.get("prediction_horizon") or "1w"
+        ).strip() or "1w"
+        direction = str(forecast.get("direction") or "").strip().lower()
+        if direction not in {"up", "down", "flat"}:
+            action_text = str(action or "").strip().upper()
+            direction = "up" if action_text == "BUY" else "down" if action_text == "SELL" else "flat"
+
+        assessment = build_net_edge_assessment(
+            expected_return=forecast.get("expected_return"),
+            horizon=horizon,
+            direction=direction,
+        )
+        if not isinstance(assessment, dict) or not assessment:
+            return None
+
+        gross_expected_return_pct = round(float(assessment.get("gross_expected_return") or 0.0), 6)
+        net_expected_return_pct = round(float(assessment.get("net_expected_return") or 0.0), 6)
+        tax_bucket = (
+            "long_term"
+            if str(assessment.get("tax_treatment") or "").strip().lower().startswith("long_term")
+            else "short_term"
+        )
+        warning = None
+        if gross_expected_return_pct > 0 and net_expected_return_pct <= 0:
+            warning = "Costs overwhelm edge"
+        elif (
+            gross_expected_return_pct > 0
+            and net_expected_return_pct <= gross_expected_return_pct * 0.25
+        ):
+            warning = "Low net edge after costs"
+
+        return {
+            "gross_expected_return_pct": gross_expected_return_pct,
+            "net_expected_return_pct": net_expected_return_pct,
+            "fee_bps": round(float(assessment.get("fee_bps") or 0.0), 2),
+            "slippage_bps": round(float(assessment.get("slippage_bps") or 0.0), 2),
+            "estimated_tax_drag_bps": round(float(assessment.get("tax_drag") or 0.0) * 10_000.0, 2),
+            "total_cost_bps": round(float(assessment.get("total_drag") or 0.0) * 10_000.0, 2),
+            "tax_rate_assumption": round(float(assessment.get("tax_rate") or 0.0), 4),
+            "tax_bucket": tax_bucket,
+            "tax_impact": (
+                "Long-term tax drag assumed"
+                if tax_bucket == "long_term"
+                else "Short-term tax drag assumed"
+            ),
+            "warning": warning,
+            "alert": assessment.get("alert"),
+            "edge_status": assessment.get("edge_status"),
+        }
     
     async def _validate_with_llm(
         self,
@@ -726,10 +896,17 @@ Output ONLY valid JSON with this structure:
                 forecast=forecast,
                 market_context=market_context,
             )
+            action = 'BUY' if forecast.get('direction') == 'up' else 'HOLD'
+            cost_awareness = self._build_cost_awareness(
+                ticker=ticker,
+                forecast=forecast,
+                action=action,
+                data=item.get('data'),
+            )
 
             rec = {
                 'ticker': ticker,
-                'action': 'BUY' if forecast.get('direction') == 'up' else 'HOLD',
+                'action': action,
                 'score': round(score, 2),
                 'reasoning': item.get('reasoning', 'No reasoning provided'),
                 'catalysts': item.get('catalysts', []),
@@ -743,6 +920,9 @@ Output ONLY valid JSON with this structure:
                 },
                 'forecast_fusion': fusion,
             }
+            if cost_awareness:
+                rec['cost_awareness'] = cost_awareness
+                rec.update(cost_awareness)
 
             # Enrich with playbook context (BATCH-15-DEV-02)
             if self.playbook_resolver:

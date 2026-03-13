@@ -567,6 +567,108 @@ class TestPlaybookEnrichmentStructure:
             f"{risk_off_macro} vs {risk_on_macro}"
         )
 
+    def test_format_recommendations_surfaces_cost_awareness_fields(self):
+        """Recommendations should expose flattened gross/net cost fields for the existing UI."""
+        service = RecommendationsService()
+
+        validated = [
+            {
+                'ticker': 'AAPL',
+                'score': 0.72,
+                'reasoning': 'Trend remains constructive.',
+                'confidence': 0.74,
+                'data': {
+                    'forecast': {
+                        'direction': 'up',
+                        'confidence': 0.74,
+                        'expected_return': 0.018,
+                        'horizon': '1w',
+                    }
+                }
+            }
+        ]
+
+        result = service._format_recommendations(validated, {'regime': 'NORMAL', 'key_drivers': []})
+        rec = result['recommendations'][0]
+
+        assert rec['gross_expected_return_pct'] == pytest.approx(0.018, abs=1e-6)
+        assert rec['net_expected_return_pct'] == pytest.approx(0.0093, abs=1e-6)
+        assert rec['fee_bps'] == pytest.approx(6.0, abs=1e-3)
+        assert rec['slippage_bps'] == pytest.approx(45.0, abs=1e-3)
+        assert rec['estimated_tax_drag_bps'] == pytest.approx(36.0, abs=1e-3)
+        assert rec['total_cost_bps'] == pytest.approx(87.0, abs=1e-3)
+        assert rec['tax_bucket'] == 'short_term'
+        assert rec['tax_impact'] == 'Short-term tax drag assumed'
+        assert rec['cost_awareness']['asset_class'] == 'equity'
+        assert rec['liquidity_bucket'] == 'illiquid'
+        assert rec['cost_awareness']['gross_expected_return_pct'] == rec['gross_expected_return_pct']
+        assert rec['cost_awareness']['net_expected_return_pct'] == rec['net_expected_return_pct']
+
+    def test_format_recommendations_marks_when_costs_overwhelm_edge(self):
+        """Low-edge wording should be explicit before the user acts on the recommendation."""
+        service = RecommendationsService()
+
+        validated = [
+            {
+                'ticker': 'IEF',
+                'score': 0.58,
+                'reasoning': 'Defensive ballast remains useful.',
+                'confidence': 0.63,
+                'data': {
+                    'forecast': {
+                        'direction': 'up',
+                        'confidence': 0.63,
+                        'expected_return': 0.0011,
+                        'horizon': '1w',
+                    }
+                }
+            }
+        ]
+
+        result = service._format_recommendations(validated, {'regime': 'RISK_OFF', 'key_drivers': []})
+        rec = result['recommendations'][0]
+
+        assert rec['net_expected_return_pct'] == pytest.approx(0.00018, abs=1e-6)
+        assert rec['fee_bps'] == pytest.approx(2.0, abs=1e-3)
+        assert rec['slippage_bps'] == pytest.approx(5.0, abs=1e-3)
+        assert rec['estimated_tax_drag_bps'] == pytest.approx(2.2, abs=1e-3)
+        assert rec['total_cost_bps'] == pytest.approx(9.2, abs=1e-3)
+        assert rec['warning'] == 'Low net edge after costs'
+        assert rec['cost_awareness']['warning'] == 'Low net edge after costs'
+        assert rec['cost_awareness']['edge_status'] == 'thin'
+
+    def test_format_recommendations_uses_etf_cost_calibration_when_ticker_implies_etf(self):
+        """ETF recommendations should reuse the shared judge execution-cost calibration."""
+        service = RecommendationsService()
+
+        validated = [
+            {
+                'ticker': 'SPY',
+                'score': 0.68,
+                'reasoning': 'Broad market trend remains constructive.',
+                'confidence': 0.7,
+                'data': {
+                    'forecast': {
+                        'direction': 'up',
+                        'confidence': 0.7,
+                        'expected_return': 0.018,
+                        'horizon': '1m',
+                    }
+                }
+            }
+        ]
+
+        result = service._format_recommendations(validated, {'regime': 'NORMAL', 'key_drivers': []})
+        rec = result['recommendations'][0]
+
+        assert rec['cost_awareness']['asset_class'] == 'etf'
+        assert rec['liquidity_bucket'] == 'liquid'
+        assert rec['fee_bps'] == pytest.approx(2.0, abs=1e-3)
+        assert rec['slippage_bps'] == pytest.approx(5.0, abs=1e-3)
+        assert rec['estimated_tax_drag_bps'] == pytest.approx(36.0, abs=1e-3)
+        assert rec['total_cost_bps'] == pytest.approx(43.0, abs=1e-3)
+        assert rec['net_expected_return_pct'] == pytest.approx(0.0137, abs=1e-6)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
