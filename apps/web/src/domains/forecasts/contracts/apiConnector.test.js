@@ -781,6 +781,40 @@ test('getCopilotContext normalizes copilot slashed targets to the copilot overla
   ]);
 });
 
+test('getCopilotContext normalizes nested copilot open targets to the copilot overlay', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          copilot_start: {
+            brief_of_day: {
+              title: 'Brief of the day',
+              summary: 'Overnight demand improves broad risk tone.',
+              sentiment: 'mixed',
+              generated_at: '2026-03-09T06:15:00.000Z',
+            },
+            open: [
+              {
+                id: 'copilot_overview',
+                label: 'Open personal finance',
+                target: '/copilot/personal-finance/overview',
+              },
+            ],
+          },
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotContext();
+  const copilotStart = payload.copilot_start || {};
+
+  assert.deepEqual(copilotStart.open.map((item) => ({ id: item.id, target: item.target })), [
+    { id: 'copilot_overview', target: 'copilot' },
+  ]);
+});
+
 test('getCopilotContext forwards scoped tickers to the backend starter endpoint', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {

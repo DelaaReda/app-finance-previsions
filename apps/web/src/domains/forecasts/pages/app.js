@@ -5745,7 +5745,9 @@ function normalizeCopilotStartOpenTarget(target, id = '') {
     || normalizedId === 'copilot'
     || normalizedTarget === '/copilot'
     || normalizedTarget === '/copilot/ask'
+    || normalizedTarget.startsWith('/copilot/')
     || normalizedTarget === 'copilot/ask'
+    || normalizedTarget.startsWith('copilot/')
     || normalizedTarget === 'copilot'
     || normalizedTarget === 'personal-finance'
     || normalizedTarget === '/personal-finance'

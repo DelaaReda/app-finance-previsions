@@ -987,7 +987,9 @@ function loadSanitizeCopilotStart() {
         || normalizedId === 'copilot'
         || normalizedTarget === '/copilot'
         || normalizedTarget === '/copilot/ask'
+        || normalizedTarget.startsWith('/copilot/')
         || normalizedTarget === 'copilot/ask'
+        || normalizedTarget.startsWith('copilot/')
         || normalizedTarget === 'copilot'
       ) {
         return 'copilot';
@@ -1417,7 +1419,9 @@ function loadRunCopilotStartOpen() {
         || normalizedTarget === '/copilot'
         || normalizedTarget === '/copilot/'
         || normalizedTarget === '/copilot/ask'
+        || normalizedTarget.startsWith('/copilot/')
         || normalizedTarget === 'copilot/'
+        || normalizedTarget.startsWith('copilot/')
       ) {
         return 'copilot';
       }
@@ -3363,6 +3367,18 @@ test('runCopilotStartOpen opens the overlay for a personal-finance namespace tar
   assert.deepEqual(calls.toasts, []);
 });
 
+test('runCopilotStartOpen opens the overlay for a nested copilot target', () => {
+  const { sandbox, overlay, calls } = loadRunCopilotStartOpen();
+
+  sandbox.runCopilotStartOpen('/copilot/overview');
+
+  assert.equal(calls.toggled, 1);
+  assert.equal(calls.focused, 1);
+  assert.equal(overlay.style.display, 'block');
+  assert.deepEqual(calls.switched, []);
+  assert.deepEqual(calls.toasts, []);
+});
+
 test('runCopilotStartOpen routes the landing brief to overview and scrolls the live brief widget', () => {
   const { sandbox, overlay, calls } = loadRunCopilotStartOpen();
 
@@ -4117,6 +4133,24 @@ test('sanitizeCopilotStart maps trimmed brief open target variants to market', (
   assert.equal(result.open.length, 1);
   assert.equal(result.open[0].id, 'daily_brief');
   assert.equal(result.open[0].target, 'market');
+});
+
+test('sanitizeCopilotStart maps nested copilot open targets to copilot', () => {
+  const sandbox = loadSanitizeCopilotStart();
+
+  const result = sandbox.sanitizeCopilotStart({
+    open: [
+      {
+        id: 'copilot_overview',
+        label: 'Open copilot overview',
+        target: '/copilot/overview',
+      },
+    ],
+  });
+
+  assert.equal(result.open.length, 1);
+  assert.equal(result.open[0].id, 'copilot_overview');
+  assert.equal(result.open[0].target, 'copilot');
 });
 
 test('sanitizeCopilotStart prefers direct ask tickers over prefill tickers', () => {
