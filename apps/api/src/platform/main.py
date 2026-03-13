@@ -1177,6 +1177,13 @@ def create_app() -> FastAPI:
     except ImportError as e:
         print(f"⚠️  Failed to include judge routes: {e}")
 
+    # Execution Costs API (BATCH-23-DEV-03)
+    try:
+        from domains.judge.api.execution_costs import router as execution_costs_router
+        app.include_router(execution_costs_router)
+    except ImportError as e:
+        print(f"⚠️  Failed to include execution costs routes: {e}")
+
     # =================== STARTUP EVENT HANDLER ===================
     @app.on_event("startup")
     async def startup_event():
@@ -3934,13 +3941,100 @@ def register_routes(app: FastAPI):
 
     # ====================== PILLAR 5: MARKET BRIEF =======================
 
+    def _trim_brief_summary(value: Any, *, limit: int = 200) -> str:
+        summary = str(value or "").strip()
+        words = summary.split()
+        if len(words) > limit:
+            return " ".join(words[:limit])
+        return summary
+
+    def _normalize_brief_list(*values: Any) -> list[Any]:
+        for value in values:
+            if isinstance(value, list) and value:
+                return list(value)
+        for value in values:
+            if isinstance(value, list):
+                return []
+        return []
+
+    def _normalize_brief_sources(*values: Any) -> list[str]:
+        for value in values:
+            if isinstance(value, (list, tuple)):
+                items = [str(item).strip() for item in value if str(item).strip()]
+                if items:
+                    return items
+            token = str(value or "").strip()
+            if token:
+                return [token]
+        return []
+
+    def _normalize_brief_payload(
+        payload: Dict[str, Any],
+        *,
+        source_fallback: str,
+        degraded_reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        normalized = dict(payload or {})
+        summary_seed = normalized.get("summary") or normalized.get("title")
+        if summary_seed:
+            summary = _trim_brief_summary(summary_seed)
+        else:
+            summary = "Brief summary unavailable."
+            degraded_reason = degraded_reason or "summary_missing"
+
+        market_regime = str(
+            normalized.get("market_regime")
+            or normalized.get("market_sentiment")
+            or normalized.get("regime")
+            or "UNKNOWN"
+        ).strip() or "UNKNOWN"
+        generated_at = str(normalized.get("generated_at") or datetime.utcnow().isoformat()).strip()
+        freshness = str(normalized.get("freshness") or generated_at).strip() or generated_at
+        source = _normalize_brief_sources(
+            normalized.get("sources"),
+            normalized.get("source"),
+            source_fallback,
+        )
+
+        sector_rotation = normalized.get("sector_rotation")
+        if not isinstance(sector_rotation, dict):
+            sector_rotation = {"top": [], "bottom": []}
+        sector_rotation.setdefault("top", [])
+        sector_rotation.setdefault("bottom", [])
+
+        top_opportunities = _normalize_brief_list(
+            normalized.get("top_opportunities"),
+            normalized.get("top_signals"),
+            normalized.get("picks"),
+        )
+
+        normalized["summary"] = summary
+        normalized["market_regime"] = market_regime
+        normalized["market_sentiment"] = market_regime
+        normalized["regime"] = market_regime
+        normalized["top_opportunities"] = top_opportunities
+        normalized["top_signals"] = top_opportunities
+        normalized["top_risks"] = _normalize_brief_list(normalized.get("top_risks"))
+        normalized["key_events"] = _normalize_brief_list(normalized.get("key_events"))
+        normalized["macro_signals"] = _normalize_brief_list(
+            normalized.get("macro_signals"),
+            normalized.get("macro"),
+        )
+        normalized["sector_rotation"] = sector_rotation
+        normalized["generated_at"] = generated_at
+        normalized["freshness"] = freshness
+        normalized["sources"] = source
+        normalized["source"] = source
+        normalized["degraded"] = degraded_reason is not None
+        normalized["degraded_reason"] = degraded_reason
+        return normalized
+
     @app.get("/api/brief/weekly")
     async def brief_weekly():
         """Get weekly market brief with <200ms response time using pre-computed data."""
         try:
             cached_brief = ensure_snapshot(
                 "brief_weekly",
-                job_runner=_run_weekly_brief_job,
                 aliases=["brief_weekly.json"],
             )
 
@@ -3982,87 +4076,79 @@ def register_routes(app: FastAPI):
     async def brief_daily():
         """Get daily market brief with cache-first, instant response (never-empty)."""
         try:
-            snap = ensure_snapshot(
+            daily_snap = ensure_snapshot(
                 "brief_daily",
-                job_runner=_run_daily_brief_job,
                 aliases=["brief_daily.json"],
             )
-
-            if not snap:
-                snap = ensure_snapshot(
-                    "brief_weekly",
-                    job_runner=_run_weekly_brief_job,
-                    aliases=["brief_weekly.json"],
-                )
-
-            if snap:
+            if daily_snap:
                 payload = resolve_payload(
-                    snap,
-                    ("data.daily", "daily", "data.weekly", "weekly", "data", "payload"),
+                    daily_snap,
+                    ("data.daily", "daily", "data", "payload"),
                 )
-                payload = dict(payload) if isinstance(payload, dict) else {}
+                if isinstance(payload, dict) and payload:
+                    return _ok(
+                        _normalize_brief_payload(
+                            payload,
+                            source_fallback="brief_daily",
+                        )
+                    )
 
-                payload.setdefault("title", "Daily Market Brief")
-                payload.setdefault("period", "daily")
-                payload.setdefault("top_signals", [])
-                payload.setdefault("top_risks", [])
-                payload.setdefault("picks", [])
-                payload.setdefault("sources", [])
-                payload.setdefault("generated_at", snap.get("last_update") or snap.get("timestamp") or datetime.utcnow().isoformat())
-                payload.setdefault("freshness", snap.get("freshness", "unknown"))
-                payload.setdefault("source", snap.get("source", ["brief_cache"]))
-
-                payload.setdefault("macro_signals", payload.get("macro", payload.get("macro_signals", [])))
-                if not isinstance(payload["macro_signals"], list):
-                    payload["macro_signals"] = []
-
-                payload.setdefault("sector_rotation", payload.get("sector_rotation", {"top": [], "bottom": []}))
-                if not isinstance(payload["sector_rotation"], dict):
-                    payload["sector_rotation"] = {"top": [], "bottom": []}
-                else:
-                    payload["sector_rotation"].setdefault("top", [])
-                    payload["sector_rotation"].setdefault("bottom", [])
-
-                summary = payload.get("summary", "")
-                if isinstance(summary, str):
-                    words = summary.split()
-                    if len(words) > 200:
-                        payload["summary"] = " ".join(words[:200])
-
-                return _ok(payload)
+            weekly_snap = ensure_snapshot(
+                "brief_weekly",
+                aliases=["brief_weekly.json"],
+            )
+            if weekly_snap:
+                payload = resolve_payload(
+                    weekly_snap,
+                    ("data.weekly", "weekly", "data", "payload"),
+                )
+                if isinstance(payload, dict) and payload:
+                    return _ok(
+                        _normalize_brief_payload(
+                            payload,
+                            source_fallback="brief_weekly",
+                            degraded_reason="daily_snapshot_missing_using_weekly",
+                        )
+                    )
 
             # 2) Fallback: return quick placeholder while background job can populate cache
-            return _ok({
-                "title": "Daily Market Brief",
-                "period": "daily",
-                "top_signals": [],
-                "top_risks": [],
-                "picks": [],
-                "sources": [],
-                "macro_signals": [],
-                "sector_rotation": {"top": [], "bottom": []},
-                "generated_at": datetime.utcnow().isoformat(),
-                "freshness": "empty",
-                "source": ["placeholder"],
-                "message": "Daily brief snapshot not available yet; computing in background"
-            })
+            return _ok(
+                _normalize_brief_payload(
+                    {
+                        "summary": "No daily brief available yet.",
+                        "market_regime": "UNKNOWN",
+                        "top_opportunities": [],
+                        "top_risks": [],
+                        "key_events": [],
+                        "macro_signals": [],
+                        "sector_rotation": {"top": [], "bottom": []},
+                        "generated_at": datetime.utcnow().isoformat(),
+                        "source": ["fallback_empty"],
+                    },
+                    source_fallback="fallback_empty",
+                    degraded_reason="daily_snapshot_missing",
+                )
+            )
 
         except Exception as e:
             # Never fail hard; keep UI stable
-            return _ok({
-                "title": "Daily Market Brief",
-                "period": "daily",
-                "top_signals": [],
-                "top_risks": [],
-                "picks": [],
-                "sources": [],
-                "macro_signals": [],
-                "sector_rotation": {"top": [], "bottom": []},
-                "generated_at": datetime.utcnow().isoformat(),
-                "freshness": "error",
-                "source": ["error_fallback"],
-                "error": str(e)
-            })
+            payload = _normalize_brief_payload(
+                {
+                    "summary": "No daily brief available yet.",
+                    "market_regime": "UNKNOWN",
+                    "top_opportunities": [],
+                    "top_risks": [],
+                    "key_events": [],
+                    "macro_signals": [],
+                    "sector_rotation": {"top": [], "bottom": []},
+                    "generated_at": datetime.utcnow().isoformat(),
+                    "source": ["error_fallback"],
+                    "error": str(e),
+                },
+                source_fallback="error_fallback",
+                degraded_reason="daily_snapshot_error",
+            )
+            return _ok(payload)
 
 
     @app.get("/api/debug/llm")
