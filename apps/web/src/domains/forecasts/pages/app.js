@@ -2607,6 +2607,13 @@ const ALERT_SEVERITY_ORDER = {
   low: 5
 };
 
+const ALERT_PRIORITY_BAND_ORDER = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3
+};
+
 function normalizeAlertSeverity(value, fallback = 'medium') {
   const severity = toString(value, fallback).toLowerCase();
   if (severity === 'critical') return 'critical';
@@ -2623,6 +2630,60 @@ function mapAlertPriority(severity, fallback = 'low') {
   if (normalized === 'critical' || normalized === 'high') return 'high';
   if (normalized === 'warning' || normalized === 'medium') return 'medium';
   return 'low';
+}
+
+function normalizeAlertPriorityBand(value, severity = 'medium') {
+  const priorityBand = toString(value, '').toLowerCase();
+  if (priorityBand === 'urgent') return 'urgent';
+  if (priorityBand === 'high') return 'high';
+  if (priorityBand === 'medium') return 'medium';
+  if (priorityBand === 'low') return 'low';
+
+  const normalizedSeverity = normalizeAlertSeverity(severity, 'medium');
+  if (normalizedSeverity === 'critical') return 'urgent';
+  if (normalizedSeverity === 'high' || normalizedSeverity === 'warning') return 'high';
+  if (normalizedSeverity === 'medium') return 'medium';
+  return 'low';
+}
+
+function describeAlertPriorityBand(value) {
+  const priorityBand = normalizeAlertPriorityBand(value, 'medium');
+  if (priorityBand === 'urgent') return 'Urgent';
+  if (priorityBand === 'high') return 'Action';
+  if (priorityBand === 'medium') return 'Monitor';
+  return 'Background';
+}
+
+function formatAlertSourceLabel(value) {
+  return toString(value, 'market')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase() || 'market';
+}
+
+function buildAlertQueueSummary(rows) {
+  const items = toArray(rows, []);
+  const counts = {
+    urgent: 0,
+    high: 0,
+    medium: 0,
+    low: 0
+  };
+
+  items.forEach((item) => {
+    const priorityBand = normalizeAlertPriorityBand(item.priorityBand, 'medium');
+    counts[priorityBand] += 1;
+  });
+
+  const topItem = items[0] || null;
+  return {
+    counts,
+    topItem,
+    headline: topItem
+      ? `${topItem.title} • ${topItem.priorityBandLabel} queue`
+      : 'Live queue updating'
+  };
 }
 
 function mapAlertType(rawType = '', rawCategory = '') {
@@ -2651,6 +2712,10 @@ function sanitizeAlertTimeline(items) {
     const source = isObject(item) ? item : {};
     const severity = normalizeAlertSeverity(source.severity, 'medium');
     const priority = mapAlertPriority(severity, 'low');
+    const priorityBand = normalizeAlertPriorityBand(
+      source.priority_band || source.priorityBand || source.priority,
+      severity,
+    );
     const type = mapAlertType(source.type, source.category);
     const confidence = toFiniteNumber(source.confidence, 0);
     const confidenceLabel = Math.max(0, Math.min(100, Math.round(confidence > 1 ? confidence : confidence * 100)));
@@ -2672,6 +2737,9 @@ function sanitizeAlertTimeline(items) {
       severityLabel: toString(severity, 'medium').toUpperCase(),
       priority,
       priorityRank: ALERT_SEVERITY_ORDER[severity],
+      priorityBand,
+      priorityBandLabel: describeAlertPriorityBand(priorityBand),
+      priorityBandRank: ALERT_PRIORITY_BAND_ORDER[priorityBand],
       type,
       confidence: confidenceLabel,
       confidenceLabel: confidenceLabel ? `${confidenceLabel}%` : '—',
@@ -2680,6 +2748,7 @@ function sanitizeAlertTimeline(items) {
       timestamp,
       timeLabel: formatRelativeTime(timestamp),
       signalSource: source.category || source.type || 'market',
+      signalSourceLabel: formatAlertSourceLabel(source.source || source.category || source.type || 'market'),
       actionHint: type === 'news' ? 'Voir news' : 'Act now',
       signature
     };
@@ -2694,6 +2763,7 @@ function sanitizeAlertTimeline(items) {
 
   return Array.from(bySignature.values())
     .sort((a, b) => {
+      if (a.priorityBandRank !== b.priorityBandRank) return a.priorityBandRank - b.priorityBandRank;
       if (a.priorityRank !== b.priorityRank) return a.priorityRank - b.priorityRank;
       if (a.confidence !== b.confidence) return b.confidence - a.confidence;
       return Date.parse(b.timestamp || 0) - Date.parse(a.timestamp || 0);
@@ -2720,13 +2790,25 @@ function renderAlertTimeline(alerts = liveAlerts) {
     return;
   }
 
-  container.innerHTML = rows.map((item) => `
-    <div class="alert-item ${item.priority} expandable" data-priority="${item.priority}" data-type="${item.type}" onclick="toggleAlertDetails(this)">
+  const queueSummary = buildAlertQueueSummary(rows);
+
+  container.innerHTML = `
+    <div class="alert-queue-overview">
+      <p class="widget-subtitle">Top queue: ${queueSummary.headline}</p>
+      <div class="alert-queue-chips">
+        <span class="priority-badge high">Urgent ${queueSummary.counts.urgent}</span>
+        <span class="priority-badge high">Action ${queueSummary.counts.high}</span>
+        <span class="priority-badge medium">Monitor ${queueSummary.counts.medium}</span>
+        <span class="priority-badge low">Background ${queueSummary.counts.low}</span>
+      </div>
+    </div>
+    ${rows.map((item) => `
+    <div class="alert-item ${item.priority} expandable" data-priority="${item.priorityBand}" data-type="${item.type}" onclick="toggleAlertDetails(this)">
       <span class="alert-icon">${item.icon}</span>
       <div class="alert-content">
         <h3>${item.title}</h3>
         <p>${item.summary}</p>
-        <p>${item.confidenceLabel} confidence • ${item.timeLabel}</p>
+        <p>${item.priorityBandLabel} queue • ${item.signalSourceLabel} • ${item.confidenceLabel} confidence • ${item.timeLabel}</p>
       </div>
       <div class="alert-actions" style="display: none;">
         <button class="alert-action-btn primary" onclick="showToast('Applying ${item.actionHint} for ${item.ticker}')">${item.actionHint}</button>
@@ -2734,7 +2816,8 @@ function renderAlertTimeline(alerts = liveAlerts) {
         <button class="alert-action-btn" onclick="showToast('Alert dismissed')">Dismiss</button>
       </div>
     </div>
-  `).join('');
+  `).join('')}
+  `;
 }
 
 function sanitizeMarketCalendar(calendar) {
@@ -7076,6 +7159,10 @@ function filterAlerts(type) {
       alert.style.display = 'flex';
       return;
     }
+    if (type === 'urgent' || type === 'high' || type === 'medium' || type === 'low') {
+      alert.style.display = priority === type ? 'flex' : 'none';
+      return;
+    }
     if (type === 'opportunities') {
       alert.style.display = normalizedType === 'opportunities' ? 'flex' : 'none';
       return;
@@ -7088,7 +7175,7 @@ function filterAlerts(type) {
       alert.style.display = normalizedType === 'news' ? 'flex' : 'none';
       return;
     }
-    alert.style.display = priority === type ? 'flex' : 'none';
+    alert.style.display = 'none';
   });
 }
 

@@ -5258,6 +5258,39 @@ test('sanitizeAlertTimeline surfaces policy status and jurisdiction in alert tit
   assert.equal(rows[0].summary, 'Energy oversight rules tighten for utilities.');
 });
 
+test('sanitizeAlertTimeline prefers backend priority bands for queue ordering', () => {
+  const { sandbox } = loadAlertTimelineHelpers();
+
+  const rows = sandbox.sanitizeAlertTimeline([
+    {
+      ticker: 'AAPL',
+      type: 'risk',
+      category: 'market_data',
+      description: 'Lower-priority volatility watch.',
+      severity: 'critical',
+      priority_band: 'medium',
+      confidence: 0.82,
+      timestamp: '2026-03-10T10:00:00Z',
+    },
+    {
+      ticker: 'NVDA',
+      type: 'positive-breakout',
+      category: 'forecast',
+      description: 'Backend queue marked this as urgent despite modest severity.',
+      severity: 'low',
+      priority_band: 'urgent',
+      confidence: 0.31,
+      timestamp: '2026-03-10T09:00:00Z',
+    },
+  ]);
+
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].ticker, 'NVDA');
+  assert.equal(rows[0].priorityBand, 'urgent');
+  assert.equal(rows[0].priorityBandLabel, 'Urgent');
+  assert.equal(rows[1].priorityBand, 'medium');
+});
+
 test('renderAlertTimeline includes policy summary copy in the visible card body', () => {
   const { sandbox, timelineContainer } = loadAlertTimelineHelpers();
 
@@ -5280,4 +5313,38 @@ test('renderAlertTimeline includes policy summary copy in the visible card body'
   assert.match(timelineContainer.innerHTML, /US Policy • PROPOSED/);
   assert.match(timelineContainer.innerHTML, /Disclosure rules proposed for cloud and semiconductor firms\./);
   assert.match(timelineContainer.innerHTML, /transmission: technology -> NVDA, MSFT/);
+});
+
+test('renderAlertTimeline surfaces top queue summary and urgency tier badges', () => {
+  const { sandbox, timelineContainer } = loadAlertTimelineHelpers();
+
+  sandbox.renderAlertTimeline([
+    {
+      ticker: 'MSFT',
+      type: 'risk',
+      category: 'market_data',
+      source: 'alerts_engine',
+      description: 'Cloud margin drift now requires a portfolio review.',
+      severity: 'medium',
+      priority_band: 'urgent',
+      confidence: 0.88,
+      timestamp: '2026-03-10T09:00:00Z',
+    },
+    {
+      ticker: 'QQQ',
+      type: 'news',
+      category: 'policy-impact',
+      source: 'policy_feed',
+      description: 'Semiconductor export wording remains under review.',
+      severity: 'info',
+      priority_band: 'high',
+      confidence: 0.42,
+      timestamp: '2026-03-10T08:00:00Z',
+    },
+  ]);
+
+  assert.match(timelineContainer.innerHTML, /Top queue: MSFT Risk • Urgent queue/);
+  assert.match(timelineContainer.innerHTML, /Urgent 1/);
+  assert.match(timelineContainer.innerHTML, /Action 1/);
+  assert.match(timelineContainer.innerHTML, /Urgent queue • alerts engine • 88% confidence • 2 minutes ago/);
 });

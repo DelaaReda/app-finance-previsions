@@ -6,15 +6,15 @@
         </div>
         <div class="widget-actions">
             <button class="filter-btn active" data-filter="all" onclick="filterAlerts('all')">All</button>
-            <button class="filter-btn" data-filter="opportunities" onclick="filterAlerts('opportunities')">Opportunities</button>
-            <button class="filter-btn" data-filter="risks" onclick="filterAlerts('risks')">Risks</button>
-            <button class="filter-btn" data-filter="news" onclick="filterAlerts('news')">News</button>
+            <button class="filter-btn" data-filter="urgent" onclick="filterAlerts('urgent')">Urgent</button>
+            <button class="filter-btn" data-filter="high" onclick="filterAlerts('high')">Action</button>
+            <button class="filter-btn" data-filter="medium" onclick="filterAlerts('medium')">Monitor</button>
             <button class="help-icon" onclick="showHelp('alerts')" aria-label="Help" title="Recent trading signals">?</button>
             <button class="menu-icon" onclick="showToast('Widget menu')" aria-label="Menu">⋮</button>
         </div>
     </div>
     <div class="widget-body">
-        <p class="widget-subtitle">Timeline: Last 24 hours</p>
+        <p class="widget-subtitle">Top queue: loading priority bands...</p>
         <div class="timeline-container" id="timelineContainer">
             <div class="alert-item medium expandable" data-priority="low" data-type="news" onclick="toggleAlertDetails(this)">
                 <span class="alert-icon">🔎</span>

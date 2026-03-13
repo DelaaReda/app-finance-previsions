@@ -6381,6 +6381,24 @@ input[type="checkbox"]:checked+.toggle-switch::after {
   transition: all 0.3s;
 }
 
+.alert-queue-overview {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.alert-queue-overview .widget-subtitle {
+  margin: 0;
+}
+
+.alert-queue-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
 .alert-item:hover {
   background: rgba(255, 255, 255, 0.06);
   transform: translateX(4px);
