@@ -1293,3 +1293,92 @@ def test_judge_personal_finance_start_route_delegates_to_service(monkeypatch):
     assert data["open"][0]["id"] == "briefing"
     assert data["stats"]["ask_count"] == 1
     assert sorted(captured["tickers"]) == ["MSFT", "NVDA"]
+
+
+def test_judge_personal_finance_context_route_delegates_to_service(monkeypatch):
+    captured = {}
+
+    async def fake_get_judge_personal_finance_context_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "data": {
+                "daily_brief": {
+                    "summary": "Context route synthetic brief.",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-03-13T10:00:00Z",
+                    "freshness": "2026-03-13T10:00:00Z",
+                    "source": ["judge_personal_finance_context_service"],
+                },
+                "entry_points": [
+                    {
+                        "id": "brief_of_day",
+                        "kind": "open",
+                        "label": "Brief du jour",
+                        "target": "/brief/daily",
+                    }
+                ],
+                "scope_tickers": ["MSFT", "NVDA"],
+            },
+            "freshness": "2026-03-13T10:00:00Z",
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_personal_finance_context_payload",
+        fake_get_judge_personal_finance_context_payload,
+    )
+    client = _client()
+    resp = client.get("/api/judge/personal-finance/context?tickers=nvda&tickers=msft")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["data"]["scope_tickers"] == ["MSFT", "NVDA"]
+    assert sorted(captured["tickers"]) == ["MSFT", "NVDA"]
+
+
+def test_judge_personal_finance_ask_route_delegates_to_service(monkeypatch):
+    captured = {}
+
+    async def fake_get_judge_personal_finance_ask_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "data": {
+                "answer": "Hold and monitor CPI.",
+                "action": "hold",
+                "verdict": "hold",
+                "confidence": 0.61,
+                "freshness": "2026-03-13T11:00:00Z",
+                "generated_at": "2026-03-13T11:00:00Z",
+                "sources": [
+                    {"type": "news", "ticker": "NVDA"},
+                ],
+                "sources_count": 1,
+                "quality_status": "sufficient_sources",
+                "requirements_met": {
+                    "min_sources_2": True,
+                    "quality_threshold": True,
+                },
+            },
+            "freshness": "2026-03-13T11:00:00Z",
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_personal_finance_ask_payload",
+        fake_get_judge_personal_finance_ask_payload,
+    )
+    client = _client()
+    resp = client.post(
+        "/api/judge/personal-finance/ask",
+        json={"question": "What should I do with NVDA?", "tickers": ["NVDA"]},
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+
+    assert payload["ok"] is True
+    assert payload["data"]["answer"] == "Hold and monitor CPI."
+    assert payload["data"]["action"] == "hold"
+    assert captured["question"] == "What should I do with NVDA?"
+    assert captured["tickers"] == ["NVDA"]

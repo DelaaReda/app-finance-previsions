@@ -116,6 +116,56 @@ _FEEDBACK_STATUS_ALIASES = {
 }
 
 
+def _resolve_copilot_services():
+    try:
+        from importlib import import_module
+    except Exception:  # pragma: no cover
+        import_module = None  # type: ignore
+
+    if import_module is None:
+        return None, None
+
+    try:
+        copilot_service = import_module("domains.copilot.application.copilot_service")
+    except Exception:
+        try:
+            copilot_service = import_module("services")
+        except Exception:
+            copilot_service = None
+
+    try:
+        context_service_module = import_module("domains.copilot.application.context_service")
+        context_service_cls = getattr(context_service_module, "ContextService", None)
+    except Exception:
+        try:
+            context_service_module = import_module("services.context_service")
+            context_service_cls = getattr(context_service_module, "ContextService", None)
+        except Exception:
+            context_service_cls = None
+
+    return copilot_service, context_service_cls
+
+
+def _resolve_personal_finance_scope(
+    *,
+    scope: Optional[Dict[str, Any]],
+    tickers: Optional[List[str]],
+) -> Optional[Dict[str, List[str]]]:
+    normalized_tickers = normalize_tickers(tickers or [])
+    if scope is None:
+        scope = None
+    resolved_scope: Optional[Dict[str, List[str]]] = (
+        dict(scope) if isinstance(scope, dict) else None
+    )
+    if normalized_tickers:
+        if resolved_scope is None:
+            resolved_scope = {"tickers": normalized_tickers}
+        else:
+            resolved_scope["tickers"] = normalized_tickers
+
+    return resolved_scope
+
+
 def _default_risk_levels() -> List[str]:
     return ["low", "medium", "high", "critical"]
 
@@ -3283,6 +3333,117 @@ async def get_judge_personal_finance_start_payload(
                 "message": "personal-finance start fallback response",
             },
             default_source="judge_personal_finance_start_service",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
+        )
+
+
+async def get_judge_personal_finance_context_payload(
+    *,
+    tickers: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Proxy personal-finance context payload from copilot context stack."""
+    now_iso = utc_now_iso()
+    normalized_tickers = normalize_tickers(tickers or [])
+    scope = {"tickers": normalized_tickers} if normalized_tickers else None
+
+    try:
+        copilot_service, context_service_cls = _resolve_copilot_services()
+        if copilot_service is None:
+            raise RuntimeError("Copilot service unavailable")
+
+        payload = await copilot_service.build_context_payload(
+            context_service_cls=context_service_cls,
+            scope=scope,
+        )
+        if not isinstance(payload, dict):
+            raise TypeError("Invalid copilot context payload")
+
+        if payload.get("regime") == "fallback":
+            payload.setdefault("note", "Market context service temporarily unavailable.")
+
+        return service_response_with_metadata(
+            payload,
+            default_source="judge_personal_finance_context_service",
+            freshness=payload.get("freshness") or payload.get("generated_at") or now_iso,
+        )
+    except Exception as exc:
+        fallback: Dict[str, Any] = {
+            "note": "Market context service temporarily unavailable.",
+            "daily_brief": {"summary": "Market context unavailable.", "generated_at": now_iso, "freshness": now_iso},
+            "entry_points": [],
+            "scope_tickers": list(normalized_tickers),
+        }
+        return service_response_with_metadata(
+            fallback,
+            default_source="judge_personal_finance_context_service",
+            freshness=now_iso,
+            status="degraded",
+            error=str(exc),
+        )
+
+
+async def get_judge_personal_finance_ask_payload(
+    *,
+    question: str,
+    scope: Optional[Dict[str, Any]] = None,
+    tickers: Optional[List[str]] = None,
+    max_sources: Optional[int] = 5,
+    context_years: Optional[int] = 5,
+) -> Dict[str, Any]:
+    """Proxy personal-finance ask payload from copilot ask stack."""
+    now_iso = utc_now_iso()
+    resolved_scope = _resolve_personal_finance_scope(
+        scope=scope,
+        tickers=tickers,
+    )
+    normalized_tickers = normalize_tickers(tickers or [])
+    try:
+        copilot_service, context_service_cls = _resolve_copilot_services()
+        if copilot_service is None:
+            raise RuntimeError("Copilot service unavailable")
+
+        payload = await copilot_service.build_ask_payload(
+            question=question,
+            scope=resolved_scope,
+            tickers=normalized_tickers,
+            max_sources=max_sources,
+            context_years=context_years,
+            context_service_cls=context_service_cls,
+        )
+        if not isinstance(payload, dict):
+            raise TypeError("Invalid copilot ask payload")
+
+        return service_response_with_metadata(
+            payload,
+            default_source="judge_personal_finance_ask_service",
+            freshness=payload.get("freshness") or payload.get("generated_at") or now_iso,
+        )
+    except Exception as exc:
+        payload = {
+            "answer": f"Copilot unavailable: {exc}",
+            "action": "hold",
+            "verdict": "hold",
+            "why": ["Le service Ask est temporairement indisponible."],
+            "risk": {"level": "high", "caveat": "Service copilot indisponible."},
+            "risk_level": "high",
+            "sources": [],
+            "citations": [],
+            "model": "judge_personal_finance_ask_fallback",
+            "confidence": 0.0,
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "sources_count": 0,
+            "quality_status": "error",
+            "requirements_met": {"min_sources_2": False, "quality_threshold": False},
+            "question": question,
+            "warnings": ["Copilot ask backend temporarily unavailable."],
+            "error": str(exc),
+        }
+        return service_response_with_metadata(
+            payload,
+            default_source="judge_personal_finance_ask_service",
             freshness=now_iso,
             status="degraded",
             error=str(exc),

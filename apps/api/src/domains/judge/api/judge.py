@@ -3616,6 +3616,14 @@ class JudgeDecisionOutcomeFeedbackRequest(BaseModel):
     recorded_at: Optional[str] = Field(default=None, description="Optional UTC ISO timestamp.")
 
 
+class JudgePersonalFinanceAskRequest(BaseModel):
+    question: str
+    context_years: Optional[int] = 5
+    scope: Optional[Dict[str, Any]] = None
+    tickers: Optional[List[str]] = None
+    max_sources: Optional[int] = 5
+
+
 @router.get(
     "",
     response_model=JudgeResponse if JudgeResponse is not None else None,
@@ -3982,6 +3990,36 @@ async def get_judge_personal_finance_start(
         data["debug_pipeline"] = debug_metadata
 
     return response
+
+
+@router.get("/personal-finance/context")
+async def get_judge_personal_finance_context(
+    tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+):
+    """Alias endpoint for the personal finance context view."""
+    from services.judge_endpoint_service import (
+        get_judge_personal_finance_context_payload,
+    )
+
+    return await get_judge_personal_finance_context_payload(
+        tickers=normalize_tickers(tickers or []),
+    )
+
+
+@router.post("/personal-finance/ask")
+async def post_judge_personal_finance_ask(req: JudgePersonalFinanceAskRequest):
+    """Alias endpoint for personal finance ask interactions."""
+    from services.judge_endpoint_service import (
+        get_judge_personal_finance_ask_payload,
+    )
+
+    return await get_judge_personal_finance_ask_payload(
+        question=req.question,
+        context_years=req.context_years,
+        scope=req.scope,
+        tickers=normalize_tickers(req.tickers or []),
+        max_sources=req.max_sources,
+    )
 
 
 @router.get("/decision-journal")
