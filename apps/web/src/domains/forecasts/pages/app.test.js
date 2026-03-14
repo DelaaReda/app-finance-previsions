@@ -1521,7 +1521,7 @@ function loadRunCopilotStartOpen() {
   return { sandbox, overlay, calls };
 }
 
-function loadAndRenderHeroBriefHarness(fetchResponse) {
+function loadAndRenderHeroBriefHarness(fetchResponse, options = {}) {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const functionSource = extractSection(
     source,
@@ -1539,6 +1539,7 @@ function loadAndRenderHeroBriefHarness(fetchResponse) {
     console,
     window: {
       API_BASE_URL: 'http://localhost:8050/api',
+      FinanceAPI: {},
     },
     document: {
       getElementById(id) {
@@ -1582,6 +1583,7 @@ function loadAndRenderHeroBriefHarness(fetchResponse) {
       sandbox.lastRenderedState = state;
     },
     sanitizeCopilotStart(value) {
+      sandbox.sanitizedValue = value;
       return { sanitized: true, value };
     },
     formatRelativeTime() {
@@ -1591,6 +1593,9 @@ function loadAndRenderHeroBriefHarness(fetchResponse) {
       return 0;
     },
   };
+  if (typeof options.getCopilotStart === 'function') {
+    sandbox.window.FinanceAPI.getCopilotStart = async () => options.getCopilotStart();
+  }
   sandbox.window.window = sandbox.window;
   sandbox.globalThis = sandbox;
 
@@ -5362,8 +5367,10 @@ test('loadAndRenderHeroBrief reuses the shared starter renderer and stores the s
   await sandbox.loadAndRenderHeroBrief();
 
   assert.deepEqual(sandbox.fetchCalls, ['http://localhost:8050/api/copilot/start']);
-  assert.deepEqual(sandbox.window.copilotStart, responsePayload.data);
+  assert.deepEqual(sandbox.sanitizedValue, responsePayload.data);
+  assert.deepEqual(sandbox.window.copilotStart, { sanitized: true, value: responsePayload.data });
   assert.equal(elements.heroBriefSummary.style.opacity, '1');
+  assert.equal(renderCalls.length, 1);
 });
 
 test('loadAndRenderHeroBrief keeps the failure fallback when the starter request fails', async () => {
@@ -5376,6 +5383,28 @@ test('loadAndRenderHeroBrief keeps the failure fallback when the starter request
   assert.equal(elements.heroBriefSummary.style.color, '#ef4444');
   assert.equal(elements.heroBriefTimestamp.textContent, 'Update failed');
   assert.equal(elements.heroBriefTitle.textContent, '⚠️ Brief unavailable');
+});
+
+test('loadAndRenderHeroBrief prefers FinanceAPI.getCopilotStart so namespaced copilot routes reuse the shared connector', async () => {
+  const responsePayload = {
+    brief_of_day: {
+      summary: 'Personal finance starter should come from the shared connector.',
+      market_sentiment: 'BULLISH',
+      freshness: '2026-03-10T10:00:00Z',
+    },
+    ask: [{ label: 'Ask About Today', prompt: 'What changed for my portfolio today?', tickers: ['NVDA'] }],
+    open: [{ label: 'Open Copilot', target: '/personal-finance' }],
+  };
+  const { sandbox, renderCalls } = loadAndRenderHeroBriefHarness(null, {
+    getCopilotStart: async () => responsePayload,
+  });
+
+  await sandbox.loadAndRenderHeroBrief();
+
+  assert.deepEqual(sandbox.fetchCalls, []);
+  assert.deepEqual(sandbox.sanitizedValue, responsePayload);
+  assert.deepEqual(sandbox.window.copilotStart, { sanitized: true, value: responsePayload });
+  assert.equal(renderCalls.length, 1);
 });
 
 test('sanitizeForecastRows preserves forecast provenance SLA metadata for UI consumers', () => {

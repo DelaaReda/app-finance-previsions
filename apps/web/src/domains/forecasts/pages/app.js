@@ -9121,13 +9121,25 @@ async function loadAndRenderHeroBrief() {
   if (leadEl) leadEl.textContent = 'A 30-second portfolio memo before you dive deeper.';
 
   try {
-    const response = await fetch(`${API_BASE}/copilot/start`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const result = await response.json();
-    const data = result.data || {};
+    const result = await (typeof window.FinanceAPI?.getCopilotStart === 'function'
+      ? Promise.resolve(window.FinanceAPI.getCopilotStart())
+      : fetch(`${API_BASE}/copilot/start`).then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+      }));
+    const data = result && typeof result === 'object'
+      ? (result.data && typeof result.data === 'object' ? result.data : result)
+      : {};
+    const sanitizedStart = sanitizeCopilotStart(
+      (data && typeof data === 'object' && (data.copilot_start || data.copilotStart))
+      || data
+    );
+    const starterState = buildCopilotStartState({
+      ...(data && typeof data === 'object' ? data : {}),
+      copilot_start: sanitizedStart,
+    });
     const brief = data.brief_of_day || data.daily_brief || {};
 
     // Render brief summary
@@ -9187,9 +9199,9 @@ async function loadAndRenderHeroBrief() {
       leadEl.textContent = `Market shows ${sentimentText}. A 30-second portfolio memo before you dive deeper.`;
     }
 
-    // Render suggestion chips from brief actions
-    if (chipsEl && brief.ask && Array.isArray(brief.ask) && brief.ask.length > 0) {
-      const askItems = brief.ask.slice(0, 3);
+    // Render suggestion chips from the shared starter actions
+    if (chipsEl && Array.isArray(starterState.ask) && starterState.ask.length > 0) {
+      const askItems = starterState.ask.slice(0, 3);
       chipsEl.innerHTML = askItems.map((item, idx) => {
         const prompt = item.prompt || `Tell me about ${item.target || 'this'}`;
         const label = item.label || item.target || `Suggestion ${idx + 1}`;
@@ -9207,8 +9219,10 @@ async function loadAndRenderHeroBrief() {
       chipsEl.style.display = 'flex';
     }
 
+    renderHeroCopilotBrief(starterState);
+
     // Store for later use
-    window.copilotStart = data;
+    window.copilotStart = sanitizedStart;
 
     console.log('[Brief] Loaded successfully:', {
       summary: brief.summary?.substring(0, 50) + '...',
