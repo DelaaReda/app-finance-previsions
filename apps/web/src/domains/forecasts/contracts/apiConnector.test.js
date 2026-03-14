@@ -1459,6 +1459,84 @@ test('getCopilotStart falls back to copilot context when the starter route is un
   );
 });
 
+test('getCopilotStart keeps ask/open starter actions when namespaced start falls back through daily brief to context', async () => {
+  const calls = [];
+  const sandbox = loadConnector(
+    async (url) => {
+      calls.push(url);
+      if (url === 'http://localhost:8050/api/personal-finance/start?tickers=NVDA') {
+        throw new Error('starter route unavailable');
+      }
+
+      if (url === 'http://localhost:8050/api/brief/daily') {
+        return {
+          async json() {
+            return {
+              ok: true,
+              data: {
+                title: 'Brief of the day',
+                summary: 'Daily brief fallback is available while starter is degraded.',
+                market_sentiment: 'BULLISH',
+                generated_at: '2026-03-13T10:00:00.000Z',
+              },
+            };
+          },
+        };
+      }
+
+      assert.equal(url, 'http://localhost:8050/api/personal-finance/context?tickers=NVDA');
+      return {
+        async json() {
+          return {
+            ok: true,
+            data: {
+              entry_points: [
+                {
+                  id: 'brief_of_day',
+                  kind: 'open',
+                  label: 'Open the live brief',
+                  target: '/personal-finance',
+                },
+                {
+                  id: 'ask_copilot',
+                  kind: 'ask',
+                  label: 'Ask about NVDA',
+                  target: '/personal-finance/ask',
+                  prefill: {
+                    question: 'What matters most for NVDA today?',
+                    tickers: ['NVDA'],
+                  },
+                },
+              ],
+            },
+          };
+        },
+      };
+    },
+    {
+      FINANCECOPILOT_NAMESPACE: 'personal-finance',
+    },
+  );
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotStart(['nvda']);
+  const copilotStart = payload.copilot_start || {};
+
+  assert.deepEqual(calls, [
+    'http://localhost:8050/api/personal-finance/start?tickers=NVDA',
+    'http://localhost:8050/api/brief/daily',
+    'http://localhost:8050/api/personal-finance/context?tickers=NVDA',
+  ]);
+  assert.equal(copilotStart.brief_of_day.summary, 'Daily brief fallback is available while starter is degraded.');
+  assert.deepEqual(
+    copilotStart.ask.map((item) => ({ id: item.id, target: item.target })),
+    [{ id: 'ask_copilot', target: '/personal-finance/ask' }]
+  );
+  assert.deepEqual(
+    copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
+    [{ id: 'brief_of_day', target: 'market' }]
+  );
+});
+
 test('getPortfolioRiskProfile resolves the default saved portfolio and unwraps the risk profile envelope', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {

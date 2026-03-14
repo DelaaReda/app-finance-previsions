@@ -294,19 +294,40 @@ async function getCopilotStart(tickers) {
     return normalized;
   }
 
+  let dailyBrief = null;
   // Fallback: load daily brief directly if copilot start is empty
   try {
-    const dailyBrief = await getDailyBrief();
+    dailyBrief = await getDailyBrief();
     if (dailyBrief && Object.keys(dailyBrief).length > 0) {
       normalized.brief_of_day = dailyBrief;
       normalized.brief = dailyBrief;
-      return normalized;
     }
   } catch (error) {
     console.warn('[Copilot] getDailyBrief fallback failed:', error?.message || error);
   }
 
-  return loadCopilotContext(tickers);
+  const contextPayload = await loadCopilotContext(tickers);
+  if (contextPayload && typeof contextPayload === 'object') {
+    const merged = { ...contextPayload };
+    if (dailyBrief && Object.keys(dailyBrief).length > 0) {
+      if (!merged.brief_of_day || typeof merged.brief_of_day !== 'object' || !Object.keys(merged.brief_of_day).length) {
+        merged.brief_of_day = dailyBrief;
+      }
+      if (!merged.brief || typeof merged.brief !== 'object' || !Object.keys(merged.brief).length) {
+        merged.brief = dailyBrief;
+      }
+      merged.copilot_start = transformCopilotStart(
+        merged.copilot_start || merged.copilotStart,
+        {
+          ...merged,
+          daily_brief: merged.daily_brief || dailyBrief,
+        }
+      );
+    }
+    return merged;
+  }
+
+  return normalized;
 }
 
 async function getDailyBrief() {
@@ -1379,7 +1400,7 @@ function transformCopilotStart(payload, fallbackPayload = null) {
       if (!item || typeof item !== 'object') return false;
       const kind = String(item.kind || '').toLowerCase();
       const target = String(item.target || '').toLowerCase();
-      return kind === 'ask' || target === '/copilot/ask';
+      return kind === 'ask' || isCopilotAskTarget(target);
     });
   const normalizedOpen = openItems.length
     ? openItems
@@ -1388,7 +1409,7 @@ function transformCopilotStart(payload, fallbackPayload = null) {
         if (!item || typeof item !== 'object') return false;
         const kind = String(item.kind || '').toLowerCase();
         const target = String(item.target || '').toLowerCase();
-        return kind === 'open' || (target && target !== '/copilot/ask');
+        return kind === 'open' || (target && !isCopilotAskTarget(target));
       })
       .map((item) => ({
         ...item,
@@ -1406,6 +1427,16 @@ function transformCopilotStart(payload, fallbackPayload = null) {
     allocation_drift_alerts: extractObject(source, ['allocation_drift_alerts', 'allocationDriftAlerts'])
       || extractObject(fallbackSource, ['allocation_drift_alerts', 'allocationDriftAlerts'])
   };
+}
+
+function isCopilotAskTarget(target) {
+  const normalizedTarget = String(target || '').trim().toLowerCase();
+  return (
+    normalizedTarget === '/copilot/ask'
+    || normalizedTarget === 'copilot/ask'
+    || normalizedTarget === '/personal-finance/ask'
+    || normalizedTarget === 'personal-finance/ask'
+  );
 }
 
 function mapRegimeAlertSeverity(label, confidence) {
