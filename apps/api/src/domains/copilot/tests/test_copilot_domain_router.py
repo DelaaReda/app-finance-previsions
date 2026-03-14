@@ -617,6 +617,28 @@ def test_personal_finance_context_alias_reuses_copilot_context_payload(monkeypat
 
     data_context = dict(payload_context.get("data") or {})
     data_finance = dict(payload_finance.get("data") or {})
+    finance_copilot_start = dict(data_finance.get("copilot_start") or {})
+
+    context_ask_targets = [
+        item.get("target") for item in (data_context.get("copilot_start") or {}).get("ask", [])
+    ]
+    finance_ask_targets = [
+        item.get("target") for item in (data_finance.get("copilot_start") or {}).get("ask", [])
+    ]
+    context_open_targets = [
+        item.get("target") for item in (data_context.get("copilot_start") or {}).get("open", [])
+    ]
+    finance_open_targets = [
+        item.get("target") for item in (data_finance.get("copilot_start") or {}).get("open", [])
+    ]
+
+    assert context_ask_targets == ["/copilot/ask"]
+    assert finance_ask_targets == ["/personal-finance/ask"]
+    assert context_open_targets == ["/brief/daily", "/copilot"]
+    assert finance_open_targets == ["/brief/daily", "/personal-finance"]
+
+    data_context.pop("copilot_start", None)
+    data_finance.pop("copilot_start", None)
     assert data_finance == data_context
 
     data = data_finance
@@ -629,9 +651,16 @@ def test_personal_finance_context_alias_reuses_copilot_context_payload(monkeypat
         "open_copilot",
     ]
 
-    copilot_start = data.get("copilot_start") or {}
+    copilot_start = finance_copilot_start
     assert [item.get("id") for item in (copilot_start.get("ask") or [])] == ["ask_copilot"]
     assert [item.get("id") for item in (copilot_start.get("open") or [])] == [
         "brief_of_day",
         "open_copilot",
+    ]
+    assert [item.get("target") for item in (copilot_start.get("ask") or [])] == [
+        "/personal-finance/ask",
+    ]
+    assert [item.get("target") for item in (copilot_start.get("open") or [])] == [
+        "/brief/daily",
+        "/personal-finance",
     ]

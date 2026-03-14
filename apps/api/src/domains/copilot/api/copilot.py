@@ -319,6 +319,7 @@ async def copilot_history(limit: int = 20):
 @router.get("/copilot/context")
 async def copilot_context(
     tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+    namespace: Optional[str] = None,
 ):
     scope = _normalize_scope(tickers)
 
@@ -327,6 +328,11 @@ async def copilot_context(
             context_service_cls=ContextService,
             scope=scope,
         )
+        if isinstance(payload, dict):
+            start_payload = payload.get("copilot_start")
+            if isinstance(start_payload, dict):
+                payload = dict(payload)
+                payload["copilot_start"] = _rewrite_namespace_targets(start_payload, namespace)
         if isinstance(payload, dict) and payload.get("regime") == "fallback":
             payload.setdefault("note", "Market context service temporarily unavailable.")
         return {"ok": True, "data": payload}
@@ -351,6 +357,10 @@ async def copilot_context(
                 daily_brief=daily_brief,
                 entry_points=entry_points,
                 scope=scope,
+            )
+            fallback["copilot_start"] = _rewrite_namespace_targets(
+                fallback["copilot_start"],
+                namespace,
             )
         return {"ok": True, "data": fallback}
 
@@ -458,7 +468,7 @@ async def personal_finance_context(
     tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
 ):
     """Alias entrypoint for the personal finance context view."""
-    return await copilot_context(tickers=tickers)
+    return await copilot_context(tickers=tickers, namespace="personal-finance")
 
 
 @router.post("/personal-finance/ask")
