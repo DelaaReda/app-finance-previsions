@@ -9144,7 +9144,9 @@ async function loadAndRenderHeroBrief() {
       ...(data && typeof data === 'object' ? data : {}),
       copilot_start: sanitizedStart,
     });
-    const brief = data.brief_of_day || data.daily_brief || {};
+    const brief = starterState && typeof starterState === 'object' && starterState.brief
+      ? starterState.brief
+      : {};
 
     // Render brief summary
     if (summaryEl) {
@@ -9154,7 +9156,7 @@ async function loadAndRenderHeroBrief() {
 
     // Render signals (top_signals)
     if (signalsEl) {
-      const signals = brief.top_signals || [];
+      const signals = brief.topSignals || brief.top_signals || [];
       if (signals.length > 0) {
         const signalText = signals.slice(0, 3).map(s => {
           if (typeof s === 'string') return s;
@@ -9169,7 +9171,7 @@ async function loadAndRenderHeroBrief() {
 
     // Render risks (top_risks)
     if (risksEl) {
-      const risks = brief.top_risks || [];
+      const risks = brief.topRisks || brief.top_risks || [];
       if (risks.length > 0) {
         const riskText = risks.slice(0, 3).map(r => {
           if (typeof r === 'string') return r;
@@ -9184,21 +9186,21 @@ async function loadAndRenderHeroBrief() {
 
     // Render timestamp
     if (timestampEl) {
-      const freshness = brief.freshness || brief.generated_at;
+      const freshness = brief.freshness || brief.generatedAt || brief.generated_at;
       const relative = freshness ? formatRelativeTime(freshness) : 'just now';
       timestampEl.textContent = `Updated ${relative}`;
     }
 
     // Update title with sentiment if available
     if (titleEl) {
-      const sentiment = brief.market_sentiment || brief.sentiment;
+      const sentiment = brief.marketSentiment || brief.market_sentiment || brief.sentiment;
       const sentimentIcon = sentiment === 'BULLISH' ? '🟢' : sentiment === 'BEARISH' ? '🔴' : '🟡';
       titleEl.textContent = `${sentimentIcon} Brief of the day`;
     }
 
     // Update lead with sentiment context
     if (leadEl) {
-      const sentiment = brief.market_sentiment || brief.sentiment || 'UNKNOWN';
+      const sentiment = brief.marketSentiment || brief.market_sentiment || brief.sentiment || 'UNKNOWN';
       const sentimentText = sentiment === 'BULLISH' ? 'bullish bias' : sentiment === 'BEARISH' ? 'cautious outlook' : 'mixed signals';
       leadEl.textContent = `Market shows ${sentimentText}. A 30-second portfolio memo before you dive deeper.`;
     }
@@ -9230,9 +9232,9 @@ async function loadAndRenderHeroBrief() {
 
     console.log('[Brief] Loaded successfully:', {
       summary: brief.summary?.substring(0, 50) + '...',
-      sentiment: brief.market_sentiment,
-      signals: (brief.top_signals || []).length,
-      risks: (brief.top_risks || []).length,
+      sentiment: brief.marketSentiment || brief.market_sentiment,
+      signals: (brief.topSignals || brief.top_signals || []).length,
+      risks: (brief.topRisks || brief.top_risks || []).length,
       freshness: brief.freshness
     });
 

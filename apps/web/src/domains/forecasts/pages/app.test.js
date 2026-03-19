@@ -1555,13 +1555,21 @@ function loadAndRenderHeroBriefHarness(fetchResponse, options = {}) {
       return Promise.resolve(fetchResponse);
     },
     buildCopilotStartState(result) {
+      const payload = result && typeof result === 'object'
+        ? (result.data && typeof result.data === 'object' ? result.data : result)
+        : {};
+      const briefSource = payload.brief_of_day
+        || payload.daily_brief
+        || payload.copilot_start?.brief_of_day
+        || payload.copilot_start?.value?.brief_of_day
+        || {};
       return {
         brief: {
-          summary: result.data?.brief_of_day?.summary || '',
-          marketSentiment: result.data?.brief_of_day?.market_sentiment || 'UNKNOWN',
+          summary: briefSource.summary || '',
+          marketSentiment: briefSource.market_sentiment || briefSource.marketSentiment || 'UNKNOWN',
           topSignals: ['Breadth improving'],
           topRisks: ['CPI tomorrow'],
-          freshness: result.data?.brief_of_day?.freshness || '',
+          freshness: briefSource.freshness || briefSource.generated_at || '',
         },
         ask: [
           {
@@ -5404,6 +5412,31 @@ test('loadAndRenderHeroBrief prefers FinanceAPI.getCopilotStart so namespaced co
   assert.deepEqual(sandbox.fetchCalls, []);
   assert.deepEqual(sandbox.sanitizedValue, responsePayload);
   assert.deepEqual(sandbox.window.copilotStart, { sanitized: true, value: responsePayload });
+  assert.equal(renderCalls.length, 1);
+});
+
+test('loadAndRenderHeroBrief renders the normalized starter brief when the backend only returns copilot_start', async () => {
+  const responsePayload = {
+    copilot_start: {
+      brief_of_day: {
+        summary: 'Starter-only brief is still visible in the hero.',
+        market_sentiment: 'BULLISH',
+        freshness: '2026-03-10T10:00:00Z',
+      },
+      ask: [{ label: 'Ask About Today', prompt: 'What changed for my portfolio today?' }],
+      open: [{ label: 'Open Copilot', target: '/personal-finance' }],
+    },
+  };
+  const { sandbox, elements, renderCalls } = loadAndRenderHeroBriefHarness(null, {
+    getCopilotStart: async () => responsePayload,
+  });
+
+  await sandbox.loadAndRenderHeroBrief();
+
+  assert.equal(elements.heroBriefSummary.textContent, 'Starter-only brief is still visible in the hero.');
+  assert.equal(elements.heroBriefTitle.textContent, '🟢 Brief of the day');
+  assert.equal(elements.heroBriefLead.textContent, 'Market shows bullish bias. A 30-second portfolio memo before you dive deeper.');
+  assert.equal(elements.heroBriefTimestamp.textContent, 'Updated 2 minutes ago');
   assert.equal(renderCalls.length, 1);
 });
 
