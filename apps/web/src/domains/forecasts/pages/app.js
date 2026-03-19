@@ -5802,7 +5802,7 @@ function normalizeCopilotStartList(value) {
 function buildCopilotFocusPrompt(topic) {
   const normalizedTopic = toString(topic, '').trim();
   if (!normalizedTopic) return '';
-  return `Open a deep dive on ${normalizedTopic} and explain today's setup, verdict, risks, confidence, freshness, and sources.`;
+  return `Give me a deep dive on ${normalizedTopic} and explain today's setup, verdict, risks, confidence, freshness, and sources.`;
 }
 
 function deriveCopilotStartFocusItems(state) {
@@ -5826,7 +5826,11 @@ function deriveCopilotStartFocusItems(state) {
     .filter(Boolean)
     .filter((topic) => {
       const normalizedTopic = topic.toLowerCase();
-      if (seenTopics.has(normalizedTopic) || existingLabels.has(`open ${normalizedTopic}`)) {
+      if (
+        seenTopics.has(normalizedTopic)
+        || existingLabels.has(`open ${normalizedTopic}`)
+        || existingLabels.has(`ask about ${normalizedTopic}`)
+      ) {
         return false;
       }
       seenTopics.add(normalizedTopic);
@@ -5835,7 +5839,7 @@ function deriveCopilotStartFocusItems(state) {
     .slice(0, 2)
     .map((topic, index) => ({
       id: `copilot_focus_${index}`,
-      label: `Open ${topic}`,
+      label: `Ask about ${topic}`,
       prompt: buildCopilotFocusPrompt(topic),
       tickers: /^[A-Z][A-Z0-9.-]{0,9}$/.test(topic) ? [topic] : []
     }))

@@ -4456,19 +4456,19 @@ test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actio
   assert.equal(suggestionLabels[0], 'Regime: RISK ON');
   assert.equal(suggestionLabels.length, 3);
   assert.equal(
-    suggestionLabels.filter((label) => label.startsWith('Open ')).length,
+    suggestionLabels.filter((label) => label.startsWith('Ask about ')).length,
     2,
   );
 
   Array.from(elements.heroSuggestionChips.children)
-    .filter((node) => typeof node.click === 'function' && node.textContent.startsWith('Open '))
+    .filter((node) => typeof node.click === 'function' && node.textContent.startsWith('Ask about '))
     .forEach((node) => node.click());
 
   const normalizedPromptCalls = JSON.parse(JSON.stringify(promptCalls));
   assert.equal(normalizedPromptCalls[0].prompt, 'What matters most today?');
   assert.deepEqual(normalizedPromptCalls[0].tickers, ['NVDA', 'MSFT']);
   assert.equal(normalizedPromptCalls.length, 3);
-  assert.ok(normalizedPromptCalls.some((item) => item.prompt.startsWith('Open a deep dive on ')));
+  assert.ok(normalizedPromptCalls.some((item) => item.prompt.startsWith('Give me a deep dive on ')));
   assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['market']);
 });
 
@@ -5690,10 +5690,10 @@ test('deriveCopilotStartFocusItems surfaces brief-driven ticker and theme starte
   });
 
   assert.equal(items.length, 2);
-  assert.equal(items[0].label, 'Open NVDA');
-  assert.equal(items[0].prompt, "Open a deep dive on NVDA and explain today's setup, verdict, risks, confidence, freshness, and sources.");
+  assert.equal(items[0].label, 'Ask about NVDA');
+  assert.equal(items[0].prompt, "Give me a deep dive on NVDA and explain today's setup, verdict, risks, confidence, freshness, and sources.");
   assert.deepEqual(Array.from(items[0].tickers), ['NVDA']);
-  assert.equal(items[1].label, 'Open AI Infrastructure');
+  assert.equal(items[1].label, 'Ask about AI Infrastructure');
   assert.deepEqual(Array.from(items[1].tickers), []);
 });
 
@@ -5710,7 +5710,24 @@ test('deriveCopilotStartFocusItems skips duplicates already exposed by ask/open 
   });
 
   assert.equal(items.length, 1);
-  assert.equal(items[0].label, 'Open Cloud');
+  assert.equal(items[0].label, 'Ask about Cloud');
+  assert.deepEqual(Array.from(items[0].tickers), []);
+});
+
+test('deriveCopilotStartFocusItems skips duplicates already exposed by ask labels', () => {
+  const sandbox = loadCopilotFocusHelpers();
+
+  const items = sandbox.deriveCopilotStartFocusItems({
+    scope_tickers: ['nvda'],
+    brief: {
+      topSignals: ['NVDA', 'AI Infrastructure'],
+    },
+    ask: [{ label: 'Ask about NVDA' }],
+    open: [{ label: 'Open Live Brief' }],
+  });
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].label, 'Ask about AI Infrastructure');
   assert.deepEqual(Array.from(items[0].tickers), []);
 });
 
