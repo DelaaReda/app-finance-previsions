@@ -140,6 +140,38 @@ def test_copilot_ask_route_keeps_insufficient_evidence_explicit(monkeypatch):
     assert data["requirements_met"]["min_sources_2"] is False
 
 
+def test_copilot_ask_route_returns_never_empty_fallback_when_service_crashes(monkeypatch):
+    async def fake_build_ask_payload(**_kwargs):
+        raise RuntimeError("judge stack offline")
+
+    monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", fake_build_ask_payload)
+
+    client = _client()
+    response = client.post(
+        "/api/copilot/ask",
+        json={"question": "Should I add to NVDA today?", "tickers": ["NVDA"]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+
+    data = payload["data"]
+    assert data["question"] == "Should I add to NVDA today?"
+    assert data["answer"] == "Copilot ask is temporarily unavailable."
+    assert data["verdict"] == "hold"
+    assert data["quality_status"] == "error"
+    assert data["requirements_met"] == {
+        "min_sources_2": False,
+        "quality_threshold": False,
+    }
+    assert data["note"] == "Copilot ask service temporarily unavailable."
+    assert data["error"] == "judge stack offline"
+    assert data["sources"] == ["copilot_ask_route", "copilot_ask_fallback"]
+    assert data["memo"]["verdict"] == "hold"
+    assert data["memo"]["risks"] == ["high", "Retry after the copilot ask dependency recovers."]
+
+
 def test_copilot_ask_route_preserves_event_timing_contract(monkeypatch):
     async def fake_build_ask_payload(**_kwargs):
         return {

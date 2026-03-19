@@ -299,16 +299,58 @@ class CopilotAskRequest(BaseModel):
     max_sources: Optional[int] = 5
 
 
+def _build_ask_fallback_payload(
+    req: CopilotAskRequest,
+    *,
+    error: Exception,
+) -> Dict[str, Any]:
+    fallback_payload = {
+        "question": req.question,
+        "answer": "Copilot ask is temporarily unavailable.",
+        "action": "hold",
+        "verdict": "hold",
+        "horizon": "1w",
+        "why": [
+            "The copilot ask endpoint hit an internal error and returned a safety fallback.",
+        ],
+        "risk": {
+            "level": "high",
+            "caveat": "Retry after the copilot ask dependency recovers.",
+        },
+        "risk_level": "high",
+        "risk_caveat": "Retry after the copilot ask dependency recovers.",
+        "sources": [],
+        "citations": [],
+        "confidence": 0.0,
+        "generated_at": _utc_now_iso(),
+        "sources_count": 0,
+        "quality_status": "error",
+        "requirements_met": {
+            "min_sources_2": False,
+            "quality_threshold": False,
+        },
+        "source": ["copilot_ask_route", "copilot_ask_fallback"],
+        "note": "Copilot ask service temporarily unavailable.",
+        "error": str(error),
+    }
+    if req.tickers:
+        fallback_payload["tickers"] = list(req.tickers)
+    return _normalize_ask_payload(fallback_payload)
+
+
 @router.post("/copilot/ask")
 async def copilot_ask(req: CopilotAskRequest):
-    payload = await copilot_service.build_ask_payload(
-        question=req.question,
-        context_years=req.context_years,
-        scope=req.scope,
-        tickers=req.tickers,
-        max_sources=req.max_sources,
-    )
-    return {"ok": True, "data": _normalize_ask_payload(payload)}
+    try:
+        payload = await copilot_service.build_ask_payload(
+            question=req.question,
+            context_years=req.context_years,
+            scope=req.scope,
+            tickers=req.tickers,
+            max_sources=req.max_sources,
+        )
+        return {"ok": True, "data": _normalize_ask_payload(payload)}
+    except Exception as exc:
+        return {"ok": True, "data": _build_ask_fallback_payload(req, error=exc)}
 
 
 @router.get("/copilot/history")
