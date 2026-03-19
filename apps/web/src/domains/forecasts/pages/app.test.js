@@ -5535,6 +5535,9 @@ test('hero-what-need component reuses shared copilot starter helpers for ask/ope
   assert.match(html, /onclick="runCopilotStartPrompt\('Give me today\\\\'s portfolio brief as a short memo with verdict, main drivers, risks, confidence, freshness, and sources\.'\)"/);
   assert.match(html, /onclick="runCopilotStartOpen\('brief'\)"/);
   assert.match(html, /onclick="runCopilotStartPrompt\('Explain what matters in today\\\\'s portfolio brief and what I should watch next\.'\)"/);
+  assert.match(html, /id="heroBriefExplainability"/);
+  assert.match(html, /id="heroBriefTraceability"/);
+  assert.match(html, /id="heroSuggestionChips"/);
 });
 
 test('index.html exposes the hero brief slots required by the copilot starter', () => {

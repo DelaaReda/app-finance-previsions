@@ -14,8 +14,10 @@
         <p id="heroBriefSummary" class="ai-summary-content">Your portfolio is up 1.88% today driven by tech rally (NVDA +8.5%, META +5.2%).
             Fed dovish signals support bullish continuation. Recommended: Hold current positions, monitor volatility.
         </p>
-        <p id="heroBriefSignals" class="hero-brief-meta"></p>
-        <p id="heroBriefRisks" class="hero-brief-meta"></p>
+        <p id="heroBriefSignals" class="hero-brief-meta" style="display: none;"></p>
+        <p id="heroBriefRisks" class="hero-brief-meta" style="display: none;"></p>
+        <p id="heroBriefExplainability" class="hero-brief-meta" style="display: none;"></p>
+        <p id="heroBriefTraceability" class="hero-brief-meta" style="display: none;"></p>
         <div class="ai-summary-footer">
             <span id="heroBriefTimestamp" class="ai-timestamp">Updated 2 minutes ago</span>
             <div id="heroBriefActions" class="hero-brief-actions">
@@ -24,6 +26,14 @@
                 <button class="ai-action-btn secondary"
                     onclick="runCopilotStartOpen('brief')">Open Live Brief</button>
             </div>
+        </div>
+        <div class="suggestions-chips" id="heroSuggestionChips" aria-label="Suggested copilot actions">
+            <button class="suggestion-chip"
+                onclick="runCopilotStartPrompt('Explain what matters in today\\'s portfolio brief and what I should watch next.')">Ask copilot about today's brief</button>
+            <button class="suggestion-chip"
+                onclick="safeSwitchTab(document.querySelector('[data-tab=&quot;overview&quot;]'), 'overview'); setTimeout(function() { var target = document.getElementById('market-calendar-widget-container'); if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 120);">Open this week's earnings calendar</button>
+            <button class="suggestion-chip"
+                onclick="safeSwitchTab(document.querySelector('[data-tab=&quot;overview&quot;]'), 'overview'); setTimeout(function() { var target = document.getElementById('quick-actions-widget-container'); if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 120);">Open today's portfolio actions</button>
         </div>
     </section>
 
@@ -56,17 +66,5 @@
             <span class="need-title">GO / NO-GO Drill</span>
             <span class="need-desc">Run readiness drill before key actions</span>
         </button>
-    </div>
-
-    <div class="ai-suggestions-hero">
-        <h3>🤖 AI Suggestions for you:</h3>
-        <div id="heroSuggestionChips" class="suggestions-chips">
-            <button class="suggestion-chip"
-                onclick="runCopilotStartPrompt('Explain what matters in today\\'s portfolio brief and what I should watch next.')">Ask copilot about today's brief</button>
-            <button class="suggestion-chip"
-                onclick="safeSwitchTab(document.querySelector('[data-tab=&quot;overview&quot;]'), 'overview'); setTimeout(function() { var target = document.getElementById('market-calendar-widget-container'); if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 120);">Open this week's earnings calendar</button>
-            <button class="suggestion-chip"
-                onclick="safeSwitchTab(document.querySelector('[data-tab=&quot;overview&quot;]'), 'overview'); setTimeout(function() { var target = document.getElementById('quick-actions-widget-container'); if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 120);">Open today's portfolio actions</button>
-        </div>
     </div>
 </div>
