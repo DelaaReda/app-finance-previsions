@@ -268,6 +268,34 @@ def _normalize_string_list(value: Any) -> List[str]:
     return [token] if token else []
 
 
+def _brief_topic_label(value: Any) -> str:
+    if isinstance(value, dict):
+        for key in ("ticker", "label", "name", "title", "sector", "theme", "value"):
+            token = _safe_text(value.get(key))
+            if token:
+                return token
+        return ""
+    return _safe_text(value)
+
+
+def _build_starter_question(
+    scope: Optional[Dict[str, Any]] = None,
+    daily_brief: Optional[Dict[str, Any]] = None,
+) -> str:
+    scope_tickers = _normalize_tickers(scope.get("tickers") if isinstance(scope, dict) else [])
+    if scope_tickers:
+        return f"Que dois-je surveiller aujourd'hui sur {', '.join(scope_tickers[:3])} ?"
+
+    brief = daily_brief if isinstance(daily_brief, dict) else {}
+    for key in ("top_risks", "top_signals", "top_opportunities"):
+        for item in brief.get(key) or []:
+            topic = _brief_topic_label(item)
+            if topic:
+                return f"Quel est l'impact de {topic} sur ma journée de trading ?"
+
+    return "Que dois-je surveiller aujourd'hui ?"
+
+
 def _normalize_brief_event_timing(brief: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     event_timing = brief.get("event_timing") if isinstance(brief.get("event_timing"), dict) else {}
     raw_events = event_timing.get("events") if isinstance(event_timing.get("events"), list) else []
@@ -1096,7 +1124,10 @@ def _load_daily_brief_payload() -> Dict[str, Any]:
     return normalized
 
 
-def _build_copilot_entry_points(scope: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def _build_copilot_entry_points(
+    scope: Optional[Dict[str, Any]] = None,
+    daily_brief: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
     scope_tickers = _normalize_tickers(scope.get("tickers") if isinstance(scope, dict) else [])
     return [
         {
@@ -1111,7 +1142,7 @@ def _build_copilot_entry_points(scope: Optional[Dict[str, Any]] = None) -> List[
             "label": "Poser une question",
             "target": "/copilot/ask",
             "prefill": {
-                "question": "Que dois-je surveiller aujourd'hui ?",
+                "question": _build_starter_question(scope, daily_brief),
                 "tickers": scope_tickers,
             },
         },
@@ -1855,7 +1886,10 @@ async def build_context_payload(context_service_cls: Optional[Any] = None, scope
     )
     
     payload["daily_brief"] = _load_daily_brief_payload()
-    payload["entry_points"] = _build_copilot_entry_points(resolved_scope)
+    payload["entry_points"] = _build_copilot_entry_points(
+        resolved_scope,
+        payload.get("daily_brief"),
+    )
     payload["copilot_start"] = _build_copilot_start_payload(
         daily_brief=payload.get("daily_brief"),
         entry_points=payload.get("entry_points"),

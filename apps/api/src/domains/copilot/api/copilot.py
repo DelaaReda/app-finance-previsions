@@ -338,7 +338,7 @@ async def copilot_context(
         return {"ok": True, "data": payload}
     except Exception:
         daily_brief = copilot_service._load_daily_brief_payload()
-        entry_points = copilot_service._build_copilot_entry_points(scope)
+        entry_points = copilot_service._build_copilot_entry_points(scope, daily_brief)
         build_start_payload = getattr(
             copilot_service,
             "_build_copilot_start_payload",
@@ -414,7 +414,7 @@ async def copilot_start(
         }
     except Exception:
         daily_brief = copilot_service._load_daily_brief_payload()
-        entry_points = copilot_service._build_copilot_entry_points(scope)
+        entry_points = copilot_service._build_copilot_entry_points(scope, daily_brief)
         build_start_payload = getattr(
             copilot_service,
             "_build_copilot_start_payload",
