@@ -5743,6 +5743,43 @@ function ensureCopilotStartEventCalendarOpen(openItems, eventTiming) {
   return normalizedItems;
 }
 
+function deriveCopilotStartTickerOpenItems(openItems, state) {
+  const normalizedItems = Array.isArray(openItems) ? [...openItems] : [];
+  const source = isObject(state) ? state : {};
+  const brief = isObject(source.brief) ? source.brief : {};
+  const existingTargets = new Set(
+    normalizedItems.map((item) => normalizeCopilotStartOpenTarget(item && item.target, item && item.id)).filter(Boolean)
+  );
+  const seenTickers = new Set();
+  const candidates = [
+    ...normalizeCopilotStarterTickers(source.scope_tickers || source.scopeTickers),
+    ...normalizeCopilotStarterTickers(source.contextInfluence?.effectiveTickers || source.contextInfluence?.effective_tickers),
+    ...normalizeCopilotStartList(brief.topSignals || brief.top_signals),
+    ...normalizeCopilotStartList(brief.topOpportunities || brief.top_opportunities)
+  ];
+
+  candidates
+    .map((item) => toString(item, '').trim().toUpperCase())
+    .filter((item) => /^[A-Z][A-Z0-9.-]{0,9}$/.test(item))
+    .filter((ticker) => {
+      if (seenTickers.has(ticker) || existingTargets.has(`ticker:${ticker.toLowerCase()}`)) {
+        return false;
+      }
+      seenTickers.add(ticker);
+      return true;
+    })
+    .slice(0, 2)
+    .forEach((ticker) => {
+      normalizedItems.push({
+        id: `open_${ticker.toLowerCase()}`,
+        label: `Open ${ticker} deep dive`,
+        target: `ticker:${ticker}`
+      });
+    });
+
+  return normalizedItems;
+}
+
 function normalizeCopilotStartOpenTarget(target, id = '') {
   const normalizedTarget = toString(target, '')
     .trim()
@@ -5803,6 +5840,13 @@ function buildCopilotFocusPrompt(topic) {
   const normalizedTopic = toString(topic, '').trim();
   if (!normalizedTopic) return '';
   return `Give me a deep dive on ${normalizedTopic} and explain today's setup, verdict, risks, confidence, freshness, and sources.`;
+}
+
+function parseCopilotStartTickerTarget(target) {
+  const normalizedTarget = normalizeCopilotStartOpenTarget(target);
+  if (!normalizedTarget.startsWith('ticker:')) return null;
+  const ticker = normalizedTarget.slice('ticker:'.length).trim().toUpperCase();
+  return /^[A-Z][A-Z0-9.-]{0,9}$/.test(ticker) ? ticker : null;
 }
 
 function deriveCopilotStartFocusItems(state) {
@@ -5909,10 +5953,6 @@ function buildCopilotStartState(raw) {
   );
   const topRisks = normalizeCopilotStartList(briefSource.top_risks || briefSource.risks);
   const eventTiming = normalizeCopilotStartEventTiming(briefSource.event_timing || briefSource.eventTiming);
-  const open = ensureCopilotStartEventCalendarOpen(
-    normalizeCopilotStartOpen(copilotStart.open),
-    eventTiming
-  );
   const sourceLabels = normalizeCopilotSourceLabels(briefSource.sources || briefSource.source);
   const generatedAt = toString(
     briefSource.generated_at || briefSource.generatedAt || briefSource.freshness,
@@ -5937,6 +5977,20 @@ function buildCopilotStartState(raw) {
       portfolioId: toString(rawContextInfluence.portfolio_id || rawContextInfluence.portfolioId, '')
     }
     : null;
+  const open = deriveCopilotStartTickerOpenItems(
+    ensureCopilotStartEventCalendarOpen(
+      normalizeCopilotStartOpen(copilotStart.open),
+      eventTiming
+    ),
+    {
+      scope_tickers: scopeTickers,
+      contextInfluence,
+      brief: {
+        topSignals,
+        topOpportunities
+      }
+    }
+  );
 
   return {
     brief: {
@@ -6062,6 +6116,14 @@ function runCopilotStartPrompt(prompt, tickers = []) {
 function resolveCopilotStartOpenDestination(target) {
   const normalizedTarget = normalizeCopilotStartOpenTarget(target);
   if (!normalizedTarget) return null;
+  const ticker = parseCopilotStartTickerTarget(normalizedTarget);
+  if (ticker) {
+    return {
+      target: normalizedTarget,
+      facette: 'deep-dive',
+      ticker
+    };
+  }
 
   if (
     normalizedTarget === 'personal-finance'
@@ -6175,6 +6237,32 @@ function runCopilotStartOpen(target) {
     if (input && typeof input.focus === 'function') {
       input.focus();
     }
+    return;
+  }
+
+  if (destination.ticker) {
+    if (overlay) {
+      overlay.classList.remove('active');
+      setTimeout(() => {
+        overlay.style.display = 'none';
+      }, 400);
+    }
+
+    if (typeof openFacette !== 'function') {
+      showToast(`Open ${destination.ticker} is unavailable`, 'error');
+      return;
+    }
+
+    setTimeout(() => {
+      openFacette(destination.facette || 'deep-dive');
+      const input = document.getElementById('stockSymbolInput');
+      if (input) {
+        input.value = destination.ticker;
+      }
+      if (typeof searchStock === 'function') {
+        searchStock();
+      }
+    }, 30);
     return;
   }
 

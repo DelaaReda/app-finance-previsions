@@ -1469,6 +1469,9 @@ function loadRunCopilotStartOpen() {
     toString(value, fallback = '') {
       return typeof value === 'string' ? value : fallback;
     },
+    parseCopilotStartTickerTarget() {
+      return null;
+    },
     normalizeCopilotStartOpenTarget(target, id = '') {
       const normalizedTarget = String(target || '').trim().toLowerCase();
       const normalizedId = String(id || '').trim().toLowerCase();
@@ -1519,6 +1522,98 @@ function loadRunCopilotStartOpen() {
   });
 
   return { sandbox, overlay, calls };
+}
+
+function loadRunCopilotStartOpenTickerHarness() {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractSection(
+    source,
+    'function parseCopilotStartTickerTarget(',
+    '\n\nfunction resolveCopilotStartState('
+  );
+  const overlay = {
+    style: { display: '' },
+    classList: {
+      remove() {},
+    },
+  };
+  const stockInput = { value: '' };
+  const calls = {
+    openedFacettes: [],
+    searches: 0,
+    toasts: [],
+  };
+  const sandbox = {
+    console,
+    setTimeout(fn) {
+      fn();
+      return 0;
+    },
+    document: {
+      getElementById(id) {
+        if (id === 'aiCopilotOverlay') return overlay;
+        if (id === 'stockSymbolInput') return stockInput;
+        return null;
+      },
+      querySelector() {
+        return null;
+      },
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    normalizeCopilotStartOpenTarget(target, id = '') {
+      const normalizedTarget = String(target || '').trim().toLowerCase().replace(/[?#].*$/, '').replace(/\/+$/, '');
+      const normalizedId = String(id || '').trim().toLowerCase();
+      if (
+        normalizedId === 'brief_of_day'
+        || normalizedTarget === '/brief/daily'
+        || normalizedTarget === '/brief'
+        || normalizedTarget === 'brief_of_day'
+        || normalizedTarget === 'brief'
+        || normalizedTarget === 'brief/daily'
+        || normalizedTarget === 'live_brief'
+        || normalizedTarget === 'daily_brief'
+      ) {
+        return 'market';
+      }
+      if (
+        normalizedId === 'ask_copilot'
+        || normalizedId === 'open_copilot'
+        || normalizedId === 'copilot'
+        || normalizedTarget === '/copilot'
+        || normalizedTarget === '/copilot/ask'
+        || normalizedTarget.startsWith('/copilot/')
+        || normalizedTarget === 'copilot/ask'
+        || normalizedTarget.startsWith('copilot/')
+        || normalizedTarget === 'copilot'
+        || normalizedTarget === 'personal-finance'
+        || normalizedTarget === '/personal-finance'
+        || normalizedTarget.startsWith('/personal-finance/')
+        || normalizedTarget.startsWith('personal-finance/')
+      ) {
+        return 'copilot';
+      }
+      return normalizedTarget.replace(/^\/+/, '');
+    },
+    openFacette(target) {
+      calls.openedFacettes.push(target);
+    },
+    searchStock() {
+      calls.searches += 1;
+    },
+    showToast(message) {
+      calls.toasts.push(message);
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.runCopilotStartOpen = runCopilotStartOpen;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  return { sandbox, overlay, calls, stockInput };
 }
 
 function loadAndRenderHeroBriefHarness(fetchResponse, options = {}) {
@@ -3554,6 +3649,18 @@ test('runCopilotStartOpen routes the landing brief to overview and scrolls the l
   assert.deepEqual(calls.toasts, []);
 });
 
+test('runCopilotStartOpen opens a ticker deep dive from starter actions', () => {
+  const { sandbox, overlay, calls, stockInput } = loadRunCopilotStartOpenTickerHarness();
+
+  sandbox.runCopilotStartOpen('ticker:NVDA');
+
+  assert.equal(overlay.style.display, 'none');
+  assert.deepEqual(calls.openedFacettes, ['deep-dive']);
+  assert.equal(stockInput.value, 'NVDA');
+  assert.equal(calls.searches, 1);
+  assert.deepEqual(calls.toasts, []);
+});
+
 test('runCopilotStartOpen reports unsupported landing actions instead of opening copilot', () => {
   const { sandbox, overlay, calls } = loadRunCopilotStartOpen();
 
@@ -4621,6 +4728,69 @@ test('buildCopilotStartState normalizes brief event timing for copilot starter s
       },
     ],
   });
+});
+
+test('buildCopilotStartState derives ticker open actions from focus tickers', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractSection(
+    source,
+    'function normalizeCopilotStarterTickers(',
+    '\n\nfunction focusCopilotInput('
+  );
+  const sandbox = {
+    console,
+    Date,
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    normalizeCopilotSourceLabels(value) {
+      return (Array.isArray(value) ? value : value ? [value] : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${functionSource}\nthis.buildCopilotStartState = buildCopilotStartState;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  const state = sandbox.buildCopilotStartState({
+    data: {
+      scope_tickers: ['NVDA'],
+      copilot_start: {
+        brief_of_day: {
+          summary: 'Leadership remains concentrated in NVDA and MSFT.',
+          top_signals: ['NVDA', 'MSFT'],
+        },
+        open: [
+          {
+            id: 'brief_of_day',
+            label: 'Open Live Brief',
+            target: '/brief/daily',
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(state.open.map((item) => ({ id: item.id, target: item.target })))),
+    [
+      { id: 'brief_of_day', target: 'market' },
+      { id: 'open_nvda', target: 'ticker:NVDA' },
+      { id: 'open_msft', target: 'ticker:MSFT' },
+    ]
+  );
 });
 
 test('renderHeroCopilotBrief surfaces saved portfolio context in hero metadata', () => {
