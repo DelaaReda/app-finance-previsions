@@ -1531,15 +1531,25 @@ function normalizeCopilotOpenTarget(target, id) {
     normalizedId === 'ask_copilot'
     || normalizedId === 'open_copilot'
     || normalizedId === 'copilot'
+    || normalizedId === 'open_personal_finance_start'
+    || normalizedId === 'open_personal_finance_context'
     || normalizedTarget === '/copilot/ask'
     || normalizedTarget === '/copilot'
     || normalizedTarget === '/copilot/'
+    || normalizedTarget === '/copilot/start'
+    || normalizedTarget === '/copilot/context'
     || normalizedTarget.startsWith('/copilot/')
     || normalizedTarget === 'copilot'
     || normalizedTarget === 'copilot/'
+    || normalizedTarget === 'copilot/start'
+    || normalizedTarget === 'copilot/context'
     || normalizedTarget.startsWith('copilot/')
     || normalizedTarget === '/personal-finance'
     || normalizedTarget === 'personal-finance'
+    || normalizedTarget === '/personal-finance/start'
+    || normalizedTarget === '/personal-finance/context'
+    || normalizedTarget === 'personal-finance/start'
+    || normalizedTarget === 'personal-finance/context'
     || normalizedTarget.startsWith('/personal-finance/')
     || normalizedTarget.startsWith('personal-finance/')
   ) {

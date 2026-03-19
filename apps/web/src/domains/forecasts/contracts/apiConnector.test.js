@@ -1253,6 +1253,47 @@ test('getCopilotStart normalizes personal-finance open target to the copilot des
   );
 });
 
+test('getCopilotStart normalizes personal-finance starter alias targets to the copilot destination', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          brief_of_day: {
+            title: 'Brief of the day',
+            summary: 'Starter aliases should resolve to the copilot overlay.',
+            generated_at: '2026-03-19T09:00:00.000Z',
+          },
+          ask: [],
+          open: [
+            {
+              id: 'open_personal_finance_start',
+              label: 'Open personal finance start',
+              target: '/personal-finance/start',
+            },
+            {
+              id: 'open_personal_finance_context',
+              label: 'Open personal finance context',
+              target: 'personal-finance/context',
+            },
+          ],
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotStart();
+  const open = payload.copilot_start && payload.copilot_start.open ? payload.copilot_start.open : [];
+
+  assert.deepEqual(
+    open.map((item) => ({ id: item.id, target: item.target })),
+    [
+      { id: 'open_personal_finance_start', target: 'copilot' },
+      { id: 'open_personal_finance_context', target: 'copilot' },
+    ]
+  );
+});
+
 test('getCopilotStart uses FINANCECOPILOT_NAMESPACE for personal-finance start route', async () => {
   const calls = [];
   const sandbox = loadConnector(
