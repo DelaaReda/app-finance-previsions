@@ -5891,13 +5891,26 @@ function deriveCopilotStartFocusItems(state) {
       return true;
     })
     .slice(0, 2)
-    .map((topic, index) => ({
-      id: `copilot_focus_${index}`,
-      label: `Ask about ${topic}`,
-      prompt: buildCopilotFocusPrompt(topic),
-      tickers: /^[A-Z][A-Z0-9.-]{0,9}$/.test(topic) ? [topic] : []
-    }))
-    .filter((item) => item.prompt);
+    .map((topic, index) => {
+      const ticker = /^[A-Z][A-Z0-9.-]{0,9}$/.test(topic) ? topic : '';
+      if (ticker) {
+        return {
+          id: `copilot_focus_${index}`,
+          action: 'open',
+          label: `Open ${ticker}`,
+          target: `ticker:${ticker}`,
+          tickers: [ticker]
+        };
+      }
+      return {
+        id: `copilot_focus_${index}`,
+        action: 'ask',
+        label: `Ask about ${topic}`,
+        prompt: buildCopilotFocusPrompt(topic),
+        tickers: []
+      };
+    })
+    .filter((item) => (item.action === 'open' ? item.target : item.prompt));
 }
 
 function normalizeCopilotStartEventTiming(value) {
@@ -6603,6 +6616,10 @@ function renderHeroCopilotBrief(state) {
       ...derivedFocusItems.map((item) => ({
         label: item.label,
         run() {
+          if (item.action === 'open') {
+            runCopilotStartOpen(item.target);
+            return;
+          }
           runCopilotStartPrompt(item.prompt, item.tickers);
         }
       })),

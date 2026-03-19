@@ -4535,6 +4535,7 @@ test('sanitizeCopilotStart preserves scoped tickers for downstream hero prompts'
 
 test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actions', () => {
   const state = {
+    scope_tickers: ['NVDA'],
     brief: {
       title: 'Opening Brief',
       summary: 'Risk is concentrated in tech while breadth improves underneath.',
@@ -4603,21 +4604,19 @@ test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actio
   const suggestionLabels = Array.from(elements.heroSuggestionChips.children).map((node) => node.textContent);
   assert.equal(suggestionLabels[0], 'Regime: RISK ON');
   assert.equal(suggestionLabels.length, 3);
-  assert.equal(
-    suggestionLabels.filter((label) => label.startsWith('Ask about ')).length,
-    2,
-  );
+  assert.ok(suggestionLabels.includes('Open NVDA'));
+  assert.ok(suggestionLabels.includes('Ask about Breadth improving'));
 
   Array.from(elements.heroSuggestionChips.children)
-    .filter((node) => typeof node.click === 'function' && node.textContent.startsWith('Ask about '))
+    .filter((node) => typeof node.click === 'function' && (node.textContent === 'Open NVDA' || node.textContent.startsWith('Ask about ')))
     .forEach((node) => node.click());
 
   const normalizedPromptCalls = JSON.parse(JSON.stringify(promptCalls));
   assert.equal(normalizedPromptCalls[0].prompt, 'What matters most today?');
   assert.deepEqual(normalizedPromptCalls[0].tickers, ['NVDA', 'MSFT']);
-  assert.equal(normalizedPromptCalls.length, 3);
+  assert.equal(normalizedPromptCalls.length, 2);
   assert.ok(normalizedPromptCalls.some((item) => item.prompt.startsWith('Give me a deep dive on ')));
-  assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['market']);
+  assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['market', 'ticker:NVDA']);
 });
 
 test('renderHeroCopilotBrief accepts normalized backend snake_case brief fields and falls back to opportunities', () => {
@@ -5929,9 +5928,11 @@ test('deriveCopilotStartFocusItems surfaces brief-driven ticker and theme starte
   });
 
   assert.equal(items.length, 2);
-  assert.equal(items[0].label, 'Ask about NVDA');
-  assert.equal(items[0].prompt, "Give me a deep dive on NVDA and explain today's setup, verdict, risks, confidence, freshness, and sources.");
+  assert.equal(items[0].action, 'open');
+  assert.equal(items[0].label, 'Open NVDA');
+  assert.equal(items[0].target, 'ticker:NVDA');
   assert.deepEqual(Array.from(items[0].tickers), ['NVDA']);
+  assert.equal(items[1].action, 'ask');
   assert.equal(items[1].label, 'Ask about AI Infrastructure');
   assert.deepEqual(Array.from(items[1].tickers), []);
 });
@@ -5949,6 +5950,7 @@ test('deriveCopilotStartFocusItems skips duplicates already exposed by ask/open 
   });
 
   assert.equal(items.length, 1);
+  assert.equal(items[0].action, 'ask');
   assert.equal(items[0].label, 'Ask about Cloud');
   assert.deepEqual(Array.from(items[0].tickers), []);
 });
