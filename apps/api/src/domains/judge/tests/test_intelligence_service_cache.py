@@ -97,6 +97,14 @@ class IntelligenceServiceCacheTests(unittest.TestCase):
             self.assertEqual(brief_of_day.get("source"), ["brief_daily_snapshot"])
             self.assertEqual([item.get("target") for item in copilot_start.get("open", [])], ["market", "opportunities", "copilot"])
             self.assertLessEqual(len(str(brief_of_day.get("summary", "")).split()), 200)
+            self.assertEqual(
+                [item.get("id") for item in copilot_start.get("ask", [])[:5]],
+                ["portfolio_today", "market_theme", "nvda_memo", "brief_risk_1", "brief_signal_2"],
+            )
+            self.assertEqual(
+                [item.get("prompt") for item in copilot_start.get("ask", [])[-2:]],
+                ["What matters most about TSLA today?", "What matters most about AAPL today?"],
+            )
 
             persisted = json.loads(cache_file.read_text(encoding="utf-8"))
             self.assertIn("copilot_start", persisted)

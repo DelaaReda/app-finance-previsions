@@ -233,6 +233,49 @@ def _coerce_daily_brief(value: Any) -> Dict[str, Any]:
     return brief
 
 
+def _brief_focus_label(value: Any) -> str:
+    if isinstance(value, dict):
+        for key in ("ticker", "name", "label", "title", "theme", "sector", "event", "value"):
+            token = str(value.get(key) or "").strip()
+            if token:
+                return token
+        return ""
+    return str(value or "").strip()
+
+
+def _build_brief_focus_asks(brief: Dict[str, Any]) -> List[Dict[str, str]]:
+    resolved = _coerce_daily_brief(brief)
+    suggestions: List[Dict[str, str]] = []
+    seen_prompts = {str(item.get("prompt") or "").strip().lower() for item in COPILOT_STARTER_ASK}
+
+    candidates = (
+        ("risk", resolved.get("top_risks")),
+        ("signal", resolved.get("top_signals")),
+    )
+    for prefix, items in candidates:
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            topic = _brief_focus_label(item)
+            if not topic:
+                continue
+            prompt = f"What matters most about {topic} today?"
+            normalized_prompt = prompt.lower()
+            if normalized_prompt in seen_prompts:
+                continue
+            suggestions.append(
+                {
+                    "id": f"brief_{prefix}_{len(suggestions) + 1}",
+                    "label": topic[:32],
+                    "prompt": prompt,
+                }
+            )
+            seen_prompts.add(normalized_prompt)
+            if len(suggestions) >= 2:
+                return suggestions
+    return suggestions
+
+
 def _build_brief_of_day(brief: Dict[str, Any], *, context_timestamp: Optional[str] = None) -> Dict[str, Any]:
     resolved = _coerce_daily_brief(brief)
     has_brief = bool(resolved)
@@ -268,9 +311,11 @@ def _build_brief_of_day(brief: Dict[str, Any], *, context_timestamp: Optional[st
 
 
 def _build_copilot_start_payload(brief: Dict[str, Any], *, context_timestamp: Optional[str] = None) -> Dict[str, Any]:
+    ask_items = [dict(item) for item in COPILOT_STARTER_ASK]
+    ask_items.extend(_build_brief_focus_asks(brief))
     return {
         "brief_of_day": _build_brief_of_day(brief, context_timestamp=context_timestamp),
-        "ask": [dict(item) for item in COPILOT_STARTER_ASK],
+        "ask": ask_items,
         "open": [dict(item) for item in COPILOT_STARTER_OPEN],
     }
 

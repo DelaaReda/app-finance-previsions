@@ -110,10 +110,16 @@ def test_copilot_context_route_success_keeps_brief_first_starter_contract(monkey
 
     copilot_start = data.get("copilot_start") or {}
     assert copilot_start.get("brief_of_day", {}).get("summary") == daily_brief.get("summary")
-    assert [item.get("id") for item in copilot_start.get("ask", [])] == [
+    assert [item.get("id") for item in copilot_start.get("ask", [])[:5]] == [
         "portfolio_today",
         "market_theme",
         "nvda_memo",
+        "brief_risk_1",
+        "brief_signal_2",
+    ]
+    assert [item.get("prompt") for item in copilot_start.get("ask", [])[-2:]] == [
+        "What matters most about Rates repricing today?",
+        "What matters most about Semiconductors leading today?",
     ]
     assert copilot_start.get("ask", [])[0].get("prefill", {}).get("tickers") == ["NVDA"]
     assert [item.get("target") for item in copilot_start.get("open", [])] == [
@@ -158,7 +164,7 @@ def test_copilot_context_route_fallback_keeps_brief_and_entry_points(monkeypatch
     monkeypatch.setattr(
         copilot_service,
         "_build_copilot_entry_points",
-        lambda scope=None: [dict(item) for item in fallback_entry_points],
+        lambda scope=None, daily_brief=None: [dict(item) for item in fallback_entry_points],
     )
     monkeypatch.setattr(
         copilot_service,
@@ -325,7 +331,7 @@ def test_copilot_start_route_fallback_keeps_brief_and_actions(monkeypatch):
     monkeypatch.setattr(
         copilot_service,
         "_build_copilot_entry_points",
-        lambda scope=None: [dict(item) for item in fallback_entry_points],
+        lambda scope=None, daily_brief=None: [dict(item) for item in fallback_entry_points],
     )
     monkeypatch.setattr(
         copilot_service,
@@ -369,7 +375,7 @@ def test_copilot_start_route_omits_alert_payloads_in_fallback(monkeypatch):
             "source": ["copilot_daily_brief_fallback"],
         },
     )
-    monkeypatch.setattr(copilot_service, "_build_copilot_entry_points", lambda scope=None: [])
+    monkeypatch.setattr(copilot_service, "_build_copilot_entry_points", lambda scope=None, daily_brief=None: [])
     monkeypatch.setattr(
         copilot_service,
         "_build_copilot_start_payload",
