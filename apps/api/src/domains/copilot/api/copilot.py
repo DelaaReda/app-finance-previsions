@@ -10,6 +10,8 @@ Implements minimal, never-empty endpoints backed by existing services when possi
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import os
 from datetime import datetime, timezone
 from annotated_types import Ge, Gt
@@ -57,6 +59,11 @@ except Exception:  # pragma: no cover
         from services import copilot_service  # type: ignore
     except Exception:
         from src.services import copilot_service  # type: ignore
+
+try:
+    from storage import io as storage_io
+except Exception:  # pragma: no cover
+    storage_io = None  # type: ignore
 
 
 router = APIRouter(tags=["copilot"])
@@ -294,6 +301,12 @@ def _build_start_response(
         if isinstance(resolved_start.get("brief_of_day"), dict)
         else {}
     )
+    resolved_scope_tickers = [
+        str(ticker).strip().upper()
+        for ticker in ((scope or {}).get("tickers") or [])
+        if str(ticker).strip()
+    ]
+    resolved_scope_tickers = list(dict.fromkeys(resolved_scope_tickers))
     ask_items = [
         dict(item) for item in resolved_start.get("ask", []) if isinstance(item, dict)
     ]
@@ -323,7 +336,7 @@ def _build_start_response(
         "freshness": generated_at,
         "source": normalized_source or ["copilot_start_route"],
         "sources": normalized_source or ["copilot_start_route"],
-        "filters_applied": {"tickers": list((scope or {}).get("tickers") or [])},
+        "filters_applied": {"tickers": list(resolved_scope_tickers)},
         "stats": {
             "ask_count": len(ask_items),
             "open_count": len(open_items),
@@ -332,8 +345,8 @@ def _build_start_response(
     }
     if note:
         payload["note"] = note
-    if (scope or {}).get("tickers"):
-        payload["scope_tickers"] = list((scope or {}).get("tickers") or [])
+    if resolved_scope_tickers:
+        payload["scope_tickers"] = list(resolved_scope_tickers)
     if isinstance(context_influence, dict) and context_influence:
         payload["context_influence"] = dict(context_influence)
     if isinstance(portfolio_context, dict) and portfolio_context:
@@ -345,16 +358,63 @@ def _build_start_response(
     return payload
 
 
+def _brief_signature_from_payload(payload: Optional[Dict[str, Any]]) -> str:
+    if not isinstance(payload, dict):
+        return "brief_missing"
+
+    sanitized: Dict[str, Any] = {}
+    for key in (
+        "summary",
+        "market_sentiment",
+        "top_signals",
+        "top_risks",
+        "macro_signals",
+        "sector_rotation",
+        "source",
+        "sources",
+        "event_timing",
+    ):
+        if key in payload and payload[key] is not None:
+            sanitized[key] = payload[key]
+
+    if not sanitized:
+        return "brief_missing"
+
+    return hashlib.sha1(
+        json.dumps(sanitized, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()[:12]
+
+
 def _copilot_start_cache_key(
     *,
     tickers: Optional[List[str]],
     namespace: Optional[str],
 ) -> Optional[str]:
+    try:
+        if hasattr(copilot_service, "_load_daily_brief_payload"):
+            daily_payload = copilot_service._load_daily_brief_payload()
+            payload_signature = _brief_signature_from_payload(daily_payload)
+        elif storage_io is not None:
+            snapshot = storage_io.load_json("brief_daily")
+            if not isinstance(snapshot, dict):
+                snapshot = storage_io.load_json("brief_weekly")
+            if isinstance(snapshot, dict):
+                raw_payload = snapshot.get("data") if isinstance(snapshot.get("data"), dict) else snapshot
+                raw_snapshot = raw_payload.get("daily") if isinstance(raw_payload, dict) and isinstance(raw_payload.get("daily"), dict) else raw_payload
+                payload_signature = _brief_signature_from_payload(raw_snapshot)
+            else:
+                payload_signature = "brief_fallback"
+        else:
+            payload_signature = "storage_missing"
+    except Exception as exc:  # pragma: no cover
+        payload_signature = f"brief_error:{type(exc).__name__}"
+
     if not callable(stable_cache_key):
         return None
     return stable_cache_key(
         "copilot_start_v1",
         {
+            "brief_signature": payload_signature,
             "tickers": list(tickers or []),
             "namespace": str(namespace or "").strip(),
         },
