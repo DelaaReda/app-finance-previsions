@@ -1,0 +1,528 @@
+<!--
+  COPILOT PANEL - Personal Finance Copilot UI
+  Reuses existing widget patterns from forecasts/components/widgets/*
+  Wires to backend: /api/copilot/start and /api/copilot/ask
+-->
+<section class="widget-card copilot-panel" aria-label="Copilot" data-widget-id="copilot-panel">
+    <div class="widget-header">
+        <div class="widget-title-row">
+            <span class="widget-icon">🤖</span>
+            <h2 class="widget-title">Your Finance Copilot</h2>
+            <span class="live-badge" id="copilotLiveBadge">🟢 Live</span>
+        </div>
+        <div class="widget-actions">
+            <button class="help-icon" onclick="showHelp('copilot')" aria-label="Help" title="Ask your AI finance assistant">?</button>
+            <button class="menu-icon" onclick="toggleCopilotPanel()" aria-label="Close">✕</button>
+        </div>
+    </div>
+
+    <!-- Brief of the Day Section -->
+    <div class="copilot-brief-section" id="copilotBriefSection">
+        <div class="copilot-brief-header">
+            <span class="brief-icon">📊</span>
+            <div class="brief-meta">
+                <h3 class="brief-title">Brief of the Day</h3>
+                <span class="brief-timestamp" id="copilotBriefTimestamp">Loading...</span>
+            </div>
+        </div>
+        <div class="copilot-brief-content" id="copilotBriefContent">
+            <p class="brief-summary" id="copilotBriefSummary">Fetching today's market brief...</p>
+            <div class="brief-signals" id="copilotBriefSignals" style="display: none;">
+                <h4>Key Signals</h4>
+                <ul class="signal-list" id="copilotSignalList"></ul>
+            </div>
+            <div class="brief-risks" id="copilotBriefRisks" style="display: none;">
+                <h4>Top Risks</h4>
+                <ul class="risk-list" id="copilotRiskList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions (Ask/Open) -->
+    <div class="copilot-actions-section">
+        <h3 class="actions-title">What would you like to do?</h3>
+        
+        <!-- Ask Actions -->
+        <div class="copilot-ask-list" id="copilotAskList">
+            <!-- Dynamically populated -->
+        </div>
+
+        <!-- Open Actions -->
+        <div class="copilot-open-list" id="copilotOpenList">
+            <!-- Dynamically populated -->
+        </div>
+    </div>
+
+    <!-- Custom Question Input -->
+    <div class="copilot-input-section">
+        <div class="input-group">
+            <input 
+                type="text" 
+                id="copilotQuestionInput" 
+                class="copilot-input" 
+                placeholder="Ask about a ticker, sector, or market theme..."
+                onkeypress="handleCopilotQuestionKeydown(event)"
+            />
+            <button class="copilot-send-btn" onclick="sendCopilotQuestion()" aria-label="Send question">
+                ➤
+            </button>
+        </div>
+        <div class="copilot-suggestions" id="copilotSuggestions">
+            <!-- Suggested questions -->
+        </div>
+    </div>
+
+    <!-- Answer Display -->
+    <div class="copilot-answer-section" id="copilotAnswerSection" style="display: none;">
+        <div class="answer-header">
+            <span class="answer-icon">💡</span>
+            <h3 class="answer-title">Copilot Answer</h3>
+            <button class="answer-close-btn" onclick="closeCopilotAnswer()" aria-label="Close answer">✕</button>
+        </div>
+        <div class="answer-content" id="copilotAnswerContent">
+            <!-- Answer rendered here -->
+        </div>
+        <div class="answer-footer" id="copilotAnswerFooter">
+            <span class="answer-confidence" id="copilotAnswerConfidence"></span>
+            <span class="answer-sources" id="copilotAnswerSources"></span>
+        </div>
+    </div>
+
+    <!-- Loading State -->
+    <div class="copilot-loading" id="copilotLoading" style="display: none;">
+        <div class="loading-spinner"></div>
+        <p>Thinking...</p>
+    </div>
+
+    <!-- Error State -->
+    <div class="copilot-error" id="copilotError" style="display: none;">
+        <span class="error-icon">⚠️</span>
+        <p id="copilotErrorMessage">Something went wrong. Please try again.</p>
+        <button class="error-retry-btn" onclick="loadCopilotStart()">Retry</button>
+    </div>
+
+    <div class="widget-footer">
+        <span class="widget-timestamp" id="copilotFooterTimestamp">Updated just now</span>
+        <button class="widget-action-btn" onclick="refreshCopilotData()">↻ Refresh</button>
+    </div>
+</section>
+
+<script>
+/**
+ * Copilot Panel Controller
+ * Wires to /api/copilot/start and /api/copilot/ask
+ */
+
+// State
+let copilotState = {
+    isLoading: false,
+    briefData: null,
+    askActions: [],
+    openActions: [],
+    lastAnswer: null
+};
+
+// API Base URL (reuse existing FinanceAPI pattern)
+const COPILOT_API_BASE = window.FinanceAPI?.BASE_URL || 'http://localhost:8050/api';
+
+/**
+ * Initialize copilot panel
+ */
+async function initCopilotPanel() {
+    try {
+        await loadCopilotStart();
+        renderCopilotSuggestions();
+    } catch (error) {
+        console.error('Failed to initialize copilot:', error);
+        showCopilotError('Failed to load copilot data');
+    }
+}
+
+/**
+ * Load copilot start data from backend
+ */
+async function loadCopilotStart() {
+    if (copilotState.isLoading) return;
+    
+    copilotState.isLoading = true;
+    showCopilotLoading(true);
+    
+    try {
+        const response = await fetch(`${COPILOT_API_BASE}/copilot/start`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        const data = result.data || result;
+        
+        copilotState.briefData = data;
+        copilotState.askActions = data.ask || [];
+        copilotState.openActions = data.open || [];
+        
+        renderCopilotBrief(data);
+        renderCopilotActions();
+        updateCopilotLiveBadge(data);
+        
+        showCopilotLoading(false);
+        showCopilotError(false);
+        
+    } catch (error) {
+        console.error('Failed to load copilot start:', error);
+        showCopilotError(`Failed to load: ${error.message}`);
+        showCopilotLoading(false);
+    } finally {
+        copilotState.isLoading = false;
+    }
+}
+
+/**
+ * Render brief of the day
+ */
+function renderCopilotBrief(data) {
+    const brief = data.brief_of_day || data.briefOfDay || {};
+    
+    // Summary
+    const summaryEl = document.getElementById('copilotBriefSummary');
+    if (summaryEl) {
+        summaryEl.textContent = brief.summary || 'No summary available';
+    }
+    
+    // Timestamp
+    const timestampEl = document.getElementById('copilotBriefTimestamp');
+    if (timestampEl) {
+        const freshness = data.freshness || data.generated_at || brief.freshness || brief.generated_at;
+        timestampEl.textContent = freshness ? formatCopilotTimestamp(freshness) : 'Just now';
+    }
+    
+    // Signals
+    const signalsEl = document.getElementById('copilotBriefSignals');
+    const signalListEl = document.getElementById('copilotSignalList');
+    const signals = brief.top_signals || brief.signals || brief.top_actions || [];
+    
+    if (signals && signals.length > 0) {
+        signalsEl.style.display = 'block';
+        signalListEl.innerHTML = signals.map(signal => 
+            `<li class="signal-item">${escapeHtml(signal)}</li>`
+        ).join('');
+    } else {
+        signalsEl.style.display = 'none';
+    }
+    
+    // Risks
+    const risksEl = document.getElementById('copilotBriefRisks');
+    const riskListEl = document.getElementById('copilotRiskList');
+    const risks = brief.top_risks || brief.risks || brief.main_risks || [];
+    
+    if (risks && risks.length > 0) {
+        risksEl.style.display = 'block';
+        riskListEl.innerHTML = risks.map(risk => 
+            `<li class="risk-item">${escapeHtml(risk)}</li>`
+        ).join('');
+    } else {
+        risksEl.style.display = 'none';
+    }
+}
+
+/**
+ * Render ask/open actions
+ */
+function renderCopilotActions() {
+    // Render ask actions
+    const askListEl = document.getElementById('copilotAskList');
+    if (askListEl && copilotState.askActions.length > 0) {
+        askListEl.innerHTML = copilotState.askActions.map(action => `
+            <button class="copilot-action-btn" onclick="executeCopilotAction('${escapeHtml(action.kind || 'ask')}', '${escapeHtml(action.target || '')}', '${escapeHtml(action.prefill?.question || '')}')">
+                ${escapeHtml(action.label || action.question || 'Ask')}
+            </button>
+        `).join('');
+    } else if (askListEl) {
+        askListEl.innerHTML = `
+            <button class="copilot-action-btn" onclick="focusCopilotInput()">
+                ❓ Ask a question
+            </button>
+        `;
+    }
+    
+    // Render open actions
+    const openListEl = document.getElementById('copilotOpenList');
+    if (openListEl && copilotState.openActions.length > 0) {
+        openListEl.innerHTML = copilotState.openActions.map(action => `
+            <button class="copilot-action-btn secondary" onclick="executeCopilotAction('${escapeHtml(action.kind || 'open')}', '${escapeHtml(action.target || '')}')">
+                ${escapeHtml(action.label || 'Open')}
+            </button>
+        `).join('');
+    }
+}
+
+/**
+ * Render suggested questions
+ */
+function renderCopilotSuggestions() {
+    const suggestionsEl = document.getElementById('copilotSuggestions');
+    const suggestions = [
+        "What's moving the market today?",
+        "Should I buy NVDA?",
+        "How does the Fed decision affect my portfolio?",
+        "Show me tech sector outlook"
+    ];
+    
+    if (suggestionsEl) {
+        suggestionsEl.innerHTML = suggestions.map(q => 
+            `<button class="suggestion-chip" onclick="setCopilotQuestion('${escapeHtml(q)}')">${escapeHtml(q)}</button>`
+        ).join('');
+    }
+}
+
+/**
+ * Send question to copilot ask endpoint
+ */
+async function sendCopilotQuestion() {
+    const inputEl = document.getElementById('copilotQuestionInput');
+    const question = inputEl?.value?.trim();
+    
+    if (!question) {
+        showToast('Please enter a question', 'warning');
+        return;
+    }
+    
+    copilotState.isLoading = true;
+    showCopilotLoading(true);
+    hideCopilotAnswer();
+    
+    try {
+        const response = await fetch(`${COPILOT_API_BASE}/copilot/ask`, {
+            method: 'POST',
+            headers: { 
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                question: question,
+                max_sources: 5
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        const data = result.data || result;
+        
+        copilotState.lastAnswer = data;
+        renderCopilotAnswer(data);
+        
+        showCopilotLoading(false);
+        showCopilotError(false);
+        
+        // Clear input
+        if (inputEl) inputEl.value = '';
+        
+    } catch (error) {
+        console.error('Failed to ask copilot:', error);
+        showCopilotError(`Failed to get answer: ${error.message}`);
+        showCopilotLoading(false);
+    } finally {
+        copilotState.isLoading = false;
+    }
+}
+
+/**
+ * Render copilot answer
+ */
+function renderCopilotAnswer(data) {
+    const answerSection = document.getElementById('copilotAnswerSection');
+    const answerContent = document.getElementById('copilotAnswerContent');
+    const answerConfidence = document.getElementById('copilotAnswerConfidence');
+    const answerSources = document.getElementById('copilotAnswerSources');
+    
+    if (!answerSection || !answerContent) return;
+    
+    // Build answer HTML
+    let html = '';
+    
+    if (data.answer) {
+        html += `<p class="answer-main">${escapeHtml(data.answer)}</p>`;
+    }
+    
+    if (data.verdict || data.action) {
+        const verdict = data.verdict || data.action;
+        const verdictClass = verdict === 'buy' ? 'verdict-buy' : verdict === 'sell' ? 'verdict-sell' : 'verdict-hold';
+        html += `
+            <div class="answer-verdict ${verdictClass}">
+                <strong>Recommendation:</strong> ${escapeHtml(verdict.toUpperCase())}
+            </div>
+        `;
+    }
+    
+    if (data.horizon) {
+        html += `<p class="answer-horizon"><strong>Horizon:</strong> ${escapeHtml(data.horizon)}</p>`;
+    }
+    
+    if (data.why && Array.isArray(data.why)) {
+        html += `<div class="answer-why"><strong>Why:</strong><ul>${data.why.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`;
+    }
+    
+    if (data.risk || data.risks) {
+        const risk = data.risk || {};
+        const risks = Array.isArray(data.risks) ? data.risks : [risk.level, risk.caveat].filter(Boolean);
+        html += `<div class="answer-risks"><strong>Risks:</strong><ul>${risks.map(r => `<li>${escapeHtml(r)}</li>`).join('')}</ul></div>`;
+    }
+    
+    answerContent.innerHTML = html;
+    
+    // Confidence
+    if (answerConfidence) {
+        const confidence = data.confidence || 0;
+        const confidencePct = Math.round(confidence * 100);
+        answerConfidence.textContent = `Confidence: ${confidencePct}%`;
+    }
+    
+    // Sources
+    if (answerSources) {
+        const sources = data.sources || data.citations || [];
+        answerSources.textContent = sources.length > 0 ? `${sources.length} sources` : '';
+    }
+    
+    // Show answer section
+    answerSection.style.display = 'block';
+}
+
+/**
+ * Execute copilot action (ask/open)
+ */
+function executeCopilotAction(kind, target, prefillQuestion) {
+    if (kind === 'ask' && prefillQuestion) {
+        setCopilotQuestion(prefillQuestion);
+        focusCopilotInput();
+    } else if (kind === 'open' && target) {
+        // Navigate to target
+        if (target.startsWith('/')) {
+            window.location.hash = target;
+        } else {
+            showToast(`Opening ${target}...`, 'info');
+        }
+    }
+    showToast(`${kind} ${target || prefillQuestion || ''}`, 'info');
+}
+
+/**
+ * UI Helpers
+ */
+function setCopilotQuestion(question) {
+    const inputEl = document.getElementById('copilotQuestionInput');
+    if (inputEl) inputEl.value = question;
+}
+
+function focusCopilotInput() {
+    const inputEl = document.getElementById('copilotQuestionInput');
+    if (inputEl) inputEl.focus();
+}
+
+function handleCopilotQuestionKeydown(event) {
+    if (event.key === 'Enter') {
+        sendCopilotQuestion();
+    }
+}
+
+function closeCopilotAnswer() {
+    const answerSection = document.getElementById('copilotAnswerSection');
+    if (answerSection) answerSection.style.display = 'none';
+}
+
+function hideCopilotAnswer() {
+    closeCopilotAnswer();
+}
+
+function showCopilotLoading(show) {
+    const loadingEl = document.getElementById('copilotLoading');
+    const inputEl = document.getElementById('copilotQuestionInput');
+    const sendBtn = document.querySelector('.copilot-send-btn');
+    
+    if (loadingEl) loadingEl.style.display = show ? 'flex' : 'none';
+    if (inputEl) inputEl.disabled = show;
+    if (sendBtn) sendBtn.disabled = show;
+}
+
+function showCopilotError(message) {
+    const errorEl = document.getElementById('copilotError');
+    const errorMsgEl = document.getElementById('copilotErrorMessage');
+    
+    if (message === false) {
+        if (errorEl) errorEl.style.display = 'none';
+    } else {
+        if (errorEl) errorEl.style.display = 'block';
+        if (errorMsgEl) errorMsgEl.textContent = message;
+    }
+}
+
+function updateCopilotLiveBadge(data) {
+    const badgeEl = document.getElementById('copilotLiveBadge');
+    const footerEl = document.getElementById('copilotFooterTimestamp');
+    
+    if (data && data.freshness) {
+        const timestamp = formatCopilotTimestamp(data.freshness);
+        if (badgeEl) badgeEl.textContent = `🟢 Live ${timestamp}`;
+        if (footerEl) footerEl.textContent = `Updated ${timestamp}`;
+    }
+}
+
+function formatCopilotTimestamp(isoString) {
+    if (!isoString) return 'just now';
+    try {
+        const date = new Date(isoString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        
+        if (diffMins < 1) return 'just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours}h ago`;
+        
+        return date.toLocaleDateString();
+    } catch {
+        return 'just now';
+    }
+}
+
+function refreshCopilotData() {
+    loadCopilotStart();
+    showToast('Refreshing copilot data...', 'info');
+}
+
+function toggleCopilotPanel() {
+    const panel = document.getElementById('copilotPanel');
+    if (panel) {
+        panel.classList.toggle('active');
+        if (panel.classList.contains('active')) {
+            initCopilotPanel();
+        }
+    }
+}
+
+/**
+ * Utility: Escape HTML
+ */
+function escapeHtml(text) {
+    if (typeof text !== 'string') return String(text || '');
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', () => {
+    // Auto-init if panel exists
+    const panel = document.getElementById('copilotPanel');
+    if (panel && panel.classList.contains('active')) {
+        initCopilotPanel();
+    }
+});
+</script>
