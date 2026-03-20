@@ -1,0 +1,31 @@
+{
+  "task_id": "BATCH-69-ADMIN-01",
+  "validation_timestamp": "2026-03-20T11:15:27.026609+00:00",
+  "runtime_status": {
+    "backend": "UP",
+    "frontend": "UP",
+    "monitor": "UP",
+    "health": "OK"
+  },
+  "copilot_endpoints": {
+    "start": "PASS",
+    "ask": "PASS",
+    "context": "PASS",
+    "personal_finance_alias": "PASS"
+  },
+  "brief_of_day_features": {
+    "market_sentiment": "displayed",
+    "top_signals": "displayed",
+    "top_risks": "displayed",
+    "macro_signals": "displayed",
+    "sector_rotation": "displayed"
+  },
+  "user_actions": {
+    "ask_options": 4,
+    "open_options": 3,
+    "portfolio_context": "integrated",
+    "regime_detection": "operational"
+  },
+  "validation_result": "PASS",
+  "admin_verdict": "READY_FOR_PLANNER_COMPLETE"
+}
