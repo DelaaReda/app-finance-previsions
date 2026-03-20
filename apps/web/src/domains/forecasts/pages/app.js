@@ -9355,18 +9355,25 @@ async function loadAndRenderHeroBrief() {
 
   } catch (error) {
     console.error('[Brief] Failed to load:', error);
-    
-    // Fallback state
+    const fallbackState = buildCopilotStartState({
+      copilot_start: {
+        brief_of_day: {
+          title: 'Brief unavailable',
+          summary: 'Unable to load brief. You can still ask a question or open the fallback brief.',
+          market_sentiment: 'UNKNOWN',
+          freshness: '',
+          degraded: true,
+          degraded_reason: 'starter_request_failed',
+          source: ['starter_request_failed']
+        }
+      }
+    });
+    renderHeroCopilotBrief(fallbackState);
+    window.copilotStart = sanitizeCopilotStart(null);
+
     if (summaryEl) {
-      summaryEl.textContent = 'Unable to load brief. Please check your connection and try again.';
       summaryEl.style.opacity = '1';
       summaryEl.style.color = '#ef4444';
-    }
-    if (timestampEl) {
-      timestampEl.textContent = 'Update failed';
-    }
-    if (titleEl) {
-      titleEl.textContent = '⚠️ Brief unavailable';
     }
     
     // Trigger fallback brief generation

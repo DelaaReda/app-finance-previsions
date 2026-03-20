@@ -5591,11 +5591,12 @@ test('loadAndRenderHeroBrief keeps the failure fallback when the starter request
 
   await sandbox.loadAndRenderHeroBrief();
 
-  assert.equal(renderCalls.length, 0);
-  assert.equal(elements.heroBriefSummary.textContent, 'Unable to load brief. Please check your connection and try again.');
+  assert.equal(renderCalls.length, 1);
+  assert.equal(elements.heroBriefSummary.textContent, 'Loading your daily brief...');
   assert.equal(elements.heroBriefSummary.style.color, '#ef4444');
-  assert.equal(elements.heroBriefTimestamp.textContent, 'Update failed');
-  assert.equal(elements.heroBriefTitle.textContent, '⚠️ Brief unavailable');
+  assert.equal(sandbox.lastRenderedState.brief.summary, 'Unable to load brief. You can still ask a question or open the fallback brief.');
+  assert.equal(sandbox.lastRenderedState.open[0].target, '/brief/daily');
+  assert.deepEqual(sandbox.sanitizedValue, null);
 });
 
 test('loadAndRenderHeroBrief prefers FinanceAPI.getCopilotStart so namespaced copilot routes reuse the shared connector', async () => {
