@@ -199,6 +199,10 @@
       <!-- Loaded dynamically from components/sections/forecast-board.html -->
       <div id="forecast-board-container"></div>
 
+      <!-- ============ BATCH-71-DEV-02: COPILOT PANEL (BRIEF OF THE DAY) ============ -->
+      <!-- Loaded dynamically from components/widgets/copilot-panel.html -->
+      <div id="copilot-panel-container"></div>
+
       <!-- ============ WIDGET: MARKET PULSE (STORY) ============ -->
       <!-- Loaded dynamically from components/widgets/market-pulse.html -->
       <div id="market-pulse-widget-container"></div>
@@ -1150,7 +1154,7 @@
           { path: '../components/widgets/sector-performance.html', target: '#sector-performance-widget-container' },
           { path: '../components/widgets/market-volatility.html', target: '#market-volatility-widget-container' },
           { path: '../components/widgets/macro-regime-cards.html', target: '#macro-regime-cards-widget-container' },
-          { path: '../components/widgets/copilot-panel.html', target: '#copilotPanelContainer' }
+          { path: '../components/widgets/copilot-panel.html', target: '#copilot-panel-container' }
         ];
 
         const results = await loadComponents(components);
