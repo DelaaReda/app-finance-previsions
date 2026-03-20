@@ -3,7 +3,136 @@
   Reuses existing widget patterns from forecasts/components/widgets/*
   Wires to backend: /api/copilot/start and /api/copilot/ask
 -->
-<section class="widget-card copilot-panel" aria-label="Copilot" data-widget-id="copilot-panel">
+<style>
+/* BATCH-71-DEV-03: Portfolio Context Section Styles */
+.copilot-portfolio-section {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(147, 51, 234, 0.08));
+    border-radius: 12px;
+    border: 1px solid rgba(147, 51, 234, 0.2);
+}
+
+.portfolio-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.portfolio-icon {
+    font-size: 1.5rem;
+}
+
+.portfolio-meta {
+    flex: 1;
+}
+
+.portfolio-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    color: var(--color-slate-900, #13343b);
+}
+
+.portfolio-timestamp {
+    font-size: 0.75rem;
+    color: var(--color-slate-500, #626c71);
+}
+
+.portfolio-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.portfolio-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.portfolio-holdings {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.holdings-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-slate-500, #626c71);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.holdings-tickers {
+    font-size: 0.875rem;
+    color: var(--color-slate-900, #13343b);
+    font-weight: 500;
+}
+
+.portfolio-risk-profile {
+    font-size: 0.75rem;
+    color: var(--color-slate-500, #626c71);
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(98, 108, 113, 0.2);
+}
+
+.risk-details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.portfolio-alerts {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(239, 68, 68, 0.08);
+    border-radius: 8px;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.portfolio-alerts h4 {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin: 0 0 0.5rem 0;
+    color: var(--color-red-500, #c0152f);
+}
+
+.alert-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.alert-item {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.alert-item strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--color-slate-900, #13343b);
+}
+
+.alert-medium {
+    border-left: 3px solid var(--color-orange-500, #a84b2f);
+}
+
+.alert-high {
+    border-left: 3px solid var(--color-red-500, #c0152f);
+}
+</style>
+
+<section id="copilotPanel" class="widget-card copilot-panel" aria-label="Copilot" data-widget-id="copilot-panel">
     <div class="widget-header">
         <div class="widget-title-row">
             <span class="widget-icon">🤖</span>
@@ -34,6 +163,28 @@
             <div class="brief-risks" id="copilotBriefRisks" style="display: none;">
                 <h4>Top Risks</h4>
                 <ul class="risk-list" id="copilotRiskList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Portfolio Context Section (BATCH-71-DEV-03) -->
+    <div class="copilot-portfolio-section" id="copilotPortfolioSection" style="display: none;">
+        <div class="portfolio-header">
+            <span class="portfolio-icon">💼</span>
+            <div class="portfolio-meta">
+                <h3 class="portfolio-title" id="copilotPortfolioTitle">My Portfolio</h3>
+                <span class="portfolio-timestamp" id="copilotPortfolioTimestamp"></span>
+            </div>
+        </div>
+        <div class="portfolio-content" id="copilotPortfolioContent">
+            <div class="portfolio-summary" id="copilotPortfolioSummary">
+                <div class="portfolio-holdings" id="copilotPortfolioHoldings"></div>
+                <div class="portfolio-risk-profile" id="copilotPortfolioRisk"></div>
+            </div>
+            <!-- Allocation Drift Alerts -->
+            <div class="portfolio-alerts" id="copilotPortfolioAlerts" style="display: none;">
+                <h4>⚠️ Allocation Alerts</h4>
+                <ul class="alert-list" id="copilotAlertList"></ul>
             </div>
         </div>
     </div>
@@ -119,7 +270,8 @@ let copilotState = {
     briefData: null,
     askActions: [],
     openActions: [],
-    lastAnswer: null
+    lastAnswer: null,
+    initialized: false
 };
 
 // API Base URL (reuse existing FinanceAPI pattern)
@@ -129,10 +281,13 @@ const COPILOT_API_BASE = window.FinanceAPI?.BASE_URL || 'http://localhost:8050/a
  * Initialize copilot panel
  */
 async function initCopilotPanel() {
+    if (copilotState.initialized) return;
     try {
+        copilotState.initialized = true;
         await loadCopilotStart();
         renderCopilotSuggestions();
     } catch (error) {
+        copilotState.initialized = false;
         console.error('Failed to initialize copilot:', error);
         showCopilotError('Failed to load copilot data');
     }
@@ -163,8 +318,9 @@ async function loadCopilotStart() {
         copilotState.briefData = data;
         copilotState.askActions = data.ask || [];
         copilotState.openActions = data.open || [];
-        
+
         renderCopilotBrief(data);
+        renderCopilotPortfolio(data);  // BATCH-71-DEV-03: Portfolio context
         renderCopilotActions();
         updateCopilotLiveBadge(data);
         
@@ -217,14 +373,102 @@ function renderCopilotBrief(data) {
     const risksEl = document.getElementById('copilotBriefRisks');
     const riskListEl = document.getElementById('copilotRiskList');
     const risks = brief.top_risks || brief.risks || brief.main_risks || [];
-    
+
     if (risks && risks.length > 0) {
         risksEl.style.display = 'block';
-        riskListEl.innerHTML = risks.map(risk => 
+        riskListEl.innerHTML = risks.map(risk =>
             `<li class="risk-item">${escapeHtml(risk)}</li>`
         ).join('');
     } else {
         risksEl.style.display = 'none';
+    }
+}
+
+/**
+ * Render portfolio context (BATCH-71-DEV-03)
+ */
+function renderCopilotPortfolio(data) {
+    const portfolioContext = data.portfolio_context;
+    const allocationDrift = data.allocation_drift_alerts;
+
+    // Hide section if no portfolio context
+    const sectionEl = document.getElementById('copilotPortfolioSection');
+    if (!portfolioContext || !sectionEl) {
+        if (sectionEl) sectionEl.style.display = 'none';
+        return;
+    }
+
+    // Show section
+    sectionEl.style.display = 'block';
+
+    // Portfolio title and timestamp
+    const portfolio = portfolioContext.portfolio || {};
+    const titleEl = document.getElementById('copilotPortfolioTitle');
+    const timestampEl = document.getElementById('copilotPortfolioTimestamp');
+
+    if (titleEl) {
+        titleEl.textContent = portfolio.name || 'My Portfolio';
+    }
+    if (timestampEl) {
+        const freshness = portfolioContext.freshness || portfolioContext.generated_at;
+        timestampEl.textContent = freshness ? formatCopilotTimestamp(freshness) : '';
+    }
+
+    // Holdings (tickers)
+    const holdingsEl = document.getElementById('copilotPortfolioHoldings');
+    const tickers = portfolio.tickers || [];
+    const tickersCount = portfolio.tickers_count || tickers.length;
+
+    if (holdingsEl) {
+        if (tickers.length > 0) {
+            holdingsEl.innerHTML = `
+                <div class="holdings-label">Holdings (${tickersCount})</div>
+                <div class="holdings-tickers">${tickers.join(', ')}</div>
+            `;
+        } else {
+            holdingsEl.innerHTML = '<div class="holdings-label">No holdings configured</div>';
+        }
+    }
+
+    // Risk profile
+    const riskEl = document.getElementById('copilotPortfolioRisk');
+    const riskProfile = portfolioContext.risk_profile;
+    const riskLevel = portfolioContext.risk_level;
+    const benchmark = portfolioContext.benchmark;
+
+    if (riskEl) {
+        const riskParts = [];
+        if (riskProfile) riskParts.push(escapeHtml(riskProfile));
+        if (riskLevel) riskParts.push(`Risk: ${escapeHtml(riskLevel)}`);
+        if (benchmark) riskParts.push(`Benchmark: ${escapeHtml(benchmark)}`);
+
+        if (riskParts.length > 0) {
+            riskEl.innerHTML = `<div class="risk-details">${riskParts.join(' • ')}</div>`;
+            riskEl.style.display = 'block';
+        } else {
+            riskEl.style.display = 'none';
+        }
+    }
+
+    // Allocation drift alerts
+    const alertsSectionEl = document.getElementById('copilotPortfolioAlerts');
+    const alertListEl = document.getElementById('copilotAlertList');
+
+    if (allocationDrift && allocationDrift.active && allocationDrift.alerts) {
+        const alerts = allocationDrift.alerts;
+        if (alerts.length > 0) {
+            alertsSectionEl.style.display = 'block';
+            alertListEl.innerHTML = alerts.map(alert => `
+                <li class="alert-item alert-${escapeHtml(alert.severity || 'medium')}">
+                    <strong>${escapeHtml(alert.symbol || alert.id || 'Alert')}:</strong>
+                    ${escapeHtml(alert.reason || 'No details available')}
+                </li>
+            `).join('');
+        } else {
+            alertsSectionEl.style.display = 'none';
+        }
+    } else {
+        if (alertsSectionEl) alertsSectionEl.style.display = 'none';
     }
 }
 
@@ -497,14 +741,17 @@ function refreshCopilotData() {
     showToast('Refreshing copilot data...', 'info');
 }
 
+function getCopilotPanelContainer() {
+    return document.getElementById('copilot-panel-container')
+        || document.getElementById('copilotPanelContainer');
+}
+
 function toggleCopilotPanel() {
-    const panel = document.getElementById('copilotPanel');
-    if (panel) {
-        panel.classList.toggle('active');
-        if (panel.classList.contains('active')) {
-            initCopilotPanel();
-        }
-    }
+    const container = getCopilotPanelContainer();
+    if (!container) return;
+    const isHidden = container.style.display === 'none';
+    container.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) initCopilotPanel();
 }
 
 /**
@@ -517,12 +764,18 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Initialize on load
-document.addEventListener('DOMContentLoaded', () => {
-    // Auto-init if panel exists
+function bootstrapCopilotPanel() {
     const panel = document.getElementById('copilotPanel');
-    if (panel && panel.classList.contains('active')) {
+    const container = getCopilotPanelContainer();
+    if (panel && container) {
+        container.style.display = 'block';
         initCopilotPanel();
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapCopilotPanel, { once: true });
+} else {
+    bootstrapCopilotPanel();
+}
 </script>
