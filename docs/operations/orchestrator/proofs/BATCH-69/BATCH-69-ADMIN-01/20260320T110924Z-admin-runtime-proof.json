@@ -1,0 +1,35 @@
+{
+  "task_id": "BATCH-69-ADMIN-01",
+  "stream_id": "BATCH-69",
+  "generated_at": "2026-03-20T11:09:24Z",
+  "status": "BLOCKED",
+  "summary": "Runtime validation confirms planner-only orchestration, monitor contract, frontend, cron ownership, and critical endpoint contract are live after the DEV-03 chain. A bounded runtime patch was applied to stop accepting You.com auth-wall text as a successful LLM answer, but `/api/copilot/ask` still falls back to the degraded memo path, so the personal finance copilot remains user-visibly blocked on live memo generation.",
+  "root_cause": "The judge/copilot runtime treated provider auth-wall HTML as a successful LLM reply. After rejecting that invalid response, the backend still cannot produce a non-fallback memo from the remaining provider chain, so the ask surface continues to degrade to `model=fallback`.",
+  "fix_applied": "Patched `domains.judge.application.g4f_client` to detect auth-wall/login/pricing responses and continue to the next provider instead of returning unusable content; added regression coverage for fast-path and ranked-candidate auth-wall fallback behavior; restarted the Finance Copilot runtime.",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1 workspace=/home/venom/analyse-financiere",
+    "monitor_contract_smoke": "PASS primary_status=ok roles=1 agents=4 queue_states=2 workboard_ready=0 admin_timeouts_recent=0 issues_records=2",
+    "fc_status_brief": "PASS orchestration nominal; planner-only execution_mode=planner_experimental; BATCH-69 active",
+    "fc_health_check": "PASS overall runtime governance and critical endpoint contract; warnings limited to rate limits/model recommendation",
+    "brief_daily_probe": "PASS `/api/brief/daily` returns ok=true with generated_at `2026-03-20T11:08:18.060057Z`",
+    "copilot_ask_probe": "BLOCKED `/api/copilot/ask` with explicit ticker `NVDA` still returns `model=fallback`, `quality_status=insufficient_sources`, and `⚠️ LLM indisponible` at `2026-03-20T11:08:40.459507Z`"
+  },
+  "files_touched": [
+    "apps/api/src/domains/judge/application/g4f_client.py",
+    "apps/api/src/domains/judge/tests/test_g4f_client_model_fallback.py",
+    "docs/operations/orchestrator/proofs/BATCH-69/BATCH-69-ADMIN-01/20260320T110924Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "apps/api/src/.venv/bin/pytest apps/api/src/domains/judge/tests/test_g4f_client_model_fallback.py -q",
+    "bash apps/api/runtime/copilot.sh restart",
+    "bash scripts/monitor_contract_smoke.sh",
+    "bash scripts/fc_status_brief.sh",
+    "bash scripts/fc_health_check.sh",
+    "curl -sS --max-time 15 http://127.0.0.1:8050/api/brief/daily",
+    "curl -sS --max-time 25 -X POST http://127.0.0.1:8050/api/copilot/ask -H 'Content-Type: application/json' -d '{\"question\":\"What matters for NVDA today?\",\"tickers\":[\"NVDA\"]}'"
+  ],
+  "architecture_check": "Bounded runtime/control-plane change only: no queue/workboard mutation, no frontend/theme change, no repo-wide planner behavior change. The patch is isolated to provider-response validation in the shared judge/copilot LLM bridge and preserves DEV-03 surface contracts.",
+  "vision_alignment": "Aligned with the product goal because it removes one false-success path on the `brief + ask` runtime and keeps proof focused on the user-visible memo generation path instead of broad orchestration changes.",
+  "recommended_next": "Planner should route the remaining blocker to dev/runtime for the next bounded fix: inspect why the post-auth-wall provider chain still cannot produce a non-fallback memo for `/api/copilot/ask` and capture the exact provider/error from the judge bridge during a live ask.",
+  "blocking_issue": "BATCH-69 remains blocked on live copilot memo generation: `/api/copilot/ask` still degrades to `model=fallback` after the auth-wall guard, so the ask surface does not yet meet the user-visible investment memo requirement."
+}

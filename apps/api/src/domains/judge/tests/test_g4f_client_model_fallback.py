@@ -129,12 +129,81 @@ def test_call_g4f_falls_back_to_next_candidate(monkeypatch):
         model="model-fail",
         provider="DeepInfra",
         timeout=10,
+        max_attempts=3,
+        candidate_pairs=[
+            ("DeepInfra", "model-fail"),
+            ("DeepInfra", "model-ok"),
+        ],
     )
     assert result.get("ok") is True
     assert result.get("model") == "model-ok"
     assert result.get("answer") == "fallback_success"
     attempted = result.get("attempted") or []
     assert attempted and attempted[0].get("model") == "model-fail"
+
+
+def test_call_g4f_skips_auth_wall_fast_path_and_ranked_candidate(monkeypatch):
+    class _FakeResponse:
+        def __init__(self, content: str):
+            self.choices = [type("C", (), {"message": type("M", (), {"content": content})()})]
+
+        def model_dump_json(self) -> str:
+            return json.dumps({"ok": True})
+
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            model = kwargs.get("model")
+            if model == "gpt-4o-mini":
+                return _FakeResponse("Please log in to use You.com. Check out our plans here: https://you.com/pricing")
+            if model == "model-auth":
+                return _FakeResponse("Please log in to continue")
+            return _FakeResponse("real_answer")
+
+    class _FakeChat:
+        completions = _FakeCompletions()
+
+    class _FakeClient:
+        def __init__(self, provider=None):
+            self.provider = provider
+            self.chat = _FakeChat()
+
+    class _FakeProvider:
+        You = object()
+
+    class _FakeG4F:
+        Provider = _FakeProvider
+
+    monkeypatch.setattr(g4f_client, "G4FClient", _FakeClient)
+    monkeypatch.setattr(g4f_client, "get_llm_settings", None)
+    monkeypatch.setitem(__import__("sys").modules, "g4f", _FakeG4F)
+    monkeypatch.delenv("G4F_MODEL", raising=False)
+    monkeypatch.delenv("G4F_PROVIDER", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    monkeypatch.delenv("LLM_DEFAULT_MODEL", raising=False)
+    monkeypatch.setattr(
+        g4f_client,
+        "get_ranked_tested_models",
+        lambda category_preference="forecast", limit=12: [
+            ("You", "model-auth"),
+            ("DeepInfra", "model-ok"),
+        ],
+    )
+
+    result = g4f_client.call_g4f(
+        messages=[{"role": "user", "content": "ping"}],
+        timeout=10,
+        max_attempts=4,
+        candidate_pairs=[
+            ("You", "model-auth"),
+            ("DeepInfra", "model-ok"),
+        ],
+    )
+
+    assert result.get("ok") is True
+    assert result.get("model") == "model-ok"
+    assert result.get("answer") == "real_answer"
+    attempted = result.get("attempted") or []
+    assert attempted and attempted[0].get("error") == "auth_wall_response"
 
 
 def test_get_mode_model_candidates_dev_prefers_dev_models(monkeypatch):

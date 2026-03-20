@@ -94,6 +94,20 @@ def _is_text_model(model: str) -> bool:
     return not any(token in low for token in blocked)
 
 
+def _looks_like_auth_wall(answer: Any) -> bool:
+    text = str(answer or "").strip().lower()
+    if not text:
+        return False
+    markers = (
+        "please log in",
+        "sign in",
+        "you.com/signin",
+        "you.com/pricing",
+        "check out our plans",
+    )
+    return any(marker in text for marker in markers)
+
+
 def _guess_category(model: str) -> str:
     low = (model or "").lower()
     if any(token in low for token in ("deepseek", "qwen", "llama", "mistral", "gpt-", "o3", "o4", "phi-4", "claude", "pplx")):
@@ -767,7 +781,7 @@ def call_g4f(
                 if _fast_resp and hasattr(_fast_resp, "choices") and _fast_resp.choices
                 else ""
             ).strip()
-            if _fast_ans:
+            if _fast_ans and not _looks_like_auth_wall(_fast_ans):
                 return {
                     "ok": True,
                     "answer": _fast_ans,
@@ -808,6 +822,15 @@ def call_g4f(
                         "provider": candidate_provider,
                         "model": candidate_model,
                         "error": "empty_response",
+                    }
+                )
+                continue
+            if _looks_like_auth_wall(answer):
+                attempts.append(
+                    {
+                        "provider": candidate_provider,
+                        "model": candidate_model,
+                        "error": "auth_wall_response",
                     }
                 )
                 continue
