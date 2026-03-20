@@ -1417,11 +1417,23 @@ function transformCopilotStart(payload, fallbackPayload = null) {
       }))
       .filter((item) => item.target);
   const resolvedBrief = Object.keys(briefOfDay).length ? briefOfDay : fallbackBrief;
+  const hasEventTiming = !!(
+    resolvedBrief
+    && typeof resolvedBrief === 'object'
+    && resolvedBrief.event_timing
+    && typeof resolvedBrief.event_timing === 'object'
+    && Array.isArray(resolvedBrief.event_timing.events)
+    && resolvedBrief.event_timing.events.length
+  );
+  const normalizedOpenWithCalendar = hasEventTiming
+    && !normalizedOpen.some((item) => normalizeCopilotOpenTarget(item && item.target, item && item.id) === 'calendar')
+    ? [...normalizedOpen, { id: 'event_calendar', label: 'Open event calendar', target: 'calendar' }]
+    : normalizedOpen;
 
   return {
     brief_of_day: normalizeBriefOfDayPayload(resolvedBrief),
     ask: normalizedAsk,
-    open: normalizedOpen,
+    open: normalizedOpenWithCalendar,
     regime_detection: extractObject(source, ['regime_detection', 'regimeDetection'])
       || extractObject(fallbackSource, ['regime_detection', 'regimeDetection']),
     allocation_drift_alerts: extractObject(source, ['allocation_drift_alerts', 'allocationDriftAlerts'])
@@ -1530,6 +1542,22 @@ function normalizeCopilotOpenTarget(target, id) {
     || normalizedTarget === 'daily_brief'
   ) {
     return 'overview';
+  }
+  if (
+    normalizedId === 'event_calendar'
+    || normalizedTarget === '/calendar'
+    || normalizedTarget === 'calendar'
+    || normalizedTarget === 'market-calendar'
+    || normalizedTarget === 'event_calendar'
+  ) {
+    return 'calendar';
+  }
+  if (
+    normalizedId === 'opportunities'
+    || normalizedTarget === '/opportunities'
+    || normalizedTarget === 'opportunities'
+  ) {
+    return 'opportunities';
   }
   if (
     normalizedId === 'ask_copilot'

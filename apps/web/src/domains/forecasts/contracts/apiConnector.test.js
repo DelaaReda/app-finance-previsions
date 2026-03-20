@@ -2640,3 +2640,100 @@ test('initLiveData hydrates regime detection and allocation drift alerts from co
   assert.equal(sandbox.window.copilotStart.regime_detection.label, 'RISK_ON');
   assert.equal(sandbox.window.copilotStart.allocation_drift_alerts.active, true);
 });
+
+test('getCopilotStart injects an event calendar open action when the brief carries event timing', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url === 'http://localhost:8050/api/copilot/start') {
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              brief_of_day: {
+                title: 'Daily brief',
+                summary: 'Two macro catalysts are inside the next 48 hours.',
+                event_timing: {
+                  summary: 'Critical events are clustered into the next 48h.',
+                  events: [
+                    { event_type: 'CPI', dominant_horizon: '24h' },
+                  ],
+                },
+              },
+              open: [
+                { id: 'brief_of_day', label: 'Open Live Brief', target: '/brief/daily' },
+              ],
+            },
+          };
+        },
+      };
+    }
+
+    if (url === 'http://localhost:8050/api/brief/daily') {
+      return {
+        ok: true,
+        async json() {
+          return { ok: true, data: {} };
+        },
+      };
+    }
+
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotStart();
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(payload.copilot_start.open.map((item) => ({ id: item.id, target: item.target })))),
+    [
+      { id: 'brief_of_day', target: 'overview' },
+      { id: 'event_calendar', target: 'calendar' },
+    ],
+  );
+});
+
+test('getCopilotStart normalizes opportunities and calendar aliases from backend open actions', async () => {
+  const sandbox = loadConnector(async (url) => {
+    if (url === 'http://localhost:8050/api/copilot/start') {
+      return {
+        ok: true,
+        async json() {
+          return {
+            ok: true,
+            data: {
+              brief_of_day: {
+                title: 'Daily brief',
+                summary: 'Follow-through setups remain active.',
+              },
+              open: [
+                { id: 'event_calendar', label: 'Open event calendar', target: 'market-calendar' },
+                { id: 'opportunities', label: 'Open opportunities', target: '/opportunities' },
+              ],
+            },
+          };
+        },
+      };
+    }
+
+    if (url === 'http://localhost:8050/api/brief/daily') {
+      return {
+        ok: true,
+        async json() {
+          return { ok: true, data: {} };
+        },
+      };
+    }
+
+    throw new Error(`Unexpected URL ${url}`);
+  });
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotStart();
+
+  assert.deepEqual(
+    payload.copilot_start.open.map((item) => ({ id: item.id, target: item.target })),
+    [
+      { id: 'event_calendar', target: 'calendar' },
+      { id: 'opportunities', target: 'opportunities' },
+    ],
+  );
+});
