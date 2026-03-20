@@ -577,7 +577,7 @@ test('getCopilotContext normalizes brief-first entry points into ask/open starte
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'market' },
+      { id: 'brief_of_day', target: 'overview' },
       { id: 'open_copilot', target: 'copilot' },
     ]
   );
@@ -731,7 +731,7 @@ test('getCopilotContext normalizes direct copilot_start open targets for the exi
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'market' },
+      { id: 'brief_of_day', target: 'overview' },
       { id: 'copilot', target: 'copilot' },
     ]
   );
@@ -1204,7 +1204,7 @@ test('getCopilotStart unwraps the dedicated starter contract and normalizes open
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'market' },
+      { id: 'brief_of_day', target: 'overview' },
       { id: 'open_copilot', target: 'copilot' },
     ]
   );
@@ -1275,6 +1275,47 @@ test('getCopilotStart normalizes personal-finance starter alias targets to the c
               id: 'open_personal_finance_context',
               label: 'Open personal finance context',
               target: 'personal-finance/context',
+            },
+          ],
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotStart();
+  const open = payload.copilot_start && payload.copilot_start.open ? payload.copilot_start.open : [];
+
+  assert.deepEqual(
+    open.map((item) => ({ id: item.id, target: item.target })),
+    [
+      { id: 'open_personal_finance_start', target: 'copilot' },
+      { id: 'open_personal_finance_context', target: 'copilot' },
+    ]
+  );
+});
+
+test('getCopilotStart normalizes personal-finance starter aliases with trailing slash and query fragments', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          brief_of_day: {
+            title: 'Brief of the day',
+            summary: 'Starter aliases should resolve to the copilot overlay.',
+            generated_at: '2026-03-19T09:00:00.000Z',
+          },
+          ask: [],
+          open: [
+            {
+              id: 'open_personal_finance_start',
+              label: 'Open personal finance start',
+              target: '/personal-finance/start/?source=hero',
+            },
+            {
+              id: 'open_personal_finance_context',
+              label: 'Open personal finance context',
+              target: 'personal-finance/context/#focus',
             },
           ],
         },
@@ -1496,7 +1537,7 @@ test('getCopilotStart falls back to copilot context when the starter route is un
   );
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
-    [{ id: 'brief_of_day', target: 'market' }]
+    [{ id: 'brief_of_day', target: 'overview' }]
   );
 });
 
@@ -1574,7 +1615,7 @@ test('getCopilotStart keeps ask/open starter actions when namespaced start falls
   );
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
-    [{ id: 'brief_of_day', target: 'market' }]
+    [{ id: 'brief_of_day', target: 'overview' }]
   );
 });
 

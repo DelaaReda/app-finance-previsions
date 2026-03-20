@@ -5798,7 +5798,7 @@ function normalizeCopilotStartOpenTarget(target, id = '') {
     || normalizedTarget === 'live_brief'
     || normalizedTarget === 'daily_brief'
   ) {
-    return 'market';
+    return 'overview';
   }
   if (
     normalizedId === 'event_calendar'
@@ -6162,11 +6162,12 @@ function resolveCopilotStartOpenDestination(target) {
 
   const destination = {
     brief: {
-      tab: 'market',
-      anchorId: 'market-pulse-widget-container'
+      tab: 'overview',
+      anchorId: 'heroSection'
     },
     overview: {
-      tab: 'overview'
+      tab: 'overview',
+      anchorId: 'heroSection'
     },
     calendar: {
       tab: 'market',

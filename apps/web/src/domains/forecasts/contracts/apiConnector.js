@@ -1515,7 +1515,11 @@ function buildCopilotContextAlerts(payload) {
 }
 
 function normalizeCopilotOpenTarget(target, id) {
-  const normalizedTarget = String(target || '').trim().toLowerCase();
+  const normalizedTarget = String(target || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '');
   const normalizedId = String(id || '').trim().toLowerCase();
   if (
     normalizedId === 'brief_of_day'
@@ -1525,7 +1529,7 @@ function normalizeCopilotOpenTarget(target, id) {
     || normalizedTarget === 'live_brief'
     || normalizedTarget === 'daily_brief'
   ) {
-    return 'market';
+    return 'overview';
   }
   if (
     normalizedId === 'ask_copilot'
