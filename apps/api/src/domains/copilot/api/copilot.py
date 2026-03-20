@@ -236,6 +236,37 @@ def _rewrite_namespace_targets(payload: Any, namespace: Optional[str]) -> Any:
     return rewritten
 
 
+def _rewrite_namespace_entry_points(payload: Any, namespace: Optional[str]) -> Any:
+    if namespace is None:
+        return payload
+
+    if not isinstance(payload, list):
+        return payload
+
+    rewritten: List[Any] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            rewritten.append(item)
+            continue
+
+        resolved_kind = str(item.get("kind") or "").strip().lower()
+        target = item.get("target")
+        mapped = _normalized_action_target(
+            str(target if target is not None else ""),
+            resolved_kind,
+            namespace,
+        )
+        if not mapped:
+            rewritten.append(item)
+            continue
+
+        updated = dict(item)
+        updated["target"] = mapped
+        rewritten.append(updated)
+
+    return rewritten
+
+
 def _normalize_scope(
     tickers: Optional[List[str]],
 ) -> Optional[Dict[str, List[str]]]:
@@ -458,9 +489,16 @@ async def copilot_context(
             scope=scope,
         )
         if isinstance(payload, dict):
+            entry_points = payload.get("entry_points")
             start_payload = payload.get("copilot_start")
-            if isinstance(start_payload, dict):
+            if isinstance(start_payload, dict) or isinstance(entry_points, list):
                 payload = dict(payload)
+            if isinstance(entry_points, list):
+                payload["entry_points"] = _rewrite_namespace_entry_points(
+                    entry_points,
+                    namespace,
+                )
+            if isinstance(start_payload, dict):
                 payload["copilot_start"] = _rewrite_namespace_targets(start_payload, namespace)
         if isinstance(payload, dict) and payload.get("regime") == "fallback":
             payload.setdefault("note", "Market context service temporarily unavailable.")
@@ -477,7 +515,7 @@ async def copilot_context(
         fallback: Dict[str, Any] = {
             "note": "Market context service temporarily unavailable.",
             "daily_brief": daily_brief,
-            "entry_points": entry_points,
+            "entry_points": _rewrite_namespace_entry_points(entry_points, namespace),
         }
         if isinstance(scope, dict) and scope.get("tickers"):
             fallback["scope_tickers"] = list(scope.get("tickers") or [])

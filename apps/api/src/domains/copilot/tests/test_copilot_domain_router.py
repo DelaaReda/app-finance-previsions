@@ -8,6 +8,7 @@ SRC_PATH = Path(__file__).resolve().parents[3]
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
+from domains.copilot.api import copilot as copilot_route
 from domains.copilot.api.copilot import router
 from domains.copilot.application import copilot_service
 from storage import io as storage_io
@@ -430,6 +431,8 @@ def test_copilot_context_includes_playbook_enrichment(monkeypatch):
 
 
 def test_personal_finance_start_alias_reuses_copilot_start_payload(monkeypatch):
+    copilot_route._COPILOT_START_CACHE.clear()
+
     async def _fake_build_context_payload(*_args, **kwargs):
         return {
             "daily_brief": {
@@ -643,18 +646,38 @@ def test_personal_finance_context_alias_reuses_copilot_context_payload(monkeypat
     assert context_open_targets == ["/brief/daily", "/copilot"]
     assert finance_open_targets == ["/brief/daily", "/personal-finance"]
 
+    context_entry_points = data_context.get("entry_points") or []
+    finance_entry_points = data_finance.get("entry_points") or []
+    assert [item.get("target") for item in context_entry_points] == [
+        "/brief/daily",
+        "/copilot/ask",
+        "/copilot",
+    ]
+    assert [item.get("target") for item in finance_entry_points] == [
+        "/brief/daily",
+        "/personal-finance/ask",
+        "/personal-finance",
+    ]
+
     data_context.pop("copilot_start", None)
     data_finance.pop("copilot_start", None)
+    data_context.pop("entry_points", None)
+    data_finance.pop("entry_points", None)
     assert data_finance == data_context
 
     data = data_finance
     assert data.get("scope_tickers") == ["MSFT", "NVDA"]
 
-    entry_points = data.get("entry_points") or []
+    entry_points = finance_entry_points
     assert [item.get("id") for item in entry_points] == [
         "brief_of_day",
         "ask_copilot",
         "open_copilot",
+    ]
+    assert [item.get("target") for item in entry_points] == [
+        "/brief/daily",
+        "/personal-finance/ask",
+        "/personal-finance",
     ]
 
     copilot_start = finance_copilot_start
