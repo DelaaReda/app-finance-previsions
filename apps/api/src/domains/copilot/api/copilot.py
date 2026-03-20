@@ -9,12 +9,38 @@ Implements minimal, never-empty endpoints backed by existing services when possi
 """
 from __future__ import annotations
 
+import asyncio
+import os
 from datetime import datetime, timezone
 from annotated_types import Ge, Gt
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 from typing_extensions import Annotated
+
+try:
+    from api.templates.judge_like_endpoint import (
+        append_source_tag,
+        compute_singleflight,
+        response_cache_get,
+        response_cache_set,
+        stable_cache_key,
+    )
+except Exception:  # pragma: no cover
+    try:
+        from src.api.templates.judge_like_endpoint import (  # type: ignore
+            append_source_tag,
+            compute_singleflight,
+            response_cache_get,
+            response_cache_set,
+            stable_cache_key,
+        )
+    except Exception:  # pragma: no cover
+        append_source_tag = None  # type: ignore
+        compute_singleflight = None  # type: ignore
+        response_cache_get = None  # type: ignore
+        response_cache_set = None  # type: ignore
+        stable_cache_key = None  # type: ignore
 
 try:
     from domains.copilot.application.context_service import ContextService
@@ -34,6 +60,15 @@ except Exception:  # pragma: no cover
 
 
 router = APIRouter(tags=["copilot"])
+COPILOT_START_CACHE_TTL_SECONDS = max(
+    0, int(os.getenv("COPILOT_START_CACHE_TTL_SECONDS", "30") or "30")
+)
+COPILOT_START_CACHE_MAX_ENTRIES = max(
+    1, int(os.getenv("COPILOT_START_CACHE_MAX_ENTRIES", "32") or "32")
+)
+_COPILOT_START_CACHE: Dict[str, Dict[str, Any]] = {}
+_COPILOT_START_INFLIGHT: Dict[str, asyncio.Task] = {}
+_COPILOT_START_INFLIGHT_LOCK = asyncio.Lock()
 
 
 def _utc_now_iso() -> str:
@@ -279,6 +314,58 @@ def _build_start_response(
     return payload
 
 
+def _copilot_start_cache_key(
+    *,
+    tickers: Optional[List[str]],
+    namespace: Optional[str],
+) -> Optional[str]:
+    if not callable(stable_cache_key):
+        return None
+    return stable_cache_key(
+        "copilot_start_v1",
+        {
+            "tickers": list(tickers or []),
+            "namespace": str(namespace or "").strip(),
+        },
+    )
+
+
+def _copilot_start_cached_payload(
+    cache_key: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    if not cache_key or not callable(response_cache_get):
+        return None
+    return response_cache_get(
+        _COPILOT_START_CACHE,
+        cache_key,
+        ttl_seconds=COPILOT_START_CACHE_TTL_SECONDS,
+        hit_source_tag="copilot_start_cache_hit",
+        default_source="copilot_start_route",
+    )
+
+
+def _copilot_start_store_payload(
+    cache_key: Optional[str],
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    response = dict(payload)
+    cache_meta = response.get("cache") if isinstance(response.get("cache"), dict) else {}
+    cache_meta.update({"hit": False, "age_seconds": 0.0, "ttl_seconds": COPILOT_START_CACHE_TTL_SECONDS})
+    response["cache"] = cache_meta
+    if callable(append_source_tag):
+        append_source_tag(response, "copilot_start_route", default_source="copilot_start_route")
+    elif not isinstance(response.get("source"), list):
+        response["source"] = ["copilot_start_route"]
+    if cache_key and callable(response_cache_set):
+        response_cache_set(
+            _COPILOT_START_CACHE,
+            cache_key,
+            response,
+            max_entries=COPILOT_START_CACHE_MAX_ENTRIES,
+        )
+    return response
+
+
 def _resolve_effective_scope(
     requested_scope: Optional[Dict[str, List[str]]],
     payload: Optional[Dict[str, Any]],
@@ -411,40 +498,48 @@ async def copilot_context(
 async def copilot_start(
     tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
     namespace: Optional[str] = None,
+    debug: bool = Query(False, description="Bypass route cache and return fresh payload"),
 ):
     scope = _normalize_scope(tickers)
+    normalized_tickers = list((scope or {}).get("tickers") or [])
+    cache_key = _copilot_start_cache_key(tickers=normalized_tickers, namespace=namespace)
 
-    try:
-        payload = await copilot_service.build_context_payload(
-            context_service_cls=ContextService,
-            scope=scope,
-        )
-        effective_scope = _resolve_effective_scope(scope, payload)
-        start_payload = (
-            payload.get("copilot_start")
-            if isinstance(payload, dict)
-            else None
-        )
-        if isinstance(start_payload, dict):
-            start_payload = _rewrite_namespace_targets(start_payload, namespace)
-        note = None
-        if isinstance(payload, dict) and payload.get("regime") == "fallback":
-            note = "Market context service temporarily unavailable."
+    if not debug:
+        cached_payload = _copilot_start_cached_payload(cache_key)
+        if isinstance(cached_payload, dict):
+            return {"ok": True, "data": cached_payload}
 
-        if not isinstance(start_payload, dict) or not start_payload:
+    async def _compute_payload() -> Dict[str, Any]:
+        try:
+            payload = await copilot_service.build_context_payload(
+                context_service_cls=ContextService,
+                scope=scope,
+            )
+            effective_scope = _resolve_effective_scope(scope, payload)
             start_payload = (
-                copilot_service._build_copilot_start_payload(
-                    daily_brief=payload.get("daily_brief") if isinstance(payload, dict) else None,
-                    entry_points=payload.get("entry_points") if isinstance(payload, dict) else None,
-                    scope=effective_scope,
-                )
+                payload.get("copilot_start")
                 if isinstance(payload, dict)
                 else None
             )
-            start_payload = _rewrite_namespace_targets(start_payload, namespace)
-        return {
-            "ok": True,
-            "data": _build_start_response(
+            if isinstance(start_payload, dict):
+                start_payload = _rewrite_namespace_targets(start_payload, namespace)
+            note = None
+            if isinstance(payload, dict) and payload.get("regime") == "fallback":
+                note = "Market context service temporarily unavailable."
+
+            if not isinstance(start_payload, dict) or not start_payload:
+                start_payload = (
+                    copilot_service._build_copilot_start_payload(
+                        daily_brief=payload.get("daily_brief") if isinstance(payload, dict) else None,
+                        entry_points=payload.get("entry_points") if isinstance(payload, dict) else None,
+                        scope=effective_scope,
+                    )
+                    if isinstance(payload, dict)
+                    else None
+                )
+                start_payload = _rewrite_namespace_targets(start_payload, namespace)
+
+            return _build_start_response(
                 start_payload,
                 scope=effective_scope,
                 note=note,
@@ -452,40 +547,37 @@ async def copilot_start(
                 portfolio_context=payload.get("portfolio_context") if isinstance(payload, dict) else None,
                 regime_detection=payload.get("regime_detection") if isinstance(payload, dict) else None,
                 allocation_drift_alerts=payload.get("allocation_drift_alerts") if isinstance(payload, dict) else None,
-            ),
-        }
-    except Exception:
-        daily_brief = copilot_service._load_daily_brief_payload()
-        entry_points = copilot_service._build_copilot_entry_points(scope, daily_brief)
-        build_start_payload = getattr(
-            copilot_service,
-            "_build_copilot_start_payload",
-            None,
-        ) or getattr(copilot_service, "_legacy_copilot_start_payload", None)
-
-        if callable(build_start_payload):
-            fallback_start = build_start_payload(
-                daily_brief=daily_brief,
-                entry_points=entry_points,
-                scope=scope,
             )
-        else:
-            fallback_start = {
-                "brief_of_day": daily_brief,
-                "ask": [],
-                "open": [],
-            }
-        fallback_start = _rewrite_namespace_targets(fallback_start, namespace)
-        fallback_payload = {
-            "context_influence": None,
-            "portfolio_context": None,
-            "regime_detection": None,
-            "allocation_drift_alerts": None,
-        }
+        except Exception:
+            daily_brief = copilot_service._load_daily_brief_payload()
+            entry_points = copilot_service._build_copilot_entry_points(scope, daily_brief)
+            build_start_payload = getattr(
+                copilot_service,
+                "_build_copilot_start_payload",
+                None,
+            ) or getattr(copilot_service, "_legacy_copilot_start_payload", None)
 
-        return {
-            "ok": True,
-            "data": _build_start_response(
+            if callable(build_start_payload):
+                fallback_start = build_start_payload(
+                    daily_brief=daily_brief,
+                    entry_points=entry_points,
+                    scope=scope,
+                )
+            else:
+                fallback_start = {
+                    "brief_of_day": daily_brief,
+                    "ask": [],
+                    "open": [],
+                }
+            fallback_start = _rewrite_namespace_targets(fallback_start, namespace)
+            fallback_payload = {
+                "context_influence": None,
+                "portfolio_context": None,
+                "regime_detection": None,
+                "allocation_drift_alerts": None,
+            }
+
+            return _build_start_response(
                 fallback_start,
                 scope=scope,
                 note="Market context service temporarily unavailable.",
@@ -493,8 +585,21 @@ async def copilot_start(
                 portfolio_context=fallback_payload.get("portfolio_context"),
                 regime_detection=fallback_payload.get("regime_detection"),
                 allocation_drift_alerts=fallback_payload.get("allocation_drift_alerts"),
-            ),
-        }
+            )
+
+    if debug or not callable(compute_singleflight) or not cache_key:
+        return {"ok": True, "data": _copilot_start_store_payload(None if debug else cache_key, await _compute_payload())}
+
+    payload, _ = await compute_singleflight(
+        _COPILOT_START_INFLIGHT,
+        _COPILOT_START_INFLIGHT_LOCK,
+        cache_key,
+        _compute_payload,
+    )
+    cached_payload = _copilot_start_cached_payload(cache_key)
+    if isinstance(cached_payload, dict):
+        return {"ok": True, "data": cached_payload}
+    return {"ok": True, "data": _copilot_start_store_payload(cache_key, payload)}
 
 
 @router.get("/personal-finance/start")
