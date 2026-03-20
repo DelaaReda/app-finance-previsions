@@ -9,8 +9,19 @@ Test the personal finance copilot start endpoint that delivers:
 
 Product vision: "Build a personal finance copilot that starts with a brief of the day"
 """
-import pytest
 from typing import Any, Dict, List
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from domains.copilot.api import copilot as copilot_route
+
+
+def _client() -> TestClient:
+    app = FastAPI()
+    app.include_router(copilot_route.router, prefix="/api")
+    return TestClient(app)
 
 
 class TestPersonalFinanceCopilotStart:
@@ -98,15 +109,6 @@ class TestPersonalFinanceCopilotStart:
 
     def test_investment_memo_contract(self, copilot_service_module):
         """Verify the investment memo output contract from ask endpoint."""
-        # This tests the structure that /api/copilot/ask returns
-        # The memo must include: verdict, horizon, reasoning, risks, confidence, sources
-        
-        sample_memo_keys = {
-            "question", "answer", "verdict", "horizon",
-            "reasoning", "risks", "confidence", "sources",
-            "generated_at", "freshness"
-        }
-        
         # Verify the service has the build_ask_payload function
         assert hasattr(copilot_service_module, "build_ask_payload"), \
             "Service must have build_ask_payload"
@@ -129,52 +131,90 @@ class TestPersonalFinanceCopilotStart:
 
 
 class TestPersonalFinanceCopilotIntegration:
-    """Integration tests requiring running backend."""
+    """Integration tests for the alias routes."""
 
-    def test_personal_finance_start_endpoint_live(self):
-        """Live test: /api/personal-finance/start returns valid response."""
-        import requests
-        
-        try:
-            resp = requests.get("http://localhost:8050/api/personal-finance/start", timeout=5)
-            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
-            
-            data = resp.json()
-            assert data.get("ok") is True, "Response must have ok=True"
-            assert "data" in data, "Response must have data"
-            
-            result = data["data"]
-            assert "brief_of_day" in result, "Must have brief_of_day"
-            assert "ask" in result, "Must have ask items"
-            assert "open" in result, "Must have open items"
-            
-        except requests.exceptions.ConnectionError:
-            pytest.skip("Backend not running - skipping live test")
+    def test_personal_finance_start_endpoint_route_contract(self, monkeypatch):
+        async def fake_build_context_payload(**_kwargs):
+            return {
+                "daily_brief": {
+                    "summary": "Markets are steady ahead of CPI.",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-03-14T02:00:00Z",
+                    "freshness": "2026-03-14T02:00:00Z",
+                    "source": ["personal_finance_start_route_contract"],
+                },
+                "entry_points": [
+                    {"id": "brief_of_day", "kind": "open", "target": "/brief/daily"},
+                    {"id": "ask_copilot", "kind": "ask", "target": "/copilot/ask"},
+                    {"id": "open_copilot", "kind": "open", "target": "/copilot"},
+                ],
+                "copilot_start": {
+                    "brief_of_day": {
+                        "summary": "Markets are steady ahead of CPI.",
+                        "market_sentiment": "NEUTRAL",
+                        "generated_at": "2026-03-14T02:00:00Z",
+                        "freshness": "2026-03-14T02:00:00Z",
+                        "source": ["personal_finance_start_route_contract"],
+                    },
+                    "ask": [{"id": "ask_copilot", "kind": "ask", "target": "/copilot/ask"}],
+                    "open": [{"id": "open_copilot", "kind": "open", "target": "/copilot"}],
+                },
+            }
 
-    def test_personal_finance_ask_endpoint_live(self):
-        """Live test: /api/personal-finance/ask returns investment memo."""
-        import requests
-        
-        try:
-            resp = requests.post(
-                "http://localhost:8050/api/personal-finance/ask",
-                json={"question": "What should I do today?", "tickers": ["AAPL"]},
-                timeout=10,
-            )
-            assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
-            
-            data = resp.json()
-            assert data.get("ok") is True, "Response must have ok=True"
-            assert "data" in data, "Response must have data"
-            
-            memo = data["data"]
-            # Investment memo contract
-            assert "question" in memo, "Memo must have question"
-            assert "answer" in memo, "Memo must have answer"
-            assert "verdict" in memo, "Memo must have verdict"
-            assert "horizon" in memo, "Memo must have horizon"
-            assert "confidence" in memo, "Memo must have confidence"
-            assert "sources" in memo, "Memo must have sources"
-            
-        except requests.exceptions.ConnectionError:
-            pytest.skip("Backend not running - skipping live test")
+        monkeypatch.setattr(copilot_route.copilot_service, "build_context_payload", fake_build_context_payload)
+
+        client = _client()
+        response = client.get("/api/personal-finance/start?tickers=nvda")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload.get("ok") is True
+
+        result = payload["data"]
+        assert result["brief_of_day"]["summary"] == "Markets are steady ahead of CPI."
+        assert result["ask"][0]["target"] == "/personal-finance/ask"
+        assert result["open"][0]["target"] == "/personal-finance"
+        assert result["scope_tickers"] == ["NVDA"]
+
+    def test_personal_finance_ask_endpoint_route_contract(self, monkeypatch):
+        async def fake_build_ask_payload(**_kwargs):
+            return {
+                "question": "What should I do today?",
+                "answer": "Hold AAPL and wait for the event window to clear.",
+                "verdict": "hold",
+                "horizon": "1w",
+                "confidence": 0.58,
+                "reasoning": ["Event timing dominates the setup."],
+                "sources": [{"type": "news", "ticker": "AAPL"}],
+                "generated_at": "2026-03-14T02:05:00Z",
+                "freshness": "2026-03-14T02:05:00Z",
+                "memo": {
+                    "verdict": "hold",
+                    "horizon": "1w",
+                    "why": ["Event timing dominates the setup."],
+                    "risks": ["Sources insuffisantes (moins de 2)."],
+                    "confidence": 0.58,
+                    "freshness": "2026-03-14T02:05:00Z",
+                    "sources": [{"type": "news", "ticker": "AAPL"}],
+                },
+            }
+
+        monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", fake_build_ask_payload)
+
+        client = _client()
+        response = client.post(
+            "/api/personal-finance/ask",
+            json={"question": "What should I do today?", "tickers": ["AAPL"]},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload.get("ok") is True
+
+        memo = payload["data"]
+        assert memo["question"] == "What should I do today?"
+        assert memo["answer"] == "Hold AAPL and wait for the event window to clear."
+        assert memo["verdict"] == "hold"
+        assert memo["horizon"] == "1w"
+        assert memo["confidence"] == 0.58
+        assert memo["sources"] == [{"type": "news", "ticker": "AAPL"}]
