@@ -5896,9 +5896,9 @@ function deriveCopilotStartFocusItems(state) {
       if (ticker) {
         return {
           id: `copilot_focus_${index}`,
-          action: 'open',
-          label: `Open ${ticker}`,
-          target: `ticker:${ticker}`,
+          action: 'ask',
+          label: `Ask about ${ticker}`,
+          prompt: buildCopilotFocusPrompt(ticker),
           tickers: [ticker]
         };
       }

@@ -4604,19 +4604,19 @@ test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actio
   const suggestionLabels = Array.from(elements.heroSuggestionChips.children).map((node) => node.textContent);
   assert.equal(suggestionLabels[0], 'Regime: RISK ON');
   assert.equal(suggestionLabels.length, 3);
-  assert.ok(suggestionLabels.includes('Open NVDA'));
+  assert.ok(suggestionLabels.includes('Ask about NVDA'));
   assert.ok(suggestionLabels.includes('Ask about Breadth improving'));
 
   Array.from(elements.heroSuggestionChips.children)
-    .filter((node) => typeof node.click === 'function' && (node.textContent === 'Open NVDA' || node.textContent.startsWith('Ask about ')))
+    .filter((node) => typeof node.click === 'function' && node.textContent.startsWith('Ask about '))
     .forEach((node) => node.click());
 
   const normalizedPromptCalls = JSON.parse(JSON.stringify(promptCalls));
   assert.equal(normalizedPromptCalls[0].prompt, 'What matters most today?');
   assert.deepEqual(normalizedPromptCalls[0].tickers, ['NVDA', 'MSFT']);
-  assert.equal(normalizedPromptCalls.length, 2);
+  assert.equal(normalizedPromptCalls.length, 3);
   assert.ok(normalizedPromptCalls.some((item) => item.prompt.startsWith('Give me a deep dive on ')));
-  assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['market', 'ticker:NVDA']);
+  assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['market']);
 });
 
 test('renderHeroCopilotBrief accepts normalized backend snake_case brief fields and falls back to opportunities', () => {
@@ -5929,9 +5929,9 @@ test('deriveCopilotStartFocusItems surfaces brief-driven ticker and theme starte
   });
 
   assert.equal(items.length, 2);
-  assert.equal(items[0].action, 'open');
-  assert.equal(items[0].label, 'Open NVDA');
-  assert.equal(items[0].target, 'ticker:NVDA');
+  assert.equal(items[0].action, 'ask');
+  assert.equal(items[0].label, 'Ask about NVDA');
+  assert.match(items[0].prompt, /deep dive on NVDA/i);
   assert.deepEqual(Array.from(items[0].tickers), ['NVDA']);
   assert.equal(items[1].action, 'ask');
   assert.equal(items[1].label, 'Ask about AI Infrastructure');
