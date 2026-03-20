@@ -1,0 +1,33 @@
+{
+  "task_id": "BATCH-68-ADMIN-01",
+  "task_title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open [ADMIN-01]",
+  "produced_at_utc": "2026-03-20T04:08:50Z",
+  "status": "completed",
+  "summary": "Runtime validation for BATCH-68 is green after correcting a planner-only false positive in the health check fallback path. The personal finance copilot start and ask endpoints respond successfully, monitor contract is healthy, and planner-only orchestration is the active runtime mode.",
+  "root_cause": "scripts/fc_health_check.sh treated missing dev/admin issue-publication events as a failure even when planner-only mode intentionally disables standalone dev/admin schedulers. That created a false ISSUE_PUBLICATION_GAP and obscured the real runtime state for BATCH-68.",
+  "fix_applied": "Scoped the issue-publication fallback check to the scheduled role set by passing SCHEDULED_ROLES into the Python fallback and reporting the active role scope in the result line.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-68/BATCH-68-ADMIN-01/20260320T040850Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "fc_health_check": "PASS issue publication continuity OK (roles=planner); monitor contract OK; critical endpoints contract OK",
+    "personal_finance_start": "PASS ok=true has_brief=true ask_count=3 open_count=3",
+    "personal_finance_ask": "PASS ok=true verdict=hold has_answer=true sources=5",
+    "note": "One fc_health_check run saw a transient backend /api/health miss while later checks and direct endpoint probes succeeded; no persistent runtime outage reproduced."
+  },
+  "files_touched": [
+    "scripts/fc_health_check.sh",
+    "docs/operations/orchestrator/proofs/BATCH-68/BATCH-68-ADMIN-01/20260320T040850Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "bash -n scripts/fc_health_check.sh",
+    "bash scripts/runtime_host_check.sh",
+    "bash scripts/fc_health_check.sh",
+    "curl -s http://127.0.0.1:8050/api/personal-finance/start",
+    "curl -s -X POST http://127.0.0.1:8050/api/personal-finance/ask -H Content-Type:application/json -d '{\"question\":\"What should I watch today?\",\"tickers\":[\"AAPL\"]}'"
+  ],
+  "commit_sha": "SKIP(existing unrelated worktree changes in tracked files; no safe isolated commit attempted)",
+  "architecture_check": "PASS narrow runtime-only fix inside scripts/fc_health_check.sh; no product-path code or scheduler ownership model changed.",
+  "vision_alignment": "PASS removes a false admin/runtime blocker so the planner can close BATCH-68 with evidence that the brief-of-day and ask/open copilot path is live.",
+  "recommended_next": "Planner should merge this proof, complete BATCH-68-ADMIN-01, and continue batch closeout unless the transient /api/health miss repeats under separate monitoring.",
+  "blocking_issue": "none"
+}

@@ -411,8 +411,8 @@ info "quality window: roles=$(IFS=,; echo "${QUALITY_ROLES[*]}") minutes=${QUALI
 
 # ── 13. Issue Publication Completeness ────────────────────
 echo -e "\n${BOLD}[ Issue Publication ]${NC}"
-ISSUE_EVENTS_FILE="$ROOT/docs/operations/orchestrator/agent-iteration-issues.jsonl"
-[[ -f "$ISSUE_EVENTS_FILE" ]] || ISSUE_EVENTS_FILE="$ROOT/docs/orchestrator-ops/agent-iteration-issues.jsonl"
+ISSUE_EVENTS_FILE="$ROOT/logs-codex-runs/orchestrator-state/agent-iteration-issues.jsonl"
+[[ -f "$ISSUE_EVENTS_FILE" ]] || ISSUE_EVENTS_FILE="$ROOT/docs/operations/orchestrator/agent-iteration-issues.jsonl"
 ISSUE_STATUS_SNAPSHOT="$(curl -s --max-time 3 "${MONITOR_BASE_URL}/api/status" 2>/dev/null)"
 ISSUE_STATUS_SUMMARY="$(printf '%s' "$ISSUE_STATUS_SNAPSHOT" | python3 -c "import json,sys
 try:
@@ -436,7 +436,7 @@ if [[ "$ISSUE_STATUS_SUMMARY" != "ERR" && -n "$ISSUE_STATUS_SUMMARY" ]]; then
     ok "Issue publication continuity OK (roles=${ISSUE_ROLE_SCOPE})"
   fi
 elif [[ -f "$ISSUE_EVENTS_FILE" ]]; then
-  ISSUE_SUMMARY_JSON="$(python3 - "$ISSUE_EVENTS_FILE" <<'PY'
+  ISSUE_SUMMARY_JSON="$(python3 - "$ISSUE_EVENTS_FILE" "${SCHEDULED_ROLES[@]}" <<'PY'
 import json
 import sys
 import time
@@ -444,7 +444,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 path = Path(sys.argv[1])
-roles = ("planner", "dev", "admin")
+roles = tuple(arg.strip() for arg in sys.argv[2:] if str(arg).strip()) or ("planner",)
 schedule = {
     "planner": [0, 22, 44],
     "dev": [6, 28, 50],
@@ -518,10 +518,11 @@ PY
 )"
   ISSUE_GAP_COUNT="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(len(d.get("gaps",[])))' "$ISSUE_SUMMARY_JSON" 2>/dev/null || echo 0)"
   ISSUE_GAP_ROLES="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(",".join(d.get("gaps",[])) or "none")' "$ISSUE_SUMMARY_JSON" 2>/dev/null || echo "none")"
+  ISSUE_ROLE_SCOPE="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(",".join(sorted(d.get("ages",{}).keys())) or "unknown")' "$ISSUE_SUMMARY_JSON" 2>/dev/null || echo "unknown")"
   if [[ "${ISSUE_GAP_COUNT:-0}" -gt 0 ]]; then
-    fail "ISSUE_PUBLICATION_GAP roles=${ISSUE_GAP_ROLES} (records missing > 1.5x interval)"
+    fail "ISSUE_PUBLICATION_GAP roles=${ISSUE_GAP_ROLES} (records missing > 1.5x interval; roles=${ISSUE_ROLE_SCOPE})"
   else
-    ok "Issue publication continuity OK (planner/dev/admin)"
+    ok "Issue publication continuity OK (roles=${ISSUE_ROLE_SCOPE})"
   fi
 else
   fail "ISSUE_PUBLICATION_GAP source missing: ${ISSUE_EVENTS_FILE}"
