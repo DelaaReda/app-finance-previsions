@@ -1162,6 +1162,11 @@
 
         console.log(`✅ Loaded ${successCount}/${components.length} components successfully!`);
 
+        // BATCH-72-DEV-02: Bootstrap copilot panel after component load
+        if (typeof window.bootstrapCopilotPanel === 'function') {
+          window.bootstrapCopilotPanel();
+        }
+
         // BATCH-63-DEV-02: Load and render brief of the day
         if (typeof window.loadAndRenderHeroBrief === 'function') {
           window.loadAndRenderHeroBrief();

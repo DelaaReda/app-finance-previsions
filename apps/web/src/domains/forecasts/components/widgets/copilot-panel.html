@@ -770,12 +770,18 @@ function bootstrapCopilotPanel() {
     if (panel && container) {
         container.style.display = 'block';
         initCopilotPanel();
+        return true;
     }
+    return false;
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bootstrapCopilotPanel, { once: true });
-} else {
-    bootstrapCopilotPanel();
+// BATCH-72-DEV-02: Defer bootstrap until components are loaded
+// The component is loaded asynchronously via loadComponents(), so we
+// expose bootstrapCopilotPanel globally and call it after loading.
+window.bootstrapCopilotPanel = bootstrapCopilotPanel;
+
+// Try immediate bootstrap (for non-dynamic loading)
+if (document.readyState !== 'loading') {
+    setTimeout(bootstrapCopilotPanel, 100);
 }
 </script>
