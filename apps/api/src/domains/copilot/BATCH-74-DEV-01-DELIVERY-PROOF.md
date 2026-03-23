@@ -12,7 +12,7 @@
 
 **Dependencies:** BATCH-74-ARCH ✅
 
-**Commit SHA:** `batch-74-dev-01-minimal-slice`
+**Commit SHA:** `6e5ef7ad6062f23625444e813060eda1996719c3`
 
 ---
 
@@ -119,6 +119,12 @@ pytest apps/api/src/domains/copilot/tests/test_dev01_delivery_proof.py
 # Personal finance copilot start tests
 pytest apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py
 # Result: 8 passed in 0.85s
+
+# Combined run (2026-03-23)
+pytest apps/api/src/domains/copilot/tests/test_dev01_delivery_proof.py \
+  apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py \
+  -v --tb=short
+# Result: 21 passed in 2.45s
 ```
 
 **Test Coverage:**
@@ -227,13 +233,14 @@ bash scripts/backend_regression_gate.sh --no-live
     "test": "pytest apps/api/src/domains/copilot/tests/test_dev01_delivery_proof.py -v (13 passed)"
   },
   "files_touched": [
-    "apps/api/src/domains/copilot/BATCH-74-DEV-01-DELIVERY-PROOF.md (new delivery proof)"
+    "apps/api/src/domains/copilot/BATCH-74-DEV-01-DELIVERY-PROOF.md (updated with actual commit SHA + test results)"
   ],
   "tests_run": [
-    "test_dev01_delivery_proof.py (13 tests, 1.68s)",
-    "test_personal_finance_copilot_start.py (8 tests, 0.85s)"
+    "test_dev01_delivery_proof.py (13 tests)",
+    "test_personal_finance_copilot_start.py (8 tests)",
+    "combined: 21 passed in 2.45s"
   ],
-  "commit_sha": "batch-74-dev-01-minimal-slice",
+  "commit_sha": "6e5ef7ad6062f23625444e813060eda1996719c3",
   "architecture_check": {
     "layer": "domains/copilot (existing module, no new code)",
     "imports_ok": "Judge pattern (cache, single-flight), copilot_service (business logic)",
