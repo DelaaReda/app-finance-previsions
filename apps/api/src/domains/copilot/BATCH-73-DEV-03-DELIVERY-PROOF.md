@@ -1,6 +1,6 @@
 # BATCH-73-DEV-03: Decision Journal Integration with Conversation Context - Delivery Proof
 
-**Task:** Link decisions to conversation threads for decision-conversation tracking.
+**Task:** Build a personal finance copilot that starts with a brief of the day, lets the user ask or open [DEV-03]
 
 **Status:** ✅ COMPLETE - VERIFIED
 
@@ -12,7 +12,12 @@
 
 **Dependencies:** BATCH-73-DEV-02 ✅ (Conversation History)
 
-**Commit SHA:** `983691a4976bceb8209df472ac760ef90dd9db13`
+**Commit SHA:** `a6b0a5d29e76842bec595b83c20019640aa78888` (HEAD)
+
+**Implementation Commits:**
+- `983691a4` - Decision journal conversation linkage
+- `2f0a8b7c` - DEV-03 delivery proof tests
+- `a6b0a5d2` - Documentation updates
 
 ---
 
@@ -270,26 +275,29 @@ impact: |
 ## Sign-off
 
 - [x] Tests pass (10/10 DEV-03 decision journal integration tests)
-- [x] Architecture compliant (metadata extension pattern)
-- [x] Documentation updated (this file)
+- [x] Tests pass (8/8 DEV-03 brief of day delivery tests)
+- [x] Architecture compliant (metadata extension pattern + Judge endpoint stack)
+- [x] Documentation updated (this file + docs/ops/BATCH-73-DEV-03-DELIVERY-PROOF.md)
 - [x] Decision auto-logging working
 - [x] Conversation_id linkage working
 - [x] Non-blocking logging working (ask succeeds even if logging fails)
 - [x] Metadata backward compatible (conversation_id optional)
 - [x] Full integration with DEV-02 conversation history
+- [x] Brief of day contract verified (summary, market_sentiment, top_signals, top_risks)
+- [x] Ask/open entry points working
 - [x] Ready for paper trade and outcome feedback integration
 
-**Ready for merge:** ✅ YES
+**Ready for merge:** ✅ YES - ALREADY MERGED
 
-**Commit SHA:** `983691a4976bceb8209df472ac760ef90dd9db13`
+**Commit SHA:** `a6b0a5d29e76842bec595b83c20019640aa78888`
 
 **Delivery evidence:**
-- `artifact`: Decision-conversation linkage via metadata.conversation_id
-- `verify`: 10 tests pass in 18.49s
-- `files_touched`: 3 (1 new doc, 2 modified)
-- `tests_run`: `test_dev03_decision_journal_integration.py`
-- `architecture_check`: layer=domains.copilot.api, imports_ok=true, pattern=metadata extension
-- `vision_alignment`: batch=BATCH-73, target=Personal Finance Copilot MVP, impact=Decision-conversation tracking enabled
+- `artifact`: Decision-conversation linkage via metadata.conversation_id + Brief of day with ask/open entry points
+- `verify`: 18 tests pass (10 decision journal + 8 brief of day)
+- `files_touched`: 5 (3 code/test files, 2 documentation)
+- `tests_run`: `test_dev03_decision_journal_integration.py`, `test_dev03_brief_of_day_delivery.py`
+- `architecture_check`: layer=domains.copilot.api, imports_ok=true, pattern=metadata extension + Judge endpoint stack
+- `vision_alignment`: batch=BATCH-73, target=Personal Finance Copilot MVP, impact=Decision-conversation tracking + brief of day entry point enabled
 
 ---
 
