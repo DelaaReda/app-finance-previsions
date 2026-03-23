@@ -262,6 +262,59 @@ class TestDEV03BriefOfDayContract:
         brief = data.get("brief_of_day")
         assert brief is not None, "brief must still be present with scope"
 
+    def test_copilot_start_injects_ask_and_open_fallbacks_when_missing(self, monkeypatch):
+        """
+        DEV-03: The start payload must always expose at least one ask and one open action.
+
+        If upstream context returns empty action lists, copilot should still allow the
+        user to ask a follow-up or open a view from the brief-of-day entry.
+        """
+
+        async def mock_build_context_payload(context_service_cls=None, scope=None):
+            return {
+                "daily_brief": {
+                    "summary": "Stocks mixed with low volatility.",
+                    "market_sentiment": "NEUTRAL",
+                    "top_signals": [],
+                    "top_risks": [],
+                    "generated_at": "2026-03-23T13:00:00Z",
+                    "freshness": "2026-03-23T13:00:00Z",
+                    "source": ["fallback-test"],
+                },
+                "copilot_start": {
+                    "brief_of_day": {
+                        "summary": "Stocks mixed with low volatility.",
+                        "market_sentiment": "NEUTRAL",
+                        "top_signals": [],
+                        "top_risks": [],
+                        "generated_at": "2026-03-23T13:00:00Z",
+                        "freshness": "2026-03-23T13:00:00Z",
+                        "source": ["fallback-test"],
+                    },
+                    "ask": [],
+                    "open": [],
+                },
+            }
+
+        monkeypatch.setattr(
+            "domains.copilot.application.copilot_service.build_context_payload",
+            mock_build_context_payload,
+        )
+
+        client = _client()
+        response = client.get("/api/copilot/start")
+
+        assert response.status_code == 200
+        payload = response.json()
+        data = payload.get("data") or {}
+        ask_items = data.get("ask") or []
+        open_items = data.get("open") or []
+
+        assert isinstance(ask_items, list) and ask_items, "ask action fallback must be injected"
+        assert isinstance(open_items, list) and open_items, "open action fallback must be injected"
+        assert ask_items[0].get("target") in {"/copilot/ask", "/copilot/ask/"}, "ask fallback target must be copilot ask"
+        assert open_items[0].get("target") in {"/copilot", "/copilot/"}, "open fallback target must be copilot view"
+
 
 class TestDEV03AskEndpointContract:
     """DEV-03: Verify ask endpoint for user questions"""

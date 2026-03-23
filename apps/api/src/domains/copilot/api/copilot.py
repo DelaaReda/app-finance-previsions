@@ -313,6 +313,30 @@ def _build_start_response(
     open_items = [
         dict(item) for item in resolved_start.get("open", []) if isinstance(item, dict)
     ]
+
+    if not ask_items:
+        ask_items = [
+            {
+                "id": "ask_copilot",
+                "kind": "ask",
+                "label": "Ask a question",
+                "target": "/copilot/ask",
+                "prefill": {
+                    "question": "What's moving today?",
+                    "tickers": list(resolved_scope_tickers),
+                },
+            }
+        ]
+
+    if not open_items:
+        open_items = [
+            {
+                "id": "open_copilot",
+                "kind": "open",
+                "label": "Open Copilot",
+                "target": "/copilot",
+            }
+        ]
     generated_at = (
         str(brief_of_day.get("freshness") or brief_of_day.get("generated_at") or "").strip()
         or _utc_now_iso()
