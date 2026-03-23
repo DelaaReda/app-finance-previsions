@@ -475,6 +475,7 @@ class CopilotAskRequest(BaseModel):
     scope: Optional[Dict[str, Any]] = None
     tickers: Optional[List[str]] = None
     max_sources: Optional[int] = 5
+    conversation_id: Optional[str] = None  # BATCH-73-DEV-02: Follow-up support
 
 
 def _build_ask_fallback_payload(
@@ -551,6 +552,36 @@ def _log_ask_response_decision(req: CopilotAskRequest, normalized: Dict[str, Any
 
 @router.post("/copilot/ask")
 async def copilot_ask(req: CopilotAskRequest):
+    """
+    Ask copilot a question.
+    
+    BATCH-73-DEV-02: Added conversation_id for follow-up questions.
+    When conversation_id is provided:
+    - User question is appended to conversation history
+    - Assistant response is also appended
+    - Follow-up context (tickers, recent messages) is injected
+    """
+    from domains.copilot.application.conversation_history import (
+        append_message,
+        get_follow_up_context,
+    )
+
+    conversation_id = req.conversation_id
+    follow_up_context = None
+
+    # BATCH-73-DEV-02: Get follow-up context if conversation_id provided
+    if conversation_id:
+        try:
+            ctx_result = get_follow_up_context(conversation_id=conversation_id, max_history=5)
+            if ctx_result.get("status") == "ok":
+                follow_up_context = ctx_result
+                # Enrich tickers from conversation context if not explicitly provided
+                if not req.tickers and ctx_result.get("context", {}).get("tickers"):
+                    req.tickers = ctx_result["context"]["tickers"]
+        except Exception:
+            # Non-blocking: conversation context failure should not break ask
+            pass
+
     try:
         payload = await copilot_service.build_ask_payload(
             question=req.question,
@@ -565,17 +596,79 @@ async def copilot_ask(req: CopilotAskRequest):
         try:
             _log_ask_response_decision(req, normalized)
         except Exception as log_exc:
-            # Non-blocking: log failure should not break ask response
             pass
 
-        return {"ok": True, "data": normalized}
+        # BATCH-73-DEV-02: Log conversation messages if conversation_id provided
+        conversation_response_data = None
+        if conversation_id:
+            try:
+                # Log user question
+                append_message(
+                    conversation_id=conversation_id,
+                    role="user",
+                    content=req.question,
+                    metadata={"tickers": req.tickers, "scope": req.scope},
+                )
+                # Log assistant response
+                append_result = append_message(
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=normalized.get("answer", ""),
+                    metadata={
+                        "verdict": normalized.get("verdict"),
+                        "confidence": normalized.get("confidence"),
+                        "horizon": normalized.get("horizon"),
+                        "tickers": req.tickers,
+                    },
+                )
+                conversation_response_data = {
+                    "conversation_id": conversation_id,
+                    "message_id": append_result.get("message_id"),
+                    "message_count": append_result.get("message_count"),
+                }
+            except Exception:
+                # Non-blocking: conversation logging failure should not break response
+                pass
+
+        result = {"ok": True, "data": normalized}
+        
+        # BATCH-73-DEV-02: Include conversation metadata in response
+        if conversation_response_data:
+            result["data"]["conversation"] = conversation_response_data
+        if follow_up_context:
+            result["data"]["follow_up_context"] = {
+                "conversation_id": conversation_id,
+                "tickers": follow_up_context.get("context", {}).get("tickers"),
+                "portfolio_id": follow_up_context.get("context", {}).get("portfolio_id"),
+                "last_verdict": follow_up_context.get("last_verdict"),
+                "last_confidence": follow_up_context.get("last_confidence"),
+            }
+        
+        return result
+        
     except Exception as exc:
         fallback_payload = _build_ask_fallback_payload(req, error=exc)
         try:
             _log_ask_response_decision(req, fallback_payload)
         except Exception:
             pass
-        return {"ok": True, "data": fallback_payload}
+        
+        # BATCH-73-DEV-02: Still try to log error to conversation if available
+        if conversation_id:
+            try:
+                append_message(
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=f"Error: {str(exc)}",
+                    metadata={"error": True},
+                )
+            except Exception:
+                pass
+        
+        result = {"ok": True, "data": fallback_payload}
+        if conversation_id:
+            result["data"]["conversation"] = {"conversation_id": conversation_id, "error_logged": True}
+        return result
 
 
 @router.get("/copilot/history")
@@ -922,3 +1015,118 @@ async def copilot_decision_journal_metrics():
 
     result = compute_metrics()
     return {"ok": True, "data": result}
+
+
+# Conversation History Routes (BATCH-73-DEV-02)
+
+
+class CopilotConversationCreateRequest(BaseModel):
+    first_question: str
+    tickers: Optional[List[str]] = None
+    scope: Optional[Dict[str, Any]] = None
+    portfolio_id: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@router.post("/copilot/conversation/create")
+async def copilot_conversation_create(req: CopilotConversationCreateRequest):
+    """
+    Create a new conversation thread.
+    
+    Returns conversation_id for follow-up questions.
+    """
+    from domains.copilot.application.conversation_history import create_conversation
+
+    result = create_conversation(
+        first_question=req.first_question,
+        tickers=req.tickers,
+        scope=req.scope,
+        portfolio_id=req.portfolio_id,
+        metadata=req.metadata,
+    )
+    return {"ok": result.get("status") == "created", "data": result}
+
+
+@router.get("/copilot/conversation/{conversation_id}")
+async def copilot_conversation_get(
+    conversation_id: str,
+    limit: Optional[int] = Query(None, description="Max messages to return"),
+):
+    """
+    Retrieve a conversation thread by ID.
+    
+    Returns messages, context, and metadata.
+    """
+    from domains.copilot.application.conversation_history import get_conversation
+
+    result = get_conversation(conversation_id=conversation_id, limit=limit)
+    return {"ok": result.get("status") == "ok", "data": result}
+
+
+@router.get("/copilot/conversations")
+async def copilot_conversations_list(
+    limit: int = Query(default=20, ge=1, le=100),
+    tickers: Optional[List[str]] = Query(None, description="Filter by tickers"),
+    portfolio_id: Optional[str] = Query(None, description="Filter by portfolio"),
+):
+    """
+    List conversation threads.
+    
+    Returns summaries sorted by updated_at desc.
+    """
+    from domains.copilot.application.conversation_history import list_conversations
+
+    result = list_conversations(limit=limit, tickers=tickers, portfolio_id=portfolio_id)
+    return {"ok": True, "data": result}
+
+
+@router.delete("/copilot/conversation/{conversation_id}")
+async def copilot_conversation_delete(conversation_id: str):
+    """
+    Delete a conversation thread.
+    """
+    from domains.copilot.application.conversation_history import delete_conversation
+
+    result = delete_conversation(conversation_id=conversation_id)
+    return {"ok": result.get("status") == "deleted", "data": result}
+
+
+@router.get("/copilot/conversation/{conversation_id}/followup")
+async def copilot_conversation_followup_context(
+    conversation_id: str,
+    max_history: int = Query(default=5, ge=1, le=20),
+):
+    """
+    Get context for follow-up question.
+    
+    Returns recent messages and inherited context (tickers, portfolio).
+    """
+    from domains.copilot.application.conversation_history import get_follow_up_context
+
+    result = get_follow_up_context(conversation_id=conversation_id, max_history=max_history)
+    return {"ok": result.get("status") == "ok", "data": result}
+
+
+# Personal Finance Conversation Aliases (BATCH-73-DEV-02)
+
+
+@router.post("/personal-finance/conversation/create")
+async def personal_finance_conversation_create(req: CopilotConversationCreateRequest):
+    """Alias for personal finance namespace."""
+    return await copilot_conversation_create(req)
+
+
+@router.get("/personal-finance/conversation/{conversation_id}")
+async def personal_finance_conversation_get(conversation_id: str, limit: Optional[int] = None):
+    """Alias for personal finance namespace."""
+    return await copilot_conversation_get(conversation_id, limit)
+
+
+@router.get("/personal-finance/conversations")
+async def personal_finance_conversations_list(
+    limit: int = 20,
+    tickers: Optional[List[str]] = None,
+    portfolio_id: Optional[str] = None,
+):
+    """Alias for personal finance namespace."""
+    return await copilot_conversations_list(limit, tickers, portfolio_id)
