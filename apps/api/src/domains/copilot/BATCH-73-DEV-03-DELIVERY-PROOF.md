@@ -12,7 +12,7 @@
 
 **Dependencies:** BATCH-73-DEV-02 ✅ (Conversation History)
 
-**Commit SHA:** `dev03-conversation-decision-linkage`
+**Commit SHA:** `983691a4976bceb8209df472ac760ef90dd9db13`
 
 ---
 
@@ -281,7 +281,7 @@ impact: |
 
 **Ready for merge:** ✅ YES
 
-**Commit SHA:** `dev03-conversation-decision-linkage`
+**Commit SHA:** `983691a4976bceb8209df472ac760ef90dd9db13`
 
 **Delivery evidence:**
 - `artifact`: Decision-conversation linkage via metadata.conversation_id
