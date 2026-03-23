@@ -1352,6 +1352,68 @@ def test_judge_personal_finance_start_service_rewrites_copilot_targets(monkeypat
     assert data["filters_applied"] == {"tickers": ["NVDA", "MSFT"]}
 
 
+def test_judge_personal_finance_start_service_fills_missing_ask_open(monkeypatch):
+    async def fake_build_context_payload(**_kwargs):
+        return {
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "Today is flat on energy and bonds.",
+                    "generated_at": "2026-03-23T08:00:00Z",
+                    "freshness": "2026-03-23T08:00:00Z",
+                    "source": ["copilot_context_test"],
+                },
+                "ask": [],
+                "open": [],
+            },
+            "source": ["judge_personal_finance_start_service", "copilot_route"],
+            "sources": ["judge_personal_finance_start_service", "copilot_route"],
+        }
+
+    def fake_build_copilot_start_payload(*, daily_brief=None, entry_points=None, scope=None):
+        return {
+            "brief_of_day": daily_brief or {},
+            "ask": [
+                {
+                    "id": "ask_fallback",
+                    "kind": "ask",
+                    "target": "/copilot/ask",
+                    "label": "Ask fallback",
+                }
+            ],
+            "open": [
+                {
+                    "id": "open_fallback",
+                    "kind": "open",
+                    "target": "/copilot/overview",
+                    "label": "Open fallback",
+                }
+            ],
+        }
+
+    class CopilotService:
+        build_context_payload = fake_build_context_payload
+        _build_copilot_start_payload = staticmethod(fake_build_copilot_start_payload)
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_resolve_copilot_services",
+        lambda: (CopilotService, None),
+    )
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_personal_finance_start_payload(tickers=["msft"])
+    )
+
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert [item["id"] for item in data["ask"]] == ["ask_fallback"]
+    assert data["ask"][0]["target"] == "/personal-finance/ask"
+    assert [item["id"] for item in data["open"]] == ["open_fallback"]
+    assert data["open"][0]["target"] == "/personal-finance"
+    assert data["stats"]["ask_count"] == 1
+    assert data["stats"]["open_count"] == 1
+
+
 def test_judge_personal_finance_context_route_delegates_to_service(monkeypatch):
     captured = {}
 

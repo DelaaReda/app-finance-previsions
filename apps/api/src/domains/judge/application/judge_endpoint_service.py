@@ -3290,6 +3290,39 @@ async def get_judge_personal_finance_start_payload(
         ask_items = [dict(item) for item in resolved_start.get("ask") if isinstance(item, dict)]
         open_items = [dict(item) for item in resolved_start.get("open") if isinstance(item, dict)]
 
+        # Ensure the start screen always exposes at least one actionable ask/open entry.
+        # This protects the UX contract when upstream copilot payloads are sparse.
+        if (not ask_items or not open_items) and not copilot_start is None:
+            build_start_payload = getattr(
+                copilot_service,
+                "_build_copilot_start_payload",
+                None,
+            ) or getattr(copilot_service, "_legacy_copilot_start_payload", None)
+            if callable(build_start_payload):
+                fallback_start = build_start_payload(
+                    daily_brief=payload.get("daily_brief") if isinstance(payload, dict) else None,
+                    entry_points=payload.get("entry_points") if isinstance(payload, dict) else None,
+                    scope=scope,
+                )
+                fallback_items = (
+                    dict(fallback_start)
+                    if isinstance(fallback_start, dict)
+                    else {}
+                )
+                fallback_start = _rewrite_personal_finance_start_targets(fallback_items)
+                if not ask_items:
+                    ask_items = [
+                        dict(item)
+                        for item in fallback_start.get("ask", [])
+                        if isinstance(item, dict)
+                    ]
+                if not open_items:
+                    open_items = [
+                        dict(item)
+                        for item in fallback_start.get("open", [])
+                        if isinstance(item, dict)
+                    ]
+
         result: Dict[str, Any] = {
             "brief_of_day": brief,
             "ask": ask_items,
