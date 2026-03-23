@@ -517,7 +517,17 @@ def _build_ask_fallback_payload(
     return _normalize_ask_payload(fallback_payload)
 
 
-def _log_ask_response_decision(req: CopilotAskRequest, normalized: Dict[str, Any]) -> None:
+def _log_ask_response_decision(
+    req: CopilotAskRequest,
+    normalized: Dict[str, Any],
+    conversation_id: Optional[str] = None,
+) -> None:
+    """
+    Log copilot decision to immutable journal.
+
+    BATCH-73-DEV-03: Links decisions to conversation threads when conversation_id is provided.
+    This enables tracking decision history within conversation context.
+    """
     from domains.copilot.application.decision_journal import log_copilot_decision
 
     verdict_raw = str(normalized.get("verdict") or normalized.get("action") or "hold").lower()
@@ -535,6 +545,11 @@ def _log_ask_response_decision(req: CopilotAskRequest, normalized: Dict[str, Any
     risk_level = str((normalized.get("risk") or {}).get("level") or normalized.get("risk_level") or "medium").lower()
     sources = normalized.get("sources") or normalized.get("citations") or []
 
+    # BATCH-73-DEV-03: Include conversation_id in metadata for decision-conversation linking
+    metadata = {"scope": req.scope, "context_years": req.context_years}
+    if conversation_id:
+        metadata["conversation_id"] = conversation_id
+
     log_copilot_decision(
         question=req.question,
         answer=str(normalized.get("answer") or ""),
@@ -546,7 +561,7 @@ def _log_ask_response_decision(req: CopilotAskRequest, normalized: Dict[str, Any
         risk_level=risk_level if risk_level in ("low", "medium", "high", "critical") else "medium",
         sources=sources if isinstance(sources, list) else [],
         model="copilot_ask_route",
-        metadata={"scope": req.scope, "context_years": req.context_years},
+        metadata=metadata,
     )
 
 
@@ -592,9 +607,9 @@ async def copilot_ask(req: CopilotAskRequest):
         )
         normalized = _normalize_ask_payload(payload)
 
-        # BATCH-72-DEV-03: Auto-log decision to journal
+        # BATCH-73-DEV-03: Auto-log decision to journal with conversation_id linkage
         try:
-            _log_ask_response_decision(req, normalized)
+            _log_ask_response_decision(req, normalized, conversation_id=conversation_id)
         except Exception as log_exc:
             pass
 
@@ -649,7 +664,7 @@ async def copilot_ask(req: CopilotAskRequest):
     except Exception as exc:
         fallback_payload = _build_ask_fallback_payload(req, error=exc)
         try:
-            _log_ask_response_decision(req, fallback_payload)
+            _log_ask_response_decision(req, fallback_payload, conversation_id=conversation_id)
         except Exception:
             pass
         
