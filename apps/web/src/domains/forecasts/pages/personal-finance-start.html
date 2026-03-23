@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Finance Copilot - Daily Brief</title>
+  <link rel="stylesheet" href="../platform/design-tokens.css" onerror="this.onerror=null; this.href='/platform/design-tokens.css'">
+  <link rel="stylesheet" href="../platform/style.css" onerror="this.onerror=null; this.href='/platform/style.css'">
+  <style>
+    /* Minimal page-specific styles for personal finance start page */
+    .personal-finance-page {
+      min-height: 100vh;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(147, 51, 234, 0.05));
+      padding: 2rem;
+    }
+
+    .pf-header {
+      max-width: 1200px;
+      margin: 0 auto 2rem;
+      text-align: center;
+    }
+
+    .pf-title {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--color-slate-900, #13343b);
+      margin: 0 0 0.5rem 0;
+    }
+
+    .pf-subtitle {
+      font-size: 1rem;
+      color: var(--color-slate-600, #626c71);
+      margin: 0;
+    }
+
+    .pf-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Override copilot panel width for full-page view */
+    .copilot-panel {
+      max-width: 900px;
+      width: 100%;
+    }
+
+    .back-to-dashboard {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      background: var(--color-slate-100, #f0f4f5);
+      border: 1px solid var(--color-slate-300, #c9d1d5);
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      color: var(--color-slate-700, #42525a);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+
+    .back-to-dashboard:hover {
+      background: var(--color-slate-200, #e0e8ea);
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- Back to Dashboard Link -->
+  <a href="index.html" class="back-to-dashboard">
+    ← Back to Dashboard
+  </a>
+
+  <!-- Main Page Container -->
+  <div class="personal-finance-page">
+    <header class="pf-header">
+      <h1 class="pf-title">🤖 Your Personal Finance Copilot</h1>
+      <p class="pf-subtitle">Start your day with market insights and actionable investment decisions</p>
+    </header>
+
+    <main class="pf-content">
+      <!-- Copilot Panel Widget Container -->
+      <div id="copilot-panel-container">
+        <!-- Copilot panel will be loaded here -->
+      </div>
+    </main>
+  </div>
+
+  <!-- Load Copilot Panel Widget -->
+  <script>
+    /**
+     * Personal Finance Start Page
+     * BATCH-78-DEV-02: Minimal slice - reuses copilot-panel.html widget
+     * Wired to /api/personal-finance/start endpoint
+     */
+
+    // Override COPILOT_API_BASE to use personal-finance namespace
+    window.COPILOT_API_BASE = window.FinanceAPI?.BASE_URL || 'http://localhost:8050/api';
+    window.COPILOT_NAMESPACE = 'personal-finance';
+
+    /**
+     * Load copilot panel widget dynamically
+     */
+    async function loadCopilotWidget() {
+      try {
+        const response = await fetch('../components/widgets/copilot-panel.html');
+        if (!response.ok) {
+          throw new Error(`Failed to load widget: ${response.status}`);
+        }
+        const html = await response.text();
+        const container = document.getElementById('copilot-panel-container');
+        if (container) {
+          container.innerHTML = html;
+
+          // Override the loadCopilotStart function to use personal-finance endpoint
+          const originalLoadCopilotStart = window.loadCopilotStart;
+          window.loadCopilotStart = async function() {
+            if (window.copilotState?.isLoading) return;
+
+            window.copilotState.isLoading = true;
+            showCopilotLoading(true);
+
+            try {
+              // Use personal-finance namespace endpoint
+              const response = await fetch(`${window.COPILOT_API_BASE}/personal-finance/start`, {
+                method: 'GET',
+                headers: { 'Accept': 'application/json' }
+              });
+
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              }
+
+              const result = await response.json();
+              const data = result.data || result;
+
+              // Apply namespace rewriting to targets
+              const rewrittenData = rewriteNamespaceTargets(data, window.COPILOT_NAMESPACE);
+
+              window.copilotState.briefData = rewrittenData;
+              window.copilotState.askActions = rewrittenData.ask || [];
+              window.copilotState.openActions = rewrittenData.open || [];
+
+              renderCopilotBrief(rewrittenData);
+              renderCopilotPortfolio(rewrittenData);
+              renderCopilotActions();
+              updateCopilotLiveBadge(rewrittenData);
+
+              showCopilotLoading(false);
+              showCopilotError(false);
+
+            } catch (error) {
+              console.error('Failed to load copilot start:', error);
+              showCopilotError(`Failed to load: ${error.message}`);
+              showCopilotLoading(false);
+            } finally {
+              window.copilotState.isLoading = false;
+            }
+          };
+
+          // Initialize after a short delay to ensure DOM is ready
+          setTimeout(() => {
+            if (window.initCopilotPanel) {
+              window.initCopilotPanel();
+            } else if (window.bootstrapCopilotPanel) {
+              window.bootstrapCopilotPanel();
+            }
+          }, 100);
+        }
+      } catch (error) {
+        console.error('Failed to load copilot widget:', error);
+        document.getElementById('copilot-panel-container').innerHTML = `
+          <div class="copilot-error" style="display: block; padding: 2rem; text-align: center;">
+            <span class="error-icon">⚠️</span>
+            <p>Failed to load copilot panel. Please refresh the page.</p>
+            <button onclick="location.reload()" class="error-retry-btn">Retry</button>
+          </div>
+        `;
+      }
+    }
+
+    /**
+     * Rewrite namespace targets from /copilot/* to /personal-finance/*
+     */
+    function rewriteNamespaceTargets(data, namespace) {
+      if (!namespace || !data) return data;
+
+      const rewritten = JSON.parse(JSON.stringify(data));
+
+      // Rewrite ask targets
+      if (Array.isArray(rewritten.ask)) {
+        rewritten.ask = rewritten.ask.map(action => {
+          if (action.target && action.target.startsWith('/copilot')) {
+            return {
+              ...action,
+              target: action.target.replace('/copilot', `/${namespace}`)
+            };
+          }
+          return action;
+        });
+      }
+
+      // Rewrite open targets
+      if (Array.isArray(rewritten.open)) {
+        rewritten.open = rewritten.open.map(action => {
+          if (action.target && action.target.startsWith('/copilot')) {
+            return {
+              ...action,
+              target: action.target.replace('/copilot', `/${namespace}`)
+            };
+          }
+          return action;
+        });
+      }
+
+      return rewritten;
+    }
+
+    // Load widget when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadCopilotWidget);
+    } else {
+      loadCopilotWidget();
+    }
+  </script>
+</body>
+</html>
