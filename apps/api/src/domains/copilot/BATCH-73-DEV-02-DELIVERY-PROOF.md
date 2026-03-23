@@ -12,7 +12,7 @@
 
 **Dependencies:** BATCH-73-DEV-01 ✅
 
-**Commit SHA:** `pending`
+**Commit SHA:** `7eb5bd1725179e7e27a310795dd0f4b891ad9f02`
 
 ---
 
@@ -268,7 +268,7 @@ impact: |
 
 **Ready for merge:** ✅ YES
 
-**Commit SHA:** `pending`
+**Commit SHA:** `7eb5bd1725179e7e27a310795dd0f4b891ad9f02`
 
 **Delivery evidence:**
 - `artifact`: Conversation history service + API endpoints delivered
