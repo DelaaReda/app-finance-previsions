@@ -371,12 +371,52 @@ class TestDEV03AskEndpointContract:
         assert why is not None, "must have why or reasoning"
         assert isinstance(why, list), "why/reasoning must be list"
 
-    def test_ask_endpoint_with_conversation_id(self):
+    def test_ask_endpoint_with_conversation_id(self, monkeypatch):
         """
         DEV-03: Ask endpoint must support conversation_id for follow-ups.
         
         BATCH-73-DEV-02 dependency: conversation history support
         """
+        from domains.copilot.application import conversation_history
+        from domains.copilot.api import copilot as copilot_route
+
+        async def mock_build_ask_payload(**_kwargs):
+            return {
+                "question": "What about AAPL?",
+                "answer": "Hold AAPL until the next catalyst confirms direction.",
+                "verdict": "hold",
+                "horizon": "1w",
+                "confidence": 0.62,
+                "reasoning": ["Follow-up context keeps AAPL in scope."],
+                "sources": [{"type": "conversation_context", "ticker": "AAPL"}],
+                "generated_at": _utc_now_iso(),
+                "freshness": _utc_now_iso(),
+            }
+
+        def mock_get_follow_up_context(*, conversation_id, max_history):
+            assert conversation_id == "test-conversation-123"
+            assert max_history == 5
+            return {
+                "status": "ok",
+                "context": {
+                    "tickers": ["AAPL"],
+                    "portfolio_id": "portfolio-tech",
+                },
+                "last_verdict": "hold",
+                "last_confidence": 0.58,
+            }
+
+        def mock_append_message(**kwargs):
+            return {
+                "status": "ok",
+                "message_id": f"msg-{kwargs['role']}",
+                "message_count": 2 if kwargs["role"] == "assistant" else 1,
+            }
+
+        monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", mock_build_ask_payload)
+        monkeypatch.setattr(conversation_history, "get_follow_up_context", mock_get_follow_up_context)
+        monkeypatch.setattr(conversation_history, "append_message", mock_append_message)
+
         client = _client()
         response = client.post(
             "/api/copilot/ask",
@@ -396,6 +436,12 @@ class TestDEV03AskEndpointContract:
         assert conversation is not None, "conversation metadata should be present"
         assert conversation.get("conversation_id") == "test-conversation-123", \
             "conversation_id must match"
+        assert conversation.get("message_id") == "msg-assistant"
+        assert conversation.get("message_count") == 2
+
+        follow_up = data.get("follow_up_context")
+        assert follow_up is not None, "follow-up context should be present"
+        assert follow_up.get("tickers") == ["AAPL"]
 
 
 class TestDEV03PortfolioDriftAlerts:

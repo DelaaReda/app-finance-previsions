@@ -279,9 +279,10 @@ def _normalize_scope(
 ) -> Optional[Dict[str, List[str]]]:
     normalized: List[str] = []
     for item in tickers or []:
-        ticker = str(item or "").strip().upper()
-        if ticker and ticker not in normalized:
-            normalized.append(ticker)
+        for raw_token in str(item or "").split(","):
+            ticker = raw_token.strip().upper()
+            if ticker and ticker not in normalized:
+                normalized.append(ticker)
     return {"tickers": normalized} if normalized else None
 
 
@@ -341,6 +342,9 @@ def _build_start_response(
         str(brief_of_day.get("freshness") or brief_of_day.get("generated_at") or "").strip()
         or _utc_now_iso()
     )
+    if isinstance(allocation_drift_alerts, dict) and allocation_drift_alerts:
+        brief_of_day = dict(brief_of_day)
+        brief_of_day["allocation_drift_alerts"] = dict(allocation_drift_alerts)
     source = brief_of_day.get("sources")
     if not isinstance(source, list):
         source = brief_of_day.get("source")
@@ -779,7 +783,10 @@ async def copilot_start(
 ):
     scope = _normalize_scope(tickers)
     normalized_tickers = list((scope or {}).get("tickers") or [])
-    cache_key = _copilot_start_cache_key(tickers=normalized_tickers, namespace=namespace)
+    # The starter payload can embed user-scoped context such as portfolio drift alerts.
+    # Route-level caching keyed only by brief/tickers can therefore serve stale or incomplete
+    # personalized data across requests, so keep this endpoint uncached.
+    cache_key = None
 
     if not debug:
         cached_payload = _copilot_start_cached_payload(cache_key)
