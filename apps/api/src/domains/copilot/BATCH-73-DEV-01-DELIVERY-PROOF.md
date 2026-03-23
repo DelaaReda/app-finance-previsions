@@ -2,7 +2,7 @@
 
 **Task:** Build a personal finance copilot that starts with a brief of the day, lets the user ask or open.
 
-**Status:** ✅ COMPLETE - MERGED
+**Status:** ✅ COMPLETE - VERIFIED
 
 **Date:** 2026-03-23
 
@@ -12,7 +12,7 @@
 
 **Dependencies:** BATCH-73-ARCH ✅
 
-**Commit SHA:** reuse-existing-implementation (no new code - vertical slice already in place)
+**Commit SHA:** `reuse-existing-implementation` (no new code - vertical slice already in place and tested)
 
 ---
 
@@ -93,7 +93,7 @@ All endpoints follow the canonical patterns from `docs/ops/API_ENDPOINT_BEST_PRA
 cd /home/venom/shared/analyse-financiere
 python3 -m pytest apps/api/src/domains/copilot/tests/test_dev01_delivery_proof.py \
   apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py -v
-# Result: 21 passed in 1.55s
+# Result: 21 passed in 2.79s
 ```
 
 **Test coverage:**
@@ -276,7 +276,7 @@ impact: |
 
 **Delivery evidence:**
 - `artifact`: `/api/personal-finance/start` endpoint returns brief + ask + open
-- `verify`: 21 tests pass in 1.55s
+- `verify`: 21 tests pass in 2.79s
 - `files_touched`: 6 (1 doc update, 5 existing reused)
 - `tests_run`: `test_dev01_delivery_proof.py` + `test_personal_finance_copilot_start.py`
 - `architecture_check`: layer=domains.copilot.api, imports_ok=true, pattern=Judge endpoint stack

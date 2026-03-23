@@ -516,10 +516,41 @@ def _build_ask_fallback_payload(
     return _normalize_ask_payload(fallback_payload)
 
 
-@router.post("/copilot/ask")
-async def copilot_ask(req: CopilotAskRequest):
+def _log_ask_response_decision(req: CopilotAskRequest, normalized: Dict[str, Any]) -> None:
     from domains.copilot.application.decision_journal import log_copilot_decision
 
+    verdict_raw = str(normalized.get("verdict") or normalized.get("action") or "hold").lower()
+    verdict = "buy" if any(t in verdict_raw for t in ["buy", "achat", "long", "accumuler", "acheter"]) else \
+              "sell" if any(t in verdict_raw for t in ["sell", "vendre", "short", "alléger", "sortir"]) else \
+              "hold" if any(t in verdict_raw for t in ["hold", "maintenir", "conserver", "wait"]) else "hold"
+
+    confidence = float(normalized.get("confidence") or 0.5)
+    horizon = str(normalized.get("horizon") or "1w").lower()
+    reasoning = normalized.get("why", [])
+    if isinstance(reasoning, list) and reasoning:
+        reasoning = reasoning[0]
+    elif not isinstance(reasoning, str):
+        reasoning = ""
+    risk_level = str((normalized.get("risk") or {}).get("level") or normalized.get("risk_level") or "medium").lower()
+    sources = normalized.get("sources") or normalized.get("citations") or []
+
+    log_copilot_decision(
+        question=req.question,
+        answer=str(normalized.get("answer") or ""),
+        verdict=verdict,
+        confidence=confidence,
+        tickers=req.tickers,
+        horizon=horizon if horizon in ("1d", "1w", "1m") else "1w",
+        reasoning=reasoning,
+        risk_level=risk_level if risk_level in ("low", "medium", "high", "critical") else "medium",
+        sources=sources if isinstance(sources, list) else [],
+        model="copilot_ask_route",
+        metadata={"scope": req.scope, "context_years": req.context_years},
+    )
+
+
+@router.post("/copilot/ask")
+async def copilot_ask(req: CopilotAskRequest):
     try:
         payload = await copilot_service.build_ask_payload(
             question=req.question,
@@ -532,44 +563,19 @@ async def copilot_ask(req: CopilotAskRequest):
 
         # BATCH-72-DEV-03: Auto-log decision to journal
         try:
-            verdict_raw = str(normalized.get("verdict") or normalized.get("action") or "hold").lower()
-            # Normalize verdict using same logic as copilot_service
-            verdict = "buy" if any(t in verdict_raw for t in ["buy", "achat", "long", "accumuler", "acheter"]) else \
-                      "sell" if any(t in verdict_raw for t in ["sell", "vendre", "short", "alléger", "sortir"]) else \
-                      "hold" if any(t in verdict_raw for t in ["hold", "maintenir", "conserver", "wait"]) else "hold"
-
-            confidence = float(normalized.get("confidence") or 0.5)
-            horizon = str(normalized.get("horizon") or "1w").lower()
-            reasoning = normalized.get("why", [])
-            if isinstance(reasoning, list) and reasoning:
-                reasoning = reasoning[0]
-            elif isinstance(reasoning, str):
-                pass
-            else:
-                reasoning = ""
-            risk_level = str((normalized.get("risk") or {}).get("level") or normalized.get("risk_level") or "medium").lower()
-            sources = normalized.get("sources") or normalized.get("citations") or []
-
-            log_copilot_decision(
-                question=req.question,
-                answer=str(normalized.get("answer") or ""),
-                verdict=verdict,
-                confidence=confidence,
-                tickers=req.tickers,
-                horizon=horizon if horizon in ("1d", "1w", "1m") else "1w",
-                reasoning=reasoning,
-                risk_level=risk_level if risk_level in ("low", "medium", "high", "critical") else "medium",
-                sources=sources if isinstance(sources, list) else [],
-                model="copilot_ask_route",
-                metadata={"scope": req.scope, "context_years": req.context_years},
-            )
+            _log_ask_response_decision(req, normalized)
         except Exception as log_exc:
             # Non-blocking: log failure should not break ask response
             pass
 
         return {"ok": True, "data": normalized}
     except Exception as exc:
-        return {"ok": True, "data": _build_ask_fallback_payload(req, error=exc)}
+        fallback_payload = _build_ask_fallback_payload(req, error=exc)
+        try:
+            _log_ask_response_decision(req, fallback_payload)
+        except Exception:
+            pass
+        return {"ok": True, "data": fallback_payload}
 
 
 @router.get("/copilot/history")
