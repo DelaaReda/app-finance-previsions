@@ -519,16 +519,20 @@ def get_decision_journal(
     tickers: Optional[List[str]] = None,
     horizon: Optional[str] = None,
     verdict: Optional[str] = None,
+    portfolio_id: Optional[str] = None,
+    conversation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Retrieve decision journal entries.
-    
+
     Args:
         limit: Max entries to return
         tickers: Filter by tickers
         horizon: Filter by horizon
         verdict: Filter by verdict
-    
+        portfolio_id: Filter by portfolio_id (BATCH-80-DEV-03)
+        conversation_id: Filter by conversation_id (BATCH-80-DEV-03)
+
     Returns:
         List of decision entries
     """
@@ -567,6 +571,18 @@ def get_decision_journal(
     if verdict:
         v = coerce_verdict(verdict)
         filtered = [e for e in filtered if e.get("verdict") == v]
+    # BATCH-80-DEV-03: Filter by portfolio_id from metadata
+    if portfolio_id:
+        filtered = [
+            e for e in filtered
+            if str(e.get("metadata", {}).get("portfolio_id") or "").strip() == portfolio_id
+        ]
+    # BATCH-80-DEV-03: Filter by conversation_id from metadata
+    if conversation_id:
+        filtered = [
+            e for e in filtered
+            if str(e.get("metadata", {}).get("conversation_id") or "").strip() == conversation_id
+        ]
     
     # Sort by recorded_at desc
     sorted_entries = sorted(

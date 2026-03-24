@@ -1087,8 +1087,13 @@ async def copilot_decision_journal_get(
     tickers: Optional[List[str]] = Query(None, description="Filter by tickers"),
     horizon: Optional[str] = Query(None, description="Filter by horizon (1d/1w/1m)"),
     verdict: Optional[str] = Query(None, description="Filter by verdict (buy/sell/hold)"),
+    portfolio_id: Optional[str] = Query(None, description="Filter by portfolio_id (BATCH-80-DEV-03)"),
+    conversation_id: Optional[str] = Query(None, description="Filter by conversation_id (BATCH-80-DEV-03)"),
 ):
-    """Retrieve decision journal entries."""
+    """Retrieve decision journal entries.
+    
+    BATCH-80-DEV-03: Added portfolio_id and conversation_id filters.
+    """
     from domains.copilot.application.decision_journal import get_decision_journal
 
     result = get_decision_journal(
@@ -1096,6 +1101,8 @@ async def copilot_decision_journal_get(
         tickers=tickers,
         horizon=horizon,
         verdict=verdict,
+        portfolio_id=portfolio_id,
+        conversation_id=conversation_id,
     )
     return {"ok": True, "data": result}
 
