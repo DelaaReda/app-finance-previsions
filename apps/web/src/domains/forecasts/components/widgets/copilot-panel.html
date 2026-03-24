@@ -294,7 +294,17 @@ let copilotState = {
 };
 
 // API Base URL (reuse existing FinanceAPI pattern)
-const COPILOT_API_BASE = window.FinanceAPI?.BASE_URL || 'http://localhost:8050/api';
+const COPILOT_API_BASE = window.COPILOT_API_BASE || window.FinanceAPI?.BASE_URL || 'http://localhost:8050/api';
+const COPILOT_NAMESPACE = window.COPILOT_NAMESPACE || 'copilot';
+
+function getCopilotApiBase() {
+    return window.COPILOT_API_BASE || COPILOT_API_BASE;
+}
+
+function getCopilotNamespace() {
+    const rawNamespace = window.COPILOT_NAMESPACE || COPILOT_NAMESPACE || 'copilot';
+    return String(rawNamespace).trim().replace(/^\/+|\/+$/g, '') || 'copilot';
+}
 
 /**
  * Initialize copilot panel
@@ -322,7 +332,8 @@ async function loadCopilotStart() {
     showCopilotLoading(true);
     
     try {
-        const response = await fetch(`${COPILOT_API_BASE}/copilot/start`, {
+        const namespace = getCopilotNamespace();
+        const response = await fetch(`${getCopilotApiBase()}/${namespace}/start`, {
             method: 'GET',
             headers: { 'Accept': 'application/json' }
         });
@@ -569,7 +580,8 @@ async function sendCopilotQuestion() {
             requestBody.conversation_id = copilotState.conversationId;
         }
 
-        const response = await fetch(`${COPILOT_API_BASE}/copilot/ask`, {
+        const namespace = getCopilotNamespace();
+        const response = await fetch(`${getCopilotApiBase()}/${namespace}/ask`, {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
