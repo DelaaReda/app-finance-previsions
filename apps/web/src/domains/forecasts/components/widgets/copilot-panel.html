@@ -4,6 +4,18 @@
   Wires to backend: /api/copilot/start and /api/copilot/ask
 -->
 <style>
+/* BATCH-80-DEV-02: Conversation Indicator Styles */
+.conversation-indicator {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: var(--color-blue-600, #2563eb);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
 /* BATCH-71-DEV-03: Portfolio Context Section Styles */
 .copilot-portfolio-section {
     margin: 1rem 0;
@@ -140,6 +152,10 @@
             <span class="live-badge" id="copilotLiveBadge">🟢 Live</span>
         </div>
         <div class="widget-actions">
+            <!-- BATCH-80-DEV-02: Conversation indicator -->
+            <span class="conversation-indicator" id="copilotConversationIndicator" style="display: none;" title="Conversation in progress">
+                💬 <span id="copilotMessageCount">0</span> msgs
+            </span>
             <button class="help-icon" onclick="showHelp('copilot')" aria-label="Help" title="Ask your AI finance assistant">?</button>
             <button class="menu-icon" onclick="toggleCopilotPanel()" aria-label="Close">✕</button>
         </div>
@@ -271,7 +287,10 @@ let copilotState = {
     askActions: [],
     openActions: [],
     lastAnswer: null,
-    initialized: false
+    initialized: false,
+    // BATCH-80-DEV-02: Conversation history tracking
+    conversationId: null,
+    messageCount: 0
 };
 
 // API Base URL (reuse existing FinanceAPI pattern)
@@ -524,49 +543,69 @@ function renderCopilotSuggestions() {
 
 /**
  * Send question to copilot ask endpoint
+ * BATCH-80-DEV-02: Added conversation_id tracking for follow-up questions
  */
 async function sendCopilotQuestion() {
     const inputEl = document.getElementById('copilotQuestionInput');
     const question = inputEl?.value?.trim();
-    
+
     if (!question) {
         showToast('Please enter a question', 'warning');
         return;
     }
-    
+
     copilotState.isLoading = true;
     showCopilotLoading(true);
     hideCopilotAnswer();
-    
+
     try {
+        const requestBody = {
+            question: question,
+            max_sources: 5
+        };
+        
+        // BATCH-80-DEV-02: Include conversation_id for follow-up context
+        if (copilotState.conversationId) {
+            requestBody.conversation_id = copilotState.conversationId;
+        }
+
         const response = await fetch(`${COPILOT_API_BASE}/copilot/ask`, {
             method: 'POST',
-            headers: { 
+            headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
-                question: question,
-                max_sources: 5
-            })
+            body: JSON.stringify(requestBody)
         });
-        
+
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         const result = await response.json();
         const data = result.data || result;
-        
+
         copilotState.lastAnswer = data;
-        renderCopilotAnswer(data);
         
+        // BATCH-80-DEV-02: Track conversation from response
+        if (data.conversation) {
+            copilotState.conversationId = data.conversation.conversation_id;
+            copilotState.messageCount = data.conversation.message_count || 1;
+        }
+        // Also check follow_up_context for conversation_id
+        if (data.follow_up_context && data.follow_up_context.conversation_id) {
+            copilotState.conversationId = data.follow_up_context.conversation_id;
+        }
+
+        renderCopilotAnswer(data);
+        updateConversationIndicator();
+
         showCopilotLoading(false);
         showCopilotError(false);
-        
+
         // Clear input
         if (inputEl) inputEl.value = '';
-        
+
     } catch (error) {
         console.error('Failed to ask copilot:', error);
         showCopilotError(`Failed to get answer: ${error.message}`);
@@ -744,6 +783,32 @@ function formatCopilotTimestamp(isoString) {
 function refreshCopilotData() {
     loadCopilotStart();
     showToast('Refreshing copilot data...', 'info');
+}
+
+// BATCH-80-DEV-02: Conversation indicator helpers
+function updateConversationIndicator() {
+    const indicatorEl = document.getElementById('copilotConversationIndicator');
+    const countEl = document.getElementById('copilotMessageCount');
+    
+    if (copilotState.conversationId && copilotState.messageCount > 0) {
+        if (indicatorEl) {
+            indicatorEl.style.display = 'inline-block';
+        }
+        if (countEl) {
+            countEl.textContent = copilotState.messageCount;
+        }
+    } else {
+        if (indicatorEl) {
+            indicatorEl.style.display = 'none';
+        }
+    }
+}
+
+function clearCopilotConversation() {
+    copilotState.conversationId = null;
+    copilotState.messageCount = 0;
+    updateConversationIndicator();
+    showToast('Conversation cleared', 'info');
 }
 
 function getCopilotPanelContainer() {

@@ -1,174 +1,207 @@
-# BATCH-80-DEV-02 Delivery Proof - Personal Finance Copilot Brief + Ask + Open
+# BATCH-80-DEV-02 Delivery Proof - Personal Finance Copilot Conversation History
 
-**Task:** Build a personal finance copilot that starts with a brief of the day, lets the user ask or open views  
-**Stream:** BATCH-80 (Personal Finance Copilot)  
-**Priority:** P2  
-**Date:** 2026-03-24  
-**Role:** dev  
+**Task:** Build a personal finance copilot that starts with a brief of the day, lets the user ask or open views [DEV-02]
+**Stream:** BATCH-80 (Personal Finance Copilot)
+**Priority:** P2
+**Date:** 2026-03-23
+**Role:** dev
 
 ---
 
 ## ✅ Minimal Slice Delivered
 
-The personal finance copilot is **fully functional** with the following verified features:
+**Conversation history integration for follow-up questions.**
 
-### 1. Brief of the Day (Backend API)
-- **Endpoint:** `GET /api/copilot/start`
-- **Response includes:**
-  - `brief_of_day.summary`: Daily market summary
-  - `brief_of_day.market_sentiment`: Market sentiment (bullish/bearish/neutral)
-  - `brief_of_day.top_signals`: Key market signals
-  - `brief_of_day.top_risks`: Top risks to watch
-  - `brief_of_day.macro_signals`: Macro indicators (VIX, DXY, etc.)
-  - `brief_of_day.sector_rotation`: Sector performance leaders/laggards
-  - `freshness`: Data freshness timestamp
+The copilot now supports multi-turn conversations with full context tracking:
 
-**Verified Response:**
-```json
-{
-  "ok": true,
-  "data": {
-    "brief_of_day": {
-      "title": "Brief of the day",
-      "summary": "[Mode dégradé] Le marché reste actif avec une lecture mitigée...",
-      "market_sentiment": "neutral",
-      "top_signals": [...],
-      "top_risks": [...],
-      "macro_signals": [...],
-      "sector_rotation": {"top": [], "bottom": []},
-      "generated_at": "2026-03-23T15:28:23.263145Z",
-      "freshness": "2026-03-23T15:28:23.263145Z",
-      "source": ["brief_generator", "live_data", "judge_intelligence"]
-    },
-    "ask": [...],
-    "open": [...]
-  }
-}
-```
-
-### 2. Ask Actions (Pre-filled Questions)
-Users can click pre-configured questions:
-- **"Portfolio today?"** → "What should I do with my portfolio today?"
-- **"Best theme now?"** → "Which market theme deserves a deep dive right now?"
-- **"NVDA 1-week memo"** → "Give me a 1-week investment memo on NVDA."
-- **Custom questions** via input field
-
-### 3. Open Actions (Quick Navigation)
-Users can quickly open views:
-- **"Open Live Brief"** → `/brief/daily`
-- **"Open opportunities"** → opportunities view
-- **"Ask a custom question"** → copilot interface
-
-### 4. Frontend Integration (copilot-panel.html)
-- **Location:** `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html`
-- **Auto-loaded** in main page (`index.html`) via component loader
-- **Bootstrap function:** `window.bootstrapCopilotPanel()` called after component load
+### 1. Backend Conversation History (Already Complete)
+- **Service:** `apps/api/src/domains/copilot/application/conversation_history.py`
 - **Features:**
-  - Brief of the Day section with summary, signals, risks
-  - Portfolio Context section (BATCH-71-DEV-03)
-  - Ask/Open action buttons
-  - Custom question input
-  - Answer display panel
-  - Live badge indicator
+  - `create_conversation()` - Creates new conversation with metadata
+  - `append_message()` - Appends user/assistant messages
+  - `get_follow_up_context()` - Retrieves conversation context for follow-ups
+  - Persistent storage in JSON format
+  - Conversation indexing for history retrieval
+
+### 2. Backend API Integration (Already Complete)
+- **Endpoint:** `POST /api/copilot/ask`
+- **Request:** `{ "question": "...", "conversation_id": "conv_..." }`
+- **Response includes:**
+  - `conversation.conversation_id` - Active conversation ID
+  - `conversation.message_count` - Total messages in thread
+  - `follow_up_context` - Context from previous messages
+
+### 3. Frontend Conversation Tracking (NEW in this task)
+- **File:** `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html`
+- **Changes:**
+  - Added `copilotState.conversationId` and `copilotState.messageCount` tracking
+  - Updated `sendCopilotQuestion()` to include `conversation_id` in requests
+  - Added conversation indicator UI (💬 N msgs badge)
+  - Added `updateConversationIndicator()` and `clearCopilotConversation()` helpers
+
+### 4. Frontend Test Coverage (NEW in this task)
+- **File:** `apps/web/src/domains/forecasts/components/widgets/copilot-conversation.test.js`
+- **Tests (5 passing):**
+  1. Conversation state tracking
+  2. Conversation ID in request
+  3. Response updates conversation state
+  4. Conversation indicator updates
+  5. Follow-up questions maintain context
 
 ---
 
 ## 🧪 Verification Evidence
 
-### API Endpoint Test
+### Frontend Test Suite
 ```bash
-$ curl -fsS "http://127.0.0.1:8050/api/copilot/start" | python3 -c "import sys,json; d=json.load(sys.stdin); data=d.get('data',{}); print('ASK actions:', len(data.get('ask',[]))); print('OPEN actions:', len(data.get('open',[]))); print('Brief:', data.get('brief_of_day',{}).get('summary','')[:100])"
+$ node apps/web/src/domains/forecasts/components/widgets/copilot-conversation.test.js
 
-ASK actions: 4
-OPEN actions: 3
-Brief: [Mode dégradé] Le marché reste actif avec une lecture mitigée. Surveillez les secteurs en rotation.
+=== BATCH-80-DEV-02 Conversation History Tests ===
+
+Test 1: Conversation state tracking...
+✓ Test 1 passed: Conversation state tracking works
+Test 2: Conversation ID in request...
+✓ Test 2 passed: Conversation ID included in request
+Test 3: Response updates conversation state...
+✓ Test 3 passed: Response updates conversation state
+Test 4: Conversation indicator updates...
+✓ Test 4 passed: Conversation indicator updates correctly
+Test 5: Follow-up question with context...
+✓ Test 5 passed: Follow-up questions maintain context
+
+=== Test Summary ===
+Passed: 5/5
+Failed: 0/5
+
+✓ All tests passed!
 ```
 
-### Frontend Integration Test
-- ✅ Component loaded in `index.html` at `#copilot-panel-container`
-- ✅ `bootstrapCopilotPanel()` called after component load (line 1166-1167)
-- ✅ API connector wires to `/api/copilot/start` endpoint
-- ✅ UI renders brief, ask actions, and open actions
+### User Flow
 
-### Backend Service Test
-```bash
-$ python3 -c "from apps.api.src.domains.copilot.application import copilot_service; print('Import OK')"
-Import OK
+**BEFORE (DEV-01):**
+- Each question was independent
+- No context from previous questions
+- User had to repeat context in each question
+
+**AFTER (DEV-02):**
+```
+User: "What's moving the market today?"
+  → Creates conversation conv_abc123, message_count=1
+  
+Copilot: "Tech stocks are leading with NVDA up 3%..."
+
+User: "How does that affect my portfolio?"
+  → Sends conversation_id=conv_abc123
+  → Backend retrieves context from previous messages
+  → Response includes tickers from conversation context
+  
+Copilot: "Your portfolio has 20% NVDA exposure..."
+
+User: "Should I rebalance?"
+  → Same conversation_id, message_count=5
+  → Full conversation history available
+```
+
+### UI Indicator
+
+When conversation is active, badge shows:
+```
+💬 3 msgs
 ```
 
 ---
 
 ## 📁 Files Involved
 
-### Core Implementation (Already Complete)
-- `apps/api/src/domains/copilot/api/copilot.py` - Router with `/copilot/start` endpoint
-- `apps/api/src/domains/copilot/application/copilot_service.py` - Business logic
-- `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html` - UI widget
-- `apps/web/src/domains/forecasts/pages/index.html` - Main page integration
-- `apps/web/src/domains/forecasts/contracts/apiConnector.js` - API connector
+### New Files Created
+| File | Lines | Purpose |
+|------|-------|---------|
+| `apps/web/src/domains/forecasts/components/widgets/copilot-conversation.test.js` | 393 | Frontend test coverage |
 
-### This Task's Contribution
-- **Verification** that the minimal slice is complete and functional
-- **Documentation** of the working flow
-- **No code changes required** - infrastructure already in place from BATCH-80-DEV-01
+### Modified Files
+| File | Lines Changed | Purpose |
+|------|---------------|---------|
+| `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html` | +80 | Conversation tracking + UI indicator |
+
+### Existing Files Used (No Changes)
+| File | Purpose |
+|------|---------|
+| `apps/api/src/domains/copilot/application/conversation_history.py` | Backend service |
+| `apps/api/src/domains/copilot/api/copilot.py` | API endpoint with conversation support |
+
+**Total new code:** ~80 lines (frontend widget updates)
+**Total new tests:** 393 lines (5 tests)
 
 ---
 
 ## 🎯 User Value Delivered
 
 Users can now:
-1. **See a daily brief** when opening the copilot panel
-2. **Ask pre-configured questions** with one click
-3. **Open relevant views** directly from the copilot panel
-4. **Ask custom questions** via the input field
+1. **Have natural conversations** - Follow-up questions work naturally
+2. **See conversation context** - Badge shows active conversation
+3. **Build on previous answers** - Context preserved across messages
+4. **Reference earlier topics** - Full history available to backend
 
-This is the **minimal viable copilot experience** that provides immediate value while being extensible for future enhancements.
+**Example conversation flow:**
+1. "What's the Fed decision?" → Creates conversation
+2. "How does that affect tech stocks?" → Uses context from #1
+3. "Should I buy NVDA then?" → Uses context from #1 and #2
+4. "What about MSFT?" → Understands "what about" refers to same analysis
 
 ---
 
 ## 📋 Architecture Check
 
-| Layer | Status | Details |
-|-------|--------|---------|
-| API Router | ✅ | `/api/copilot/start` registered in `main.py` |
-| Service Layer | ✅ | `copilot_service.py` provides business logic |
-| Frontend Widget | ✅ | `copilot-panel.html` with full UI |
-| Component Loading | ✅ | Dynamic loading via `componentLoader.js` |
-| API Connector | ✅ | `apiConnector.js` with `getCopilotStart()` |
+| Layer | Verification | Status |
+|-------|--------------|--------|
+| **Backend Service** | `conversation_history.py` imports OK | ✅ PASS |
+| **API Integration** | `/api/copilot/ask` accepts `conversation_id` | ✅ PASS |
+| **Frontend State** | `copilotState.conversationId` tracked | ✅ PASS |
+| **UI Indicator** | Badge shows when conversation active | ✅ PASS |
+| **Tests** | 5/5 frontend tests passing | ✅ PASS |
 
-**Imports OK:** All modules import successfully without circular dependencies  
-**Path Target:** `/api/copilot/start` → `copilot_service.build_context_payload()` → UI render
+**Path Target:** `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html`
+**Imports OK:** No new imports required (vanilla JS)
+**Layer Compliance:** State → Request → Response → UI update pattern followed
 
 ---
 
 ## 🎯 Vision Alignment
 
-**Batch:** BATCH-80 (Personal Finance Copilot)  
-**Target:** "Start with a brief of the day, let user ask or open"  
-**Impact:** ✅ **DELIVERED**
+| Dimension | Alignment |
+|-----------|-----------|
+| **Batch** | BATCH-80 (Personal Finance Copilot) |
+| **Target** | DEV-02 (Conversation history integration) |
+| **Impact** | Multi-turn conversations with full context |
+| **Value** | Natural Q&A flow, no context repetition |
+| **Next** | BATCH-80-DEV-03 (Portfolio recommendations) |
 
-- Users see **immediate value** on open (daily brief)
-- Users can **take action** immediately (ask/open buttons)
-- Architecture is **extensible** for future features (portfolio context, alerts, etc.)
+**User Journey Enabled:**
+1. User opens copilot panel → sees daily brief
+2. User asks "What's moving today?" → conversation started
+3. User asks follow-up "How does that affect tech?" → context preserved
+4. User gets contextual answer referencing earlier discussion
 
 ---
 
 ## ✅ Commit Status
 
-**No new code changes required** - this task verifies the existing implementation is complete and functional.
+**Files staged for commit:**
+- `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html` (+80 lines)
+- `apps/web/src/domains/forecasts/components/widgets/copilot-conversation.test.js` (+393 lines)
 
-**Previous commit:** `c645573b` - "docs: BATCH-80-DEV-01 delivery proof - personal finance copilot minimal slice verified"
+**Previous related commit:** `f84cd858` - "fix(copilot): conversation history test fixes and widget integration improvements"
 
 ---
 
 ## Recommended Next Steps
 
 1. **BATCH-80-DEV-03:** Add portfolio-specific recommendations to the brief
-2. **BATCH-80-DEV-04:** Implement the `/api/copilot/ask` endpoint with real LLM responses
-3. **BATCH-80-DEV-05:** Add allocation drift alerts to portfolio section
+2. **BATCH-80-DEV-04:** Enhance conversation UI (clear button, history list)
+3. **BATCH-80-DEV-05:** Add conversation persistence across page reloads
 
 ---
 
-**Delivery Status:** ✅ COMPLETE  
-**Verified:** 2026-03-24  
+**Delivery Status:** ✅ COMPLETE
+**Verified:** 2026-03-23
 **Ready for:** Planner review and merge
