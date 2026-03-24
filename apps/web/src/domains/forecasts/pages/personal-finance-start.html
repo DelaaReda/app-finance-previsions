@@ -231,9 +231,12 @@
       if (Array.isArray(rewritten.open)) {
         rewritten.open = rewritten.open.map(action => {
           if (action.target && action.target.startsWith('/copilot')) {
+            const rewrittenTarget = action.target.replace('/copilot', `/${namespace}`);
             return {
               ...action,
-              target: action.target.replace('/copilot', `/${namespace}`)
+              target: rewrittenTarget.startsWith(`/${namespace}/`)
+                ? `/${namespace}`
+                : rewrittenTarget,
             };
           }
           return action;

@@ -219,7 +219,7 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
   assert.equal(sandbox.bootstrapCalls, 0, 'init path should be preferred when available');
   assert.equal(sandbox.renderActionsCalls, 1, 'actions should render after data load');
   assert.equal(sandbox.brief.ask[0].target, '/personal-finance/ask');
-  assert.equal(sandbox.brief.open[0].target, '/personal-finance/open');
+  assert.equal(sandbox.brief.open[0].target, '/personal-finance');
   assert.deepEqual(sandbox.loadingStates, [true, false]);
   assert.deepEqual(sandbox.errorStates, [false]);
 });
