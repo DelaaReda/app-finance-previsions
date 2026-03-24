@@ -75,3 +75,69 @@ Expected:
 - Use `memory/agents/admin-agents.md` as the shared manual coordination board when a cross-role human-readable board is needed.
 - That board is advisory only; queue/workboard, runtime truth, and planner dispatch snapshots remain canonical.
 - Do not create ad-hoc `chat_*.md` coordination files for active runtime work.
+
+## Shared Mission: Automated Delivery Orchestration
+
+Primary objective:
+- improve the automated delivery orchestration itself so value ships without recurring human babysitting
+- remove systemic blockers rather than manually closing individual batches
+- increase net-new user value, not just closed-batch throughput
+
+Non-objectives:
+- manually close a specific batch as the main strategy
+- compensate silently for orchestration defects with ad hoc human intervention
+- count validation, reuse-only, or proof closure as fresh product delivery without explicit user-visible delta
+
+Role expectations:
+- `planner`: classify batch intent, avoid duplicate-scope loops, emit canonical handoffs, escalate stagnation and blocked handoffs
+- `admin`: improve runtime/session/reliability guards, keep lanes executable and non-interactive, remove recurring orchestration blockers without redefining product truth
+- `dev`: stay strictly downstream of canonical `READY_DEV` handoffs and do not invent work outside the active canonical flow
+
+Mandatory guards:
+- `novelty_gate`: every batch must be classified as `net_new`, `hardening`, `validation`, or `reuse_only`
+- `duplicate_scope_guard`: same title/scope does not count as fresh delivery without explicit user-visible delta
+- `stagnation_alert`: consecutive `reuse_only`/`validation` batches on the same scope must trigger a novelty escalation
+- `lane_validity_gate`: a lane is productive only if it is bootstrapped correctly, non-interactive, and producing fresh useful work on the canonical flow
+- `handoff_escalation`: blocked canonical handoffs must surface as blockers on the active cycle instead of being bypassed manually
+- `value_scoreboard`: track `batch_throughput` separately from `net_new_user_value`
+
+Success criteria:
+- orchestration advances the canonical flow without recurring manual rescue
+- duplicate-scope churn is reduced or prevented
+- stagnant same-scope loops are detected and escalated automatically
+- lanes are counted as healthy only when they produce fresh useful progress
+- reported delivery reflects net-new user value, not only batch closure
+
+## Admin Autonomy Plan
+
+Objective:
+- let admin/infra agents improve delivery orchestration autonomously without taking over product delivery or manually rescuing individual batches
+
+Admin operating loop:
+- read canonical truth first: queue/workboard + runtime truth
+- verify lane validity: correct VM repo, non-interactive session, fresh useful proof if the lane claims to be active
+- identify one systemic blocker class, not one batch symptom
+- patch the guard, invariant, bootstrap, escalation, or observability that removes that blocker class
+- publish the new rule in `memory/agents/admin-agents.md` and `memory/YYYY-MM-DD.md` if it changes cross-agent behavior
+
+Allowed autonomous work:
+- bootstrap/session hygiene
+- stale session and stale cycle quarantine
+- lane validity checks
+- startup/readiness hardening
+- blocked handoff escalation wiring
+- novelty/stagnation observability and guardrails
+- legacy/compat demotion so critical decisions stay SQLite/runtime-truth first
+
+Disallowed autonomous drift:
+- manually close a planner/admin/dev task as the primary fix
+- redefine product scope or invent new delivery work
+- treat tmux/session presence as sufficient proof of progress
+- use legacy registries, stale logs, or role memory as stronger truth than queue/workboard + runtime truth
+
+Admin success signals:
+- fewer recurring manual rescues
+- fewer stale or non-productive lanes counted as healthy
+- blocked canonical handoffs become visible automatically
+- same-scope delivery loops are surfaced early instead of after days of churn
+- admin interventions produce reusable rules, not one-off fixes

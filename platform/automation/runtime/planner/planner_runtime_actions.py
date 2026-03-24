@@ -3553,8 +3553,9 @@ def _planner_autobatch_cli(root: Path, board_path: Path, queue_path: Path, args:
             source=str(args.source or "planner_runtime_actions").strip() or "planner_runtime_actions",
             workspace_root=root,
         )
-        if result.get("status") == "ok":
+        if str(result.get("board_changed", "")).strip() == "1":
             save_board(board_path, board)
+        if result.get("status") == "ok":
             print(
                 "AUTOBATCH_OK "
                 f"batch_id={result.get('batch_id', 'none')} "

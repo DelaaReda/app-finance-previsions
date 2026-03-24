@@ -81,6 +81,8 @@ This specification replaces older multi-lane target assumptions.
 - a repeated batch on the same product title/scope **MUST NOT** count as fresh delivery unless it introduces a clearly stated new user-visible capability or closes an explicit regression
 - two consecutive `reuse_only` or `validation` batches on the same scope **MUST** trigger a stagnation alert and force the next planner step to define a novelty target before minting more downstream work
 - throughput **MUST NOT** be reported as value delivery without a separate net-new user-value assessment
+- runtime implementation rule: canonical queue items **MUST** persist `scope_key`, `novelty_class`, `delivery_kind`, and `user_value_delta_visible`
+- runtime implementation rule: canonical queue `meta` **MUST** expose a double scoreboard (`throughput_*` vs `net_new_user_value_*`) plus `stagnation_alert` when the same scope loops on low-novelty classes
 
 ## Core Reliability Modules
 

@@ -30,6 +30,7 @@
   - `3_stagnation_escalation`: two consecutive `reuse_only`/`validation` batches on the same scope trigger a stagnation alert and force planner to write the next novelty target before continuing
   - `4_mission_discipline`: planner pursues novelty or explicit hardening; admin only validates canonical handoffs; dev never invents work outside canonical `READY_DEV`
   - `5_scoreboard`: team reports both `throughput` and `net_new_user_value`; only the latter counts as real delivery progress
+- automation_guard_status_2026-03-24: canonical `planner-autobatch` now evaluates a novelty/stagnation gate before minting a fresh batch. If the two most recent same-scope batches classify as low-novelty (`validation` / `reuse_only`), autobatch exits with `reason=stagnation_requires_novelty_target` and planner autonomy reports an explicit stagnation issue instead of churning another duplicate delivery loop.
 - orchestration_mission_publication:
   - mission: improve automated delivery orchestration so value ships without manual intervention on specific batches
   - non_goal: manually close `BATCH-84-ADMIN-01` or any other individual batch as the primary strategy
@@ -169,3 +170,6 @@
 - proof_fraiche_utile_observee: yes (`active_cycle.active_batch_ids=["BATCH-71"]`; `BATCH-71-PLAN` is `DONE`; `BATCH-71-ANALYSIS` is `IN_PROGRESS` for planner on the live workboard).
 - current_coordination_blocker: planner proof transport is fixed, but downstream proof freshness is still missing; `dev/admin` have no fresh useful-work proof on `BATCH-71`, and auxiliary sessions `admin-agents-sync-cron`, `adminapp_codex_sync`, and `clawsentinel` are confirmed absent on the live VM.
 - current_safe_step: keep the repaired non-interactive bootstrap unchanged, let planner complete `BATCH-71-ANALYSIS` under the tightened proof contract, recreate the three auxiliary sessions only if they are still needed, and do not count `dev/admin` as productive until `BATCH-71` emits fresh downstream work.
+
+shared_mission_reference: see `docs/ops/AGENTS_READY.md` section `Shared Mission: Automated Delivery Orchestration`
+admin_autonomy_plan_reference: see `docs/ops/AGENTS_READY.md` section `Admin Autonomy Plan`

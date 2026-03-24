@@ -1734,10 +1734,11 @@ def reconcile_state(board: dict, queue_path: Path) -> Dict[str, int]:
         queue_synced += 1
         queue_changed = True
 
+    novelty_changed, _ = _apply_queue_novelty_policy(queue_obj)
     board_active_cycle_changed = _normalize_active_cycle_payload(board)
     queue_active_cycle_changed = _normalize_active_cycle_payload(queue_obj)
     queue_next_action_changed = _update_queue_next_action_from_streams(queue_obj, board)
-    if queue_changed or queue_next_action_changed or queue_active_cycle_changed:
+    if queue_changed or novelty_changed or queue_next_action_changed or queue_active_cycle_changed:
         queue_obj["updated_at"] = now
         _stamp_priority_queue_projection(queue_obj)
         _write_projection_json(queue_path, "priority-queue.json", queue_obj)
@@ -1752,6 +1753,7 @@ def reconcile_state(board: dict, queue_path: Path) -> Dict[str, int]:
             "queue_synced": str(queue_synced),
             "waiting_dep_reclassified": str(waiting_dep_reclassified),
             "active_cycle_synced": "1" if board_active_cycle_changed or queue_active_cycle_changed else "0",
+            "novelty_synced": "1" if novelty_changed else "0",
             "non_destructive": "1",
         },
     )
@@ -1822,6 +1824,10 @@ def _ensure_autobatch_stream_and_task(
     batch_id: str,
     title: str,
     now: str,
+    scope_key: str = "",
+    novelty_class: str = "",
+    user_value_delta_visible: int = 0,
+    novelty_target: str = "",
 ) -> Tuple[int, int]:
     stream_created = 0
     existing_stream = stream_index(board).get(batch_id)
@@ -1833,6 +1839,9 @@ def _ensure_autobatch_stream_and_task(
                 "priority": "P2",
                 "source_state": STATE_READY,
                 "state": STATE_READY,
+                "scope_key": scope_key,
+                "novelty_class": novelty_class,
+                "user_value_delta_visible": user_value_delta_visible,
                 "created_at": now,
                 "updated_at": now,
             }
@@ -1843,7 +1852,16 @@ def _ensure_autobatch_stream_and_task(
         existing_stream["priority"] = "P2"
         existing_stream["source_state"] = STATE_READY
         existing_stream["state"] = STATE_READY
+        if scope_key:
+            existing_stream["scope_key"] = scope_key
+        if novelty_class:
+            existing_stream["novelty_class"] = novelty_class
+        existing_stream["user_value_delta_visible"] = user_value_delta_visible
         existing_stream["updated_at"] = now
+    if novelty_target:
+        existing_stream = stream_index(board).get(batch_id) or existing_stream
+        if isinstance(existing_stream, dict):
+            existing_stream["novelty_target"] = novelty_target
 
     task_created = 0
     task_id_value = f"{batch_id}-ANALYSIS"
@@ -1858,6 +1876,9 @@ def _ensure_autobatch_stream_and_task(
                 "role": "planner",
                 "state": STATE_READY,
                 "priority": "P2",
+                "scope_key": scope_key,
+                "novelty_class": novelty_class,
+                "user_value_delta_visible": user_value_delta_visible,
                 "depends_on": [],
                 "assignee": "",
                 "blocked_reason": "",
@@ -1880,6 +1901,13 @@ def _ensure_autobatch_stream_and_task(
         existing_task["assignee"] = ""
         existing_task["started_at"] = ""
         existing_task["completed_at"] = ""
+        if scope_key:
+            existing_task["scope_key"] = scope_key
+        if novelty_class:
+            existing_task["novelty_class"] = novelty_class
+        existing_task["user_value_delta_visible"] = user_value_delta_visible
+        if novelty_target:
+            existing_task["novelty_target"] = novelty_target
         existing_task["updated_at"] = now
     return stream_created, task_created
 
@@ -1978,6 +2006,212 @@ def _autobatch_seed(workspace_root: Path) -> Tuple[str, str]:
     return "Planner Autonomy Batch", "none"
 
 
+_BATCH_ID_RE = re.compile(r"^BATCH-(\d+)$")
+_NOVELTY_CLASSES = {"net_new", "hardening", "validation", "reuse_only"}
+_STAGNATION_CLASSES = {"reuse_only", "validation"}
+_CLOSED_BATCH_QUEUE_STATES = {"CLOSED", "DONE", "PASS", "CANCELLED", "ARCHIVED"}
+_VALIDATION_HINTS = (
+    "validation",
+    "validate",
+    "proof",
+    "verify",
+    "qa",
+    "smoke",
+    "checklist",
+    "release gate",
+    "release_gate",
+    "go/no-go",
+    "go_no_go",
+    "runtime validation",
+)
+_HARDENING_HINTS = (
+    "hardening",
+    "reliability",
+    "stability",
+    "repair",
+    "fix",
+    "refactor",
+    "chaos",
+    "drill",
+    "guardrail",
+    "sre",
+    "robustness",
+)
+
+
+def _batch_sequence(value: str) -> int:
+    match = _BATCH_ID_RE.match(str(value or "").strip().upper())
+    if not match:
+        return -1
+    return int(match.group(1))
+
+
+def _normalize_scope_key(value: str) -> str:
+    raw = unicodedata.normalize("NFKD", str(value or ""))
+    raw = raw.encode("ascii", "ignore").decode("ascii")
+    raw = re.sub(r"\[[^\]]+\]", " ", raw)
+    raw = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
+    return raw[:120] or "unknown-scope"
+
+
+def _item_scope_key(item: dict) -> str:
+    for key in ("scope_key", "scope", "goal", "objective", "title"):
+        token = str(item.get(key, "")).strip()
+        if token:
+            return _normalize_scope_key(token)
+    return "unknown-scope"
+
+
+def _extract_novelty_target(*, reason: str = "", item: dict | None = None) -> str:
+    if isinstance(item, dict):
+        for key in ("novelty_target", "user_value_delta", "user_visible_delta"):
+            token = str(item.get(key, "")).strip()
+            if token:
+                return token[:240]
+    raw = str(reason or "").strip()
+    if not raw:
+        return ""
+    match = re.search(r"(?:novelty_target|user_value_delta|user_visible_delta|target)=([^;|,\n]+)", raw, re.IGNORECASE)
+    if not match:
+        return ""
+    return str(match.group(1) or "").strip()[:240]
+
+
+def _infer_novelty_class(item: dict, *, prior_same_scope: list[dict], reason: str = "") -> str:
+    explicit = str(item.get("novelty_class", "")).strip().lower()
+    if explicit in _NOVELTY_CLASSES:
+        return explicit
+
+    novelty_target = _extract_novelty_target(reason=reason, item=item)
+    context_parts = [
+        str(item.get("title", "")),
+        str(item.get("reason", "")),
+        str(item.get("next_action", "")),
+        str(item.get("acceptance_gate", "")),
+        str(reason or ""),
+        novelty_target,
+    ]
+    context = " ".join(part for part in context_parts if part).lower()
+    if any(token in context for token in _VALIDATION_HINTS):
+        return "validation"
+    if any(token in context for token in _HARDENING_HINTS):
+        return "hardening"
+    if prior_same_scope and not novelty_target:
+        return "reuse_only"
+    return "net_new"
+
+
+def _apply_queue_novelty_policy(queue_obj: dict) -> tuple[bool, dict[str, list[dict]]]:
+    items = queue_obj.get("items")
+    if not isinstance(items, list):
+        queue_obj["items"] = []
+        items = []
+
+    batch_items = [
+        item for item in items
+        if isinstance(item, dict) and _batch_sequence(str(item.get("id", ""))) >= 0
+    ]
+    batch_items.sort(key=lambda item: _batch_sequence(str(item.get("id", ""))))
+
+    changed = False
+    history_by_scope: dict[str, list[dict]] = {}
+    for item in batch_items:
+        scope_key = _item_scope_key(item)
+        prior_same_scope = history_by_scope.get(scope_key, [])
+        novelty_target = _extract_novelty_target(item=item)
+        novelty_class = _infer_novelty_class(item, prior_same_scope=prior_same_scope)
+        user_value_delta_visible = 1 if novelty_class == "net_new" else 0
+        stagnation_alert = (
+            len(prior_same_scope) >= 2
+            and all(str(entry.get("novelty_class", "")).strip().lower() in _STAGNATION_CLASSES for entry in prior_same_scope[-2:])
+            and not novelty_target
+        )
+
+        desired_fields = {
+            "scope_key": scope_key,
+            "novelty_class": novelty_class,
+            "delivery_kind": novelty_class,
+            "user_value_delta_visible": user_value_delta_visible,
+            "stagnation_alert": bool(stagnation_alert),
+        }
+        if novelty_target:
+            desired_fields["novelty_target"] = novelty_target
+        for key, value in desired_fields.items():
+            if item.get(key) != value:
+                item[key] = value
+                changed = True
+        if not novelty_target and "novelty_target" in item:
+            item.pop("novelty_target", None)
+            changed = True
+
+        history_by_scope.setdefault(scope_key, []).append(
+            {
+                "id": str(item.get("id", "")).strip().upper(),
+                "state": str(item.get("state", "")).strip().upper(),
+                "novelty_class": novelty_class,
+                "stagnation_alert": bool(stagnation_alert),
+            }
+        )
+
+    meta = queue_obj.get("meta")
+    if not isinstance(meta, dict):
+        meta = {}
+        queue_obj["meta"] = meta
+        changed = True
+
+    scoreboard = {
+        "throughput_total": len(batch_items),
+        "throughput_closed": sum(
+            1 for item in batch_items
+            if str(item.get("state", "")).strip().upper() in _CLOSED_BATCH_QUEUE_STATES
+        ),
+        "net_new_user_value_total": sum(1 for item in batch_items if str(item.get("novelty_class", "")).strip().lower() == "net_new"),
+        "net_new_user_value_closed": sum(
+            1
+            for item in batch_items
+            if str(item.get("novelty_class", "")).strip().lower() == "net_new"
+            and str(item.get("state", "")).strip().upper() in _CLOSED_BATCH_QUEUE_STATES
+        ),
+        "hardening_total": sum(1 for item in batch_items if str(item.get("novelty_class", "")).strip().lower() == "hardening"),
+        "validation_total": sum(1 for item in batch_items if str(item.get("novelty_class", "")).strip().lower() == "validation"),
+        "reuse_only_total": sum(1 for item in batch_items if str(item.get("novelty_class", "")).strip().lower() == "reuse_only"),
+    }
+    if meta.get("delivery_scoreboard") != scoreboard:
+        meta["delivery_scoreboard"] = scoreboard
+        changed = True
+
+    active_cycle = queue_obj.get("active_cycle")
+    active_batch_ids = []
+    if isinstance(active_cycle, dict):
+        raw_active = active_cycle.get("active_batch_ids")
+        if isinstance(raw_active, list):
+            active_batch_ids = [str(item).strip().upper() for item in raw_active if str(item).strip()]
+    active_map = {str(item.get("id", "")).strip().upper(): item for item in batch_items}
+    stagnation_payload: dict | None = None
+    for batch_id in active_batch_ids:
+        active_item = active_map.get(batch_id)
+        if not isinstance(active_item, dict) or not bool(active_item.get("stagnation_alert")):
+            continue
+        scope_key = str(active_item.get("scope_key", "")).strip() or _item_scope_key(active_item)
+        recent = history_by_scope.get(scope_key, [])[-3:]
+        stagnation_payload = {
+            "batch_id": batch_id,
+            "scope_key": scope_key,
+            "recent_classes": [str(entry.get("novelty_class", "")).strip().lower() for entry in recent],
+            "novelty_target_required": True,
+        }
+        break
+    if stagnation_payload:
+        if meta.get("stagnation_alert") != stagnation_payload:
+            meta["stagnation_alert"] = stagnation_payload
+            changed = True
+    elif "stagnation_alert" in meta:
+        meta.pop("stagnation_alert", None)
+        changed = True
+
+    return changed, history_by_scope
+
+
 def planner_autobatch(
     board: dict,
     queue_path: Path,
@@ -2060,8 +2294,17 @@ def planner_autobatch(
         queue_obj = {"version": 1, "updated_at": now_iso(), "items": [], "meta": {}}
         _stamp_priority_queue_projection(queue_obj)
 
+    queue_policy_changed, history_by_scope = _apply_queue_novelty_policy(queue_obj)
     batch_id = _next_batch_id(queue_obj, board)
     title, vision_ref = _autobatch_seed(workspace_root)
+    scope_key = _normalize_scope_key(title)
+    recent_scope_history = history_by_scope.get(scope_key, [])
+    novelty_target = _extract_novelty_target(reason=reason)
+    candidate_stub = {"title": title, "scope_key": scope_key, "reason": reason}
+    if novelty_target:
+        candidate_stub["novelty_target"] = novelty_target
+    novelty_class = _infer_novelty_class(candidate_stub, prior_same_scope=recent_scope_history, reason=reason)
+    user_value_delta_visible = 1 if novelty_class == "net_new" else 0
 
     duplicate_item = next(
         (
@@ -2069,7 +2312,7 @@ def planner_autobatch(
             for item in queue_obj.get("items", [])
             if isinstance(item, dict)
             and str(item.get("state", "")).upper() not in {"CLOSED", "DONE", "PASS"}
-            and str(item.get("title", "")).strip().lower() == title.strip().lower()
+            and _item_scope_key(item) == scope_key
         ),
         None,
     )
@@ -2089,12 +2332,63 @@ def planner_autobatch(
             "cooldown_applied": "0",
         }
 
+    stagnation_alert = (
+        len(recent_scope_history) >= 2
+        and all(str(entry.get("novelty_class", "")).strip().lower() in _STAGNATION_CLASSES for entry in recent_scope_history[-2:])
+        and not novelty_target
+    )
+    if stagnation_alert:
+        meta = queue_obj.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+            queue_obj["meta"] = meta
+            queue_policy_changed = True
+        stagnation_payload = {
+            "scope_key": scope_key,
+            "recent_classes": [str(entry.get("novelty_class", "")).strip().lower() for entry in recent_scope_history[-2:]],
+            "novelty_target_required": True,
+            "reason": "stagnation_alert",
+        }
+        if meta.get("stagnation_alert") != stagnation_payload:
+            meta["stagnation_alert"] = stagnation_payload
+            queue_policy_changed = True
+        if queue_policy_changed:
+            queue_obj["updated_at"] = now
+            _stamp_priority_queue_projection(queue_obj)
+            _write_projection_json(queue_path, "priority-queue.json", queue_obj)
+        append_event(
+            board,
+            "planner_autobatch_stagnation_alert",
+            {
+                "reason": reason,
+                "source": source,
+                "scope_key": scope_key,
+                "recent_classes": ",".join(stagnation_payload["recent_classes"]),
+                "novelty_target_required": "1",
+            },
+        )
+        return {
+            "status": "skip",
+            "reason": "stagnation_alert",
+            "batch_id": "none",
+            "stream_created": "0",
+            "task_created": "0",
+            "cooldown_applied": "0",
+            "board_changed": "1",
+        }
+
     if isinstance(duplicate_item, dict):
         existing_batch_id = str(duplicate_item.get("id", "")).strip().upper() or batch_id
         duplicate_item["state"] = "READY"
         duplicate_item["owner_role"] = "planner"
         duplicate_item["created_by"] = duplicate_item.get("created_by") or "planner_autonomy"
         duplicate_item["vision_ref"] = duplicate_item.get("vision_ref") or vision_ref
+        duplicate_item["scope_key"] = scope_key
+        duplicate_item["novelty_class"] = novelty_class
+        duplicate_item["delivery_kind"] = novelty_class
+        duplicate_item["user_value_delta_visible"] = user_value_delta_visible
+        if novelty_target:
+            duplicate_item["novelty_target"] = novelty_target
         duplicate_item["next_action"] = f"ouvrir {existing_batch_id}-ANALYSIS"
         duplicate_item["updated_at"] = now
         duplicate_item["dispatch_authorized"] = True
@@ -2104,7 +2398,12 @@ def planner_autobatch(
             batch_id=existing_batch_id,
             title=title,
             now=now,
+            scope_key=scope_key,
+            novelty_class=novelty_class,
+            user_value_delta_visible=user_value_delta_visible,
+            novelty_target=novelty_target,
         )
+        queue_policy_changed, _ = _apply_queue_novelty_policy(queue_obj)
         queue_obj["updated_at"] = now
         queue_path.parent.mkdir(parents=True, exist_ok=True)
         _stamp_priority_queue_projection(queue_obj)
@@ -2118,6 +2417,8 @@ def planner_autobatch(
                 "source": source,
                 "vision_ref": vision_ref,
                 "duplicate_title": "1",
+                "scope_key": scope_key,
+                "novelty_class": novelty_class,
                 "stream_created": str(stream_created),
                 "task_created": str(task_created),
             },
@@ -2129,6 +2430,7 @@ def planner_autobatch(
             "stream_created": str(stream_created),
             "task_created": str(task_created),
             "cooldown_applied": "0",
+            "board_changed": "1",
         }
 
     queue_obj.setdefault("items", [])
@@ -2141,6 +2443,10 @@ def planner_autobatch(
             "owner_role": "planner",
             "created_by": "planner_autonomy",
             "vision_ref": vision_ref,
+            "scope_key": scope_key,
+            "novelty_class": novelty_class,
+            "delivery_kind": novelty_class,
+            "user_value_delta_visible": user_value_delta_visible,
             "next_action": f"ouvrir {batch_id}-PLAN",
             "depends_on": [],
             "dependency_policy": "single_batch",
@@ -2148,6 +2454,9 @@ def planner_autobatch(
             "updated_at": now,
         }
     )
+    if novelty_target:
+        queue_obj["items"][-1]["novelty_target"] = novelty_target
+    queue_policy_changed, _ = _apply_queue_novelty_policy(queue_obj)
     queue_obj["updated_at"] = now
     queue_path.parent.mkdir(parents=True, exist_ok=True)
     _stamp_priority_queue_projection(queue_obj)
@@ -2158,6 +2467,10 @@ def planner_autobatch(
         batch_id=batch_id,
         title=title,
         now=now,
+        scope_key=scope_key,
+        novelty_class=novelty_class,
+        user_value_delta_visible=user_value_delta_visible,
+        novelty_target=novelty_target,
     )
 
     append_event(
@@ -2169,6 +2482,9 @@ def planner_autobatch(
             "cooldown_s": str(max(0, cooldown_s)),
             "source": source or "planner_autobatch_cli",
             "vision_ref": vision_ref,
+            "scope_key": scope_key,
+            "novelty_class": novelty_class,
+            "user_value_delta_visible": str(user_value_delta_visible),
             "stream_created": str(stream_created),
             "task_created": str(task_created),
         },
@@ -2182,6 +2498,7 @@ def planner_autobatch(
         "task_created": str(task_created),
         "vision_ref": vision_ref,
         "cooldown_applied": "1" if cooldown_s > 0 else "0",
+        "board_changed": "1",
     }
 
 

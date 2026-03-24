@@ -427,6 +427,16 @@ def snapshot(root: Path) -> dict[str, Any]:
         "compat_events_present": False if event_store_primary else bool(events_path and events_path.exists()),
         "compat_worker_registry_present": False if event_store_primary else bool(worker_registry_path and worker_registry_path.exists()),
         "active_cycle": active_cycle,
+        "delivery_scoreboard": (
+            queue.get("meta", {}).get("delivery_scoreboard", {})
+            if isinstance(queue.get("meta"), dict)
+            else {}
+        ),
+        "stagnation_alert": (
+            queue.get("meta", {}).get("stagnation_alert", {})
+            if isinstance(queue.get("meta"), dict)
+            else {}
+        ),
         "planning_alignment_status": planning_alignment_status,
         "planning_alignment_reason": planning_alignment_reason,
         "active_subagent_ids": active_subagent_ids,

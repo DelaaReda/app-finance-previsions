@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-03-24T22:33:59Z",
+  "updated_at": "2026-03-24T22:40:14Z",
   "active_cycle": {
     "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
     "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
@@ -26,7 +26,12 @@
       "depends_on": [],
       "closed_at": "2026-02-28T20:01:54Z",
       "updated_at": "2026-03-08T21:34:02Z",
-      "created_at": "2026-03-05T22:47:19Z"
+      "created_at": "2026-03-05T22:47:19Z",
+      "scope_key": "contrats-api",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-02",
@@ -42,7 +47,12 @@
         "BATCH-01"
       ],
       "dependency_policy": "single_batch",
-      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z",
+      "scope_key": "multi-ticker-news",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-03",
@@ -58,7 +68,12 @@
         "BATCH-02"
       ],
       "dependency_policy": "single_batch",
-      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z",
+      "scope_key": "frontend-live-qualite-donnees",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-04",
@@ -74,7 +89,12 @@
         "BATCH-03"
       ],
       "dependency_policy": "single_batch",
-      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z",
+      "scope_key": "dashboard-vision",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-05",
@@ -90,7 +110,12 @@
         "BATCH-04"
       ],
       "dependency_policy": "single_batch",
-      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z",
+      "scope_key": "copilot-que-faire-aujourd-hui",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-06",
@@ -106,7 +131,12 @@
         "BATCH-05"
       ],
       "dependency_policy": "single_batch",
-      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z",
+      "scope_key": "forecasts-multi-assets-judge",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-07",
@@ -122,7 +152,12 @@
         "BATCH-06"
       ],
       "dependency_policy": "single_batch",
-      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z",
+      "scope_key": "deep-dive-news-intelligence",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-08",
@@ -138,7 +173,12 @@
         "BATCH-07"
       ],
       "dependency_policy": "single_batch",
-      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z",
+      "scope_key": "decision-ux-2-3-clics-flux-portefeuille",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-09",
@@ -154,7 +194,12 @@
         "BATCH-08"
       ],
       "dependency_policy": "single_batch",
-      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z",
+      "scope_key": "alertes-surveillance-orientees-decision",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-10",
@@ -177,7 +222,12 @@
         "BATCH-09"
       ],
       "dependency_policy": "single_batch",
-      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z",
+      "scope_key": "cost-runtime-governance-release-gate-mvp",
+      "novelty_class": "validation",
+      "delivery_kind": "validation",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-11",
@@ -210,7 +260,12 @@
           "migrated_from_state": "READY_DEV"
         }
       },
-      "closed_at": "2026-03-09T05:02:23Z"
+      "closed_at": "2026-03-09T05:02:23Z",
+      "scope_key": "data-ingestion-core-freshness-slo",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-12",
@@ -234,7 +289,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-09T05:38:15Z",
       "opened_at": "2026-03-09T05:38:15Z",
-      "closed_at": "2026-03-09T11:50:53Z"
+      "closed_at": "2026-03-09T11:50:53Z",
+      "scope_key": "portfolio-state-risk-profile-core",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-13",
@@ -258,7 +318,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-09T12:01:26Z",
       "opened_at": "2026-03-09T12:01:26Z",
-      "closed_at": "2026-03-09T18:49:43Z"
+      "closed_at": "2026-03-09T18:49:43Z",
+      "scope_key": "decision-journal-outcome-feedback-loop",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-14",
@@ -282,7 +347,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-09T18:54:02Z",
       "opened_at": "2026-03-09T18:54:02Z",
-      "closed_at": "2026-03-09T23:16:52Z"
+      "closed_at": "2026-03-09T23:16:52Z",
+      "scope_key": "finalisation-core-v2-robustness-drills-go-no-go",
+      "novelty_class": "validation",
+      "delivery_kind": "validation",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-15",
@@ -306,7 +376,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-09T23:19:01Z",
       "opened_at": "2026-03-09T23:19:01Z",
-      "closed_at": "2026-03-11T01:24:46Z"
+      "closed_at": "2026-03-11T01:24:46Z",
+      "scope_key": "strategy-playbooks-engine",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-16",
@@ -333,7 +408,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T01:29:02Z",
       "opened_at": "2026-03-11T01:29:02Z",
-      "closed_at": "2026-03-11T03:03:54.106433Z"
+      "closed_at": "2026-03-11T03:03:54.106433Z",
+      "scope_key": "scenario-and-stress-testing-lite",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-17",
@@ -358,7 +438,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T07:57:47Z",
       "opened_at": "2026-03-11T07:57:47Z",
-      "closed_at": "2026-03-11T08:26:24Z"
+      "closed_at": "2026-03-11T08:26:24Z",
+      "scope_key": "regime-detection-allocation-drift-alerts",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-18",
@@ -386,7 +471,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T08:26:46Z",
       "opened_at": "2026-03-11T08:26:46Z",
-      "closed_at": "2026-03-11T08:53:36Z"
+      "closed_at": "2026-03-11T08:53:36Z",
+      "scope_key": "event-driven-copilot",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-19",
@@ -411,7 +501,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T08:54:02Z",
       "opened_at": "2026-03-11T08:54:02Z",
-      "closed_at": "2026-03-11T09:21:33Z"
+      "closed_at": "2026-03-11T09:21:33Z",
+      "scope_key": "explainability-graph-source-traceability",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-20",
@@ -436,7 +531,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T09:21:46Z",
       "opened_at": "2026-03-11T09:21:46Z",
-      "closed_at": "2026-03-11T10:09:43Z"
+      "closed_at": "2026-03-11T10:09:43Z",
+      "scope_key": "personal-policy-guardrails",
+      "novelty_class": "hardening",
+      "delivery_kind": "hardening",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-21",
@@ -461,7 +561,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T10:13:06Z",
       "opened_at": "2026-03-11T10:13:06Z",
-      "closed_at": "2026-03-11T13:37:32Z"
+      "closed_at": "2026-03-11T13:37:32Z",
+      "scope_key": "paper-trading-simulator-execution-journal",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-22",
@@ -489,7 +594,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-12T11:05:46Z",
       "reconciled_at": "2026-03-12T11:05:46Z",
-      "closed_at": "2026-03-12T12:03:13Z"
+      "closed_at": "2026-03-12T12:03:13Z",
+      "scope_key": "rebalancing-optimizer-lite",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-23",
@@ -517,7 +627,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-12T12:55:23Z",
       "reconciled_at": "2026-03-12T12:55:23Z",
-      "closed_at": "2026-03-13T04:43:44Z"
+      "closed_at": "2026-03-13T04:43:44Z",
+      "scope_key": "tax-fees-and-slippage-awareness",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-24",
@@ -545,7 +660,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-13T05:45:02Z",
       "reconciled_at": "2026-03-13T05:45:02Z",
-      "closed_at": "2026-03-13T06:19:54Z"
+      "closed_at": "2026-03-13T06:19:54Z",
+      "scope_key": "alerting-intelligence-v2",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-25",
@@ -573,7 +693,12 @@
       "architecture_plan_ref": "docs/architecture/ARCHITECTURE_MAP.md;docs/product/planning/BATCH-25_EXECUTION_HANDOFF_2026-03-13.md;docs/product/planning/BATCH-25_PROOF_CHECKLIST_2026-03-13.md",
       "architecture_audit": "scripts/generate_brief.py;apps/api/src/domains/forecasts/api/brief.py;apps/api/src/platform/legacy/research/llm_client.py;apps/api/src/domains/judge/application/intelligence_service.py",
       "vision_alignment": "batch=BATCH-25; target=autonomous morning brief pipeline on existing brief/judge/forecast path; impact=scheduled brief generation with explicit degraded fallback and action-oriented morning output",
-      "closed_at": "2026-03-13T15:49:06Z"
+      "closed_at": "2026-03-13T15:49:06Z",
+      "scope_key": "autonomous-morning-brief-pipeline",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-26",
@@ -589,7 +714,12 @@
         "BATCH-25"
       ],
       "dependency_policy": "single_batch",
-      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z"
+      "inter_batch_decoupled_at": "2026-03-05T23:04:01Z",
+      "scope_key": "weekly-investment-committee-mode",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-27",
@@ -630,7 +760,12 @@
         }
       },
       "stalled_reason": "parked_by_rebuild_cannot_stay_in_progress",
-      "closed_at": "2026-03-09T01:54:14Z"
+      "closed_at": "2026-03-09T01:54:14Z",
+      "scope_key": "reliability-sre-pack-chaos-drills",
+      "novelty_class": "hardening",
+      "delivery_kind": "hardening",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-28",
@@ -664,7 +799,12 @@
           "migrated_from_state": "READY_DEV"
         }
       },
-      "closed_at": "2026-03-08T21:08:42Z"
+      "closed_at": "2026-03-08T21:08:42Z",
+      "scope_key": "mvp-v3-release-gate-adoption-analytics",
+      "novelty_class": "validation",
+      "delivery_kind": "validation",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-29",
@@ -688,7 +828,12 @@
       "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
-      "closed_at": "2026-03-11T03:03:54.106433Z"
+      "closed_at": "2026-03-11T03:03:54.106433Z",
+      "scope_key": "probabilistic-forecast-calibration-lab",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-30",
@@ -712,7 +857,12 @@
       "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
-      "closed_at": "2026-03-11T03:03:54.106433Z"
+      "closed_at": "2026-03-11T03:03:54.106433Z",
+      "scope_key": "multi-horizon-forecast-decomposition",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-31",
@@ -736,7 +886,12 @@
       "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
-      "closed_at": "2026-03-11T03:03:54.106433Z"
+      "closed_at": "2026-03-11T03:03:54.106433Z",
+      "scope_key": "cross-asset-correlation-regime-map",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-32",
@@ -760,7 +915,12 @@
       "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
-      "closed_at": "2026-03-11T03:03:54.106433Z"
+      "closed_at": "2026-03-11T03:03:54.106433Z",
+      "scope_key": "forecast-ensemble-governance",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-33",
@@ -784,7 +944,12 @@
       "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
-      "closed_at": "2026-03-11T03:03:54.106433Z"
+      "closed_at": "2026-03-11T03:03:54.106433Z",
+      "scope_key": "macro-narrative-to-signal-parser",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-34",
@@ -808,7 +973,12 @@
       "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
-      "closed_at": "2026-03-11T03:03:54.106433Z"
+      "closed_at": "2026-03-11T03:03:54.106433Z",
+      "scope_key": "alternative-data-sentiment-fusion",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-35",
@@ -832,7 +1002,12 @@
       "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
-      "closed_at": "2026-03-11T03:03:54.106433Z"
+      "closed_at": "2026-03-11T03:03:54.106433Z",
+      "scope_key": "forecast-drift-sentinel-auto-recalibration",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-36",
@@ -856,7 +1031,12 @@
       "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
-      "closed_at": "2026-03-11T03:03:54.106433Z"
+      "closed_at": "2026-03-11T03:03:54.106433Z",
+      "scope_key": "uncertainty-visualization-ux",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-37",
@@ -880,7 +1060,12 @@
       "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
-      "closed_at": "2026-03-11T03:03:54.106433Z"
+      "closed_at": "2026-03-11T03:03:54.106433Z",
+      "scope_key": "hypothesis-workbench",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-38",
@@ -907,7 +1092,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T06:23:47Z"
+      "closed_at": "2026-03-11T06:23:47Z",
+      "scope_key": "walk-forward-forecast-scoreboard",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-39",
@@ -934,7 +1124,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T06:45:05Z"
+      "closed_at": "2026-03-11T06:45:05Z",
+      "scope_key": "forecast-data-quality-sla-provenance",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-40",
@@ -961,7 +1156,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T06:23:36Z"
+      "closed_at": "2026-03-11T06:23:36Z",
+      "scope_key": "predictive-research-hub-finalization-gate",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-41",
@@ -988,7 +1188,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T06:54:01Z"
+      "closed_at": "2026-03-11T06:54:01Z",
+      "scope_key": "free-global-signal-mesh",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-42",
@@ -1015,7 +1220,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T06:50:17Z"
+      "closed_at": "2026-03-11T06:50:17Z",
+      "scope_key": "geopolitical-risk-graph-conflict-escalation",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-43",
@@ -1042,7 +1252,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T07:18:30Z"
+      "closed_at": "2026-03-11T07:18:30Z",
+      "scope_key": "law-and-policy-change-impact-engine",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-44",
@@ -1069,7 +1284,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T07:06:41Z"
+      "closed_at": "2026-03-11T07:06:41Z",
+      "scope_key": "insider-behavior-intelligence-layer",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-45",
@@ -1096,7 +1316,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T07:23:31Z"
+      "closed_at": "2026-03-11T07:23:31Z",
+      "scope_key": "supply-chain-commodity-shock-propagation",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-46",
@@ -1123,7 +1348,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T07:45:02Z"
+      "closed_at": "2026-03-11T07:45:02Z",
+      "scope_key": "country-continent-world-macro-regime-forecasts",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-47",
@@ -1150,7 +1380,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T07:35:21Z"
+      "closed_at": "2026-03-11T07:35:21Z",
+      "scope_key": "sector-to-company-impact-transmission",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-48",
@@ -1177,7 +1412,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T07:33:17Z"
+      "closed_at": "2026-03-11T07:33:17Z",
+      "scope_key": "event-impact-horizon-matrix",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-49",
@@ -1204,7 +1444,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T07:48:15Z"
+      "closed_at": "2026-03-11T07:48:15Z",
+      "scope_key": "multi-layer-forecast-fusion-attribution",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-50",
@@ -1234,7 +1479,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
       "reconciled_at": "2026-03-11T03:30:22Z",
-      "closed_at": "2026-03-11T07:57:27Z"
+      "closed_at": "2026-03-11T07:57:27Z",
+      "scope_key": "global-forecast-board-final-gate",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-51",
@@ -1259,7 +1509,12 @@
           "migrated_from_state": "READY_DEV"
         }
       },
-      "closed_at": "2026-03-08T21:08:45Z"
+      "closed_at": "2026-03-08T21:08:45Z",
+      "scope_key": "product-vision-finance-copilot",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-52",
@@ -1277,7 +1532,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T03:04:01Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
-      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical",
+      "scope_key": "document-de-reference-pour-tous-les-agents-mis-a-jour-2026-03-02-par-admin-claude",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-53",
@@ -1295,7 +1555,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T04:04:01Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
-      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical",
+      "scope_key": "document-de-reference-pour-tous-les-agents-mis-a-jour-2026-03-02-par-admin-claude",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-54",
@@ -1313,7 +1578,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T05:00:36Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
-      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical",
+      "scope_key": "document-de-reference-pour-tous-les-agents-mis-a-jour-2026-03-02-par-admin-claude",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-55",
@@ -1331,7 +1601,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T06:00:47Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
-      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical",
+      "scope_key": "document-de-reference-pour-tous-les-agents-mis-a-jour-2026-03-02-par-admin-claude",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-56",
@@ -1349,7 +1624,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-06T07:04:01Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
-      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical",
+      "scope_key": "document-de-reference-pour-tous-les-agents-mis-a-jour-2026-03-02-par-admin-claude",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-57",
@@ -1365,7 +1645,12 @@
       "created_at": "2026-03-06T07:22:02Z",
       "updated_at": "2026-03-08T21:34:02Z",
       "closed_at": "2026-03-06T10:57:32.847640+00:00",
-      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical"
+      "close_reason": "planner_autonomy_duplicate: created same doc-ref batch multiple times; BATCH-51 is canonical",
+      "scope_key": "document-de-reference-pour-tous-les-agents-mis-a-jour-2026-03-02-par-admin-claude",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-58",
@@ -1385,7 +1670,12 @@
       "ready_starvation": true,
       "ready_starved_at": "2026-03-07T02:44:01Z",
       "reconciled_at": "2026-03-07T02:44:01Z",
-      "closed_at": "2026-03-08T21:08:45Z"
+      "closed_at": "2026-03-08T21:08:45Z",
+      "scope_key": "profil-reda-venom-professionnel-non-expert-en-finance-qui-gere-ses-investissements-pers",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-59",
@@ -1405,7 +1695,12 @@
       "reconciled_at": "2026-03-07T20:54:56Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-07T20:55:59Z",
-      "closed_at": "2026-03-09T05:29:39Z"
+      "closed_at": "2026-03-09T05:29:39Z",
+      "scope_key": "status-canonical",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-60",
@@ -1422,7 +1717,12 @@
       "updated_at": "2026-03-09T10:00:07Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-08T21:40:02Z",
-      "closed_at": "2026-03-09T10:00:07Z"
+      "closed_at": "2026-03-09T10:00:07Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "net_new",
+      "delivery_kind": "net_new",
+      "user_value_delta_visible": 1,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-61",
@@ -1439,7 +1739,12 @@
       "updated_at": "2026-03-09T18:49:55Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-09T10:28:16Z",
-      "closed_at": "2026-03-09T18:49:55Z"
+      "closed_at": "2026-03-09T18:49:55Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": false
     },
     {
       "id": "VB-04",
@@ -1494,7 +1799,12 @@
       "updated_at": "2026-03-14T04:01:02Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-14T03:11:50Z",
-      "closed_at": "2026-03-14T04:01:02Z"
+      "closed_at": "2026-03-14T04:01:02Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": false
     },
     {
       "id": "BATCH-65",
@@ -1511,7 +1821,12 @@
       "updated_at": "2026-03-19T16:50:37Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-14T05:06:07Z",
-      "closed_at": "2026-03-19T16:50:37Z"
+      "closed_at": "2026-03-19T16:50:37Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-66",
@@ -1528,7 +1843,12 @@
       "updated_at": "2026-03-19T19:37:18Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-19T16:54:28Z",
-      "closed_at": "2026-03-19T19:37:18Z"
+      "closed_at": "2026-03-19T19:37:18Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-67",
@@ -1545,7 +1865,12 @@
       "updated_at": "2026-03-19T23:33:07Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-19T20:32:25Z",
-      "closed_at": "2026-03-19T23:33:07Z"
+      "closed_at": "2026-03-19T23:33:07Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-68",
@@ -1562,7 +1887,12 @@
       "updated_at": "2026-03-20T04:33:08Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-20T01:02:43Z",
-      "closed_at": "2026-03-20T04:33:08Z"
+      "closed_at": "2026-03-20T04:33:08Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-69",
@@ -1579,7 +1909,12 @@
       "updated_at": "2026-03-20T12:02:11Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-20T06:31:52Z",
-      "closed_at": "2026-03-20T12:02:11Z"
+      "closed_at": "2026-03-20T12:02:11Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-70",
@@ -1597,7 +1932,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-20T13:01:54Z",
       "opened_at": "2026-03-20T20:09:01Z",
-      "closed_at": "2026-03-20T21:34:08Z"
+      "closed_at": "2026-03-20T21:34:08Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-71",
@@ -1614,7 +1954,12 @@
       "updated_at": "2026-03-21T00:05:45Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-20T21:59:10Z",
-      "closed_at": "2026-03-21T00:05:45Z"
+      "closed_at": "2026-03-21T00:05:45Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-72",
@@ -1632,7 +1977,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-21T00:34:29Z",
       "opened_at": "2026-03-21T01:54:02Z",
-      "closed_at": "2026-03-23T04:03:53Z"
+      "closed_at": "2026-03-23T04:03:53Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-73",
@@ -1650,7 +2000,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-23T04:32:14Z",
       "opened_at": "2026-03-23T05:39:02Z",
-      "closed_at": "2026-03-23T13:48:50Z"
+      "closed_at": "2026-03-23T13:48:50Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-74",
@@ -1668,7 +2023,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-23T13:52:52Z",
       "opened_at": "2026-03-23T14:06:30Z",
-      "closed_at": "2026-03-23T15:29:14Z"
+      "closed_at": "2026-03-23T15:29:14Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-75",
@@ -1686,7 +2046,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-23T15:33:08Z",
       "opened_at": "2026-03-23T15:55:35Z",
-      "closed_at": "2026-03-23T16:56:26Z"
+      "closed_at": "2026-03-23T16:56:26Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-76",
@@ -1704,7 +2069,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-23T16:59:28Z",
       "opened_at": "2026-03-23T17:24:02Z",
-      "closed_at": "2026-03-23T18:40:07Z"
+      "closed_at": "2026-03-23T18:40:07Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-77",
@@ -1722,7 +2092,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-23T19:03:11Z",
       "opened_at": "2026-03-23T19:45:35Z",
-      "closed_at": "2026-03-23T20:07:57Z"
+      "closed_at": "2026-03-23T20:07:57Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-78",
@@ -1740,7 +2115,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-23T20:11:14Z",
       "opened_at": "2026-03-23T20:51:31Z",
-      "closed_at": "2026-03-23T21:15:35Z"
+      "closed_at": "2026-03-23T21:15:35Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-79",
@@ -1758,7 +2138,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-23T21:20:01Z",
       "opened_at": "2026-03-23T21:41:17Z",
-      "closed_at": "2026-03-23T22:10:38Z"
+      "closed_at": "2026-03-23T22:10:38Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-80",
@@ -1776,7 +2161,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-23T22:15:05Z",
       "opened_at": "2026-03-24T01:48:46Z",
-      "closed_at": "2026-03-24T04:28:34Z"
+      "closed_at": "2026-03-24T04:28:34Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-81",
@@ -1794,7 +2184,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-24T04:32:30Z",
       "opened_at": "2026-03-24T05:18:17Z",
-      "closed_at": "2026-03-24T05:28:39Z"
+      "closed_at": "2026-03-24T05:28:39Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-82",
@@ -1812,7 +2207,12 @@
       "dispatch_authorized": true,
       "ready_at": "2026-03-24T05:32:44Z",
       "opened_at": "2026-03-24T06:04:02Z",
-      "closed_at": "2026-03-24T06:20:41Z"
+      "closed_at": "2026-03-24T06:20:41Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-83",
@@ -1829,7 +2229,12 @@
       "updated_at": "2026-03-24T07:16:05Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-24T06:24:59Z",
-      "closed_at": "2026-03-24T07:16:05Z"
+      "closed_at": "2026-03-24T07:16:05Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     },
     {
       "id": "BATCH-84",
@@ -1839,14 +2244,19 @@
       "owner_role": "planner",
       "created_by": "planner_autonomy",
       "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
-      "next_action": "compl\u00e9ter BATCH-84-ANALYSIS (READY_PLANNER pour planner)",
+      "next_action": "compl\u00e9ter BATCH-84-ADMIN-01 (READY_PLANNER pour admin)",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-24T07:19:03Z",
-      "updated_at": "2026-03-24T22:33:59Z",
+      "updated_at": "2026-03-24T22:40:14Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-24T07:21:45Z",
-      "opened_at": "2026-03-24T08:47:36Z"
+      "opened_at": "2026-03-24T08:47:36Z",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "stagnation_alert": true
     }
   ],
   "meta": {
@@ -1860,6 +2270,25 @@
     "projection_kind": "priority_queue",
     "projection_source": "parallel_workstream",
     "canonical_truth": "sqlite_event_store",
-    "planner_scheduler": "planner"
+    "planner_scheduler": "planner",
+    "delivery_scoreboard": {
+      "throughput_total": 82,
+      "throughput_closed": 81,
+      "net_new_user_value_total": 50,
+      "net_new_user_value_closed": 50,
+      "hardening_total": 2,
+      "validation_total": 3,
+      "reuse_only_total": 27
+    },
+    "stagnation_alert": {
+      "batch_id": "BATCH-84",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "recent_classes": [
+        "reuse_only",
+        "reuse_only",
+        "reuse_only"
+      ],
+      "novelty_target_required": true
+    }
   }
 }

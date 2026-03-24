@@ -42,7 +42,7 @@ fi
 # during a push, but still block on real unstaged source/doc changes.
 unstaged_files="$(git diff --name-only || true)"
 significant_unstaged="$(
-  printf '%s\n' "$unstaged_files" | grep -Ev '^$|^docs/operations/orchestrator/legacy/planner-subagents-(events\.jsonl|registry\.json)$|^docs/operations/orchestrator/(parallel-workstreams|priority-queue)\.json$|^memory/agents/admin-agents\.md$' || true
+  printf '%s\n' "$unstaged_files" | grep -Ev '^$|^docs/operations/orchestrator/legacy/planner-subagents-(events\.jsonl|registry\.json)$|^docs/operations/orchestrator/(parallel-workstreams|priority-queue)\.json$|^docs/operations/orchestrator/executors-monitoring-latest\.json$|^docs/operations/orchestrator/kpi-history\.jsonl$|^docs/operations/ops/DIRECTIVE_BUS\.jsonl$|^docs/ops/AGENT_MESSAGE_BUS\.jsonl$|^memory/[0-9]{4}-[0-9]{2}-[0-9]{2}\.md$|^memory/agents/.*\.md$' || true
 )"
 if [ -n "$significant_unstaged" ]; then
   echo "❌ Unstaged significant changes detected. Commit or stash before push."
