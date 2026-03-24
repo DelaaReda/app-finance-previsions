@@ -3510,6 +3510,39 @@ def _reconcile_state_cli(root: Path, board_path: Path, queue_path: Path) -> int:
 
 def _planner_autobatch_cli(root: Path, board_path: Path, queue_path: Path, args: argparse.Namespace) -> int:
     runtime_meta = _projection_runtime_meta(root)
+    novelty_gate: dict[str, Any] = {"allow_autobatch": True, "status": "unknown", "reason": "not_evaluated"}
+    try:
+        import importlib.util
+
+        guard_path = root / "platform" / "automation" / "product_priority_guard.py"
+        spec = importlib.util.spec_from_file_location("fc_product_priority_guard", guard_path)
+        if spec and spec.loader:
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            gate_builder = getattr(module, "build_autobatch_novelty_gate", None)
+            if callable(gate_builder):
+                gate_payload = gate_builder(root, queue_path=queue_path, board_path=board_path)
+                if isinstance(gate_payload, dict):
+                    novelty_gate = gate_payload
+    except Exception:
+        novelty_gate = {"allow_autobatch": True, "status": "degraded", "reason": "novelty_gate_error"}
+    if not bool(novelty_gate.get("allow_autobatch", True)):
+        recent_classes = ",".join(
+            str(item.get("classification") or "unknown")
+            for item in novelty_gate.get("recent_batches", [])
+            if isinstance(item, dict)
+        ) or "none"
+        print(
+            "AUTOBATCH_SKIP "
+            f"reason={novelty_gate.get('reason', 'stagnation_requires_novelty_target')} "
+            "batch_id=none "
+            f"stagnation_alert={1 if novelty_gate.get('stagnation_alert') else 0} "
+            f"repeated_scope={novelty_gate.get('repeated_scope', 'none')} "
+            f"recent_classes={recent_classes} "
+            f"runtime_truth_source={runtime_meta['runtime_truth_source']} "
+            f"event_store_primary={1 if runtime_meta['event_store_primary'] else 0}"
+        )
+        return 0
     with board_lock(board_path):
         board = load_board(board_path)
         result = planner_autobatch(

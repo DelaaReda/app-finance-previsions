@@ -563,6 +563,9 @@ if [[ "$create_out" == AUTOBATCH_SKIP* ]]; then
   if [[ "$create_reason" == "duplicate_title" ]]; then
     create_issue="autobatch_duplicate_nonfatal"
     create_state_reason="autobatch_duplicate_nonfatal"
+  elif [[ "$create_reason" == "stagnation_requires_novelty_target" ]]; then
+    create_issue="planner_stagnation_requires_novelty_target"
+    create_state_reason="planner_stagnation_requires_novelty_target"
   elif [[ "$create_reason" == "runway_not_empty" ]]; then
     bridge_payload="$(runtime_dispatch_capture)"
     bridge_rc="$(capture_rc "$bridge_payload")"

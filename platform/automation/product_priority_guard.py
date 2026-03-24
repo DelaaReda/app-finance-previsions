@@ -87,6 +87,40 @@ COMMIT_RE = re.compile(r"\b[0-9a-f]{7,40}\b", re.IGNORECASE)
 QA_SUCCESS_STATUSES = {"completed", "done", "pass", "ok", "success", "merged"}
 DEFAULT_DELIVERY_FUTURE_ROLLOUT_AT = "2026-03-08T19:00:00Z"
 NO_CODE_COMPLETION_MODES = {"runtime_no_code", "no_code_runtime_fix", "runtime_repair_no_code"}
+LOW_NOVELTY_BATCH_CLASSES = {"validation", "reuse_only"}
+VALID_BATCH_CLASSES = {"net_new", "hardening", "validation", "reuse_only"}
+NOVELTY_TARGET_KEYS = (
+    "novelty_target",
+    "user_visible_delta",
+    "value_delta",
+    "net_new_user_value",
+)
+REUSE_ONLY_MARKERS = (
+    "already implemented",
+    "reuse existing",
+    "reuse_only",
+    "no code changes required",
+    "no code change required",
+    "no_code_change",
+)
+VALIDATION_MARKERS = (
+    "validation",
+    "verify=",
+    "browser_smoke",
+    "browser smoke",
+    "runtime validation",
+    "contract test",
+    "proof closure",
+    "review_verdict=pass",
+)
+HARDENING_MARKERS = (
+    "hardening",
+    "regression",
+    "stability",
+    "reliability",
+    "repair",
+    "guardrail",
+)
 
 
 def _now() -> datetime:
@@ -203,6 +237,207 @@ def _probe_json(url: str, *, timeout_s: float) -> tuple[dict[str, Any], float, s
 
 def _monitor_data_file(root: Path, relative_path: str) -> Path:
     return root / relative_path
+
+
+def _canonical_queue_board_paths(root: Path, *, queue_path: Path | None = None, board_path: Path | None = None) -> tuple[Path, Path]:
+    queue = queue_path or (root / "logs-codex-runs" / "orchestrator-state" / "priority-queue.json")
+    board = board_path or (root / "logs-codex-runs" / "orchestrator-state" / "parallel-workstreams.json")
+    return queue, board
+
+
+def _batch_num(batch_id: str) -> int:
+    match = re.search(r"(\d+)", str(batch_id or ""))
+    return int(match.group(1)) if match else -1
+
+
+def _task_batch_id(task: dict[str, Any]) -> str:
+    stream_id = str(task.get("stream_id") or task.get("batch_id") or "").strip().upper()
+    if stream_id:
+        return stream_id
+    task_id = str(task.get("id") or task.get("task_id") or "").strip().upper()
+    if task_id.startswith("BATCH-"):
+        parts = task_id.split("-")
+        if len(parts) >= 2:
+            return "-".join(parts[:2])
+    return ""
+
+
+def _normalize_scope_key(title: str) -> str:
+    token = str(title or "").strip().lower()
+    if not token:
+        return ""
+    token = re.sub(r"\[[^\]]+\]", " ", token)
+    token = re.sub(r"\bbatch[- ]?\d+\b", " ", token)
+    token = re.sub(r"[^a-z0-9]+", " ", token)
+    words = [word for word in token.split() if word]
+    return " ".join(words[:18])
+
+
+def _text_blob(batch: dict[str, Any], tasks: list[dict[str, Any]]) -> str:
+    values: list[str] = []
+    for payload in [batch, *tasks]:
+        for key in (
+            "title",
+            "summary",
+            "notes",
+            "artifact",
+            "artifacts",
+            "verify",
+            "fix_applied",
+            "root_cause",
+            "tests_run",
+            "files_touched",
+            "reason",
+            "state_reason",
+        ):
+            raw = payload.get(key)
+            if isinstance(raw, list):
+                values.extend(str(item) for item in raw if str(item).strip())
+            elif str(raw or "").strip():
+                values.append(str(raw))
+    return " || ".join(values).lower()
+
+
+def _explicit_batch_class(batch: dict[str, Any], tasks: list[dict[str, Any]]) -> str:
+    for payload in [batch, *tasks]:
+        for key in ("batch_classification", "classification", "novelty_class", "delivery_class"):
+            token = str(payload.get(key) or "").strip().lower()
+            if token in VALID_BATCH_CLASSES:
+                return token
+    return ""
+
+
+def _has_novelty_target(batch: dict[str, Any], tasks: list[dict[str, Any]]) -> bool:
+    for payload in [batch, *tasks]:
+        for key in NOVELTY_TARGET_KEYS:
+            if str(payload.get(key) or "").strip():
+                return True
+    return False
+
+
+def _has_code_change(tasks: list[dict[str, Any]]) -> bool:
+    for task in tasks:
+        commit_sha = str(task.get("commit_sha") or "").strip()
+        if commit_sha and commit_sha.lower() not in {"none", "skip(no code/config change)", "skip(no code change)"} and COMMIT_RE.search(commit_sha):
+            return True
+        files_touched = str(task.get("files_touched") or "").strip()
+        if files_touched and files_touched.lower() != "none":
+            lowered = files_touched.lower()
+            if "apps/" in lowered or "platform/" in lowered or "src/" in lowered:
+                if "/proofs/" not in lowered and not lowered.startswith("docs/"):
+                    return True
+    return False
+
+
+def _classify_batch_entry(batch: dict[str, Any], tasks: list[dict[str, Any]], *, repeated_scope: bool) -> str:
+    explicit = _explicit_batch_class(batch, tasks)
+    if explicit:
+        return explicit
+    if _has_novelty_target(batch, tasks):
+        return "net_new"
+    text = _text_blob(batch, tasks)
+    has_code = _has_code_change(tasks)
+    if has_code:
+        if repeated_scope or any(marker in text for marker in HARDENING_MARKERS):
+            return "hardening"
+        return "net_new"
+    if any(marker in text for marker in REUSE_ONLY_MARKERS):
+        return "reuse_only"
+    if any(marker in text for marker in VALIDATION_MARKERS):
+        return "validation"
+    return "reuse_only"
+
+
+def build_autobatch_novelty_gate(
+    root: Path,
+    *,
+    queue_path: Path | None = None,
+    board_path: Path | None = None,
+) -> dict[str, Any]:
+    queue_file, board_file = _canonical_queue_board_paths(root, queue_path=queue_path, board_path=board_path)
+    queue_payload = _read_json(queue_file)
+    board_payload = _read_json(board_file)
+    queue_items = {
+        str(item.get("id") or item.get("batch_id") or "").strip().upper(): item
+        for item in queue_payload.get("items", [])
+        if isinstance(item, dict) and str(item.get("id") or item.get("batch_id") or "").strip()
+    }
+    board_tasks = [item for item in board_payload.get("tasks", []) if isinstance(item, dict)]
+    tasks_by_batch: dict[str, list[dict[str, Any]]] = {}
+    for task in board_tasks:
+        batch_id = _task_batch_id(task)
+        if not batch_id:
+            continue
+        tasks_by_batch.setdefault(batch_id, []).append(task)
+
+    recent_completed = board_payload.get("active_cycle", {}).get("recent_completed_batch_ids")
+    if not isinstance(recent_completed, list) or not recent_completed:
+        recent_completed = queue_payload.get("active_cycle", {}).get("recent_completed_batch_ids")
+    recent_ids = [str(item).strip().upper() for item in recent_completed or [] if str(item).strip()]
+    if not recent_ids:
+        recent_ids = sorted(
+            [
+                batch_id
+                for batch_id, item in queue_items.items()
+                if str(item.get("state") or "").strip().upper() in {"DONE", "CLOSED", "COMPLETED"}
+            ],
+            key=_batch_num,
+            reverse=True,
+        )
+
+    entries: list[dict[str, Any]] = []
+    seen_scopes: set[str] = set()
+    for batch_id in recent_ids[:6]:
+        batch = queue_items.get(batch_id, {})
+        tasks = tasks_by_batch.get(batch_id, [])
+        title = str(batch.get("title") or "").strip()
+        if not title:
+            for task in tasks:
+                title = str(task.get("title") or "").strip()
+                if title:
+                    break
+        scope_key = _normalize_scope_key(title or batch_id)
+        repeated_scope = bool(scope_key and scope_key in seen_scopes)
+        classification = _classify_batch_entry(batch, tasks, repeated_scope=repeated_scope)
+        entries.append(
+            {
+                "batch_id": batch_id,
+                "title": title or batch_id,
+                "scope_key": scope_key or batch_id.lower(),
+                "classification": classification,
+                "repeated_scope": repeated_scope,
+                "has_code_change": _has_code_change(tasks),
+            }
+        )
+        if scope_key:
+            seen_scopes.add(scope_key)
+
+    gate = {
+        "status": "ok",
+        "allow_autobatch": True,
+        "reason": "novelty_clear",
+        "stagnation_alert": False,
+        "repeated_scope": "none",
+        "recent_batches": entries[:3],
+    }
+    if len(entries) >= 2:
+        first, second = entries[0], entries[1]
+        if (
+            first.get("scope_key")
+            and first.get("scope_key") == second.get("scope_key")
+            and first.get("classification") in LOW_NOVELTY_BATCH_CLASSES
+            and second.get("classification") in LOW_NOVELTY_BATCH_CLASSES
+        ):
+            gate.update(
+                {
+                    "status": "blocked",
+                    "allow_autobatch": False,
+                    "reason": "stagnation_requires_novelty_target",
+                    "stagnation_alert": True,
+                    "repeated_scope": str(first.get("scope_key") or "none"),
+                }
+            )
+    return gate
 
 
 def _freshness_entry(root: Path, key: str, relative_path: str, *, now: datetime | None = None) -> dict[str, Any]:
@@ -956,6 +1191,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--api-base-url", default="")
     parser.add_argument("--timeout-s", type=float, default=DEFAULT_TIMEOUT_S)
     sub = parser.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("autobatch-gate")
     sub.add_parser("metrics")
     sub.add_parser("delivery")
     sub.add_parser("delivery-control")
@@ -964,6 +1200,9 @@ def main(argv: list[str] | None = None) -> int:
 
     root = Path(args.root).expanduser().resolve() if args.root else Path(__file__).resolve().parents[2]
     api_base_url = args.api_base_url.strip() or None
+    if args.cmd == "autobatch-gate":
+        print(json.dumps(build_autobatch_novelty_gate(root), ensure_ascii=True))
+        return 0
     if args.cmd == "metrics":
         print(json.dumps(build_product_value_metrics(root, api_base_url=api_base_url, timeout_s=args.timeout_s), ensure_ascii=True))
         return 0

@@ -8,9 +8,9 @@
 - planner_lane: `codex_planner_cron` is not visible in `tmux list-panes` at this check; tmux is secondary only, and the canonical signal is that `BATCH-84` is `IN_PROGRESS` and owned by `planner`
 - dev_lane: `codex_dev_cron` exists as a live shell/Codex lane, but there is no fresh canonical `READY_DEV` work yet on `BATCH-84`
 - admin_lane: `codex_admin_cron` exists as a live shell/Codex lane; canonical batch-level next action now points to admin work: `compléter BATCH-84-ADMIN-01 (READY_PLANNER pour admin)`
-- planner_mission_now: keep automated orchestration advancing on canonical `BATCH-84`, emit/confirm the real planner-side handoff, and avoid any fallback to stale `BATCH-71` or older memory
-- dev_mission_now: stay strictly downstream; do not invent work or wake on stale role memory until canonical `BATCH-84` emits a real dev-ready task
-- admin_mission_now: support autonomous flow by picking up the canonical admin handoff for `BATCH-84-ADMIN-01` only through canonical runtime/planning truth, while keeping bootstrap/session hygiene stable
+- planner_mission_now: improve automated delivery orchestration itself; do not optimize for manually unblocking one batch, optimize for removing the failure class that causes manual intervention
+- dev_mission_now: stay strictly downstream of canonical orchestration; do not invent work, and do not compensate manually for planner/orchestration failures
+- admin_mission_now: improve runtime/session/orchestration reliability so delivery can continue without manual babysitting; do not become the manual closer of a specific batch
 - auxiliary_sessions: `adminapp_codex_sync` visible; `admin-agents-sync-cron` / `clawsentinel` not observed in current `tmux list-panes`
 - next_architecture_fix: keep lane startup independent from session presence and ensure canonical batch-level handoffs (`planner -> admin/dev`) are the only triggers for autonomous work
 - ownership_now: architecture/admin infra owns runtime reliability only: preserve bootstrap/session hygiene, keep `BATCH-84` canonical, let planner own planner-task orchestration, keep dev strictly downstream, and let admin help only on the explicit canonical handoff
@@ -30,6 +30,23 @@
   - `3_stagnation_escalation`: two consecutive `reuse_only`/`validation` batches on the same scope trigger a stagnation alert and force planner to write the next novelty target before continuing
   - `4_mission_discipline`: planner pursues novelty or explicit hardening; admin only validates canonical handoffs; dev never invents work outside canonical `READY_DEV`
   - `5_scoreboard`: team reports both `throughput` and `net_new_user_value`; only the latter counts as real delivery progress
+- orchestration_mission_publication:
+  - mission: improve automated delivery orchestration so value ships without manual intervention on specific batches
+  - non_goal: manually close `BATCH-84-ADMIN-01` or any other individual batch as the primary strategy
+  - success_criteria:
+    - planner stops reopening the same scope without novelty
+    - stagnation is detected automatically
+    - lanes count as productive only with fresh useful proof
+    - canonical handoffs advance without human babysitting
+    - throughput and net-new value are tracked separately
+
+## Shared Anti-Stagnation Plan
+- `A. novelty_gate`: before downstream work, planner must stamp each batch `net_new|hardening|validation|reuse_only`
+- `B. duplicate_scope_guard`: repeated same-title batches must justify a new user-visible delta or get downgraded from fresh delivery
+- `C. stagnation_alert`: two same-scope `reuse_only|validation` batches in a row force planner to define a novelty target before continuing
+- `D. lane_validity_gate`: a lane counts as productive only if bootstrap is correct, non-interactive, and it emits fresh useful proof on the canonical stream
+- `E. handoff_escalation`: if a canonical batch-level handoff does not advance, planner must raise a blocker on the active cycle instead of letting humans silently compensate
+- `F. value_scoreboard`: track `batch_throughput` separately from `net_new_user_value`; use the second metric to judge whether orchestration is actually working
 
 ## Usage Rules
 - update this top board, not the historical log below, when coordinating cross-agent work
