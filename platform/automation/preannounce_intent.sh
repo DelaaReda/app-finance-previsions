@@ -13,7 +13,7 @@ Usage:
   scripts/preannounce_intent.sh list [--json]
 
 Examples:
-  scripts/preannounce_intent.sh preannounce --role backend_engineer --scope api_forecast_contract --files docs/product/planning/tasks.md,apps/api/src/platform/main.py --eta-minutes 25
+  scripts/preannounce_intent.sh preannounce --role backend_engineer --scope api_forecast_contract --files logs-codex-runs/orchestrator-state/priority-queue.json,apps/api/src/platform/main.py --eta-minutes 25
   scripts/preannounce_intent.sh close --intent-id INTENT_BACKEND_ENGINEER_20260226T210000Z --status done
   scripts/preannounce_intent.sh list
 USAGE

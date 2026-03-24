@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T190243Z-893"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T19:02:43Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T19:02:43Z"
+      ended_at_utc: "2026-03-24T19:02:43Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_runtime_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-84-analysis-p1774378894-15139"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=planner_orchestrator_admin_route_mismatch | fix_applied=planner claimed and normalized the analysis owner path before admin dispatch | verify=before=READY planner analysis unclaimed with admin route mismatch; after=planner analysis claimed with concrete admin dispatch next step; test=parallel_workstream context plus planner claim output | architecture_check=anti_regression_guards=ok; architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md|docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md|docs/product/PRODUCT_VISION.md; architecture_audit=apps/api/src/domains/*+apps/api/runtime/+apps/web/src preserved | vision_alignment=batch=BATCH-84; target=personal finance copilot brief and ask open flow; impact=planner analysis closed with delivery route clarified"

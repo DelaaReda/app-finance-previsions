@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-74-BATCH-74-ARCH-20260323T140051Z-154"
+stream_id: "BATCH-74"
+task_id: "BATCH-74-ARCH"
+role: "planner"
+produced_at_utc: "2026-03-23T14:00:51Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_architecture_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T14:00:51Z"
+      ended_at_utc: "2026-03-23T14:00:51Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_architecture_proof_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/BATCH-73_ARCHITECTURE_CONTINUITY_2026-03-23.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-74-arch-20260323T1403Z"
+  review_ref: "runner:BATCH-74-ARCH"
+  note: "source=runner | root_cause=preuve architecture incomplète sur le stream actif BATCH-74 malgré un contexte canonique prêt | fix_applied=réutilisation de l architecture_plan_ref et de l architecture_audit déjà documentés pour fermer l étape ARCH du batch actif | verify=before=ARCH ouvert avec preuves manquantes; after=ARCH clôturé avec artefact et audit reliés à apps/api et apps/web; test=projection runtime BATCH-74 indique next_action compléter BATCH-74-ARCH et depends_on vide | architecture_check=apps/api/src/domains/* anchored; apps/api/runtime/ anchored; apps/web/src preserved; legacy forbidden paths rejected | vision_alignment=batch=BATCH-74; target=finance copilot brief du jour et navigation ticker/thème; impact=fermeture du jalon architecture sans refonte frontend"

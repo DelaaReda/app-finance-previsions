@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-73-BATCH-73-ANALYSIS-20260323T094540Z-539"
+stream_id: "BATCH-73"
+task_id: "BATCH-73-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T09:45:40Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_artifact_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T09:45:40Z"
+      ended_at_utc: "2026-03-23T09:45:40Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_artifact_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/BATCH-73_ARCHITECTURE_CONTINUITY_2026-03-23.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch73-analysis-20260323t0948z"
+  review_ref: "runner:BATCH-73-ANALYSIS"
+  note: "source=runner | root_cause=guardian red on missing architecture_plan_ref and architecture_audit with failed dev dispatch signal | fix_applied=created batch architecture continuity artifact tied to apps/api and apps/web with grouped dependency policy | verify=before=analysis task had no explicit architecture reference and peer event showed planner_orchestrator_dev_dispatch_failed on BATCH-73-DEV-03; after=artifact now defines architecture_plan_ref architecture_audit implementation_tracks and acceptance_gate for BATCH-73; test=parallel_workstream context returned BATCH-73-ANALYSIS as sole ready planner task before closure preparation | architecture_check=apps/api/src/domains/* linked; apps/api/runtime/ linked; apps/web/src preserved; no copilot-app legacy path used | vision_alignment=batch=BATCH-73 target=personal finance copilot day brief plus ask-or-open flow impact=planner analysis now anchored to canonical api runtime and web integration paths"

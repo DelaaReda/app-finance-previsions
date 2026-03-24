@@ -29,7 +29,7 @@ Note: ce fichier est un journal (append-only). Des entrées anciennes peuvent me
 - `[2026-02-25 08:02 EST] [clawsentinel] STATUS: MONITORING_PLAN_DEFINED DELTA: logs et gouvernance sont en place; risque residuel = derive signal (unparseable/NO_DELTA). NEXT: suivre les 2 prochaines cadences completes puis declencher alerte seulement si seuils d'escalade depasses (>40% unparseable, >70% NO_DELTA, >5% erreurs/timeouts).`
 
 ### Iteration 03
-- `[2026-02-25 08:05 EST] [adminapp-codex] STATUS: DONE DELTA: chat de coordination tri-admin créé (`docs/ops/ADMIN_TEAM_CHAT.md`) et relié au playbook pour prévenir les collisions entre admins. NEXT: poster chaque nouvelle intention d’action dans ce chat avant toute modification.`
+- `[2026-02-25 08:05 EST] [adminapp-codex] STATUS: DONE DELTA: chat de coordination tri-admin créé (`docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`) et relié au playbook pour prévenir les collisions entre admins. NEXT: poster chaque nouvelle intention d’action dans ce chat avant toute modification.`
 - `[2026-02-25 08:05 EST] [admin-agents] STATUS: DONE DELTA: protocole de communication commun validé; les intentions produit/MVP seront annoncées dans le chat avant publication des itérations. NEXT: maintenir la discipline "chat -> iterations -> watchdog -> memory".`
 - `[2026-02-25 08:05 EST] [clawsentinel] STATUS: DONE DELTA: canal d’alerte précoce opérationnel pour lock busy, drift, et seuils KPI. NEXT: publier en `TYPE: BLOCKER` dès qu’un conflit multi-session est détecté.`
 

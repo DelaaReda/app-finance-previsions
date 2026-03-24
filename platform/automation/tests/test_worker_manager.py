@@ -13,7 +13,7 @@ AUTOMATION_DIR = ROOT / "platform" / "automation"
 if str(AUTOMATION_DIR) not in sys.path:
     sys.path.insert(0, str(AUTOMATION_DIR))
 
-MODULE_PATH = AUTOMATION_DIR / "worker_manager.py"
+MODULE_PATH = AUTOMATION_DIR / "compat" / "legacy_workers" / "worker_manager.py"
 SPEC = importlib.util.spec_from_file_location("fc_worker_manager", MODULE_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
@@ -75,10 +75,15 @@ class WorkerManagerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def test_plan_allows_planner_repo_scan(self) -> None:
+    def test_plan_disables_non_qa_legacy_worker_types(self) -> None:
         result = plan_worker(self.config, "planner", "repo_scan_worker", "BATCH-11-PLAN", "repo_scan")
-        self.assertTrue(result["allowed"])
+        self.assertFalse(result["allowed"])
+        self.assertEqual(result["reason"], "legacy_worker_type_disabled:repo_scan_worker")
         self.assertEqual(result["result_kind"], "investigation_result")
+        self.assertTrue(result["legacy_compat_only"])
+        self.assertTrue(result["compat_only"])
+        self.assertEqual(result["storage_plane"], "runtime_mutable")
+        self.assertEqual(result["provider_policy_plane"], "model_plane")
 
     def test_plan_allows_planner_qa_review(self) -> None:
         result = plan_worker(self.config, "planner", "qa_review_worker", "BATCH-28-DEV-01", "qa_review")
@@ -93,43 +98,47 @@ class WorkerManagerTests(unittest.TestCase):
     def test_duplicate_guard_blocks_same_active_tuple(self) -> None:
         record = WorkerRecord(
             worker_id="worker_repo_scan_dup",
-            worker_type="repo_scan_worker",
+            worker_type="qa_review_worker",
             parent_role="planner",
-            owner_task_id="BATCH-11-PLAN",
-            task_kind="repo_scan",
+            owner_task_id="BATCH-28-DEV-01",
+            task_kind="qa_review",
             status="running",
             created_at="2026-03-06T12:00:00Z",
             expires_at="2099-03-06T12:30:00Z",
             ttl_min=30,
         )
         _save_registry(self.config.registry_path, [record])
-        result = plan_worker(self.config, "planner", "repo_scan_worker", "BATCH-11-PLAN", "repo_scan")
+        result = plan_worker(self.config, "planner", "qa_review_worker", "BATCH-28-DEV-01", "qa_review")
         self.assertFalse(result["allowed"])
         self.assertIn("duplicate_active", result["reason"])
 
     def test_run_collect_and_merge_mock_worker(self) -> None:
         rc, payload = run_worker(
             self.config,
-            role="dev",
-            worker_type="test_worker",
+            role="planner",
+            worker_type="qa_review_worker",
             owner_task_id="BATCH-27-DEV-01",
-            task_kind="targeted_test",
-            message="Run targeted regression tests for dashboard summary.",
+            task_kind="qa_review",
+            message="Validate and fix the QA drift on the delivery artifact.",
             ttl_min=15,
             backend="mock",
             timeout_seconds=120,
-            thinking="medium",
-            result_kind="test_result",
+            thinking="high",
+            result_kind="qa_fix_result",
         )
         self.assertEqual(rc, 0)
         self.assertTrue(payload["ok"])
+        self.assertTrue(payload["legacy_compat_only"])
+        self.assertTrue(payload["compat_only"])
+        self.assertEqual(payload["storage_plane"], "runtime_mutable")
+        self.assertEqual(payload["provider_policy_plane"], "model_plane")
         worker_id = payload["worker_id"]
 
-        rc_collect, collected = collect_worker(self.config, "dev", worker_id, "", mark_merged=True)
+        rc_collect, collected = collect_worker(self.config, "planner", worker_id, "", mark_merged=True)
         self.assertEqual(rc_collect, 0)
         self.assertEqual(collected["worker_id"], worker_id)
 
-        snapshot = status_snapshot(self.config, "dev")
+        snapshot = status_snapshot(self.config, "planner")
         self.assertEqual(snapshot["active_count"], 0)
         self.assertTrue(any(item["worker_id"] == worker_id for item in snapshot["recent"]))
 
@@ -188,6 +197,22 @@ class WorkerManagerTests(unittest.TestCase):
         cleaned = cleanup_workers(self.config)
         self.assertTrue(cleaned["ok"])
         self.assertIn("worker_expired_01", cleaned["removed"])
+
+    def test_status_snapshot_marks_legacy_workers_as_runtime_mutable_compat_only(self) -> None:
+        snapshot = status_snapshot(self.config, "planner")
+        self.assertTrue(snapshot["legacy_compat_only"])
+        self.assertTrue(snapshot["compat_only"])
+        self.assertTrue(snapshot["registry_secondary_only"])
+        self.assertTrue(snapshot["events_secondary_only"])
+        self.assertEqual(snapshot["storage_plane"], "runtime_mutable")
+        self.assertEqual(snapshot["provider_policy_plane"], "model_plane")
+        self.assertEqual(snapshot["operator_plane"], "openclaw")
+        self.assertEqual(snapshot["registry_path"], "secondary_compat_only")
+        self.assertEqual(snapshot["events_path"], "secondary_compat_only")
+        self.assertEqual(snapshot["results_path"], "secondary_compat_only")
+        self.assertIn("compat_registry_present", snapshot)
+        self.assertIn("compat_events_present", snapshot)
+        self.assertIn("compat_results_present", snapshot)
 
     def test_openclaw_capability_workspace_writes_minimal_codex_config(self) -> None:
         for relative in ("apps", "platform", "scripts", "docs", "data", "tests", "memory"):

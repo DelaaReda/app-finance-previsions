@@ -20,7 +20,7 @@
 
 ## Executive Summary
 
-Delivered frontend integration for the personal finance copilot by reusing the existing `copilot-panel.html` widget (from BATCH-71/72) already wired to the main forecasts page. **Zero new code** - pure verification and documentation of existing, tested integration.
+Delivered frontend integration for the personal finance copilot by reusing the existing `copilot-panel.html` widget (from BATCH-71/72) already wired to the main forecasts page. This slice adds a focused integration-contract harness and delivery documentation on top of the existing widget and backend route coverage.
 
 ### User Journey Enabled
 
@@ -88,6 +88,13 @@ tests 7, pass 7, fail 0
 python3 -m pytest apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py -v
 
 8 passed in 1.09s
+```
+
+**Frontend Integration Contract Tests (8/8 passing):**
+```bash
+node apps/web/src/domains/forecasts/components/widgets/copilot-integration.test.js
+
+8 passed
 ```
 
 **Test Coverage:**
@@ -179,10 +186,11 @@ python3 -m pytest apps/api/src/domains/copilot/tests/test_personal_finance_copil
 
 ## Implementation Details
 
-### Key Files (No New Code - Pure Reuse)
+### Key Files
 
 | File | Kind | Lines | Purpose |
 |------|------|-------|---------|
+| `apps/web/src/domains/forecasts/components/widgets/copilot-integration.test.js` | New | 231 | Widget contract/integration harness |
 | `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html` | Existing | 793 | Copilot widget UI + controller |
 | `apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js` | Existing | 287 | Component unit tests |
 | `apps/web/src/domains/forecasts/pages/index.html` | Existing | 1225 | Main page with widget integration |
@@ -243,6 +251,9 @@ async function sendCopilotQuestion() {
 cd /home/venom/shared/analyse-financiere
 node apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js
 # Result: 7 passed
+
+node apps/web/src/domains/forecasts/components/widgets/copilot-integration.test.js
+# Result: 8 passed
 ```
 
 ### 2. Run Backend Tests
@@ -281,7 +292,7 @@ curl -s -X POST http://localhost:8050/api/personal-finance/ask \
 
 - [x] **Reuse evidenced:** Widget reused from `forecasts/components/widgets/copilot-panel.html`
 - [x] **Integration verified:** Widget auto-loads on main page via `bootstrapCopilotPanel()`
-- [x] **Tests passing:** 7 frontend + 8 backend tests green
+- [x] **Tests passing:** 7 widget + 8 integration-contract + 8 backend tests green
 - [x] **Artifacts:** Proof manifest in `BATCH-74-DEV-02-DELIVERY-PROOF.md`
 - [x] **User journey enabled:** Brief → Ask → Answer flow working
 
@@ -295,15 +306,17 @@ curl -s -X POST http://localhost:8050/api/personal-finance/ask \
   "verify": {
     "before": "Backend API ready (DEV-01), widget exists but integration unverified",
     "after": "Widget auto-loads on main page, brief + ask + open flow working",
-    "test": "node apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js (7 passed)"
+    "test": "node apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js (7 passed) + node apps/web/src/domains/forecasts/components/widgets/copilot-integration.test.js (8 passed) + python3 -m pytest apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py -v (8 passed)"
   },
   "files_touched": [
-    "apps/api/src/domains/copilot/BATCH-74-DEV-02-DELIVERY-PROOF.md (NEW - 338 lines)"
+    "apps/web/src/domains/forecasts/components/widgets/copilot-integration.test.js",
+    "apps/api/src/domains/copilot/BATCH-74-DEV-02-DELIVERY-PROOF.md"
   ],
   "tests_run": [
     "copilot-panel.test.js (7 frontend tests - all passed)",
+    "copilot-integration.test.js (8 frontend integration-contract tests - all passed)",
     "test_personal_finance_copilot_start.py (8 backend tests - all passed)",
-    "combined: 15 passed, 0 failed"
+    "combined: 23 passed, 0 failed"
   ],
   "commit_sha": "ace0f58d",
   "architecture_check": {
@@ -333,8 +346,8 @@ curl -s -X POST http://localhost:8050/api/personal-finance/ask \
 
 ## Notes
 
-- **Zero new code:** This delivery verified 100% existing implementation
-- **Tested:** 15 tests passing (7 frontend + 8 backend)
+- **Bounded additions:** Added delivery proof plus a focused integration-contract harness
+- **Tested:** 23 tests passing (7 widget + 8 integration-contract + 8 backend)
 - **Production-ready:** Widget follows existing patterns (FinanceAPI, bootstrap pattern)
 - **Namespace-aware:** `/api/copilot/*` endpoints properly wired
 - **Portfolio-aware:** Allocation drift alerts rendering with severity styling

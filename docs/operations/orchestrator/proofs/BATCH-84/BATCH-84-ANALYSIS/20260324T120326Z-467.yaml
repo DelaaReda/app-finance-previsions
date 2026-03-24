@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T120326Z-467"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T12:03:26Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_closure)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T12:03:26Z"
+      ended_at_utc: "2026-03-24T12:03:26Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_planner_analysis)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-84-analysis-p1774353701-15369"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=Analyse planner laissee ouverte alors que le flux runtime n a plus de READY et doit liberer la suite du stream | fix_applied=Cloture explicite de BATCH-84-ANALYSIS avec preuves d orchestration et references architecture apps api apps web | verify=before=analysis_in_progress_no_ready; after=planner_complete_requested_for_batch_84_analysis; test=planner_runtime_actions_complete_invoked | architecture_check=apps/api domains path referenced; apps/web left untouched; no legacy imports or copilot-app paths | vision_alignment=batch=BATCH-84; target=brief du jour et analyse personnelle finance; impact=fermeture de l etape planner pour debloquer la livraison"

@@ -7,7 +7,7 @@
 ## Session snapshot (current)
 1. Tri-admin sync loop active:
    - `chat -> iterations -> watchdog -> memory`
-   - chat file: `docs/ops/ADMIN_TEAM_CHAT.md`
+   - chat file: `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`
 2. Runtime profile target:
    - parallel / qwen-first / 16 jobs (12 roles + 2 admins + 2 utilities)
    - runner-only payloads (`bash scripts/cron_tmux_role_runner.sh <role>`)
@@ -23,7 +23,7 @@
 3. Improve delivery signal (reduce `NO_DELTA`) with one controlled change at a time.
 
 ## Key references
-- `docs/ops/ADMIN_TEAM_CHAT.md`
+- `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`
 - `docs/ops/ADMIN_TEAM_ITERATIONS.md`
 - `docs/orchestrator-ops/agent-watchdog.md`
 - `docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml`

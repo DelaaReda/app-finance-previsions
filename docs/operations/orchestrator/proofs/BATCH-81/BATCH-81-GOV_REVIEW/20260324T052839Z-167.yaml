@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-81-BATCH-81-GOV_REVIEW-20260324T052839Z-167"
+stream_id: "BATCH-81"
+task_id: "BATCH-81-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-03-24T05:28:39Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_code_change_gov_review_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T05:28:39Z"
+      ended_at_utc: "2026-03-24T05:28:39Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_governance_review_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/priority-queue.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b81-gov-review-close-20260324t0532z"
+  review_ref: "runner:BATCH-81-GOV_REVIEW"
+  note: "source=runner | root_cause=la revue gouvernance finale restait ouverte apres execution admin et cloture analysis | fix_applied=verification planner des depends_on puis cloture GOV_REVIEW sur le stream actif | verify=before=ROLE_CONTEXT montrait BATCH-81-GOV_REVIEW ready sans autre in_progress planner; after=commande complete acceptee et revue gouvernance fermee; test=parallel_workstream context planner puis claim planner OK | architecture_check=architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md; architecture_audit=apps/api/src/domains and apps/web/src boundaries preserved; dependency_policy=sanitize ok | vision_alignment=batch=BATCH-81; target=finance_copilot_brief_du_jour_et_flux_d_analyse; impact=validation planner du stream et preparation cloture backlog"

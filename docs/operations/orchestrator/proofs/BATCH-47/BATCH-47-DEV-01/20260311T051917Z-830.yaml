@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-47-BATCH-47-DEV-01-20260311T051917Z-830"
+stream_id: "BATCH-47"
+task_id: "BATCH-47-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-11T05:19:17Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope sector-to-company impact transmission [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_sector-to-company_impact_transmission_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T05:19:17Z"
+      ended_at_utc: "2026-03-11T05:19:17Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PYTHONPATH=apps/api/src pytest -q apps/api/src/domains/forecasts/tests/test_policy_impact_route.py apps/api/src/domains/forecasts/tests/test_global_signal_mesh_route.py -k policy_impact"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Endpoint artifact: `/api/forecasts/policy-impact` now returns `data.transmission={path,event_count,matrix}` plus `event.transmission={path,primary_sectors,company_count,companies[]}`. Commit: `0c740a00cfd08a90667d6f0ff38"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-47-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-47-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The current policy-impact endpoint stopped at sector tagging and raw ticker lists; it did not expose a stable company-level transmission layer showing how a sector/policy signal propagates to affected companies, which le | fix_applied=Patched `apps/api/src/domains/forecasts/application/global_signal_mesh_service.py` to normalize company tickers, infer lightweight company metadata, attach per-event `transmission` details, and publish a top-level `trans | verify=before=`/api/forecasts/policy-impact` exposed sectors and raw company tickers only, with no stable sector-to-company transmission object and no fallback parity`; after=`/api/forecasts/policy-impact` exposes top-level and | architecture_check=layer=api route + forecasts application service only; imports_ok=yes (reused existing forecasts route/service stack and Judge `score_news`, introduced no new cross-domain dependency); path_target=apps/api/src/domains/for | vision_alignment=batch=BATCH-47; target=sector-to-company impact transmission; impact=policy-impact consumers now receive a concrete transmission contract that connects sector-level policy events to company-level exposures without wideni"

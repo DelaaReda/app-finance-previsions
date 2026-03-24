@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-22-BATCH-22-DEV-02-20260312T114102Z-205"
+stream_id: "BATCH-22"
+task_id: "BATCH-22-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-12T11:41:02Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope rebalancing optimizer lite [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_rebalancing_optimizer_lite_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-12T11:41:02Z"
+      ended_at_utc: "2026-03-12T11:41:02Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js | node --test apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Existing card `rebalanceProposalCard` in `apps/web/src/domains/forecasts/pages/index.html` now renders `turnover delta` and `risk delta` from `/api/judge/strategy-playbooks?profile=rebalancing_optimizer_lite&portfolio_id"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-22-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-22-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The forecasts UI already had a reusable recommendation card, but it was static and never consumed the rebalancing optimizer profile added in DEV-01. The shared `getStrategyPlaybooks()` helper also could not forward `port | fix_applied=Added stable targets to the existing rebalance recommendation card in `pages/index.html`, extended `apps/web`'s shared strategy-playbook connector to pass `portfolio_id`, and added `renderRebalanceProposalCard()` in `pag | verify=before=the medium-conviction rebalance recommendation in `apps/web/src/domains/forecasts/pages/index.html` was static copy with no live optimizer payload, no portfolio-aware request, and no guaranteed turnover/risk delta | architecture_check=layer=apps/web forecasts page + existing shared FinanceAPI connector only; imports_ok=yes, reused existing recommendation card and existing `/judge/strategy-playbooks` wiring with no new component tree or route surface;  | vision_alignment=batch=BATCH-22; target=Rebalancing Optimizer Lite [DEV-02]; impact=The current recommendation-card schema is now extended in-place to surface a one-screen rebalance proposal with turnover and risk delta, matching the bat"

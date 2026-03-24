@@ -1,0 +1,27 @@
+{
+  "task_id": "BATCH-24-ADMIN-01",
+  "captured_at_utc": "2026-03-13T06:23:24Z",
+  "status": "explicit_unblock",
+  "summary": "No new runtime patch was required in this tick. Existing orchestrator-path and shared-lock hardening is present, direct planner preflight commands now pass, and monitor/runtime endpoints are healthy.",
+  "runtime_health": {
+    "host_check": "PASS runtime_is_vm=1",
+    "monitor_status_lite": "PASS http://127.0.0.1:7779/api/status?lite=1 health=OK",
+    "runtime_diagnostics_lite": "PASS http://127.0.0.1:7779/api/runtime-diagnostics?lite=1 planner.blocker=NONE admin_dispatch.status=ok",
+    "fc_status_brief": "PASS health=OK planner=IN_PROGRESS/PLANNER_DISPATCH_ACTIVE mismatch_count=0",
+    "listeners": [
+      "PASS 192.168.64.9:7780 monitor LAN",
+      "PASS 0.0.0.0:7779 monitor local",
+      "PASS 127.0.0.1:8050 backend API"
+    ]
+  },
+  "planner_preflight_validation": {
+    "sanitize_dependencies": "PASS python3 platform/automation/parallel_workstream.py sanitize-dependencies --queue docs/operations/orchestrator/priority-queue.json --all-batches",
+    "sync_priority": "PASS python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json"
+  },
+  "evidence": {
+    "recent_failure_reference": "logs-codex-runs/role-runner/planner.live.log shows a 2026-03-13T06:21:39Z preflight soft-fail on parallel_workstream shared-lock resolution",
+    "current_state": "The same preflight commands are passing manually in the current workspace, so the lane is not runtime-blocked now."
+  },
+  "blocking_issue": "none",
+  "recommended_next": "Planner can treat BATCH-24 as runtime-unblocked and move to the next delivery decision; only re-open admin if the next cron tick reproduces the shared-lock/preflight failure."
+}

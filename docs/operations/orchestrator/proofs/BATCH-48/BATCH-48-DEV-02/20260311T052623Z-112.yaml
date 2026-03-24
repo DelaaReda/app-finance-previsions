@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-48-BATCH-48-DEV-02-20260311T052623Z-112"
+stream_id: "BATCH-48"
+task_id: "BATCH-48-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T05:26:23Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope event impact horizon matrix [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_event_impact_horizon_matrix_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T05:26:23Z"
+      ended_at_utc: "2026-03-11T05:26:23Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=acb7ee54aa5a2daeeab260bfc005a911ac8f484a; UI artifact=existing news-impact widget now renders first event row as a 1d/1w/1m impact matrix with divergence badge and template copy."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-48-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-48-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=BATCH-48 had backend support for the event impact horizon matrix, but the web layer neither fetched nor exposed that contract, so the market UX had no visible horizon-matrix slice. | fix_applied=Added `getEventImpactHorizonMatrix()` to the shared forecasts web connector, propagated the payload through live dashboard state/meta, extended the existing `news-impact` widget with a compact horizon-matrix slot, and ad | verify=before=web dashboard had no consumer for `/api/judge/event-impact-horizon-matrix` and no horizon matrix visible in Market news UI; after=connector fetches/stores the matrix and `news-impact` renders a compact sanctions/e | architecture_check=layer=apps/web existing forecasts UI + shared connector only; imports_ok=yes (reused existing page/widget wiring, no new module layer introduced); path_target=apps/web/src/domains/forecasts/{contracts/apiConnector.js,pag | vision_alignment=batch=BATCH-48; target=Event Impact Horizon Matrix UX slice using existing widgets/platform wiring; impact=delivers the first visible matrix interpretation path for 1d/1w/1m event effects with explicit cross-horizon dive"

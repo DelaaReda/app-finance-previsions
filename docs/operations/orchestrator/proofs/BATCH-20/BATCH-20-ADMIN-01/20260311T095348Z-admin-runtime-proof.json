@@ -1,0 +1,46 @@
+{
+  "task_id": "BATCH-20-ADMIN-01",
+  "stream_id": "BATCH-20",
+  "title": "Personal Policy Guardrails [ADMIN-01]",
+  "captured_at": "2026-03-11T09:53:48Z",
+  "runtime_host_check": {
+    "runtime_host_kind": "vm_runtime",
+    "runtime_is_vm": 1,
+    "os": "Linux",
+    "hostname": "venom-Apple-Virtualization-Generic-Platform",
+    "pwd": "/home/venom/analyse-financiere"
+  },
+  "root_cause": "Live API runtime on :8050 was stale relative to the delivered BATCH-20 code/data. `data/judge_personal_policy.json` existed and current source applied `policy_guardrails`, but `/api/judge?limit=3&debug=true` initially omitted `data.policy_guardrails` and per-verdict guardrails until the backend was restarted. The `finance-copilot.sh restart` flow also left monitor unavailable on :7779, so monitor required a direct restart.",
+  "fix_applied": [
+    "Reversible runtime repair: restarted the canonical backend/frontend/monitor stack with `bash finance-copilot.sh restart`.",
+    "Reversible runtime repair: restored monitor availability explicitly with detached `python3 apps/monitor/server.py > /tmp/monitor.log 2>&1 &` after the wrapper restart left :7779 unavailable."
+  ],
+  "verify": {
+    "judge_before_restart": {
+      "url": "http://127.0.0.1:8050/api/judge?limit=3&debug=true",
+      "count": 1,
+      "top_level_guardrails_present": false
+    },
+    "judge_after_restart": {
+      "url": "http://127.0.0.1:8050/api/judge?limit=3&debug=true",
+      "count": 1,
+      "top_level_guardrails_present": true,
+      "policy_id": "test_policy",
+      "policy_version": "v1",
+      "violations_count": 0
+    },
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=3 workboard_ready=0 admin_timeouts_recent=0 issues_records=2",
+    "runtime_diagnostics_lite": {
+      "health": "OK",
+      "findings_count": 0,
+      "agents_keys": [
+        "admin",
+        "dev",
+        "planner",
+        "scrum_master"
+      ]
+    },
+    "fc_status_brief": "Santé: OK · mode=planner_experimental · freshness=warm/275s"
+  },
+  "scope": "Runtime validation and repair only. No code or config files changed."
+}

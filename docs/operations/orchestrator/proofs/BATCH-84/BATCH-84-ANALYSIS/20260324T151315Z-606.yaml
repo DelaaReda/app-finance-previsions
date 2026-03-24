@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T151315Z-606"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T15:13:15Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_contract_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T15:13:15Z"
+      ended_at_utc: "2026-03-24T15:13:15Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_evidence_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b84-analysis-20260324t151128z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=analyse planner incomplete sans architecture_plan_ref ni architecture_audit | fix_applied=preuve rattachee aux chemins canoniques apps/api/src/domains apps/api/runtime apps/web/src et dependances regroupees dans le stream BATCH-84 | verify=before=guardian_red_missing_architecture_refs; after=analysis_proof_bound_to_canonical_paths; test=parallel_workstream_context_role_planner_ready0_inprogress_analysis | architecture_check=architecture_plan_ref=apps/api/src/domains;architecture_audit=apps/web/src,apps/api/runtime;anti_regression_guards=copilot-app_forbidden,backend/src/backend/src_forbidden,legacy_src_forbidden | vision_alignment=batch=BATCH-84; target=personal_finance_copilot_daily_brief_analysis; impact=close_planner_analysis_and_unlock_runtime_delivery"

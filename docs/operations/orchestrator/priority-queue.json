@@ -1,6 +1,21 @@
 {
   "version": 1,
-  "updated_at": "2026-03-11T07:39:16Z",
+  "updated_at": "2026-03-24T22:21:10Z",
+  "active_cycle": {
+    "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
+    "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
+    "dispatch_namespace": "BATCH",
+    "active_batch_ids": [
+      "BATCH-84"
+    ],
+    "recent_completed_batch_ids": [
+      "BATCH-83",
+      "BATCH-82",
+      "BATCH-81",
+      "BATCH-80",
+      "BATCH-79"
+    ]
+  },
   "items": [
     {
       "id": "BATCH-01",
@@ -323,13 +338,13 @@
     {
       "id": "BATCH-17",
       "title": "Regime Detection + Allocation Drift Alerts",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-17-PLAN et definir matrice regime->posture + alertes de derive allocation.",
+      "updated_at": "2026-03-13T18:44:03Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: extend current signal scoring and alert channels instead of introducing a new alert subsystem.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse monitor/status surfaces and existing forecast factors before new abstractions.",
@@ -339,18 +354,23 @@
       ],
       "legacy_depends_on": [
         "BATCH-16"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T07:57:47Z",
+      "opened_at": "2026-03-11T07:57:47Z",
+      "closed_at": "2026-03-11T08:26:24Z"
     },
     {
       "id": "BATCH-18",
       "title": "Event Driven Copilot",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
+      "dependency_policy": "single_batch",
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-18-PLAN pour integrer calendrier macro/earnings dans le contexte copilot avec fenetre 24-48h.",
+      "updated_at": "2026-03-13T18:44:03Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: enrich copilot context service and keep response schema compatible with judge-style decision outputs.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse context_service and llm_client/g4f integration already proven in judge/coprocess flows.",
@@ -358,20 +378,26 @@
         "integration_contract: event_timeline appended to existing copilot context without breaking current frontend connector parsing.",
         "validation_path: context injection tests + endpoint contract tests + canary prompt quality checks."
       ],
+      "architecture_plan_ref": "docs/architecture/ARCHITECTURE_MAP.md;docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md",
+      "architecture_audit": "apps/api/src/domains/copilot;apps/web/src/domains/forecasts/pages/app.js;platform/automation/parallel_workstream.py",
       "legacy_depends_on": [
         "BATCH-17"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T08:26:46Z",
+      "opened_at": "2026-03-11T08:26:46Z",
+      "closed_at": "2026-03-11T08:53:36Z"
     },
     {
       "id": "BATCH-19",
       "title": "Explainability Graph + Source Traceability",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-19-PLAN et formaliser graphe d explication avec poids/fraicheur/sources.",
+      "updated_at": "2026-03-13T18:44:03Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: build explainability layer from existing judge/forecast intermediate artifacts, no parallel provenance store.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: align with Judge API verdict object and reuse its normalization path.",
@@ -381,18 +407,22 @@
       ],
       "legacy_depends_on": [
         "BATCH-18"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T08:54:02Z",
+      "opened_at": "2026-03-11T08:54:02Z",
+      "closed_at": "2026-03-11T09:21:33Z"
     },
     {
       "id": "BATCH-20",
       "title": "Personal Policy Guardrails",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-20-PLAN et definir politique utilisateur (risque/exclusions/limites) avec downgrade explicite.",
+      "updated_at": "2026-03-13T18:44:03Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: policy guard wraps existing decision object post-judge and pre-ui serialization.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse current decision payload and add guard fields instead of a separate policy endpoint.",
@@ -402,18 +432,22 @@
       ],
       "legacy_depends_on": [
         "BATCH-19"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T09:21:46Z",
+      "opened_at": "2026-03-11T09:21:46Z",
+      "closed_at": "2026-03-11T10:09:43Z"
     },
     {
       "id": "BATCH-21",
       "title": "Paper Trading Simulator + Execution Journal",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-21-PLAN et preparer simulation execution + journal outcome pour boucle apprentissage.",
+      "updated_at": "2026-03-13T18:44:03Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: simulate fills in lightweight domain service while reusing decision journal schema.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse existing journaling and judge identifiers as primary foreign keys.",
@@ -423,18 +457,22 @@
       ],
       "legacy_depends_on": [
         "BATCH-20"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T10:13:06Z",
+      "opened_at": "2026-03-11T10:13:06Z",
+      "closed_at": "2026-03-11T13:37:32Z"
     },
     {
       "id": "BATCH-22",
       "title": "Rebalancing Optimizer Lite",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-22-PLAN et cadrer proposition de rebalancing en un ecran avec contraintes policy.",
+      "updated_at": "2026-03-13T18:44:03Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: optimize from current portfolio state and existing risk policy service, no separate optimizer microservice.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse policy guardrails and portfolio context contracts already in copilot path.",
@@ -444,18 +482,25 @@
       ],
       "legacy_depends_on": [
         "BATCH-21"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-11T13:39:02Z",
+      "opened_at": "2026-03-11T13:39:02Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-12T11:05:46Z",
+      "reconciled_at": "2026-03-12T11:05:46Z",
+      "closed_at": "2026-03-12T12:03:13Z"
     },
     {
       "id": "BATCH-23",
       "title": "Tax, Fees, and Slippage Awareness",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-23-PLAN pour estimer impact net et activer alertes edge-net insuffisant.",
+      "updated_at": "2026-03-13T18:44:03Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: cost awareness computed as post-processing stage over existing recommendation payload.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse execution journal outputs and avoid duplicating transaction models.",
@@ -465,18 +510,25 @@
       ],
       "legacy_depends_on": [
         "BATCH-22"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-12T12:04:04Z",
+      "opened_at": "2026-03-12T12:04:04Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-12T12:55:23Z",
+      "reconciled_at": "2026-03-12T12:55:23Z",
+      "closed_at": "2026-03-13T04:43:44Z"
     },
     {
       "id": "BATCH-24",
       "title": "Alerting Intelligence V2",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-24-PLAN et finaliser file alertes priorisee avec controle fatigue et urgences top queue.",
+      "updated_at": "2026-03-13T18:44:03Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: iterate on existing monitor + alert channels; preserve single ingestion and dispatch pipeline.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse monitor server and existing fc health checks before adding new daemons.",
@@ -486,18 +538,25 @@
       ],
       "legacy_depends_on": [
         "BATCH-23"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-13T04:44:01Z",
+      "opened_at": "2026-03-13T04:44:01Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-13T05:45:02Z",
+      "reconciled_at": "2026-03-13T05:45:02Z",
+      "closed_at": "2026-03-13T06:19:54Z"
     },
     {
       "id": "BATCH-25",
       "title": "Autonomous Morning Brief Pipeline",
-      "state": "WAITING_DEP",
+      "state": "CLOSED",
       "priority": "P1",
       "owner_role": "planner",
       "depends_on": [],
       "created_at": "2026-03-03T14:12:00Z",
-      "updated_at": "2026-03-06T10:49:36Z",
-      "next_action": "ouvrir BATCH-25-PLAN pour pipeline brief matinal automatique avec top actions/risques et fallback degrade.",
+      "updated_at": "2026-03-13T18:44:03Z",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "notes": [
         "implementation_architecture: compose morning brief from existing forecasts + judge + monitor data without separate pipeline stack.",
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse generate_brief flow and Judge API fallback strategy for robust brief synthesis.",
@@ -507,7 +566,14 @@
       ],
       "legacy_depends_on": [
         "BATCH-24"
-      ]
+      ],
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-13T10:23:00Z",
+      "opened_at": "2026-03-13T10:23:00Z",
+      "architecture_plan_ref": "docs/architecture/ARCHITECTURE_MAP.md;docs/product/planning/BATCH-25_EXECUTION_HANDOFF_2026-03-13.md;docs/product/planning/BATCH-25_PROOF_CHECKLIST_2026-03-13.md",
+      "architecture_audit": "scripts/generate_brief.py;apps/api/src/domains/forecasts/api/brief.py;apps/api/src/platform/legacy/research/llm_client.py;apps/api/src/domains/judge/application/intelligence_service.py",
+      "vision_alignment": "batch=BATCH-25; target=autonomous morning brief pipeline on existing brief/judge/forecast path; impact=scheduled brief generation with explicit degraded fallback and action-oriented morning output",
+      "closed_at": "2026-03-13T15:49:06Z"
     },
     {
       "id": "BATCH-26",
@@ -1035,9 +1101,9 @@
     {
       "id": "BATCH-46",
       "title": "Country/Continent/World Macro Regime Forecasts",
-      "state": "IN_PROGRESS",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-11T07:12:16Z",
+      "updated_at": "2026-03-11T07:45:02Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -1051,12 +1117,13 @@
           "migrated_from_state": "PLANNED"
         }
       },
-      "next_action": "compl\u00e9ter BATCH-46-ADMIN-01 (PLANNED pour admin)",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
-      "reconciled_at": "2026-03-11T03:30:22Z"
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T07:45:02Z"
     },
     {
       "id": "BATCH-47",
@@ -1115,9 +1182,9 @@
     {
       "id": "BATCH-49",
       "title": "Multi-Layer Forecast Fusion + Attribution",
-      "state": "IN_PROGRESS",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-11T07:39:16Z",
+      "updated_at": "2026-03-13T18:44:03Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
       "legacy_depends_on": [
@@ -1131,21 +1198,23 @@
           "migrated_from_state": "PLANNED"
         }
       },
-      "next_action": "compl\u00e9ter BATCH-49-ADMIN-01 (PLANNED pour admin)",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
-      "reconciled_at": "2026-03-11T03:30:22Z"
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T07:48:15Z"
     },
     {
       "id": "BATCH-50",
       "title": "Global Forecast Board Final Gate",
-      "state": "PLANNED",
+      "state": "CLOSED",
       "depends_on": [],
-      "updated_at": "2026-03-11T06:01:46Z",
+      "updated_at": "2026-03-13T18:44:03Z",
       "created_at": "2026-03-05T22:47:19Z",
       "priority": "P2",
+      "dependency_policy": "single_batch",
       "legacy_depends_on": [
         "BATCH-49"
       ],
@@ -1157,12 +1226,15 @@
           "migrated_from_state": "PLANNED"
         }
       },
-      "next_action": "claim BATCH-50-ADMIN-01 (PLANNED pour admin)",
+      "architecture_plan_ref": "docs/architecture/ARCHITECTURE_MAP.md;docs/product/planning/BATCHES_41_50_GLOBAL_FORECAST_SPEC.md",
+      "architecture_audit": "apps/api/src/domains/forecasts;apps/web/src/domains/forecasts/pages/app.js;platform/automation/parallel_workstream.py",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "dispatch_authorized": true,
       "ready_at": "2026-03-11T02:59:04Z",
       "ready_starvation": true,
       "ready_starved_at": "2026-03-11T03:30:22Z",
-      "reconciled_at": "2026-03-11T03:30:22Z"
+      "reconciled_at": "2026-03-11T03:30:22Z",
+      "closed_at": "2026-03-11T07:57:27Z"
     },
     {
       "id": "BATCH-51",
@@ -1406,6 +1478,375 @@
       ],
       "ready_at": "2026-03-11T03:15:05Z",
       "closed_at": "2026-03-11T06:15:00Z"
+    },
+    {
+      "id": "BATCH-64",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-14T02:47:23Z",
+      "updated_at": "2026-03-14T04:01:02Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-14T03:11:50Z",
+      "closed_at": "2026-03-14T04:01:02Z"
+    },
+    {
+      "id": "BATCH-65",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-14T04:01:22Z",
+      "updated_at": "2026-03-19T16:50:37Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-14T05:06:07Z",
+      "closed_at": "2026-03-19T16:50:37Z"
+    },
+    {
+      "id": "BATCH-66",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-19T16:52:13Z",
+      "updated_at": "2026-03-19T19:37:18Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-19T16:54:28Z",
+      "closed_at": "2026-03-19T19:37:18Z"
+    },
+    {
+      "id": "BATCH-67",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-19T20:00:30Z",
+      "updated_at": "2026-03-19T23:33:07Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-19T20:32:25Z",
+      "closed_at": "2026-03-19T23:33:07Z"
+    },
+    {
+      "id": "BATCH-68",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-20T00:00:20Z",
+      "updated_at": "2026-03-20T04:33:08Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-20T01:02:43Z",
+      "closed_at": "2026-03-20T04:33:08Z"
+    },
+    {
+      "id": "BATCH-69",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-20T05:00:25Z",
+      "updated_at": "2026-03-20T12:02:11Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-20T06:31:52Z",
+      "closed_at": "2026-03-20T12:02:11Z"
+    },
+    {
+      "id": "BATCH-70",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-20T12:19:41Z",
+      "updated_at": "2026-03-20T21:34:08Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-20T13:01:54Z",
+      "opened_at": "2026-03-20T20:09:01Z",
+      "closed_at": "2026-03-20T21:34:08Z"
+    },
+    {
+      "id": "BATCH-71",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-20T21:46:25Z",
+      "updated_at": "2026-03-21T00:05:45Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-20T21:59:10Z",
+      "closed_at": "2026-03-21T00:05:45Z"
+    },
+    {
+      "id": "BATCH-72",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-21T00:31:23Z",
+      "updated_at": "2026-03-23T04:03:53Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-21T00:34:29Z",
+      "opened_at": "2026-03-21T01:54:02Z",
+      "closed_at": "2026-03-23T04:03:53Z"
+    },
+    {
+      "id": "BATCH-73",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-23T04:30:25Z",
+      "updated_at": "2026-03-23T13:48:50Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-23T04:32:14Z",
+      "opened_at": "2026-03-23T05:39:02Z",
+      "closed_at": "2026-03-23T13:48:50Z"
+    },
+    {
+      "id": "BATCH-74",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-23T13:51:24Z",
+      "updated_at": "2026-03-23T15:29:14Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-23T13:52:52Z",
+      "opened_at": "2026-03-23T14:06:30Z",
+      "closed_at": "2026-03-23T15:29:14Z"
+    },
+    {
+      "id": "BATCH-75",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-23T15:30:44Z",
+      "updated_at": "2026-03-23T16:56:26Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-23T15:33:08Z",
+      "opened_at": "2026-03-23T15:55:35Z",
+      "closed_at": "2026-03-23T16:56:26Z"
+    },
+    {
+      "id": "BATCH-76",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-23T16:57:24Z",
+      "updated_at": "2026-03-23T18:40:07Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-23T16:59:28Z",
+      "opened_at": "2026-03-23T17:24:02Z",
+      "closed_at": "2026-03-23T18:40:07Z"
+    },
+    {
+      "id": "BATCH-77",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-23T19:02:06Z",
+      "updated_at": "2026-03-23T20:07:57Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-23T19:03:11Z",
+      "opened_at": "2026-03-23T19:45:35Z",
+      "closed_at": "2026-03-23T20:07:57Z"
+    },
+    {
+      "id": "BATCH-78",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-23T20:09:38Z",
+      "updated_at": "2026-03-23T21:15:35Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-23T20:11:14Z",
+      "opened_at": "2026-03-23T20:51:31Z",
+      "closed_at": "2026-03-23T21:15:35Z"
+    },
+    {
+      "id": "BATCH-79",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-23T21:15:47Z",
+      "updated_at": "2026-03-23T22:10:38Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-23T21:20:01Z",
+      "opened_at": "2026-03-23T21:41:17Z",
+      "closed_at": "2026-03-23T22:10:38Z"
+    },
+    {
+      "id": "BATCH-80",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-23T22:11:41Z",
+      "updated_at": "2026-03-24T04:28:34Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-23T22:15:05Z",
+      "opened_at": "2026-03-24T01:48:46Z",
+      "closed_at": "2026-03-24T04:28:34Z"
+    },
+    {
+      "id": "BATCH-81",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-24T04:31:11Z",
+      "updated_at": "2026-03-24T05:28:39Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-24T04:32:30Z",
+      "opened_at": "2026-03-24T05:18:17Z",
+      "closed_at": "2026-03-24T05:28:39Z"
+    },
+    {
+      "id": "BATCH-82",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-24T05:30:44Z",
+      "updated_at": "2026-03-24T06:20:41Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-24T05:32:44Z",
+      "opened_at": "2026-03-24T06:04:02Z",
+      "closed_at": "2026-03-24T06:20:41Z"
+    },
+    {
+      "id": "BATCH-83",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "CLOSED",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-24T06:23:40Z",
+      "updated_at": "2026-03-24T07:16:05Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-24T06:24:59Z",
+      "closed_at": "2026-03-24T07:16:05Z"
+    },
+    {
+      "id": "BATCH-84",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "IN_PROGRESS",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "next_action": "compl\u00e9ter BATCH-84-ANALYSIS (READY_PLANNER pour planner)",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-03-24T07:19:03Z",
+      "updated_at": "2026-03-24T22:21:10Z",
+      "dispatch_authorized": true,
+      "ready_at": "2026-03-24T07:21:45Z",
+      "opened_at": "2026-03-24T08:47:36Z"
     }
   ],
   "meta": {
@@ -1414,6 +1855,11 @@
       "source": "docs/product/planning/PRODUCT_VISION.md",
       "parked_batches": [],
       "first_open_batch": "BATCH-11"
-    }
+    },
+    "projection": true,
+    "projection_kind": "priority_queue",
+    "projection_source": "parallel_workstream",
+    "canonical_truth": "sqlite_event_store",
+    "planner_scheduler": "planner"
   }
 }

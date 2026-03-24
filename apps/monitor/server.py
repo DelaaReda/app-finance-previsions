@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from collections import Counter, defaultdict
 from functools import lru_cache
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 import uvicorn
@@ -31,13 +31,17 @@ if str(MONITOR_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(MONITOR_SRC_DIR))
 
 from orchestrator_paths import (
+    CANONICAL_VM_ROOT,
+    SHARED_VM_ROOT,
     canonical_docs_root,
-    legacy_docs_root,
     load_runtime_state,
     resolve_orchestrator_read_path,
     resolve_orchestrator_write_path,
     runtime_state_root,
 )
+from planning.plane.plane_runtime_sync import ingest_plane_payload
+from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
 
 from collectors import (  # type: ignore
     collect_activity_events as monitor_collect_activity_events,
@@ -58,6 +62,24 @@ from aggregators import (  # type: ignore
     ensure_core_agents as monitor_ensure_core_agents,
 )
 from api import create_activity_router, create_doctor_router  # type: ignore
+
+LITE_ENDPOINT_CACHE_TTL_SECONDS = max(1.0, float(os.environ.get("FC_MONITOR_LITE_CACHE_TTL_SECONDS", "3") or "3"))
+_STATUS_LITE_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
+_RUNTIME_DIAGNOSTICS_LITE_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
+
+
+def _lite_cache_get(bucket: dict[str, object]) -> dict[str, Any] | None:
+    payload = bucket.get("payload")
+    expires_at = float(bucket.get("expires_at", 0.0) or 0.0)
+    if isinstance(payload, dict) and time.time() < expires_at:
+        return payload
+    return None
+
+
+def _lite_cache_set(bucket: dict[str, object], payload: dict[str, Any]) -> dict[str, Any]:
+    bucket["payload"] = payload
+    bucket["expires_at"] = time.time() + LITE_ENDPOINT_CACHE_TTL_SECONDS
+    return payload
 
 def _latest_mtime(paths: list[Path]) -> float:
     latest = 0.0
@@ -342,11 +364,12 @@ def resolve_root() -> Path:
     env_root = os.environ.get("FC_MONITOR_ROOT", "").strip()
     if env_root:
         p = Path(env_root).expanduser()
+        if p == SHARED_VM_ROOT:
+            p = CANONICAL_VM_ROOT
         if p.exists():
             return p
     candidates = [
-        Path("/home/venom/analyse-financiere"),
-        Path("/home/venom/shared/analyse-financiere"),
+        CANONICAL_VM_ROOT,
         Path.home() / "Documents" / "analyse-financiere",
         Path(__file__).resolve().parents[2],
     ]
@@ -459,7 +482,9 @@ DEFAULT_SCHEDULE_MAP = {
 ROLE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
 ORCH_ROOT = _orchestrator_root_for_workspace(ROOT) or runtime_state_root(ROOT)
 CANONICAL_ORCH_ROOT = canonical_docs_root(ROOT)
-LEGACY_ORCH_ROOT = legacy_docs_root(ROOT)
+# Legacy payload field kept for status compatibility; the old docs/orchestrator-ops
+# tree is no longer a runtime source of truth.
+LEGACY_ORCH_ROOT = CANONICAL_ORCH_ROOT
 RUNTIME_ORCH_ROOT = runtime_state_root(ROOT)
 ITERATION_ISSUES_EVENTS_FILE = Path(
     os.environ.get(
@@ -518,7 +543,7 @@ DOCTOR_PY_FILE = Path(
     )
 ).expanduser()
 DOCTOR_CACHE_TTL_SECONDS = max(5, int(os.environ.get("FC_MONITOR_DOCTOR_CACHE_TTL_SECONDS", "120")))
-DOCTOR_RUN_TIMEOUT_SECONDS = max(8, int(os.environ.get("FC_MONITOR_DOCTOR_RUN_TIMEOUT_SECONDS", "20")))
+DOCTOR_RUN_TIMEOUT_SECONDS = max(8, int(os.environ.get("FC_MONITOR_DOCTOR_RUN_TIMEOUT_SECONDS", "45")))
 _DOCTOR_CACHE: dict[str, object] = {"ts": 0.0, "payload": None}
 _DOCTOR_RUNNING = False
 PLANNER_SUBAGENTS_CACHE_TTL_SECONDS = max(
@@ -689,7 +714,48 @@ def _po_scrum_master_snapshot(message_bus_snapshot: dict) -> dict:
 
 
 def _dynamic_workers_snapshot() -> dict:
+    runtime_truth = build_runtime_truth_snapshot(ROOT, state_limit=16, event_limit=16)
+    event_store_primary = bool(runtime_truth.get("event_store_primary", False))
+    runtime_truth_source = str(runtime_truth.get("runtime_truth_source", "sqlite" if event_store_primary else "fallback"))
     registry_path = orchestrator_file("dynamic-workers-registry.json")
+    if event_store_primary:
+        return {
+            "enabled": str(os.environ.get("FC_DYNAMIC_WORKERS_ENABLED", "0")).strip() not in {"0", "false", "False"},
+            "runtime_truth_source": runtime_truth_source,
+            "primary_source": str(runtime_truth.get("source", "event_store")),
+            "event_store_primary": True,
+            "decision_capable": False,
+            "registry_secondary_only": True,
+            "legacy_registry_secondary_only": True,
+            "compat_registry_scan_skipped": True,
+            "compat_registry_present": False,
+            "registry_path": "secondary_compat_only",
+            "secondary_registry_path": "secondary_compat_only",
+            "worker_orphan_count": 0,
+            "worker_orphans": [],
+            "active_count": 0,
+            "active": [],
+            "recent": [],
+        }
+    try:
+        from compat.legacy_workers import worker_manager as native_module  # type: ignore
+
+        snapshot = native_module.status_snapshot(native_module._load_config(ROOT), "planner")
+        if isinstance(snapshot, dict):
+            payload = dict(snapshot)
+            payload["runtime_truth_source"] = runtime_truth_source
+            payload["primary_source"] = str(runtime_truth.get("source", "projection_fallback"))
+            payload["event_store_primary"] = event_store_primary
+            payload["decision_capable"] = False
+            payload["registry_secondary_only"] = True
+            payload["legacy_registry_secondary_only"] = True
+            payload["compat_registry_present"] = registry_path.exists()
+            payload["registry_path"] = "secondary_compat_only"
+            payload["secondary_registry_path"] = "secondary_compat_only"
+            return payload
+    except Exception:
+        pass
+
     payload = _load_json_file(registry_path) if registry_path.exists() else {}
     workers = payload.get("workers", []) if isinstance(payload, dict) else []
     if not isinstance(workers, list):
@@ -716,7 +782,17 @@ def _dynamic_workers_snapshot() -> dict:
             recent.append(normalized)
     return {
         "enabled": str(os.environ.get("FC_DYNAMIC_WORKERS_ENABLED", "0")).strip() not in {"0", "false", "False"},
-        "registry_path": str(registry_path),
+        "runtime_truth_source": runtime_truth_source,
+        "primary_source": str(runtime_truth.get("source", "projection_fallback")),
+        "event_store_primary": event_store_primary,
+        "decision_capable": False,
+        "registry_secondary_only": True,
+        "legacy_registry_secondary_only": True,
+        "compat_registry_present": registry_path.exists(),
+        "registry_path": "secondary_compat_only",
+        "secondary_registry_path": "secondary_compat_only",
+        "worker_orphan_count": 0,
+        "worker_orphans": [],
         "active_count": len(active),
         "active": active[:8],
         "recent": recent[-8:],
@@ -748,33 +824,17 @@ def _planner_subagents_snapshot() -> dict:
             _PLANNER_SUBAGENTS_CACHE["ts"] = now
             return latest_subagents
 
+    runtime_truth = build_runtime_truth_snapshot(ROOT, state_limit=12, event_limit=24)
+    event_store_primary = bool(runtime_truth.get("event_store_primary", False))
+    runtime_truth_source = str(runtime_truth.get("runtime_truth_source", "sqlite" if event_store_primary else "fallback"))
     try:
-        import planner_subagent_manager as native_module  # type: ignore
-
-        snapshot = native_module.status_snapshot(native_module._load_config(ROOT), "planner")
-    except Exception as exc:
-        module = _planner_dispatch_metrics_module()
-        if module is not None and hasattr(module, "build_planner_dispatch_metrics"):
-            try:
-                snapshot = module.build_planner_dispatch_metrics(ROOT, recent_limit=12)
-            except Exception:
-                snapshot = {
-                    "registry_path": str(orchestrator_file("planner-subagents-registry.json")),
-                    "active_count": 0,
-                    "active": [],
-                    "recent": [],
-                    "recent_total": 0,
-                    "recent_success_count": 0,
-                    "recent_failed_count": 0,
-                    "recent_blocked_count": 0,
-                    "recent_fallback_like_count": 0,
-                    "recent_success_rate": 1.0,
-                    "recent_by_role": {},
-                    "status": f"error:{exc}",
-                }
-        else:
+        snapshot = build_stable_planner_dispatch_snapshot(ROOT, recent_limit=12)
+    except Exception as dispatch_exc:
+        if event_store_primary:
             snapshot = {
-                "registry_path": str(orchestrator_file("planner-subagents-registry.json")),
+                "registry_path": "event_store:dispatch_snapshot_error",
+                "secondary_registry_path": "secondary_compat_only",
+                "compat_registry_present": False,
                 "active_count": 0,
                 "active": [],
                 "recent": [],
@@ -785,14 +845,52 @@ def _planner_subagents_snapshot() -> dict:
                 "recent_fallback_like_count": 0,
                 "recent_success_rate": 1.0,
                 "recent_by_role": {},
-                "status": f"error:{exc}",
+                "status": f"error:{dispatch_exc}",
+                "source": "dispatch_snapshot_error_event_store_primary",
             }
+        else:
+            try:
+                import planner_subagent_manager as native_module  # type: ignore
+
+                snapshot = native_module.status_snapshot(native_module._load_config(ROOT), "planner")
+            except Exception:
+                snapshot = {
+                    "registry_path": "secondary_compat_only",
+                    "secondary_registry_path": "secondary_compat_only",
+                    "compat_registry_present": orchestrator_file("planner-subagents-registry.json").exists(),
+                    "active_count": 0,
+                    "active": [],
+                    "recent": [],
+                    "recent_total": 0,
+                    "recent_success_count": 0,
+                    "recent_failed_count": 0,
+                    "recent_blocked_count": 0,
+                    "recent_fallback_like_count": 0,
+                    "recent_success_rate": 1.0,
+                    "recent_by_role": {},
+                    "status": f"error:{dispatch_exc}",
+                    "source": "dispatch_snapshot_error",
+                }
     enabled, cron_planner_only = _planner_orchestrator_flags(ROOT)
     payload = {
         "enabled": enabled,
         "cron_planner_only": cron_planner_only,
+        "runtime_truth_source": runtime_truth_source,
+        "event_store_primary": event_store_primary,
+        "primary_source": str(runtime_truth.get("source", "projection_fallback")),
+        "decision_capable": False,
+        "legacy_registry_secondary_only": True,
+        "registry_secondary_only": True,
         **snapshot,
     }
+    payload["registry_path"] = "secondary_compat_only"
+    payload["secondary_registry_path"] = "secondary_compat_only"
+    if event_store_primary:
+        payload["compat_registry_present"] = False
+    else:
+        payload["compat_registry_present"] = bool(
+            payload.get("compat_registry_present", orchestrator_file("planner-subagents-registry.json").exists())
+        )
     _PLANNER_SUBAGENTS_CACHE["payload"] = payload
     _PLANNER_SUBAGENTS_CACHE["ts"] = time.time()
     return payload
@@ -913,7 +1011,8 @@ def _planner_dispatch_snapshot(
         "monitoring_count": monitoring_count,
         "monitor_without_target_count": monitor_without_target_count,
         "collect_timeout_without_agents": collect_timeout_without_agents,
-        "registry_path": str(planner_subagents.get("registry_path", "") or ""),
+        "registry_path": "secondary_compat_only",
+        "compat_registry_present": bool(planner_subagents.get("compat_registry_present", False)),
     }
 
 
@@ -1109,7 +1208,7 @@ def _runtime_state_snapshot() -> dict:
 
 @lru_cache(maxsize=1)
 def _planner_dispatch_metrics_module():
-    module_path = ROOT / "platform" / "automation" / "planner_dispatch_metrics.py"
+    module_path = ROOT / "platform" / "automation" / "runtime" / "planner" / "planner_dispatch_metrics.py"
     if not module_path.exists():
         return None
     spec = importlib.util.spec_from_file_location("fc_planner_dispatch_metrics_monitor", module_path)
@@ -3300,6 +3399,10 @@ def status(lite: int = 0):
     now=datetime.now(timezone.utc); m=now.minute
     now_iso = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     lite_mode = bool(lite)
+    if lite_mode:
+        cached_payload = _lite_cache_get(_STATUS_LITE_CACHE)
+        if cached_payload is not None:
+            return cached_payload
     runtime_state = _runtime_state_snapshot()
     latest_snapshot = monitor_latest_snapshot()
     latest_roles_raw = latest_snapshot.get("roles", {})
@@ -3352,19 +3455,27 @@ def status(lite: int = 0):
     critical_widget_health = latest_snapshot.get("critical_widget_health", {}) if isinstance(latest_snapshot, dict) else {}
     if not isinstance(critical_widget_health, dict):
         critical_widget_health = {}
-    planner_autonomy = planner_autonomy_snapshot()
-    dispatcher_tshape = admin_tshape_snapshot()
-    admin_autonomy = admin_autonomy_snapshot()
-    admin_dispatch = admin_dispatch_snapshot()
-    agent_messages = _message_bus_snapshot(now_iso)
-    po_scrum_master = _po_scrum_master_snapshot(agent_messages)
+    if lite_mode:
+        planner_autonomy = latest_snapshot.get("planner_autonomy", {}) if isinstance(latest_snapshot, dict) else {}
+        dispatcher_tshape = latest_snapshot.get("dispatcher_tshape", {}) if isinstance(latest_snapshot, dict) else {}
+        admin_autonomy = latest_snapshot.get("admin_autonomy", {}) if isinstance(latest_snapshot, dict) else {}
+        admin_dispatch = latest_snapshot.get("admin_dispatch", {}) if isinstance(latest_snapshot, dict) else {}
+        agent_messages = latest_snapshot.get("agent_messages", {}) if isinstance(latest_snapshot, dict) else {}
+        po_scrum_master = latest_snapshot.get("po_scrum_master", {}) if isinstance(latest_snapshot, dict) else {}
+    else:
+        planner_autonomy = planner_autonomy_snapshot()
+        dispatcher_tshape = admin_tshape_snapshot()
+        admin_autonomy = admin_autonomy_snapshot()
+        admin_dispatch = admin_dispatch_snapshot()
+        agent_messages = _message_bus_snapshot(now_iso)
+        po_scrum_master = _po_scrum_master_snapshot(agent_messages)
     try:
         doctor = doctor_snapshot(force_refresh=False, allow_refresh=not lite_mode)
     except TypeError:
         doctor = doctor_snapshot(force_refresh=False)
-    planner_contract_health = parse_contract_fields("planner")
+    planner_contract_health = {} if lite_mode else parse_contract_fields("planner")
     planner_evidence_quality_score = _int_or_default(planner_contract_health.get("quality_score"), 0)
-    alerts_overview = _alerts_overview_snapshot(ROOT)
+    alerts_overview = {} if lite_mode else _alerts_overview_snapshot(ROOT)
 
     queue_total = len(queue_items)
     queue_closed = len(queue_items) - len(qa)
@@ -3941,6 +4052,11 @@ def status(lite: int = 0):
             queue_waiting_dep = _int_or_default(hs_queue.get("waiting_dep"), queue_waiting_dep)
             queue_in_progress = _int_or_default(hs_queue.get("in_progress"), queue_in_progress)
 
+        try:
+            doctor = doctor_snapshot(force_refresh=False, allow_refresh=not lite_mode)
+        except TypeError:
+            doctor = doctor_snapshot(force_refresh=False)
+
         lite_payload = {
             "ts_utc": now.isoformat(),
             "health": health,
@@ -4001,6 +4117,8 @@ def status(lite: int = 0):
             "critical_open_count": critical_count,
             "issue_publication_gap_roles": issue_publication_gap_roles,
             "last_issue_by_role": last_issue_by_role,
+            "doctor": doctor,
+            "doctor_status": str(doctor.get("status", "unknown")) if isinstance(doctor, dict) else "unknown",
             "runtime_freshness": {"seconds": data_freshness_s, "state": freshness_state},
             "data_freshness_s": data_freshness_s,
             "data_source": data_source,
@@ -4022,7 +4140,7 @@ def status(lite: int = 0):
             lite_payload = build_status_snapshot(ROOT, lambda: lite_payload, include_layers=False)
         except Exception:
             pass
-        return lite_payload
+        return _lite_cache_set(_STATUS_LITE_CACHE, lite_payload)
 
     queue_ready_planner = _int_or_default(queue_state_counts.get("READY_PLANNER"), 0)
     queue_ready_dev = _int_or_default(queue_state_counts.get("READY_DEV"), 0)
@@ -4352,6 +4470,29 @@ def planner_log_bundle(n:int=120):
         },
     }
 
+
+@app.post("/api/planning/plane/webhook")
+async def plane_webhook(request: Request):
+    try:
+        raw_body = await request.body()
+    except Exception as exc:
+        return JSONResponse({"accepted": False, "error": f"plane_webhook_read_failed:{exc}"}, status_code=400)
+    try:
+        payload = json.loads(raw_body.decode("utf-8") or "{}")
+    except Exception as exc:
+        return JSONResponse({"accepted": False, "error": f"plane_webhook_invalid_json:{exc}"}, status_code=400)
+    if not isinstance(payload, dict):
+        return JSONResponse({"accepted": False, "error": "plane_webhook_payload_must_be_object"}, status_code=400)
+    try:
+        result = ingest_plane_payload(ROOT, payload, raw_body=raw_body, headers=dict(request.headers))
+    except ValueError as exc:
+        error = str(exc)
+        status_code = 403 if "signature" in error else 400
+        return JSONResponse({"accepted": False, "error": error}, status_code=status_code)
+    except Exception as exc:
+        return JSONResponse({"accepted": False, "error": f"plane_webhook_sync_failed:{exc}"}, status_code=500)
+    return JSONResponse(result, status_code=202 if result.get("ignored") else 200)
+
 @app.get("/api/execution/{role}")
 def execution(role: str, tick_n: int = 35, runner_n: int = 55):
     roles = monitor_roles()
@@ -4580,6 +4721,11 @@ def iteration_issues(role: str = "", severity: str = "", recent_minutes: int = 1
 
 @app.get("/api/runtime-diagnostics")
 def runtime_diagnostics(lite: int = 0):
+    lite_mode = bool(lite)
+    if lite_mode:
+        cached_payload = _lite_cache_get(_RUNTIME_DIAGNOSTICS_LITE_CACHE)
+        if cached_payload is not None:
+            return cached_payload
     try:
         try:
             status_snapshot = status(lite=1)
@@ -4675,6 +4821,188 @@ def runtime_diagnostics(lite: int = 0):
                 "dev_force_claim_events_60m": 0,
             },
         }
+    if lite_mode:
+        status_health = str(status_snapshot.get("health", "unknown") or "unknown")
+        status_agents = status_snapshot.get("agents", {}) if isinstance(status_snapshot, dict) else {}
+        if not isinstance(status_agents, dict):
+            status_agents = {}
+        dispatcher_tshape = status_snapshot.get("dispatcher_tshape", {}) if isinstance(status_snapshot, dict) else {}
+        if not isinstance(dispatcher_tshape, dict):
+            dispatcher_tshape = {}
+        admin_autonomy = status_snapshot.get("admin_autonomy", {}) if isinstance(status_snapshot, dict) else {}
+        if not isinstance(admin_autonomy, dict):
+            admin_autonomy = {}
+        dev_parent_data = status_snapshot.get("dev_parent", {}) if isinstance(status_snapshot, dict) else {}
+        if not isinstance(dev_parent_data, dict):
+            dev_parent_data = {}
+        dev_autonomy_data = _dev_autonomy_from_parent(dev_parent_data)
+        planner_blocker = str(status_agents.get("planner", {}).get("blocker", "")).strip().upper()
+        top_findings: list[dict[str, Any]] = []
+        if planner_blocker and planner_blocker not in {"NONE", "UNKNOWN"}:
+            top_findings.append(
+                {
+                    "id": "PLANNER_BLOCKER_LITE",
+                    "severity": "warn",
+                    "title": "PLANNER_BLOCKER_LITE",
+                    "detail": planner_blocker,
+                    "sample": "derived from status lite snapshot",
+                }
+            )
+        if bool(dispatcher_tshape.get("active", False)):
+            top_findings.append(
+                {
+                    "id": "T_SHAPE_TAKEOVER_ACTIVE",
+                    "severity": "high",
+                    "title": "T_SHAPE_TAKEOVER_ACTIVE",
+                    "detail": (
+                        f"target={str(dispatcher_tshape.get('target_role', '') or 'unknown').strip()}; "
+                        f"blocker={str(dispatcher_tshape.get('reason_blocker', 'NONE') or 'NONE').strip()}"
+                    ),
+                    "sample": "derived from status lite snapshot",
+                }
+            )
+        if bool(admin_autonomy.get("active", False)):
+            top_findings.append(
+                {
+                    "id": "ADMIN_STALL_TAKEOVER_ACTIVE",
+                    "severity": "high",
+                    "title": "ADMIN_STALL_TAKEOVER_ACTIVE",
+                    "detail": (
+                        f"trigger={str(admin_autonomy.get('trigger', 'none') or 'none').strip()}; "
+                        f"target={str(admin_autonomy.get('target_role', 'none') or 'none').strip()}"
+                    ),
+                    "sample": "derived from status lite snapshot",
+                }
+            )
+        if not top_findings:
+            top_findings.append(
+                {
+                    "id": "NO_RUNTIME_ANOMALY_LITE",
+                    "severity": "ok",
+                    "title": "No critical runtime anomaly in lite snapshot",
+                    "detail": "lite mode omits deep log scans",
+                    "sample": "",
+                }
+            )
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "health": status_health,
+            "doctor_status": (
+                str(status_snapshot.get("doctor", {}).get("status", "unknown"))
+                if isinstance(status_snapshot.get("doctor"), dict)
+                else str(status_snapshot.get("doctor_status", "unknown"))
+            ),
+            "data_freshness_s": status_snapshot.get("data_freshness_s", -1),
+            "data_source": status_snapshot.get("data_source", "unknown"),
+            "agents": status_agents,
+            "po_scrum_master": status_snapshot.get("po_scrum_master", {}),
+            "admin_autonomy": admin_autonomy,
+            "admin_dispatch": status_snapshot.get("admin_dispatch", {}),
+            "dev_autonomy": dev_autonomy_data,
+            "agent_messages": status_snapshot.get("agent_messages", {}),
+            "window": {
+                "mode": "lite",
+                "log_scans_omitted": True,
+            },
+            "signals": {
+                "recent_window_minutes": RUNTIME_DIAG_RECENT_MINUTES,
+                "permission_errors_recent": 0,
+                "permission_errors_historical": 0,
+                "permission_last_error_ts": "",
+                "permission_last_error_age_min": -1,
+                "health_degraded_recent": 0,
+                "health_stale_recent": 0,
+                "health_last_blocked_roles": [],
+                "resume_detected_count": 0,
+                "resume_max_gap_s": 0,
+                "admin_timeout_events_recent": 0,
+                "admin_timeout_events_historical": 0,
+                "planner_guard_blocked": planner_blocker == "PLANNER_BATCH_ID_INVALID",
+                "planner_blocker_id": planner_blocker or "NONE",
+                "tshape_takeover_active": bool(dispatcher_tshape.get("active", False)),
+                "tshape_takeover_age_min": _int_or_default(dispatcher_tshape.get("age_min"), -1),
+                "tshape_takeover_target_role": str(dispatcher_tshape.get("target_role", "") or "").strip(),
+                "tshape_takeover_reason_blocker": str(dispatcher_tshape.get("reason_blocker", "NONE") or "NONE").strip() or "NONE",
+                "admin_autonomy_active": bool(admin_autonomy.get("active", False)),
+                "admin_autonomy_trigger": str(admin_autonomy.get("trigger", "none") or "none").strip() or "none",
+                "admin_autonomy_target_role": str(admin_autonomy.get("target_role", "") or "").strip(),
+                "admin_autonomy_target_task": str(admin_autonomy.get("target_task", "none") or "none").strip() or "none",
+                "admin_autonomy_last_outcome": str(admin_autonomy.get("last_outcome", "none") or "none").strip() or "none",
+                "admin_autonomy_age_min": _int_or_default(admin_autonomy.get("age_min"), -1),
+                "admin_autonomy_needs_human_review": admin_autonomy.get("needs_human_review_by_role", {})
+                if isinstance(admin_autonomy.get("needs_human_review_by_role"), dict)
+                else {},
+                "admin_dispatch_status": str(status_snapshot.get("admin_dispatch", {}).get("status", "unknown"))
+                if isinstance(status_snapshot.get("admin_dispatch"), dict)
+                else "unknown",
+                "admin_dispatch_last_action": str(status_snapshot.get("admin_dispatch", {}).get("last_action", "none"))
+                if isinstance(status_snapshot.get("admin_dispatch"), dict)
+                else "none",
+                "admin_dispatch_last_reason": str(status_snapshot.get("admin_dispatch", {}).get("last_reason", "none"))
+                if isinstance(status_snapshot.get("admin_dispatch"), dict)
+                else "none",
+                "dispatcher_starvation_s": _int_or_default(
+                    status_snapshot.get("admin_dispatch", {}).get("last_result_age_s"),
+                    -1,
+                )
+                if isinstance(status_snapshot.get("admin_dispatch"), dict)
+                else -1,
+                "planner_policy_enforced": bool(status_snapshot.get("planner_policy_enforced", True)),
+                "planner_autonomy_last_action": str(status_snapshot.get("planner_autonomy_last_action", "idle") or "idle").strip() or "idle",
+                "planner_autonomy_last_outcome": str(status_snapshot.get("planner_autonomy_last_outcome", "none") or "none").strip() or "none",
+                "planner_quality_score": _int_or_default(status_snapshot.get("orchestration", {}).get("planner_quality_score"), 100)
+                if isinstance(status_snapshot.get("orchestration"), dict)
+                else 100,
+                "planner_quality_missing_count": _int_or_default(status_snapshot.get("orchestration", {}).get("planner_quality_missing_count"), 0)
+                if isinstance(status_snapshot.get("orchestration"), dict)
+                else 0,
+                "scrum_actions_sent_60m": _int_or_default(status_snapshot.get("orchestration", {}).get("scrum_actions_sent_60m"), 0)
+                if isinstance(status_snapshot.get("orchestration"), dict)
+                else 0,
+                "scrum_message_emit_skip_60m": _int_or_default(status_snapshot.get("orchestration", {}).get("scrum_message_emit_skip_60m"), 0)
+                if isinstance(status_snapshot.get("orchestration"), dict)
+                else 0,
+                "dev_wait_reason": str(status_snapshot.get("dev_wait_reason", "none") or "none").strip() or "none",
+                "passive_with_ready_streak": _int_or_default(dev_autonomy_data.get("ready_seen_without_claim_24h"), 0),
+                "dev_claim_loop_count": _int_or_default(dev_autonomy_data.get("contract_guard_block_count_24h"), 0),
+                "admin_runtime_override_applied": 0,
+                "session_not_ready_fallback_count_by_role": {},
+                "issue_publication_gap_roles": [],
+                "issue_publication_gap_count": 0,
+                "dev_coaching_state": str(dev_autonomy_data.get("coaching_state", "RECOVERING") or "RECOVERING").upper(),
+                "dev_none_no_signal_streak_24h": _int_or_default(dev_autonomy_data.get("none_no_signal_streak_24h"), 0),
+                "dev_delivery_actions_24h": _int_or_default(dev_autonomy_data.get("delivery_actions_24h"), 0),
+                "dev_issue_reporting_ok_rate_24h": _int_or_default(dev_autonomy_data.get("issue_reporting_ok_rate_24h"), 100),
+                "queue_waiting_dep": _int_or_default(status_snapshot.get("queue", {}).get("state_counts", {}).get("WAITING_DEP"), 0)
+                if isinstance(status_snapshot.get("queue"), dict)
+                and isinstance(status_snapshot.get("queue", {}).get("state_counts"), dict)
+                else 0,
+                "queue_ready": (
+                    _int_or_default(status_snapshot.get("queue", {}).get("state_counts", {}).get("READY_PLANNER"), 0)
+                    + _int_or_default(status_snapshot.get("queue", {}).get("state_counts", {}).get("READY_DEV"), 0)
+                    + _int_or_default(status_snapshot.get("queue", {}).get("state_counts", {}).get("READY"), 0)
+                )
+                if isinstance(status_snapshot.get("queue"), dict)
+                and isinstance(status_snapshot.get("queue", {}).get("state_counts"), dict)
+                else 0,
+                "queue_in_progress": _int_or_default(status_snapshot.get("queue", {}).get("state_counts", {}).get("IN_PROGRESS"), 0)
+                if isinstance(status_snapshot.get("queue"), dict)
+                and isinstance(status_snapshot.get("queue", {}).get("state_counts"), dict)
+                else 0,
+                "dependency_funnel_plateau": False,
+                "runtime_truth_source": str(status_snapshot.get("runtime_truth", {}).get("runtime_truth_source", "unknown"))
+                if isinstance(status_snapshot.get("runtime_truth"), dict)
+                else "unknown",
+            },
+            "top_findings": top_findings[:6],
+        }
+        try:
+            from apps.monitor.services.runtime_diagnostics_service import build_runtime_diagnostics
+
+            payload = build_runtime_diagnostics(ROOT, lambda: payload, include_layers=False)
+        except Exception:
+            pass
+        return _lite_cache_set(_RUNTIME_DIAGNOSTICS_LITE_CACHE, payload)
     status_agents = status_snapshot.get("agents", {}) if isinstance(status_snapshot, dict) else {}
     if not isinstance(status_agents, dict):
         status_agents = {role: _unknown_agent_payload(role) for role in CORE_ROLES}
@@ -5121,6 +5449,8 @@ def runtime_diagnostics(lite: int = 0):
         payload = build_runtime_diagnostics(ROOT, lambda: payload, include_layers=not bool(lite))
     except Exception:
         pass
+    if bool(lite) and isinstance(payload, dict):
+        return _lite_cache_set(_RUNTIME_DIAGNOSTICS_LITE_CACHE, payload)
     return payload
 
 
@@ -5935,9 +6265,12 @@ function liveTruthHtml(){
         <div class="live-truth-sub">URL canonique: <a class="ext-link" href="${esc(access.canonical)}" target="_blank">${esc(access.canonical)}</a> · mise à jour status=${esc(fmtTs((D&&D.ts_utc)||''))} · fraîcheur runtime=${esc(String(rf.state||'unknown'))} (${esc(refreshLabel)})</div>
         <div class="live-truth-kpis">
           <div class="live-truth-kpi"><div class="live-truth-kpi-label">Health</div><div class="live-truth-kpi-value">${esc((D&&D.health)||'UNKNOWN')}</div></div>
+          <div class="live-truth-kpi"><div class="live-truth-kpi-label">App</div><div class="live-truth-kpi-value">${esc(String((((S&&S.app_runtime)||{}).status)||'unknown').toUpperCase())}</div></div>
+          <div class="live-truth-kpi"><div class="live-truth-kpi-label">Agentic</div><div class="live-truth-kpi-value">${esc(String((((S&&S.agentic_runtime)||{}).status)||'unknown').toUpperCase())}</div></div>
+          <div class="live-truth-kpi"><div class="live-truth-kpi-label">Planning</div><div class="live-truth-kpi-value">${esc(String((((S&&S.planning_plane)||{}).status)||'unknown').toUpperCase())}</div></div>
+          <div class="live-truth-kpi"><div class="live-truth-kpi-label">App Prov.</div><div class="live-truth-kpi-value">${esc(String((((S&&S.app_providers)||{}).status)||'unknown').toUpperCase())}</div></div>
+          <div class="live-truth-kpi"><div class="live-truth-kpi-label">Agent Prov.</div><div class="live-truth-kpi-value">${esc(String((((S&&S.agent_providers)||{}).status)||'unknown').toUpperCase())}</div></div>
           <div class="live-truth-kpi"><div class="live-truth-kpi-label">Doctor</div><div class="live-truth-kpi-value">${esc(String(doctor.status||'unknown').toUpperCase())}</div></div>
-          <div class="live-truth-kpi"><div class="live-truth-kpi-label">Planner</div><div class="live-truth-kpi-value">${esc(String(pd.status||'unknown'))}</div></div>
-          <div class="live-truth-kpi"><div class="live-truth-kpi-label">Next</div><div class="live-truth-kpi-value">${esc(String(pd.recommended_next_action||'monitor'))}</div></div>
         </div>
         <div class="live-truth-role-grid">${liveTruthRolesHtml()}</div>
         ${partialHtml}
@@ -5950,6 +6283,8 @@ function liveTruthHtml(){
       </div>
       <div class="live-truth-stream">
         <div class="queue-sync ok"><strong>Accès</strong> · canonical=${esc(access.canonical)} · vm=${esc(access.vmLocal)} · mode=${esc(access.mode)} · public=${access.publicEnabled?'enabled':'disabled'}</div>
+        <div class="queue-sync ${String((((S&&S.app_runtime)||{}).status)||'unknown').toLowerCase()==='ok'?'ok':'warn'}"><strong>Runtime split</strong> · app=${esc(String((((S&&S.app_runtime)||{}).status)||'unknown'))} · agentic=${esc(String((((S&&S.agentic_runtime)||{}).status)||'unknown'))} · planning=${esc(String((((S&&S.planning_plane)||{}).status)||'unknown'))}</div>
+        <div class="queue-sync ${String((((S&&S.agent_providers)||{}).status)||'unknown').toLowerCase()==='degraded'?'warn':'ok'}"><strong>Providers</strong> · app=${esc(String((((S&&S.app_providers)||{}).status)||'unknown'))} · agent=${esc(String((((S&&S.agent_providers)||{}).status)||'unknown'))} · doctor=${esc(String(doctor.status||'unknown'))}</div>
         <div class="queue-sync ${Number(q.ready||0)>0?'ok':'warn'}"><strong>Runway</strong> · READY=${q.ready??0} · READY_DEV=${q.ready_dev_count??0} · IN_PROGRESS=${q.in_progress??0} · WAITING_DEP=${q.waiting_dep??0}</div>
         <div class="queue-sync ${Number(summary.tasks_progressed_last_1h||0)>0?'ok':'warn'}"><strong>Flux</strong> · progressed_1h=${summary.tasks_progressed_last_1h||0} · events_1h=${summary.events_last_1h||0} · bottleneck=${esc(summary.current_bottleneck||'none')}</div>
         <div class="queue-sync"><strong>Workboard</strong> · done=${wb.done??0} · ready=${wb.ready??0} · in_progress=${wb.in_progress??0}</div>
@@ -6605,7 +6940,7 @@ function iterationIssuesHtml(){
 function render(){
   if(!D)return;
   const statusUnavailable = !!D.__status_unavailable || !D.queue || !D.workboard;
-  const health=(statusUnavailable?'UNKNOWN':(D.health||'DEGRADED'));
+  const health=(statusUnavailable?'UNKNOWN':(D.primary_status||((D.product_runtime||{}).status)||D.health||'DEGRADED'));
   const queue=D.queue||{total:null,closed:null,active:[],state_counts:{},mismatch_count:0,mismatches:[]};
   const workboard=D.workboard||{total:null,done:null,ready:null,in_progress:null,ready_tasks:[],in_progress_tasks:[]};
   const agents=D.agents||{};
@@ -6764,9 +7099,9 @@ function render(){
     ${alertsHtml}
     ${liveTruthHtml()}
     <div class="col-left">
-      <div class="panel fade"><div class="panel-head"><span class="panel-label">Santé</span><div class="status-capsule ${hcls}" style="padding:3px 9px;font-size:10px"><span class="status-dot${health==='OK'?' live':''}"></span>${health}</div></div>
+      <div class="panel fade"><div class="panel-head"><span class="panel-label">Santé globale</span><div class="status-capsule ${hcls}" style="padding:3px 9px;font-size:10px"><span class="status-dot${health==='OK'?' live':''}"></span>${health}</div></div>
         <div class="health-hero"><div class="health-ring-wrap"><div class="health-ring ${hcls}"><div class="health-ring-inner"><div class="health-pct">${pct}</div><div class="health-pct-label">%</div></div></div></div><div class="health-status-word ${hcls}">${health}</div><div class="health-ts">${new Date().toLocaleTimeString('fr-FR')}</div></div>
-        <div class="stat4"><div class="stat-tile g"><div class="stat-n g">${workboard.done ?? '—'}</div><div class="stat-lbl">DONE</div></div><div class="stat-tile b"><div class="stat-n b">${workboard.ready ?? '—'}</div><div class="stat-lbl">READY</div></div><div class="stat-tile y"><div class="stat-n y">${kpi.done_24h??'—'}</div><div class="stat-lbl">24h</div></div><div class="stat-tile v"><div class="stat-n v">${kpi.proofs??'—'}</div><div class="stat-lbl">PROOFS</div></div></div></div>
+        <div class="queue-sync ${String((((S&&S.app_runtime)||{}).status)||'unknown').toLowerCase()==='ok'?'ok':'warn'}" style="margin:10px 0 0 0"><strong>App runtime</strong> · status=${esc(String((((S&&S.app_runtime)||{}).status)||'unknown').toUpperCase())} · état produit de référence</div><div class="queue-sync ok" style="margin:8px 0 0 0"><strong>Lecture</strong> · santé monitor globale, l'app reste servie si agentic ou planning est dégradé</div><div class="stat4"><div class="stat-tile g"><div class="stat-n g">${workboard.done ?? '—'}</div><div class="stat-lbl">DONE</div></div><div class="stat-tile b"><div class="stat-n b">${workboard.ready ?? '—'}</div><div class="stat-lbl">READY</div></div><div class="stat-tile y"><div class="stat-n y">${kpi.done_24h??'—'}</div><div class="stat-lbl">24h</div></div><div class="stat-tile v"><div class="stat-n v">${kpi.proofs??'—'}</div><div class="stat-lbl">PROOFS</div></div></div></div>
       <div class="panel fade"><div class="panel-head"><span class="panel-label">Batches</span><span style="font-size:10px;color:var(--ghost)">${qDisplayClosed ?? '—'}/${qDisplayTotal ?? '—'}</span></div><div class="panel-body"><div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div><div class="queue-states">${queueStatesHtml}</div><div class="queue-list">${qRows}</div>${mismatchHtml}</div></div>
       <div class="panel fade"><div class="panel-head"><span class="panel-label">Vélocité</span><span style="font-size:10px;color:var(--ghost)">${kpi.ts??''}</span></div><div class="stat4"><div class="stat-tile g"><div class="stat-n g">${kpi.done_total??'—'}</div><div class="stat-lbl">Total</div></div><div class="stat-tile y"><div class="stat-n y">${kpi.done_24h??'—'}</div><div class="stat-lbl">24h</div></div><div class="stat-tile"><div class="stat-n">${kpi.done_7d??'—'}</div><div class="stat-lbl">7 jours</div></div><div class="stat-tile b"><div class="stat-n b">${kpi.proofs??'—'}</div><div class="stat-lbl">Proofs</div></div></div></div>
     </div>
@@ -6775,14 +7110,14 @@ function render(){
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Planner Dispatch</span><span style="font-size:10px;color:var(--ghost)">mode=${esc((D&&D.execution_mode)||'unknown')} · subagents=${((D&&D.planner_dispatch&&D.planner_dispatch.active_subagents) ?? (D&&D.planner_subagents&&D.planner_subagents.active_count) ?? 0)}</span></div><div class="panel-body">${plannerDispatchHtml()}</div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Activite Agents</span><span style="font-size:10px;color:var(--ghost)">helpers=${esc(String((((D&&D.agent_activity)||{}).active_helper_count)||0))}</span></div><div class="panel-body">${agentActivityHtml()}<div class="link-row"><a class="ext-link" href="/api/agents/activity" target="_blank">⬡ Agents activity JSON</a><a class="ext-link" href="/api/agent-insights" target="_blank">⬡ Agent insights JSON</a></div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Delivery Control</span><span style="font-size:10px;color:var(--ghost)">future=${esc(String(((D&&D.delivery_control)||{}).future_status||'unknown'))} · integrity=${esc(String(((D&&D.delivery_control)||{}).integrity_status||'unknown'))}</span></div><div class="panel-body">${deliveryControlHtml()}</div></div>
-	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Workboard actif</span><span style="font-size:10px;color:var(--ghost)">${workboard.total ?? '—'} tâches · ${workboard.done ?? '—'} done</span></div><div class="panel-body"><div class="task-grid">${wbHtml}</div><div class="queue-sync ${freshnessClass}" style="margin-top:10px"><strong>Runtime freshness</strong> · ${freshnessText}</div><div class="queue-sync warn" style="margin-top:8px"><strong>Planner autonomy</strong> · idle=${pa.ready_idle_streak??0} · low_score=${pa.low_score_streak??0} · runway_no_batch=${pa.runway_no_batch_streak??0} · autofix24h=${pa.autofix_count_24h??0}</div><div class="queue-sync warn" style="margin-top:8px"><strong>T-shape admin</strong> · active=${ts.active?'1':'0'} · target=${esc(ts.target_role||'none')} · blocker=${esc(ts.reason_blocker||'NONE')}</div><div class="queue-sync ${doctorStatus==='OK'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor</strong> · status=${doctorStatus} · runtime=${doctorDuration}</div><div class="queue-sync ${doctorFailures==='none'?'ok':'warn'}" style="margin-top:8px"><strong>Doctor checks</strong> · ${esc(doctorFailures)}</div><div class="queue-sync ${Number(activitySummary.events_last_1h||0)>0?'ok':'warn'}" style="margin-top:8px"><strong>Activity summary</strong> · 1h=${activitySummary.events_last_1h||0} · 6h=${activitySummary.events_last_6h||0} · progressed_1h=${activitySummary.tasks_progressed_last_1h||0} · bottleneck=${esc(activitySummary.current_bottleneck||'none')}</div><div class="queue-sync" style="margin-top:8px"><strong>System summary</strong> · next=${esc(systemSummary.recommended_next_action||'monitor')} · changed15m=${(systemSummary.what_changed_last_15m||[]).length||0}</div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>sources:</strong><br>queue=${esc(shortPath(src.queue||''))}<br>workboard=${esc(shortPath(src.workboard||''))}</div></div></div>
+	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Workboard actif</span><span style="font-size:10px;color:var(--ghost)">${workboard.total ?? '—'} tâches · ${workboard.done ?? '—'} done</span></div><div class="panel-body"><div class="task-grid">${wbHtml}</div><div class="queue-sync ${freshnessClass}" style="margin-top:10px"><strong>Runtime freshness</strong> · ${freshnessText}</div><div class="queue-sync warn" style="margin-top:8px"><strong>Planner autonomy</strong> · idle=${pa.ready_idle_streak??0} · low_score=${pa.low_score_streak??0} · runway_no_batch=${pa.runway_no_batch_streak??0} · autofix24h=${pa.autofix_count_24h??0}</div><div class="queue-sync warn" style="margin-top:8px"><strong>T-shape admin</strong> · active=${ts.active?'1':'0'} · target=${esc(ts.target_role||'none')} · blocker=${esc(ts.reason_blocker||'NONE')}</div><div class="queue-sync ${doctorStatus==='OK'?'ok':'warn'}" style="margin-top:8px"><strong>Agentic doctor</strong> · status=${doctorStatus} · runtime=${doctorDuration}</div><div class="queue-sync ${doctorFailures==='none'?'ok':'warn'}" style="margin-top:8px"><strong>Agentic checks</strong> · ${esc(doctorFailures)}</div><div class="queue-sync ${Number(activitySummary.events_last_1h||0)>0?'ok':'warn'}" style="margin-top:8px"><strong>Activity summary</strong> · 1h=${activitySummary.events_last_1h||0} · 6h=${activitySummary.events_last_6h||0} · progressed_1h=${activitySummary.tasks_progressed_last_1h||0} · bottleneck=${esc(activitySummary.current_bottleneck||'none')}</div><div class="queue-sync" style="margin-top:8px"><strong>System summary</strong> · next=${esc(systemSummary.recommended_next_action||'monitor')} · changed15m=${(systemSummary.what_changed_last_15m||[]).length||0}</div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>sources:</strong><br>queue=${esc(shortPath(src.queue||''))}<br>workboard=${esc(shortPath(src.workboard||''))}</div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Agent Activity Feed</span><span style="font-size:10px;color:var(--ghost)">window=${esc(String((A&&A.window_hours)||6))}h · timeline=${(A&&A.timeline&&A.timeline.length)||0}</span></div><div class="panel-body"><div class="queue-sync ok"><strong>Throughput</strong> · completed_1h=${(A&&A.throughput&&A.throughput.tasks_completed_last_hour)||0} · artifacts_1h=${(A&&A.throughput&&A.throughput.artifacts_generated_last_hour)||0} · rate=${(A&&A.throughput&&A.throughput.delivery_rate)||0}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px"><div class="log-box"><div class="log-head">Timeline</div><div class="log-scroll">${activityFeedHtml()}</div></div><div class="log-box"><div class="log-head">Task Inspector</div><div class="log-scroll">${taskInspectorHtml()}</div></div><div class="log-box"><div class="log-head">Dependency Map</div><div class="log-scroll">${dependencyMapHtml()}</div></div></div><div class="link-row"><a class="ext-link" href="/api/agent-activity?window=6&limit=300" target="_blank">⬡ Agent activity JSON</a><a class="ext-link" href="/api/tasks/active?window=6&limit=120" target="_blank">⬡ Tasks active JSON</a><a class="ext-link" href="/api/dependencies/map?limit=300" target="_blank">⬡ Dependencies JSON</a></div></div></div>
 	      ${poPanel}
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Exécution récente</span><span style="color:var(--emerald);font-size:11px;font-weight:600">${execRole}</span></div><div class="panel-body"><div class="tab-bar" id="exec-tabs">${etabs}</div><div class="exec-meta">${execMetaHtml(execRole)}</div><div class="exec-logs"><div class="log-box"><div class="log-head">fc-ticks (${execRole}.tick.log)</div><div class="log-scroll">${logLinesHtml(ex.tick_tail)}</div></div><div class="log-box"><div class="log-head">role-runner (${execRole}.live.log)</div><div class="log-scroll">${logLinesHtml(ex.runner_tail)}</div></div><div class="log-box"><div class="log-head">runner-events (${execRole}.events.log)</div><div class="log-scroll">${logLinesHtml(ex.events_tail)}</div></div></div><div class="link-row"><a class="ext-link" href="/api/execution/${execRole}" target="_blank">⬡ Execution JSON</a><a class="ext-link" href="/api/logs/${execRole}" target="_blank">⬡ Runner logs</a><a class="ext-link" href="/api/logs/${execRole}/events" target="_blank">⬡ Runner events</a><a class="ext-link" href="/api/ticks/${execRole}" target="_blank">⬡ Ticks</a>${plannerExecLinks}</div></div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Execution Truth Matrix</span><span style="color:var(--amber);font-size:11px;font-weight:600">activité réelle · qualité · signaux</span></div><div class="panel-body">${insightsHtml()}</div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Execution Issues Feed</span><span style="color:var(--coral);font-size:11px;font-weight:600">open ${((IS&&IS.totals_by_severity)?((IS.totals_by_severity.WARN||0)+(IS.totals_by_severity.ERROR||0)+(IS.totals_by_severity.CRITICAL||0)):0)} · critical ${(IS&&IS.critical_open_count)||0}</span></div><div class="panel-body">${iterationIssuesHtml()}</div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Logs agents</span><span style="color:var(--aqua);font-size:11px;font-weight:600">${logRole} · ${logKind}</span></div><div class="panel-body">${logViewerHtml()}</div></div>
-		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Diagnostic Rapide Runtime</span><span style="color:var(--amber);font-size:11px;font-weight:600">root causes auto</span></div><div class="panel-body">${runtimeDiagnosticsHtml()}</div></div>
+		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Diagnostic runtime agentic</span><span style="color:var(--amber);font-size:11px;font-weight:600">root causes auto</span></div><div class="panel-body">${runtimeDiagnosticsHtml()}</div></div>
 		      <div class="panel fade"><div class="panel-head"><span class="panel-label">Error Feed Global</span><span style="color:var(--coral);font-size:11px;font-weight:600">${(F&&F.count)||0} événements</span></div><div class="panel-body"><div class="log-box"><div class="log-head">Dernières erreurs/warnings (tous agents)</div><div class="log-scroll">${errorFeedHtml()}</div></div></div></div>
 		      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
 	        <div class="panel fade"><div class="panel-head"><span class="panel-label">Ticks</span></div><div class="panel-body"><div class="tab-bar" id="tick-tabs">${tickTabs}</div><div class="tick-scroll" id="tick-content">${tickRowsHtml(tickRole)}</div></div></div>
@@ -6876,12 +7211,12 @@ function render(bundle,status){
   const streaks=(g.streaks||{});
   const score=Number(g.score||0);
   const scls=scoreCls(score);
-  const health=(status&&status.health)||'—';
+  const health=(status&&(status.primary_status||((status.product_runtime||{}).status)||status.health))||'—';
   const app=document.getElementById('app');
   app.innerHTML=`
     <div class="card span2"><div class="head">Guardian Snapshot</div><div class="body">
       <div class="kpi">
-        <div class="pill"><div class="lbl">Health</div><div class="val">${esc(health)}</div></div>
+        <div class="pill"><div class="lbl">Product status</div><div class="val">${esc(health)}</div></div>
         <div class="pill"><div class="lbl">Score</div><div class="val ${scls}">${esc(g.score)}</div></div>
         <div class="pill"><div class="lbl">Level</div><div class="val">${esc(g.level||'')}</div></div>
         <div class="pill"><div class="lbl">Updated</div><div class="val" style="font-size:12px">${esc(normTs(g.ts_utc))}</div></div>

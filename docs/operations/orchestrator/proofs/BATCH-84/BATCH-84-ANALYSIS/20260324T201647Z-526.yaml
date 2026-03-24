@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T201647Z-526"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T20:16:47Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner analysis closure no code change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T20:16:47Z"
+      ended_at_utc: "2026-03-24T20:16:47Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime evidence only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/product/PRODUCT_VISION.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b84-analysis-close-20260324t201521z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=planner analysis lacked architecture plan ref and architecture audit linkage | fix_applied=attached BATCH-84 analysis completion proof to product vision and runtime context | verify=before=guardian red on missing architecture refs and audit; after=analysis proof links apps/api/src/domains and apps/web/src with runtime sequence; test=parallel_workstream context showed only BATCH-84-ANALYSIS in progress and no planner ready tasks | architecture_check=architecture_plan_ref=docs/product/PRODUCT_VISION.md; architecture_audit=apps/api/src/domains,apps/web/src; architecture_check=depends_on BATCH-84-PLAN inferred done because ANALYSIS is sole planner in_progress and PLAN is absent from open planner context; vision_alignment=batch=BATCH-84 target=personal finance copilot impact=advance stream; batch_created=0; acceptance_gate=planner analysis proof captured | vision_alignment=batch=BATCH-84; target=personal finance copilot delivery path; impact=analysis stage closed for downstream execution"

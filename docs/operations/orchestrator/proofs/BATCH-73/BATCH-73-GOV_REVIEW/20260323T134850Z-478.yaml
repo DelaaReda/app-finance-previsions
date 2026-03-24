@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-73-BATCH-73-GOV_REVIEW-20260323T134850Z-478"
+stream_id: "BATCH-73"
+task_id: "BATCH-73-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-03-23T13:48:50Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_gov_review_no_code_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T13:48:50Z"
+      ended_at_utc: "2026-03-23T13:48:50Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_gov_review_uses_runtime_proofs)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-73/BATCH-73-ADMIN-01/20260323T134515Z-376.yaml"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-gov-review-batch-73-p1774273586-9344"
+  review_ref: "runner:BATCH-73-GOV_REVIEW"
+  note: "source=runner | root_cause=planner_gov_review_waited_for_admin_dependency_completion | fix_applied=validated_done_dependency_and_closed_planner_review | verify=before=BATCH-73-GOV_REVIEW:IN_PROGRESS; after=complete_requested; test=planner_complete_autofill | architecture_check=depends_on satisfied in runtime projection; planner owns GOV_REVIEW completion; no frontend theme changes | vision_alignment=batch=BATCH-73,target=personal_finance_copilot,impact=planner_gov_review_closed"

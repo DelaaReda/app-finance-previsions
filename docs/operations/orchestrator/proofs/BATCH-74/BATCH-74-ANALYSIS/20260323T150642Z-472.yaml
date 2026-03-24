@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-74-BATCH-74-ANALYSIS-20260323T150642Z-472"
+stream_id: "BATCH-74"
+task_id: "BATCH-74-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T15:06:42Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_code_change_planner_analysis_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T15:06:42Z"
+      ended_at_utc: "2026-03-23T15:06:42Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_projection_review_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-74/BATCH-74-ANALYSIS/20260323T145605Z-279.yaml"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch74-analysis-20260323t150439z-p1774278279-32564"
+  review_ref: "runner:BATCH-74-ANALYSIS"
+  note: "source=runner | root_cause=analyse planner laissee IN_PROGRESS alors que la projection canonique demande completion | fix_applied=cloture planner avec preuve runtime et chemins impactes apps/api apps/web platform/automation | verify=before=BATCH-74-ANALYSIS in_progress et next_action complete; after=complete demandee via planner_runtime_actions; test=parallel_workstream context plus projections BATCH-74 relues | architecture_check=paths apps/api apps/web platform/automation verifies contre anti_regression_guards | vision_alignment=batch=BATCH-74,target=copilot finance personnel journalier,impact=fermer analyse pour debloquer GOV_REVIEW et delivery"

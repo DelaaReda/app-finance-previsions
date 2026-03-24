@@ -2,11 +2,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
-VM_SHARED_ROOT="/home/venom/shared/analyse-financiere"
-ROOT="${FINANCE_COPILOT_ROOT:-$DEFAULT_ROOT}"
-if [[ -z "${FINANCE_COPILOT_ROOT:-}" && -d "$VM_SHARED_ROOT" ]]; then
-  ROOT="$VM_SHARED_ROOT"
+SOURCE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+WORKSPACE_HELPER="${SCRIPT_DIR}/lib/workspace_paths.sh"
+if [[ -n "${FINANCE_COPILOT_ROOT:-}" ]]; then
+  ROOT="${FINANCE_COPILOT_ROOT}"
+elif [[ -f "$WORKSPACE_HELPER" ]]; then
+  # shellcheck source=/dev/null
+  source "$WORKSPACE_HELPER"
+  ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+else
+  ROOT="$SOURCE_ROOT"
 fi
 cd "$ROOT"
 

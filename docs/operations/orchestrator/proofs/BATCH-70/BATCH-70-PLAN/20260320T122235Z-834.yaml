@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-70-BATCH-70-PLAN-20260320T122235Z-834"
+stream_id: "BATCH-70"
+task_id: "BATCH-70-PLAN"
+role: "planner"
+produced_at_utc: "2026-03-20T12:22:35Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_plan_delivery_no_runtime_patch)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T12:22:35Z"
+      ended_at_utc: "2026-03-20T12:22:35Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(plan_task_no_code_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/.tmp/role-runner/planner/BATCH-70-PLAN-20260320T122000Z.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-BATCH-70-PLAN-20260320T122000Z-r3"
+  review_ref: "runner:BATCH-70-PLAN"
+  note: "source=runner | root_cause=planner-owned plan closure lacked inline delivery evidence in complete payload | fix_applied=inline planner proof now mirrors canonical docs and runtime dependency state | verify=before=task_in_progress_without_gate_accepted_proof; after=complete_payload_contains_required_delivery_keys; test=planner_runtime_actions_note_pairs_path_confirmed | architecture_check=PASS(canonical_docs_only); imports_ok=not_applicable; path_target=theme_preserved_backend_first | vision_alignment=batch=BATCH-70; target=brief_plus_ask_finance_copilot; impact=unblocks_analysis_arch_gov_review"

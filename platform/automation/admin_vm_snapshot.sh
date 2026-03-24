@@ -197,7 +197,10 @@ copy_if_exists "${ROOT}/USER.md" "${SNAP_DIR}/workspace/USER.md"
 copy_if_exists "${ROOT}/MEMORY.md" "${SNAP_DIR}/workspace/MEMORY.md"
 copy_if_exists "${ROOT}/docs/ops/ADMIN_TEAM_CHAT.md" "${SNAP_DIR}/workspace/ADMIN_TEAM_CHAT.md"
 copy_if_exists "${ROOT}/docs/ops/ADMIN_TEAM_ITERATIONS.md" "${SNAP_DIR}/workspace/ADMIN_TEAM_ITERATIONS.md"
-copy_if_exists "${ROOT}/docs/orchestrator-ops/agent-watchdog.md" "${SNAP_DIR}/workspace/agent-watchdog.md"
+copy_if_exists "${ROOT}/logs-codex-runs/orchestrator-state/agent-watchdog.md" "${SNAP_DIR}/workspace/agent-watchdog.md"
+if [[ ! -f "${SNAP_DIR}/workspace/agent-watchdog.md" ]]; then
+  copy_if_exists "${ROOT}/docs/operations/orchestrator/agent-watchdog.md" "${SNAP_DIR}/workspace/agent-watchdog.md"
+fi
 copy_if_exists "${ROOT}/docs/ops/TMUX_SESSION_HANDOFF_ADMINAPP_CODEX.md" "${SNAP_DIR}/workspace/TMUX_SESSION_HANDOFF_ADMINAPP_CODEX.md"
 
 latest_admin_agents_handoff="$(list_recent_files "${ROOT}/docs/ops" 'TMUX_HANDOFF_admin-agents_*.md' 1 || true)"
@@ -238,7 +241,7 @@ copy_if_exists "${yesterday_memory}" "${SNAP_DIR}/workspace/"
   echo "## Key Files To Reopen"
   echo "- docs/ops/ADMIN_TEAM_CHAT.md"
   echo "- docs/ops/ADMIN_TEAM_ITERATIONS.md"
-  echo "- docs/orchestrator-ops/agent-watchdog.md"
+  echo "- docs/operations/orchestrator/agent-watchdog.md"
   echo "- memory/$(date +%F).md"
 } > "${SNAP_DIR}/resume/ADMIN_RESUME_PACKET.md"
 

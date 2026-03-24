@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-47-BATCH-47-DEV-03-20260311T052954Z-399"
+stream_id: "BATCH-47"
+task_id: "BATCH-47-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T05:29:54Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope sector-to-company impact transmission [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_sector-to-company_impact_transmission_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T05:29:54Z"
+      ended_at_utc: "2026-03-11T05:29:54Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --check apps/web/src/domains/forecasts/contracts/apiConnector.js; node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js; node --test apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=d061e755b21407644db3a6c44c15d806eb6951b1; policy-impact alerts now carry uncertainty-aware confidence degradation and transmission uncertainty metadata through the existing alert timeline path."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-47-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-47-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=The BATCH-47 transmission path exposed sector/company propagation details, but the frontend alert normalization still mapped policy-impact confidence directly from raw impact score, so uncertainty in multi-sector or indi | fix_applied=Patched `apps/web/src/domains/forecasts/contracts/apiConnector.js` to reuse the existing policy-impact alert flow, add a narrow `getPolicyTransmissionConfidence()` helper, lower alert confidence for no-company/multi-sect | verify=before=policy-impact alerts always mirrored `impact_score` as confidence, even when transmission was multi-sector or indirect; after=direct transmission stays at 82 confidence while broad/indirect transmission degrades t | architecture_check=layer=web forecasts connector/test surface only; imports_ok=yes, reused existing policy-impact normalization and alert timeline wiring with no new cross-domain imports; path_target=apps/web/src/domains/forecasts/contract | vision_alignment=batch=BATCH-47; target=sector-to-company impact transmission uncertainty handling; impact=the live policy-impact surface now communicates lower confidence when transmission evidence is broad or indirect without widening"

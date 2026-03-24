@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-73-BATCH-73-ANALYSIS-20260323T131307Z-434"
+stream_id: "BATCH-73"
+task_id: "BATCH-73-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T13:13:07Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_closeout_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T13:13:07Z"
+      ended_at_utc: "2026-03-23T13:13:07Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_closeout_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-BATCH-73-ANALYSIS-20260323T131148Z"
+  review_ref: "runner:BATCH-73-ANALYSIS"
+  note: "source=runner | root_cause=guardian_feedback_missing_architecture_plan_ref_and_audit | fix_applied=analysis_closeout_now_references_apps_api_src_domains_and_apps_web_src_with_runtime_projection_alignment | verify=before=guardian_red_missing_architecture_proof; after=analysis_closeout_contains_canonical_architecture_refs_and_audit; test=parallel_workstream_context_confirmed_single_planner_in_progress_task | architecture_check=architecture_plan_ref=apps/api/src/domains/*|apps/web/src; architecture_audit=dependency_policy_migration_v1_runtime_projection_checked; anti_regression=copilot-app/*|backend/src/backend/src/*|legacy_src_blocked | vision_alignment=batch=BATCH-73,target=personal_finance_copilot_daily_brief_and_analysis,impact=planner_analysis_closed_to_unlock_downstream_review"

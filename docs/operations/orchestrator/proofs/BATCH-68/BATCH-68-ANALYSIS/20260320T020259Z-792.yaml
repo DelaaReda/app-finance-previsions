@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-68-BATCH-68-ANALYSIS-20260320T020259Z-792"
+stream_id: "BATCH-68"
+task_id: "BATCH-68-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-20T02:02:59Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_repo_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T02:02:59Z"
+      ended_at_utc: "2026-03-20T02:02:59Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_task_no_code)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "resume_gov_review_P1773972029_6275"
+  review_ref: "runner:BATCH-68-ANALYSIS"
+  note: "source=runner | root_cause=analysis_task_left_open_despite_depends_on_none | fix_applied=planner_closed_BATCH-68-ANALYSIS_using_canonical_runtime_truth | verify=before=in_progress_depends_on_none; after=COMPLETE_OK_state_DONE; test=parallel_workstream_context_confirmed_single_in_progress | architecture_check=docs/ops/ACTIVE_DOCS_INDEX.md+docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md; imports_ok=anti_regression_paths_ok; path_target=apps/api/src/domains/*+apps/web/src | vision_alignment=batch=BATCH-68; target=brief_ask_investment_memo; impact=advance_stream_to_gov_review_without_frontend_redesign"

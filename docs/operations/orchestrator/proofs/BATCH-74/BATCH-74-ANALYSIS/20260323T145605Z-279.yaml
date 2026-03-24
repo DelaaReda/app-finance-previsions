@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-74-BATCH-74-ANALYSIS-20260323T145605Z-279"
+stream_id: "BATCH-74"
+task_id: "BATCH-74-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T14:56:05Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_close_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T14:56:05Z"
+      ended_at_utc: "2026-03-23T14:56:05Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_contract_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/BATCH-73_ARCHITECTURE_CONTINUITY_2026-03-23.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "complete_batch74_analysis_P1774277527_110"
+  review_ref: "runner:BATCH-74-ANALYSIS"
+  note: "source=runner | root_cause=Batch 74 analysis remained IN_PROGRESS after BATCH-74-PLAN and BATCH-74-ARCH were DONE, leaving stale planner ownership on the only active stream | fix_applied=Planner closed ANALYSIS using canonical runtime context, active docs index, Plane backlog integration spec, product vision, and architecture continuity evidence | verify=before=BATCH-74-ANALYSIS:IN_PROGRESS with BATCH-74-PLAN:DONE and BATCH-74-ARCH:DONE; after=planner complete requested for BATCH-74-ANALYSIS with canonical architecture proof; test=parallel_workstream context role planner limit 5 confirmed in_progress=BATCH-74-ANALYSIS | architecture_check=architecture_plan_ref=apps/api/src/domains/*,apps/api/runtime/,apps/web/src;architecture_audit=planner_orchestrator_preserved,same_stream_dependencies_grouped,frontend_theme_untouched,legacy_paths_rejected;path_target=apps/api,apps/web | vision_alignment=batch=BATCH-74; target=brief_plus_ask_investment_memo; impact=close_planner_analysis_and_keep_backend_first_delivery"

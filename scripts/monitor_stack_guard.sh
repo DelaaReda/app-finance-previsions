@@ -16,7 +16,8 @@ LOG_DIR="${FC_MONITOR_LOG_DIR:-$ROOT/logs-codex-runs}"
 GUARD_LOG="${LOG_DIR}/monitor-guard.log"
 LOCK_FILE="${FC_MONITOR_GUARD_LOCK_FILE:-/tmp/fc-monitor-guard.v2.lock}"
 LOCK_DIR_FALLBACK=""
-MONITOR_APP_SCRIPT="${FC_MONITOR_APP_SCRIPT:-$ROOT/scripts/monitor_server.py}"
+MONITOR_APP_SCRIPT="${FC_MONITOR_APP_SCRIPT:-$ROOT/apps/monitor/server.py}"
+MONITOR_PYTHON_BIN="${FC_MONITOR_PYTHON_BIN:-$ROOT/apps/monitor/.venv/bin/python}"
 MONITOR_LAN_PROXY_SCRIPT="${FC_MONITOR_LAN_PROXY_SCRIPT:-$ROOT/scripts/monitor_lan_proxy.py}"
 LOCAL_URL="${FC_MONITOR_LOCAL_URL:-http://127.0.0.1:7779/api/monitor/access}"
 LOCAL_DIAG_URL="${FC_MONITOR_LOCAL_DIAG_URL:-http://127.0.0.1:7779/api/runtime-diagnostics}"
@@ -40,11 +41,7 @@ TUNNEL_PROVIDERS="${FC_MONITOR_TUNNEL_PROVIDERS:-localtunnel,localhost_run}"
 MANAGE_TUNNEL="${FC_MONITOR_MANAGE_TUNNEL:-0}"
 ENFORCE_PUBLIC_ROOT_MATCH="${FC_MONITOR_ENFORCE_PUBLIC_ROOT_MATCH:-0}"
 ENABLE_LAN_PROXY="${FC_MONITOR_ENABLE_LAN_PROXY:-1}"
-if [[ "$ROOT" == /Users/* ]]; then
-  FC_MONITOR_AUTO_START_STACK="${FC_MONITOR_AUTO_START_STACK:-0}"
-else
-  FC_MONITOR_AUTO_START_STACK="${FC_MONITOR_AUTO_START_STACK:-1}"
-fi
+FC_MONITOR_AUTO_START_STACK="${FC_MONITOR_AUTO_START_STACK:-0}"
 FC_MONITOR_AUTO_START_COOLDOWN_SECONDS="${FC_MONITOR_AUTO_START_COOLDOWN_SECONDS:-600}"
 AUTO_START_STATE_FILE="${FC_MONITOR_AUTO_START_STATE_FILE:-${LOG_DIR}/monitor-auto-start.last}"
 STALE_LOCK_MINUTES="${FC_MONITOR_GUARD_STALE_LOCK_MINUTES:-30}"
@@ -157,12 +154,12 @@ write_auto_start_epoch() {
 }
 
 monitor_server_running() {
-  pgrep -f 'scripts/monitor_server.py|apps/monitor/server.py|uvicorn.*7779' >/dev/null 2>&1 \
+  pgrep -f 'apps/monitor/server.py|uvicorn.*7779' >/dev/null 2>&1 \
     || ss -ltn 2>/dev/null | awk '$4 ~ /:7779$/ {found=1} END{exit(found?0:1)}'
 }
 
 stack_process_running() {
-  pgrep -f 'python.*run_api.py|uvicorn.*8050|http.server 5173|vite.*5173|scripts/monitor_server.py|apps/monitor/server.py' >/dev/null 2>&1
+  pgrep -f 'python.*run_api.py|uvicorn.*8050|http.server 5173|vite.*5173|apps/monitor/server.py' >/dev/null 2>&1
 }
 
 other_guard_running() {
@@ -230,9 +227,13 @@ public_matches_root() {
 }
 
 start_monitor_server() {
+  local monitor_python="$MONITOR_PYTHON_BIN"
+  if [[ ! -x "$monitor_python" ]]; then
+    monitor_python="python3"
+  fi
   (
     exec 9>&-
-    nohup env FC_MONITOR_ROOT="$ROOT" python3 "$MONITOR_APP_SCRIPT" >> "${LOG_DIR}/monitor-server.log" 2>&1 < /dev/null &
+    nohup env FC_MONITOR_ROOT="$ROOT" "$monitor_python" "$MONITOR_APP_SCRIPT" >> "${LOG_DIR}/monitor-server.log" 2>&1 < /dev/null &
   )
   local _i=0
   while [[ "$_i" -lt 12 ]]; do
@@ -246,7 +247,7 @@ start_monitor_server() {
 }
 
 restart_monitor_server() {
-  pkill -f 'scripts/monitor_server.py|apps/monitor/server.py' >/dev/null 2>&1 || true
+  pkill -f 'apps/monitor/server.py' >/dev/null 2>&1 || true
   sleep 2
   start_monitor_server
 }

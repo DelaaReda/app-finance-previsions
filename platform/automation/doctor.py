@@ -20,9 +20,10 @@ if str(THIS_DIR) not in sys.path:
     sys.path.insert(0, str(THIS_DIR))
 
 from orchestrator_paths import load_runtime_state, resolve_orchestrator_read_path
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
 
 CORE_ROLES = ("planner", "dev", "admin")
-ROLE_MAP_FILE = Path("docs/orchestrator-ops/parallel-role-cron-map.json")
+ROLE_MAP_FILE = Path("logs-codex-runs/orchestrator-state/parallel-role-cron-map.json")
 BASELINE_ADMIN_JOBS = (
     "adminapp-codex-sync-10m",
     "admin-agents-supervisor-15m",
@@ -407,7 +408,7 @@ def _load_product_priority_guard(root: Path):
 
 
 def _load_planner_dispatch_metrics(root: Path):
-    module_path = root / "platform" / "automation" / "planner_dispatch_metrics.py"
+    module_path = root / "platform" / "automation" / "runtime" / "planner" / "planner_dispatch_metrics.py"
     if not module_path.exists():
         return None
     spec = importlib.util.spec_from_file_location("fc_planner_dispatch_metrics_unified", module_path)
@@ -443,11 +444,20 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
         if locks.get(lock_kind, {}).get("stale_count", 0) > 0:
             warnings.append(f"stale_{lock_kind}_locks")
 
+    runtime_truth = build_runtime_truth_snapshot(root)
+    event_store_primary = bool(runtime_truth.get("event_store_primary", False))
+
     queue_summary, workboard_summary, consistency_flags = _queue_workboard_snapshot(root)
     if not consistency_flags.get("queue_file_exists"):
-        errors.append("queue_file_missing")
+        if event_store_primary:
+            warnings.append("queue_file_missing_projection_only")
+        else:
+            errors.append("queue_file_missing")
     if not consistency_flags.get("workboard_file_exists"):
-        errors.append("workboard_file_missing")
+        if event_store_primary:
+            warnings.append("workboard_file_missing_projection_only")
+        else:
+            errors.append("workboard_file_missing")
     if consistency_flags.get("queue_workboard_mismatch"):
         warnings.append("queue_workboard_mismatch")
 
@@ -566,6 +576,11 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
         },
         "locks": locks,
         "orchestrator": {
+            "runtime_truth": runtime_truth,
+            "runtime_truth_source": "sqlite" if event_store_primary else "fallback",
+            "event_store_primary": event_store_primary,
+            "projection_secondary_only": event_store_primary,
+            "legacy_registry_secondary_only": True,
             "queue_summary": queue_summary,
             "workboard_summary": workboard_summary,
             "consistency_flags": consistency_flags,

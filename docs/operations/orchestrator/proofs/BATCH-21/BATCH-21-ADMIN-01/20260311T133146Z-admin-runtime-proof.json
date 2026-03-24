@@ -1,0 +1,24 @@
+{
+  "task_id": "BATCH-21-ADMIN-01",
+  "stream_id": "BATCH-21",
+  "role": "admin",
+  "produced_at_utc": "2026-03-11T13:31:46Z",
+  "status": "UNBLOCKED",
+  "summary": "BATCH-21 runtime validation passed after repairing a stale API process that was not serving the latest paper-trade execution metrics contract.",
+  "root_cause": "The live API process on :8050 predated the latest BATCH-21 decision_journal changes, so /api/copilot/decision-journal/metrics omitted paper_trade_execution even though the repo code and dev proof expected it.",
+  "fix_applied": "Reversible runtime repair only: terminated the stale run_api.py process and relaunched the canonical API server from apps/api/src/platform/run_api.py.",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "monitor_status": "PASS /api/status health=OK at 2026-03-11T13:31:45Z",
+    "monitor_contract_smoke": "PASS_WITH_CAUTION health=DEGRADED issues_records=1",
+    "fc_status_brief": "PASS_WITH_CAUTION Santé=DEGRADED blocker=planner:PLANNER_ORCHESTRATOR_BRIDGE_FAILED",
+    "decision_journal_metrics": "PASS /api/copilot/decision-journal/metrics now returns paper_trade_execution.total_records=2 and total_paper_trade_records=2",
+    "decision_journal_list": "PASS /api/copilot/decision-journal?limit=5 responded 200 with schema_version=copilot_decision_journal_v1",
+    "git_head": "c20c35dd7eebe7824647dfc88c264fef66f1fb35"
+  },
+  "scope_note": "Observed monitor degradation is tied to planner runtime blocker PLANNER_ORCHESTRATOR_BRIDGE_FAILED, not the BATCH-21 paper-trading/journal API slice.",
+  "artifact_refs": [
+    "docs/operations/orchestrator/proofs/BATCH-21/BATCH-21-DEV-03/20260311T104753Z-174.yaml",
+    "docs/operations/orchestrator/proofs/BATCH-21/BATCH-21-ADMIN-01/20260311T133146Z-admin-runtime-proof.json"
+  ]
+}

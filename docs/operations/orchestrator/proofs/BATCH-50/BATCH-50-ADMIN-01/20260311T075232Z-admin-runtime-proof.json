@@ -1,0 +1,52 @@
+{
+  "ts_utc": "2026-03-11T07:52:32Z",
+  "stream_id": "BATCH-50",
+  "task_id": "BATCH-50-ADMIN-01",
+  "task_title": "Global Forecast Board Final Gate [ADMIN-01]",
+  "role": "admin",
+  "status": "PASS",
+  "summary": "Runtime truth and observability validated for BATCH-50 after a reversible monitor repair.",
+  "root_cause": "The FC Monitor process on port 7779 was listening but its `/api/status?lite=1` contract had stalled and timed out, so `monitor_contract_smoke.sh` and `fc_status_brief.sh` could not establish runtime truth.",
+  "fix_applied": "Reversible runtime repair only: killed the stale `scripts/monitor_server.py` process and restarted the monitor wrapper. No code or config changes were made.",
+  "runtime_probes": {
+    "runtime_host_check": {
+      "result": "PASS",
+      "details": "runtime_is_vm=1 hostname=venom-Apple-Virtualization-Generic-Platform pwd=/home/venom/analyse-financiere"
+    },
+    "monitor_contract_smoke": {
+      "result": "PASS",
+      "details": "health=OK roles=1 agents=4 queue_states=3 workboard_ready=0 admin_timeouts_recent=0 issues_records=6"
+    },
+    "fc_status_brief": {
+      "result": "PASS",
+      "details": "health=OK mode=planner_experimental ready=0 in_progress=1 waiting_dep=9 closed=53 mismatch_count=0"
+    },
+    "health_snapshot": {
+      "result": "PASS",
+      "details": "health=OK done=322 ready=0 done_24h=104 done_7d=322 blocked=[] stale=[] critical_widgets=ok"
+    },
+    "final_global_gate_endpoint": {
+      "result": "PASS_WITH_PRODUCT_DEGRADE",
+      "details": "GET /api/forecasts/final-global-gate returned the expected aggregated gate payload with required_layers_active=[macro,market,news,policy,insider,geopolitical], free_data_compliant=true, freshness within SLA, and explicit degraded quality_status=fail sample_size=0"
+    }
+  },
+  "repair_evidence": {
+    "before": {
+      "monitor_contract_smoke": "curl(28) timeout after 8001ms on /api/status?lite=1",
+      "fc_status_brief": "monitor_unreachable"
+    },
+    "action": {
+      "killed_process": "pkill -f 'scripts/monitor_server.py|apps/monitor/server.py'",
+      "restart": "nohup env FC_MONITOR_ROOT=/home/venom/analyse-financiere python3 scripts/monitor_server.py >> logs-codex-runs/monitor-server.log 2>&1 < /dev/null &"
+    },
+    "after": {
+      "monitor_listener": "LISTEN 0.0.0.0:7779 pid=2163609",
+      "monitor_access": "GET /api/monitor/access returned canonical LAN-only URLs",
+      "monitor_status": "GET /api/status?lite=1 returned health=OK"
+    }
+  },
+  "planner_signal": {
+    "verdict": "UNBLOCKED_WITH_EXPLICIT_PRODUCT_DEGRADE",
+    "note": "Runtime and observability are healthy again. The remaining degraded state is product truth inside the final gate payload (`quality_non_regressing=false`, `quality_status=fail`, sample_size=0), not a runtime blocker."
+  }
+}

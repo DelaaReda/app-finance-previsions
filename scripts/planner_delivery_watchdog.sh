@@ -53,21 +53,30 @@ fi
 
 cleanup_orphan_capabilities() {
   python3 - <<'PY'
-import json, pathlib, subprocess
+import json, pathlib, subprocess, sys
 
 root = pathlib.Path("/home/venom/analyse-financiere")
-registry_path = root / "logs-codex-runs" / "orchestrator-state" / "planner-subagents-registry.json"
-if not registry_path.exists():
-    legacy_path = root / "docs" / "operations" / "orchestrator" / "planner-subagents-registry.json"
-    if legacy_path.exists():
-        registry_path = legacy_path
+sys.path.insert(0, str(root / "platform" / "automation"))
+keep = set()
+runtime_truth_source = ""
 try:
-    obj = json.loads(registry_path.read_text())
+    from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
+
+    snapshot = build_stable_planner_dispatch_snapshot(root, recent_limit=24)
+    runtime_truth_source = str(snapshot.get("runtime_truth_source", "") or "").strip().lower()
+    if runtime_truth_source == "sqlite":
+        keep = {
+            str(row.get("subagent_id") or "").strip()
+            for row in snapshot.get("active", [])
+            if isinstance(row, dict) and str(row.get("subagent_id") or "").strip()
+        }
 except Exception:
-    obj = {}
-subagents = obj.get("subagents") if isinstance(obj, dict) else obj
-subagents = subagents if isinstance(subagents, list) else []
-keep = {row.get("subagent_id") for row in subagents if isinstance(row, dict) and row.get("subagent_id")}
+    runtime_truth_source = ""
+
+if runtime_truth_source != "sqlite":
+    print("cleanup_removed=0")
+    raise SystemExit(0)
+
 try:
     agents = json.loads(subprocess.check_output(["openclaw", "agents", "list", "--json"], text=True))
 except Exception:
@@ -152,44 +161,6 @@ print(pd.get("recommended_next_action") or "none")
 PY
 }
 
-force_bridge_dispatch_if_needed() {
-  local tmp_status="/tmp/planner-watchdog-status-post.json"
-  curl -fsS "http://127.0.0.1:7779/api/status" >"$tmp_status" || return 0
-  local should_force
-  should_force="$(python3 - <<'PY' "$tmp_status"
-import json, pathlib, sys
-status = json.loads(pathlib.Path(sys.argv[1]).read_text())
-pd = status.get("planner_dispatch") or {}
-active = int(pd.get("active_subagents") or 0)
-pd_status = str(pd.get("status") or "").lower()
-needs_dispatch = bool(pd.get("needs_dispatch"))
-delivery = status.get("delivery_control") or {}
-stall_summary = ((delivery.get("capability_stall_summary") or {}).get("items") or [])
-takeover_required = any(bool(item.get("takeover_required")) for item in stall_summary if isinstance(item, dict))
-print("1" if active == 0 and (needs_dispatch or pd_status in {"dispatch_needed", "degraded"} or takeover_required) else "0")
-PY
-)"
-  if [ "$should_force" != "1" ]; then
-    return 0
-  fi
-  local contract_file
-  contract_file="$(mktemp /tmp/planner-watchdog-bridge.XXXXXX.txt)"
-  cat >"$contract_file" <<'EOF'
-STATUS: IN_PROGRESS
-DELTA: PLANNER_PROGRESS_REQUIRED
-EVIDENCE: task_update=analysis_only; run_note=watchdog forcing planner bridge dispatch from runtime truth; issues=none; issue_count=0; issue_severity=none
-RISKS: none
-NEXT: owner=planner; action=dispatch next capability now
-VERDICT: GO_WITH_CAUTION
-BLOCKER_ID: NONE
-NEXT_ACTION_UNIQUE: WATCHDOG_FORCE_DISPATCH
-EOF
-  log "planner_bridge_force_start"
-  python3 platform/automation/planner_orchestrator_bridge.py --root "$ROOT" --role planner --source watchdog_recovery --backend auto --contract-file "$contract_file" >>"$LOG_FILE" 2>&1 || true
-  rm -f "$contract_file"
-  log "planner_bridge_force_end"
-}
-
 log "watchdog_start interval=${INTERVAL_SECONDS}s duration=${DURATION_SECONDS}s pid=$$"
 
 while [ "$end_ts" -eq 0 ] || [ "$(date +%s)" -lt "$end_ts" ]; do
@@ -208,7 +179,6 @@ while [ "$end_ts" -eq 0 ] || [ "$(date +%s)" -lt "$end_ts" ]; do
     bash scripts/fc_agent_tick.sh planner >>"$LOG_FILE" 2>&1 || true
     log "planner_tick_end"
   fi
-  force_bridge_dispatch_if_needed
   sleep "$INTERVAL_SECONDS"
 done
 

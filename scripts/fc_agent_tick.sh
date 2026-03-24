@@ -362,6 +362,32 @@ normalize_seconds() {
   echo "$raw"
 }
 
+normalize_model_name() {
+  local raw="${1:-gpt-5.2}"
+  local stripped="${raw#openai-codex/}"
+  case "$stripped" in
+    gpt-5.2|gpt-5.3-codex-spark|gpt-5.3-codex|gpt-5.4)
+      printf '%s\n' "$stripped" ;;
+    gpt-5.3-spark)
+      printf 'gpt-5.3-codex-spark\n' ;;
+    qwen)
+      printf 'qwen\n' ;;
+    *)
+      printf 'gpt-5.2\n' ;;
+  esac
+}
+
+resolve_role_model_early() {
+  local role="${1:-${ROLE}}"
+  local varname="LM_ROLE_${role^^}_MODEL"
+  varname="${varname//-/_}"
+  printf '%s' "${TMUX_ROLE_CODEX_MODEL:-${!varname:-${LM_USED_ROLE_MODEL:-gpt-5.2}}}"
+}
+
+model_cache_key() {
+  printf '%s' "${1:-gpt-5.2}" | tr '[:upper:]/.-' '[:lower:]___' | sed 's/[^a-z0-9_]/_/g'
+}
+
 resolve_executable() {
   local candidate="${1:-}"
   if [[ -z "$candidate" ]]; then
@@ -518,9 +544,9 @@ if [[ "$LAST_EPOCH" -gt 0 && "$GAP" -gt "$VM_RESUME_KILL_GAP_SECONDS" ]]; then
 fi
 
 # ============================================================
-# Qwen fallback gate
-# Vérifie si codex est rate-limited → bascule vers qwen
-# Vérifie aussi si qwen lui-même est rate-limited → skip
+# Fallback gate
+# Vérifie si le modèle codex courant est rate-limited.
+# Chaîne: codex primary -> codex secondary (spark) -> qwen -> skip
 # ============================================================
 is_rl_cache_active() {
   local cache_file="$1"
@@ -551,6 +577,8 @@ set_rl_cache() {
 AGENT_MODE="codex"
 AGENT_BIN_EFFECTIVE="codex"
 CODEX_COOLDOWN_ACTIVE=0
+RATE_LIMIT_SECONDARY_MODEL="${TMUX_ROLE_RATE_LIMIT_SECONDARY_MODEL:-${TMUX_ROLE_RATE_LIMIT_FALLBACK_MODEL:-${LM_FALLBACK_SECONDARY_MODEL:-gpt-5.3-codex-spark}}}"
+RATE_LIMIT_SECONDARY_THINKING="${TMUX_ROLE_RATE_LIMIT_SECONDARY_THINKING:-${LM_FALLBACK_SECONDARY_THINKING:-high}}"
 # Default conservative: keep qwen fallback opt-in until qwen tmux transport is hardened.
 if [[ "$ROLE" == "planner" || "$ROLE" == "dev" || "$ROLE" == "admin" ]]; then
   FC_ENABLE_QWEN_FALLBACK="${FC_ENABLE_QWEN_FALLBACK:-${TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK:-1}}"
@@ -572,9 +600,26 @@ fi
 
 if [[ "$CODEX_COOLDOWN_ACTIVE" -eq 1 ]]; then
   RL_REASON="$(cache_reason "$CODEX_RL_CACHE_FILE")"
+  CURRENT_ROLE_MODEL_EARLY="$(normalize_model_name "$(resolve_role_model_early "$ROLE")")"
+  SECONDARY_RATE_LIMIT_MODEL="$(normalize_model_name "$RATE_LIMIT_SECONDARY_MODEL")"
+  SECONDARY_MODEL_SELECTED=0
   if [[ "$ENABLE_QWEN_FALLBACK" != "1" ]]; then
     echo "$(ts) [CODEX_COOLDOWN] codex rate-limited (${RL_REASON}); qwen fallback disabled, keeping codex rate-limit gate" >> "$LOG"
-  else
+  elif [[ -n "$SECONDARY_RATE_LIMIT_MODEL" && "$SECONDARY_RATE_LIMIT_MODEL" != "qwen" && "$SECONDARY_RATE_LIMIT_MODEL" != "$CURRENT_ROLE_MODEL_EARLY" ]]; then
+    SECONDARY_MODEL_CACHE_FILE="${CODEX_RL_CACHE_DIR}/codex.$(model_cache_key "$SECONDARY_RATE_LIMIT_MODEL").rate_limit_gate_cache"
+    if is_rl_cache_active "$SECONDARY_MODEL_CACHE_FILE"; then
+      echo "$(ts) [SECONDARY_FALLBACK] codex rate-limited (${RL_REASON}); secondary model ${SECONDARY_RATE_LIMIT_MODEL} also cooling down, trying qwen" >> "$LOG"
+    else
+      export TMUX_ROLE_CODEX_MODEL="$SECONDARY_RATE_LIMIT_MODEL"
+      export TMUX_ROLE_CODEX_THINKING="$RATE_LIMIT_SECONDARY_THINKING"
+      export TMUX_ROLE_RATE_LIMIT_SECONDARY_MODEL=""
+      export TMUX_ROLE_RATE_LIMIT_SECONDARY_THINKING=""
+      SECONDARY_MODEL_SELECTED=1
+      echo "$(ts) [SECONDARY_FALLBACK] codex rate-limited (${RL_REASON}), switching to model ${SECONDARY_RATE_LIMIT_MODEL} thinking=${RATE_LIMIT_SECONDARY_THINKING}" >> "$LOG"
+    fi
+  fi
+
+  if [[ "$SECONDARY_MODEL_SELECTED" -eq 0 && "$ENABLE_QWEN_FALLBACK" == "1" ]]; then
     echo "$(ts) [QWEN_FALLBACK] codex rate-limited (${RL_REASON}), switching to qwen" >> "$LOG"
 
     if is_rl_cache_active "$QWEN_RL_CACHE_FILE"; then
@@ -666,7 +711,7 @@ normalize_reasoning_effort() {
     ""|default|auto|none)
       printf 'high\n' ;;
     xhigh|extra|extra_high|veryhigh|max|maximum)
-      printf 'high\n' ;;
+      printf 'xhigh\n' ;;
     minimal|low|medium|high)
       printf '%s\n' "$normalized" ;;
     *)
@@ -712,7 +757,7 @@ if [[ "$SANITIZED_ROLE_MODEL" == "qwen" ]]; then
 fi
 
 # Lire allow_file_edits depuis le cron-map pour ce rôle (évite mode read-only incorrect)
-CRON_MAP_FILE="$ROOT/docs/operations/orchestrator/parallel-role-cron-map.json"
+CRON_MAP_FILE="$ROOT/logs-codex-runs/orchestrator-state/parallel-role-cron-map.json"
 if [[ -f "$CRON_MAP_FILE" ]]; then
   ALLOW_FILE_EDITS_FROM_MAP=$(python3 -c "
 import json,sys
@@ -750,15 +795,20 @@ export TMUX_ROLE_STALL_ABORT_SECONDS="${TMUX_ROLE_STALL_ABORT_SECONDS:-80}"
 # Role-specific overrides to reduce planner/admin timeout churn on heavy context ticks.
 case "$ROLE" in
   planner)
-    export TMUX_ROLE_CODEX_MODEL="${FC_PLANNER_MODEL:-$SANITIZED_ROLE_MODEL}"
+    export TMUX_ROLE_CODEX_MODEL="${TMUX_ROLE_CODEX_MODEL:-${FC_PLANNER_MODEL:-$SANITIZED_ROLE_MODEL}}"
     export PROMPT_TIMEOUT_SECONDS="${FC_PLANNER_PROMPT_TIMEOUT_SECONDS:-300}"
     export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_PLANNER_RETRY_TIMEOUT_SECONDS:-120}"
     export TMUX_ROLE_STALL_ABORT_SECONDS="${FC_PLANNER_STALL_ABORT_SECONDS:-90}"
     TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_PLANNER_TICK_TIMEOUT_SECONDS:-420}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
-    # Planner: keep resume enabled by default for faster/stabler ticks.
-    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_PLANNER_CODEX_EXEC_RESUME:-0}"
+    if [[ "${FC_PLANNER_ALLOW_CODEX_EXEC_RESUME:-0}" == "1" ]]; then
+      export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_PLANNER_CODEX_EXEC_RESUME:-1}"
+    else
+      export TMUX_ROLE_CODEX_EXEC_RESUME="0"
+    fi
     export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_PLANNER_RATE_LIMIT_PRECHECK:-${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}}"
-    export TMUX_ROLE_CODEX_THINKING="${FC_PLANNER_THINKING:-${RESOLVED_ROLE_THINKING}}"
+    export TMUX_ROLE_RATE_LIMIT_SECONDARY_MODEL="${FC_PLANNER_RATE_LIMIT_SECONDARY_MODEL:-gpt-5.3-codex-spark}"
+    export TMUX_ROLE_RATE_LIMIT_SECONDARY_THINKING="${FC_PLANNER_RATE_LIMIT_SECONDARY_THINKING:-high}"
+    export TMUX_ROLE_CODEX_THINKING="${TMUX_ROLE_CODEX_THINKING:-${FC_PLANNER_THINKING:-${RESOLVED_ROLE_THINKING}}}"
     export TMUX_ROLE_MIN_REFLECTION_PASSES="${FC_PLANNER_MIN_REFLECTION_PASSES:-1}"
     export FC_PLANNER_AUTONOMY_ENABLED="${FC_PLANNER_AUTONOMY_ENABLED:-1}"
     export FC_PLANNER_WAIT_FORBIDDEN="${FC_PLANNER_WAIT_FORBIDDEN:-${FC_PLANNER_NEVER_WAIT:-1}}"
@@ -772,6 +822,8 @@ case "$ROLE" in
   dev)
     export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_DEV_RATE_LIMIT_PRECHECK:-${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}}"
     export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_DEV_CODEX_EXEC_RESUME:-1}"
+    export TMUX_ROLE_RATE_LIMIT_SECONDARY_MODEL="${FC_DEV_RATE_LIMIT_SECONDARY_MODEL:-gpt-5.3-codex-spark}"
+    export TMUX_ROLE_RATE_LIMIT_SECONDARY_THINKING="${FC_DEV_RATE_LIMIT_SECONDARY_THINKING:-high}"
     export PROMPT_TIMEOUT_SECONDS="${FC_DEV_PROMPT_TIMEOUT_SECONDS:-300}"
     export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_DEV_RETRY_TIMEOUT_SECONDS:-120}"
     TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_DEV_TICK_TIMEOUT_SECONDS:-540}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
@@ -786,7 +838,7 @@ case "$ROLE" in
     export TMUX_ROLE_DEV_WAIT_READY_TASK_ONLY="${FC_DEV_WAIT_READY_TASK_ONLY:-1}"
     ;;
   admin)
-    export TMUX_ROLE_CODEX_MODEL="${FC_ADMIN_MODEL:-$SANITIZED_ROLE_MODEL}"
+    export TMUX_ROLE_CODEX_MODEL="${TMUX_ROLE_CODEX_MODEL:-${FC_ADMIN_MODEL:-$SANITIZED_ROLE_MODEL}}"
     # Admin defaults slightly raised; final budget remains adaptive in cron_tmux_role_runner.sh
     export PROMPT_TIMEOUT_SECONDS="${FC_ADMIN_PROMPT_TIMEOUT_SECONDS:-360}"
     export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_ADMIN_RETRY_TIMEOUT_SECONDS:-150}"
@@ -794,7 +846,7 @@ case "$ROLE" in
     TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_ADMIN_TICK_TIMEOUT_SECONDS:-540}" "$TICK_TIMEOUT_SECONDS" "300" "900")"
     export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_ADMIN_CODEX_EXEC_RESUME:-0}"
     export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_ADMIN_RATE_LIMIT_PRECHECK:-${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}}"
-    export TMUX_ROLE_CODEX_THINKING="${FC_ADMIN_THINKING:-${RESOLVED_ROLE_THINKING}}"
+    export TMUX_ROLE_CODEX_THINKING="${TMUX_ROLE_CODEX_THINKING:-${FC_ADMIN_THINKING:-${RESOLVED_ROLE_THINKING}}}"
     export TMUX_ROLE_MEMORY_PROFILE="${FC_ADMIN_MEMORY_PROFILE:-analysis}"
     export TMUX_ROLE_MEMORY_DAILY_LINES="${FC_ADMIN_MEMORY_DAILY_LINES:-4}"
     export TMUX_ROLE_MEMORY_ROLE_HISTORY_LINES="${FC_ADMIN_MEMORY_ROLE_HISTORY_LINES:-2}"
@@ -840,10 +892,10 @@ case "$ROLE" in
   scrum_master)
     export TMUX_ROLE_ENABLE_SCRUM_MASTER="${FC_SCRUM_MASTER_ENABLED:-1}"
     export TMUX_ROLE_ENABLE_PO_SCRUM_MASTER="${TMUX_ROLE_ENABLE_PO_SCRUM_MASTER:-${TMUX_ROLE_ENABLE_SCRUM_MASTER}}"
-    export TMUX_ROLE_CODEX_MODEL="${FC_SCRUM_MASTER_MODEL:-${FC_PO_SCRUM_MASTER_MODEL:-gpt-5.3-codex-spark}}"
+    export TMUX_ROLE_CODEX_MODEL="${TMUX_ROLE_CODEX_MODEL:-${FC_SCRUM_MASTER_MODEL:-${FC_PO_SCRUM_MASTER_MODEL:-gpt-5.3-codex-spark}}}"
     export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_SCRUM_MASTER_CODEX_EXEC_RESUME:-${FC_PO_SCRUM_MASTER_CODEX_EXEC_RESUME:-1}}"
     export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-${FC_PO_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}}}"
-    export TMUX_ROLE_CODEX_THINKING="${FC_SCRUM_MASTER_THINKING:-${FC_PO_SCRUM_MASTER_THINKING:-low}}"
+    export TMUX_ROLE_CODEX_THINKING="${TMUX_ROLE_CODEX_THINKING:-${FC_SCRUM_MASTER_THINKING:-${FC_PO_SCRUM_MASTER_THINKING:-low}}}"
     export PROMPT_TIMEOUT_SECONDS="${FC_SCRUM_MASTER_PROMPT_TIMEOUT_SECONDS:-${FC_PO_SCRUM_MASTER_PROMPT_TIMEOUT_SECONDS:-300}}"
     export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_SCRUM_MASTER_RETRY_TIMEOUT_SECONDS:-${FC_PO_SCRUM_MASTER_RETRY_TIMEOUT_SECONDS:-120}}"
     export PO_SCRUM_MASTER_ALLOW_BUS_POST="${FC_SCRUM_MASTER_ALLOW_BUS_POST:-${PO_SCRUM_MASTER_ALLOW_BUS_POST:-1}}"

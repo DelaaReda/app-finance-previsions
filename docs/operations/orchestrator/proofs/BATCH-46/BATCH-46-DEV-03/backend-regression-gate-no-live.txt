@@ -1,0 +1,749 @@
+== BACKEND REGRESSION GATE ==
+backend_dir=/home/venom/shared/analyse-financiere/apps/api/src
+pytest_bin=/home/venom/shared/analyse-financiere/apps/api/src/.venv/bin/pytest
+pytest_targets=domains/
+..............F...F..........F.FF....................................... [ 24%]
+........................................................................ [ 49%]
+................................F....................................... [ 74%]
+.........................................................FFF..F......... [ 99%]
+.                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_copilot_context_route_success_keeps_brief_first_starter_contract _____
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0xf78d94e09d00>
+
+    def test_copilot_context_route_success_keeps_brief_first_starter_contract(monkeypatch):
+        class _FakeContextService:
+            async def get_current_market_context(self):
+                return {
+                    "regime": "BULL_MARKET",
+                    "confidence": 0.72,
+                    "key_drivers": ["AI leadership remains concentrated."],
+                    "metadata": {
+                        "generated_at": "2026-03-09T10:15:00Z",
+                        "sources": ["forecasts", "news"],
+                    },
+                }
+    
+        brief_snapshot = {
+            "data": {
+                "daily": {
+                    "summary": "Semiconductors continue to lead while rates stay range-bound.",
+                    "market_sentiment": "BULLISH",
+                    "top_signals": ["Semiconductors leading"],
+                    "top_risks": ["Rates repricing"],
+                    "generated_at": "2026-03-09T10:20:00Z",
+                    "source": ["copilot_domain_router_test"],
+                }
+            }
+        }
+    
+        monkeypatch.setattr(
+            storage_io,
+            "load_json",
+            lambda key: brief_snapshot if key == "brief_daily" else None,
+        )
+        monkeypatch.setattr(
+            copilot_service,
+            "_resolve_context_service_class",
+            lambda _context_service_cls=None: _FakeContextService,
+        )
+    
+        client = _client()
+        response = client.get("/api/copilot/context?tickers=nvda")
+    
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload.get("ok") is True
+    
+        data = payload.get("data") or {}
+        assert data.get("scope_tickers") == ["NVDA"]
+    
+        daily_brief = data.get("daily_brief") or {}
+>       assert daily_brief.get("summary") == "Semiconductors continue to lead while rates stay range-bound."
+E       AssertionError: assert 'Daily market...ders: Unknown' == 'Semiconducto... range-bound.'
+E         
+E         - Semiconductors continue to lead while rates stay range-bound.
+E         + Daily market brief: BEARISH. 0 opportunités haussières, 1 risques majeurs. 197 top nouvelles positives, 0 négatives. Leaders: Unknown
+
+domains/copilot/tests/test_copilot_domain_router.py:97: AssertionError
+__________ test_copilot_start_route_fallback_keeps_brief_and_actions ___________
+
+_args = ()
+_kwargs = {'context_service_cls': <class 'domains.copilot.application.context_service.ContextService'>, 'scope': {'tickers': ['SPY']}}
+
+    async def _raise_context_error(*_args, **_kwargs):
+>       raise RuntimeError("copilot context unavailable")
+E       RuntimeError: copilot context unavailable
+
+domains/copilot/tests/test_copilot_domain_router.py:282: RuntimeError
+
+During handling of the above exception, another exception occurred:
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0xf78dc133d550>
+
+    def test_copilot_start_route_fallback_keeps_brief_and_actions(monkeypatch):
+        async def _raise_context_error(*_args, **_kwargs):
+            raise RuntimeError("copilot context unavailable")
+    
+        fallback_brief = {
+            "summary": "No daily brief available yet.",
+            "market_sentiment": "UNKNOWN",
+            "generated_at": "2026-03-09T06:00:00Z",
+            "freshness": "2026-03-09T06:00:00Z",
+            "source": ["copilot_daily_brief_fallback"],
+        }
+        fallback_entry_points = [
+            {
+                "id": "brief_of_day",
+                "kind": "open",
+                "label": "Brief du jour",
+                "target": "/brief/daily",
+            },
+            {
+                "id": "ask_copilot",
+                "kind": "ask",
+                "label": "Poser une question",
+                "target": "/copilot/ask",
+            },
+        ]
+    
+        monkeypatch.setattr(copilot_service, "build_context_payload", _raise_context_error)
+        monkeypatch.setattr(copilot_service, "_load_daily_brief_payload", lambda: dict(fallback_brief))
+        monkeypatch.setattr(
+            copilot_service,
+            "_build_copilot_entry_points",
+            lambda scope=None: [dict(item) for item in fallback_entry_points],
+        )
+        monkeypatch.setattr(
+            copilot_service,
+            "_build_copilot_start_payload",
+            lambda *, daily_brief=None, entry_points=None, scope=None: {
+                "brief_of_day": dict(daily_brief or {}),
+                "open": [dict(item) for item in entry_points or [] if item.get("kind") == "open"],
+                "ask": [dict(item) for item in entry_points or [] if item.get("kind") == "ask"],
+            },
+        )
+    
+        client = _client()
+>       response = client.get("/api/copilot/start?tickers=spy")
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+domains/copilot/tests/test_copilot_domain_router.py:324: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/starlette/testclient.py:473: in get
+    return super().get(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1053: in get
+    return self.request(
+.venv/lib/python3.12/site-packages/starlette/testclient.py:445: in request
+    return super().request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:914: in send
+    response = self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/testclient.py:348: in handle_request
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/testclient.py:345: in handle_request
+    portal.call(self.app, scope, receive, send)
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:334: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/_base.py:449: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+/usr/lib/python3.12/concurrent/futures/_base.py:401: in __get_result
+    raise self._exception
+.venv/lib/python3.12/site-packages/anyio/from_thread.py:259: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1160: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:107: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:716: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:736: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:290: in handle
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:130: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:116: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:670: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:324: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tickers = ['spy']
+
+    @router.get("/copilot/start")
+    async def copilot_start(
+        tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+    ):
+        scope = _normalize_scope(tickers)
+    
+        try:
+            payload = await copilot_service.build_context_payload(
+                context_service_cls=ContextService,
+                scope=scope,
+            )
+            effective_scope = _resolve_effective_scope(scope, payload)
+            note = None
+            if isinstance(payload, dict) and payload.get("regime") == "fallback":
+                note = "Market context service temporarily unavailable."
+    
+            start_payload = payload.get("copilot_start") if isinstance(payload, dict) else None
+            if not isinstance(start_payload, dict) or not start_payload:
+                start_payload = copilot_service._build_copilot_start_payload(
+                    daily_brief=payload.get("daily_brief") if isinstance(payload, dict) else None,
+                    entry_points=payload.get("entry_points") if isinstance(payload, dict) else None,
+                    scope=effective_scope,
+                )
+            return {
+                "ok": True,
+                "data": _build_start_response(
+                    start_payload,
+                    scope=effective_scope,
+                    note=note,
+                    context_influence=payload.get("context_influence") if isinstance(payload, dict) else None,
+                    portfolio_context=payload.get("portfolio_context") if isinstance(payload, dict) else None,
+                ),
+            }
+        except Exception:
+            daily_brief = copilot_service._load_daily_brief_payload()
+            entry_points = copilot_service._build_copilot_entry_points(scope)
+            build_start_payload = getattr(
+                copilot_service,
+                "_build_copilot_start_payload",
+                None,
+            ) or getattr(copilot_service, "_legacy_copilot_start_payload", None)
+    
+            fallback_start: Dict[str, Any]
+            if callable(build_start_payload):
+                fallback_start = build_start_payload(
+                    daily_brief=daily_brief,
+                    entry_points=entry_points,
+                    scope=scope,
+                )
+            else:
+                fallback_start = {
+                    "brief_of_day": daily_brief,
+                    "ask": [],
+                    "open": [],
+                }
+    
+            return {
+                "ok": True,
+                "data": _build_start_response(
+                    fallback_start,
+                    scope=scope,
+                    note="Market context service temporarily unavailable.",
+>                   context_influence=fallback.get("context_influence"),
+                                      ^^^^^^^^
+                    portfolio_context=fallback.get("portfolio_context"),
+                ),
+            }
+E           NameError: name 'fallback' is not defined
+
+domains/copilot/api/copilot.py:319: NameError
+_______ test_build_context_payload_includes_daily_brief_and_entry_points _______
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0xf78d6fe87950>
+
+    def test_build_context_payload_includes_daily_brief_and_entry_points(monkeypatch):
+        brief_snapshot = {
+            "data": {
+                "daily": {
+                    "summary": "Ouverture calme sur les mega caps avec un biais favorable aux semi-conducteurs.",
+                    "market_sentiment": "BULLISH",
+                    "macro_signals": [
+                        {"name": "CPI", "value": "2.1%", "signal": "stable"},
+                    ],
+                    "sector_rotation": {
+                        "top": ["Semiconductors"],
+                        "bottom": ["Utilities"],
+                    },
+                    "generated_at": "2026-03-02T08:30:00Z",
+                    "source": ["test_brief"],
+                }
+            }
+        }
+    
+        monkeypatch.setattr(
+            storage_io,
+            "load_json",
+            lambda key: brief_snapshot if key == "brief_daily" else None,
+        )
+    
+        response = asyncio.run(
+            copilot_service.build_context_payload(
+                context_service_cls=_FakeContextService,
+                scope={"tickers": ["nvda"]},
+            )
+        )
+    
+        brief = response.get("daily_brief") or {}
+>       assert brief.get("summary", "").startswith("Ouverture calme")
+E       AssertionError: assert False
+E        +  where False = <built-in method startswith of str object at 0xf78d6ff43030>('Ouverture calme')
+E        +    where <built-in method startswith of str object at 0xf78d6ff43030> = 'Daily market brief: BEARISH. 0 opportunités haussières, 1 risques majeurs. 197 top nouvelles positives, 0 négatives. Leaders: Unknown'.startswith
+E        +      where 'Daily market brief: BEARISH. 0 opportunités haussières, 1 risques majeurs. 197 top nouvelles positives, 0 négatives. Leaders: Unknown' = <built-in method get of dict object at 0xf78d6f107cc0>('summary', '')
+E        +        where <built-in method get of dict object at 0xf78d6f107cc0> = {'freshness': '2026-03-11T05:15:44.813007Z', 'generated_at': '2026-03-11T05:15:44.813007Z', 'macro_signals': [{'confid...l macro géopolitique dérivé de snapshot.', 'score': 0.0, 'state': 'neutral', ...}], 'market_sentiment': 'BEARISH', ...}.get
+
+domains/copilot/tests/test_copilot_service.py:556: AssertionError
+________ test_build_context_payload_fallback_keeps_daily_brief_contract ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0xf78d94482c00>
+
+    def test_build_context_payload_fallback_keeps_daily_brief_contract(monkeypatch):
+        class _FailingContextService:
+            async def get_current_market_context(self) -> Dict[str, Any]:
+                raise RuntimeError("context unavailable")
+    
+        monkeypatch.setattr(storage_io, "load_json", lambda _key: None)
+    
+        response = asyncio.run(
+            copilot_service.build_context_payload(
+                context_service_cls=_FailingContextService,
+            )
+        )
+    
+        brief = response.get("daily_brief") or {}
+>       assert brief.get("summary") == "No daily brief available yet."
+E       AssertionError: assert 'Daily market...ders: Unknown' == 'No daily bri...vailable yet.'
+E         
+E         - No daily brief available yet.
+E         + Daily market brief: BEARISH. 0 opportunités haussières, 1 risques majeurs. 197 top nouvelles positives, 0 négatives. Leaders: Unknown
+
+domains/copilot/tests/test_copilot_service.py:658: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  domains.copilot.application.playbook_resolver:playbook_resolver.py:92 No playbook found for regime=fallback, risk=moderate. Using default: normal_moderate_001
+_ test_ask_payload_includes_local_daily_brief_when_brief_route_is_unavailable __
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0xf78d6ff0d9a0>
+
+    def test_ask_payload_includes_local_daily_brief_when_brief_route_is_unavailable(monkeypatch):
+        class _EmptyRAGStore(_FakeRAGStore):
+            def search(self, scope: Optional[Dict[str, Any]] = None, top_k: int = 10):
+                return []
+    
+        brief_snapshot = {
+            "data": {
+                "daily": {
+                    "summary": "Les semi-conducteurs restent leaders avant l'ouverture.",
+                    "market_sentiment": "BULLISH",
+                    "macro_signals": [
+                        {"name": "Rates", "value": "stable", "signal": "neutral"},
+                    ],
+                    "sector_rotation": {
+                        "top": ["Semiconductors"],
+                        "bottom": ["Utilities"],
+                    },
+                }
+            }
+        }
+    
+        monkeypatch.setattr(
+            storage_io,
+            "load_json",
+            lambda key: brief_snapshot if key == "brief_daily" else None,
+        )
+    
+        def _raise_backend_unavailable(*args, **kwargs):
+            raise RuntimeError("backend unavailable")
+    
+        monkeypatch.setattr(urllib.request, "urlopen", _raise_backend_unavailable)
+    
+        def fake_ask_llm(*, question: str, context_chunks: List[Dict[str, Any]], max_tokens: int = 1000):
+            assert "Les semi-conducteurs restent leaders avant l'ouverture." in question
+            assert "Sentiment: BULLISH" in question
+            return {"model": "test-llm", "answer": "Je recommande HOLD sur NVDA.", "citations": []}
+    
+        response = asyncio.run(
+            copilot_service.build_ask_payload(
+                question="Que faire sur NVDA aujourd'hui ?",
+                tickers=["NVDA"],
+                max_sources=2,
+                rag_store_cls=_EmptyRAGStore,
+                ask_llm_fn=fake_ask_llm,
+                context_service_cls=_FakeContextService,
+            )
+        )
+    
+        assert response.get("action") == "hold"
+>       assert response.get("sources_count") == 1
+E       assert 0 == 1
+E        +  where 0 = <built-in method get of dict object at 0xf78d6f47d600>('sources_count')
+E        +    where <built-in method get of dict object at 0xf78d6f47d600> = {'action': 'hold', 'answer': 'Désolé, une erreur s\'est produite lors du traitement: assert "Les semi-conducteurs rest...claire (HOLD/BUY/SELL/REDUIRE/AUGMENTER) avec 3 points de raisonnement max."', 'citations': [], 'confidence': 0.0, ...}.get
+
+domains/copilot/tests/test_copilot_service.py:728: AssertionError
+__________________ test_call_g4f_falls_back_to_next_candidate __________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0xf78d6f886510>
+
+    def test_call_g4f_falls_back_to_next_candidate(monkeypatch):
+        class _FakeResponse:
+            def __init__(self, content: str):
+                self.choices = [type("C", (), {"message": type("M", (), {"content": content})()})]
+    
+            def model_dump_json(self) -> str:
+                return json.dumps({"ok": True})
+    
+        class _FakeCompletions:
+            def create(self, **kwargs):
+                model = kwargs.get("model")
+                if model == "model-fail":
+                    raise RuntimeError("forced failure")
+                return _FakeResponse("fallback_success")
+    
+        class _FakeChat:
+            completions = _FakeCompletions()
+    
+        class _FakeClient:
+            def __init__(self):
+                self.chat = _FakeChat()
+    
+        monkeypatch.setattr(g4f_client, "G4FClient", _FakeClient)
+        monkeypatch.setattr(g4f_client, "get_llm_settings", None)
+        monkeypatch.delenv("G4F_MODEL", raising=False)
+        monkeypatch.delenv("G4F_PROVIDER", raising=False)
+        monkeypatch.delenv("LLM_MODEL", raising=False)
+        monkeypatch.delenv("LLM_DEFAULT_MODEL", raising=False)
+        monkeypatch.setattr(
+            g4f_client,
+            "get_ranked_tested_models",
+            lambda category_preference="forecast", limit=12: [
+                ("DeepInfra", "model-fail"),
+                ("DeepInfra", "model-ok"),
+            ],
+        )
+    
+        result = g4f_client.call_g4f(
+            messages=[{"role": "user", "content": "ping"}],
+            model="model-fail",
+            provider="DeepInfra",
+            timeout=10,
+        )
+>       assert result.get("ok") is True
+E       AssertionError: assert False is True
+E        +  where False = <built-in method get of dict object at 0xf78d6f344380>('ok')
+E        +    where <built-in method get of dict object at 0xf78d6f344380> = {'answer': '', 'attempted': [{'error': 'RuntimeError: forced failure', 'model': 'model-fail', 'provider': 'DeepInfra'}...del-fail -> RuntimeError: forced failure; auto|model-fail -> RuntimeError: forced failure', 'llm_mode': 'fastest', ...}.get
+
+domains/judge/tests/test_g4f_client_model_fallback.py:133: AssertionError
+________________ test_forecasts_endpoint_exposes_edge_contract _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0xf78d6f7e8b60>
+
+    def test_forecasts_endpoint_exposes_edge_contract(monkeypatch):
+>       client = _build_client(monkeypatch)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+domains/market_data/tests/test_edge_contracts_runtime.py:59: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+domains/market_data/tests/test_edge_contracts_runtime.py:27: in _build_client
+    platform_main = _load_platform_main()
+                    ^^^^^^^^^^^^^^^^^^^^^
+domains/market_data/tests/test_edge_contracts_runtime.py:22: in _load_platform_main
+    spec.loader.exec_module(module)
+<frozen importlib._bootstrap_external>:995: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    # src/api/main.py
+    """
+    FastAPI backend for React frontend.
+    Serves all 5 pillars according to VISION.md
+    """
+    from __future__ import annotations
+    
+    import os
+    import inspect
+    import importlib.util
+    from pathlib import Path
+    from typing import Any, Dict, List, Optional
+    from datetime import datetime, timedelta, timezone
+    import json
+    from dataclasses import asdict
+    import logging
+    import math
+    import re
+    import time
+    from copy import deepcopy
+    from email.utils import parsedate_to_datetime
+    from urllib.parse import urlparse
+    
+    from fastapi import FastAPI, Query, HTTPException, Body, Request
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.middleware.gzip import GZipMiddleware
+    from pydantic import BaseModel
+    import pandas as pd
+    from starlette.concurrency import run_in_threadpool
+>   from .bootstrap import bootstrap_runtime
+E   ImportError: attempted relative import with no known parent package
+
+platform/main.py:30: ImportError
+_____________ test_recommendations_endpoint_exposes_edge_contract ______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0xf78d6ef169f0>
+
+    def test_recommendations_endpoint_exposes_edge_contract(monkeypatch):
+>       client = _build_client(monkeypatch)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+domains/market_data/tests/test_edge_contracts_runtime.py:67: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+domains/market_data/tests/test_edge_contracts_runtime.py:27: in _build_client
+    platform_main = _load_platform_main()
+                    ^^^^^^^^^^^^^^^^^^^^^
+domains/market_data/tests/test_edge_contracts_runtime.py:22: in _load_platform_main
+    spec.loader.exec_module(module)
+<frozen importlib._bootstrap_external>:995: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    # src/api/main.py
+    """
+    FastAPI backend for React frontend.
+    Serves all 5 pillars according to VISION.md
+    """
+    from __future__ import annotations
+    
+    import os
+    import inspect
+    import importlib.util
+    from pathlib import Path
+    from typing import Any, Dict, List, Optional
+    from datetime import datetime, timedelta, timezone
+    import json
+    from dataclasses import asdict
+    import logging
+    import math
+    import re
+    import time
+    from copy import deepcopy
+    from email.utils import parsedate_to_datetime
+    from urllib.parse import urlparse
+    
+    from fastapi import FastAPI, Query, HTTPException, Body, Request
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.middleware.gzip import GZipMiddleware
+    from pydantic import BaseModel
+    import pandas as pd
+    from starlette.concurrency import run_in_threadpool
+>   from .bootstrap import bootstrap_runtime
+E   ImportError: attempted relative import with no known parent package
+
+platform/main.py:30: ImportError
+________ test_stocks_sheet_returns_degraded_contract_instead_of_raw_404 ________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0xf78d6f6cb1d0>
+
+    def test_stocks_sheet_returns_degraded_contract_instead_of_raw_404(monkeypatch):
+>       client = _build_client(monkeypatch)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+domains/market_data/tests/test_edge_contracts_runtime.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+domains/market_data/tests/test_edge_contracts_runtime.py:27: in _build_client
+    platform_main = _load_platform_main()
+                    ^^^^^^^^^^^^^^^^^^^^^
+domains/market_data/tests/test_edge_contracts_runtime.py:22: in _load_platform_main
+    spec.loader.exec_module(module)
+<frozen importlib._bootstrap_external>:995: in exec_module
+    ???
+<frozen importlib._bootstrap>:488: in _call_with_frames_removed
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+    # src/api/main.py
+    """
+    FastAPI backend for React frontend.
+    Serves all 5 pillars according to VISION.md
+    """
+    from __future__ import annotations
+    
+    import os
+    import inspect
+    import importlib.util
+    from pathlib import Path
+    from typing import Any, Dict, List, Optional
+    from datetime import datetime, timedelta, timezone
+    import json
+    from dataclasses import asdict
+    import logging
+    import math
+    import re
+    import time
+    from copy import deepcopy
+    from email.utils import parsedate_to_datetime
+    from urllib.parse import urlparse
+    
+    from fastapi import FastAPI, Query, HTTPException, Body, Request
+    from fastapi.middleware.cors import CORSMiddleware
+    from fastapi.middleware.gzip import GZipMiddleware
+    from pydantic import BaseModel
+    import pandas as pd
+    from starlette.concurrency import run_in_threadpool
+>   from .bootstrap import bootstrap_runtime
+E   ImportError: attempted relative import with no known parent package
+
+platform/main.py:30: ImportError
+__________ test_copilot_context_fallback_keeps_copilot_start_contract __________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0xf78d6fcef020>
+
+    def test_copilot_context_fallback_keeps_copilot_start_contract(monkeypatch):
+        platform_main = importlib.import_module("platform.main")
+        copilot_service = importlib.import_module("domains.copilot.application.copilot_service")
+    
+        async def fake_build_context_payload(*_args, **_kwargs):
+            return {
+                "regime": "fallback",
+                "confidence": 0.35,
+                "daily_brief": {
+                    "title": "Brief of the day",
+                    "summary": "No daily brief available yet.",
+                    "market_sentiment": "UNKNOWN",
+                    "top_signals": [],
+                    "top_risks": [],
+                    "macro_signals": [],
+                    "sector_rotation": {"top": [], "bottom": []},
+                    "generated_at": "2026-03-09T06:00:00Z",
+                    "freshness": "2026-03-09T06:00:00Z",
+                    "source": ["brief_daily_fallback"],
+                },
+                "entry_points": [
+                    {
+                        "id": "brief_of_day",
+                        "kind": "open",
+                        "label": "Brief du jour",
+                        "target": "/brief/daily",
+                    },
+                    {
+                        "id": "ask_copilot",
+                        "kind": "ask",
+                        "label": "Poser une question",
+                        "target": "/copilot/ask",
+                        "prefill": {
+                            "question": "Que dois-je surveiller aujourd'hui ?",
+                            "tickers": [],
+                        },
+                    },
+                ],
+                "copilot_start": {
+                    "brief_of_day": {
+                        "title": "Brief of the day",
+                        "summary": "No daily brief available yet.",
+                        "market_sentiment": "UNKNOWN",
+                        "top_signals": [],
+                        "top_risks": [],
+                        "macro_signals": [],
+                        "sector_rotation": {"top": [], "bottom": []},
+                        "generated_at": "2026-03-09T06:00:00Z",
+                        "freshness": "2026-03-09T06:00:00Z",
+                        "source": ["brief_daily_fallback"],
+                    },
+                    "ask": [
+                        {
+                            "id": "ask_copilot",
+                            "label": "Poser une question",
+                            "target": "/copilot/ask",
+                        }
+                    ],
+                    "open": [
+                        {
+                            "id": "brief_of_day",
+                            "label": "Brief du jour",
+                            "target": "/brief/daily",
+                        }
+                    ],
+                },
+            }
+    
+        monkeypatch.setattr(copilot_service, "build_context_payload", fake_build_context_payload)
+    
+        endpoint = _route_endpoint("/api/copilot/context")
+>       payload = asyncio.run(endpoint())
+                  ^^^^^^^^^^^^^^^^^^^^^^^
+
+/home/venom/.openclaw/workspace/capabilities/planner-dev/repo/apps/api/src/domains/market_data/tests/test_endpoint_cache_contracts.py:204: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/nest_asyncio.py:30: in run
+    return loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/nest_asyncio.py:98: in run_until_complete
+    return f.result()
+           ^^^^^^^^^^
+/usr/lib/python3.12/asyncio/futures.py:203: in result
+    raise self._exception.with_traceback(self._exception_tb)
+/usr/lib/python3.12/asyncio/tasks.py:314: in __step_run_and_handle_result
+    result = coro.send(None)
+             ^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+tickers = Query(None)
+
+    @app.get("/api/copilot/context")
+    async def copilot_context_alias(
+        tickers: Optional[List[str]] = Query(default=None, description="Starter scope tickers"),
+    ):
+        # Parse tickers - FastAPI handles multiple ?tickers=A&tickers=B as a list
+        scope_tickers = []
+>       for item in (tickers or []):
+E       TypeError: 'Query' object is not iterable
+
+platform/main.py:4485: TypeError
+=============================== warnings summary ===============================
+domains/forecasts/tests/test_recommendations_contract_robustness.py::test_recommendations_openapi_exposes_enum_params_and_response_schema
+  /home/venom/shared/analyse-financiere/apps/api/src/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID copilot_ask_api_copilot_ask_post for function copilot_ask at /home/venom/shared/analyse-financiere/apps/api/src/domains/copilot/api/copilot.py
+    warnings.warn(message, stacklevel=1)
+
+domains/forecasts/tests/test_recommendations_contract_robustness.py::test_recommendations_openapi_exposes_enum_params_and_response_schema
+  /home/venom/shared/analyse-financiere/apps/api/src/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:255: UserWarning: Duplicate Operation ID copilot_history_api_copilot_history_get for function copilot_history at /home/venom/shared/analyse-financiere/apps/api/src/domains/copilot/api/copilot.py
+    warnings.warn(message, stacklevel=1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED domains/copilot/tests/test_copilot_domain_router.py::test_copilot_context_route_success_keeps_brief_first_starter_contract
+FAILED domains/copilot/tests/test_copilot_domain_router.py::test_copilot_start_route_fallback_keeps_brief_and_actions
+FAILED domains/copilot/tests/test_copilot_service.py::test_build_context_payload_includes_daily_brief_and_entry_points
+FAILED domains/copilot/tests/test_copilot_service.py::test_build_context_payload_fallback_keeps_daily_brief_contract
+FAILED domains/copilot/tests/test_copilot_service.py::test_ask_payload_includes_local_daily_brief_when_brief_route_is_unavailable
+FAILED domains/judge/tests/test_g4f_client_model_fallback.py::test_call_g4f_falls_back_to_next_candidate
+FAILED domains/market_data/tests/test_edge_contracts_runtime.py::test_forecasts_endpoint_exposes_edge_contract
+FAILED domains/market_data/tests/test_edge_contracts_runtime.py::test_recommendations_endpoint_exposes_edge_contract
+FAILED domains/market_data/tests/test_edge_contracts_runtime.py::test_stocks_sheet_returns_degraded_contract_instead_of_raw_404
+FAILED domains/market_data/tests/test_endpoint_cache_contracts.py::test_copilot_context_fallback_keeps_copilot_start_contract

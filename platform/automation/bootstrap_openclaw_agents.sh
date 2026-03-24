@@ -14,7 +14,7 @@ if [[ -f "$MODEL_CONFIG_FILE" ]]; then
   source "$MODEL_CONFIG_FILE"
 fi
 
-CATALOG_FILE="${OPENCLAW_AGENT_CATALOG_FILE:-docs/orchestrator-ops/openclaw-agent-catalog.json}"
+CATALOG_FILE="${OPENCLAW_AGENT_CATALOG_FILE:-logs-codex-runs/orchestrator-state/openclaw-agent-catalog.json}"
 WORKSPACE_DEFAULT="$ROOT"
 MODEL_DEFAULT="${MODEL_DEFAULT:-${LM_USED_ROLE_MODEL:-${MODEL_CONFIG_ROLE_MODEL:-${MODEL_CONFIG_PARALLEL_ROLE_MODEL}}}}"
 MEMORY_DIR="${OPENCLAW_AGENT_MEMORY_DIR:-$ROOT/memory/agents}"
@@ -30,7 +30,7 @@ Options:
   --apply            Create/update agents and cron bindings (default: dry-run)
   --no-link-cron     Do not bind existing cron jobs to agent IDs
   --full-access      Apply permissive VM-test access policy (sandbox off + /** allowlist)
-  --catalog <path>   Agent catalog JSON (default: docs/orchestrator-ops/openclaw-agent-catalog.json)
+  --catalog <path>   Agent catalog JSON (default: logs-codex-runs/orchestrator-state/openclaw-agent-catalog.json)
   -h, --help         Show help
 EOF
 }

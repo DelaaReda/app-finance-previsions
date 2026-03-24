@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T122231Z-805"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T12:22:31Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T12:22:31Z"
+      ended_at_utc: "2026-03-24T12:22:31Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_proof_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/.tmp/role-runner/planner/BATCH-84-ANALYSIS-architecture-audit.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b84-analysis-close-20260324t121942z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=guardian red kept BATCH-84-ANALYSIS open because architecture_plan_ref and architecture_audit were not bound to canonical paths and planner-only orchestration evidence | fix_applied=linked ACTIVE_DOCS_INDEX PLANE_BACKLOG_INTEGRATION_SPEC PRODUCT_VISION and the architecture audit artifact to BATCH-84-ANALYSIS so admin takeover can proceed on the same stream | verify=before=ROLE_CONTEXT ready=0 in_progress=BATCH-84-ANALYSIS waiting_dep=BATCH-84-GOV_REVIEW; after=BATCH-84-ANALYSIS completion requested with runtime artifact and admin takeover next; test=parallel_workstream_context plus audit artifact present | architecture_check=architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md|docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md|docs/product/PRODUCT_VISION.md|architecture_audit=apps/api/src/domains/*,apps/web/src,apps/api/runtime/|anti_regression=copilot-app_forbidden,legacy_src_forbidden|path_target=/home/venom/analyse-financiere/.tmp/role-runner/planner/BATCH-84-ANALYSIS-architecture-audit.md | vision_alignment=batch=BATCH-84; target=brief_of_day_plus_ask_open_investment_memo; impact=analysis_closed_and_admin_takeover_unblocked"

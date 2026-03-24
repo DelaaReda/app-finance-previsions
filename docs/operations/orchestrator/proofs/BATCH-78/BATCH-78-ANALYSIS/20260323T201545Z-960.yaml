@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-78-BATCH-78-ANALYSIS-20260323T201545Z-960"
+stream_id: "BATCH-78"
+task_id: "BATCH-78-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T20:15:45Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(runtime completion only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T20:15:45Z"
+      ended_at_utc: "2026-03-23T20:15:45Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime metadata completion only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "COMPLETE_B78_ANALYSIS_P1774296810_1542"
+  review_ref: "runner:BATCH-78-ANALYSIS"
+  note: "source=runner | root_cause=analysis_in_progress_dep_none_with_downstream_waiting_dep | fix_applied=planner_complete_called_with_canonical_architecture_ref | verify=before=analysis_open_dep_none; after=analysis_completion_submitted; test=parallel_workstream_context_rc0 | architecture_check=docs/architecture/ARCHITECTURE_MAP.md_apps_api_src_domains_apps_web_src | vision_alignment=batch=BATCH-78; target=finance_copilot_daily_brief_and_analysis_open; impact=unblock_arch_and_gov_review"

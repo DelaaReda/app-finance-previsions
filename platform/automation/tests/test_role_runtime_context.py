@@ -19,7 +19,8 @@ class RoleRuntimeContextTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             workspace = Path(td)
             (workspace / "docs/orchestrator-ops").mkdir(parents=True, exist_ok=True)
-            (workspace / "docs/planning").mkdir(parents=True, exist_ok=True)
+            (workspace / "docs/product/planning").mkdir(parents=True, exist_ok=True)
+            (workspace / "logs-codex-runs/orchestrator-state").mkdir(parents=True, exist_ok=True)
             (workspace / "state").mkdir(parents=True, exist_ok=True)
             (workspace / "memory/agents").mkdir(parents=True, exist_ok=True)
             (workspace / "docs/ops").mkdir(parents=True, exist_ok=True)
@@ -41,10 +42,10 @@ class RoleRuntimeContextTests(unittest.TestCase):
                     },
                 ]
             }
-            (workspace / "docs/orchestrator-ops/priority-queue.json").write_text(
+            (workspace / "logs-codex-runs/orchestrator-state/priority-queue.json").write_text(
                 json.dumps(queue), encoding="utf-8"
             )
-            (workspace / "docs/planning/WORKSTATE.md").write_text(
+            (workspace / "docs/product/planning/WORKSTATE.md").write_text(
                 "Working on orchestration status and channel impacts.\n", encoding="utf-8"
             )
             (workspace / "state/dev.last_contract").write_text(
@@ -134,7 +135,7 @@ class RoleRuntimeContextTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             workspace = Path(td)
             (workspace / "docs/orchestrator-ops").mkdir(parents=True, exist_ok=True)
-            (workspace / "docs/planning").mkdir(parents=True, exist_ok=True)
+            (workspace / "docs/product/planning").mkdir(parents=True, exist_ok=True)
             (workspace / "state").mkdir(parents=True, exist_ok=True)
             (workspace / "memory/agents").mkdir(parents=True, exist_ok=True)
             (workspace / "docs/ops").mkdir(parents=True, exist_ok=True)
@@ -143,7 +144,7 @@ class RoleRuntimeContextTests(unittest.TestCase):
             (workspace / "docs/orchestrator-ops/priority-queue.json").write_text(
                 json.dumps({"items": []}), encoding="utf-8"
             )
-            (workspace / "docs/planning/WORKSTATE.md").write_text("none\n", encoding="utf-8")
+            (workspace / "docs/product/planning/WORKSTATE.md").write_text("none\n", encoding="utf-8")
             (workspace / "state/dev.last_contract").write_text(
                 "STATUS: IN_PROGRESS\nDELTA: DEV_TICK\nNEXT_ACTION_UNIQUE: DEV_ACTION\n", encoding="utf-8"
             )
@@ -251,23 +252,23 @@ class RoleRuntimeContextTests(unittest.TestCase):
         self.assertIn("TMUX_ROLE_PLANNER_DEP_POLICY_ENFORCE", text)
         self.assertIn("planner_preflight_sync_if_needed()", text)
         self.assertIn(
-            'python3 platform/automation/parallel_workstream.py sanitize-dependencies --queue docs/operations/orchestrator/priority-queue.json --all-batches',
+            'python3 platform/automation/runtime/planner/planner_runtime_actions.py sanitize-dependencies --queue ${CANONICAL_QUEUE_FILE} --all-batches',
             text,
         )
         self.assertIn(
-            'python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json',
+            'python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --queue ${CANONICAL_QUEUE_FILE}',
             text,
         )
         self.assertIn(
-            'python3 platform/automation/parallel_workstream.py reconcile-state --queue docs/operations/orchestrator/priority-queue.json',
+            'python3 platform/automation/runtime/planner/planner_runtime_actions.py reconcile-state --queue ${CANONICAL_QUEUE_FILE}',
             text,
         )
         self.assertIn(
-            'python3 platform/automation/parallel_workstream.py planner-autobatch --queue docs/operations/orchestrator/priority-queue.json --reason idle_no_ready',
+            'python3 platform/automation/runtime/planner/planner_runtime_actions.py planner-autobatch --queue ${CANONICAL_QUEUE_FILE} --reason idle_no_ready --cooldown-s ${TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S}',
             text,
         )
         self.assertIn(
-            'python3 platform/automation/parallel_workstream.py complete --role planner --task <task_id>',
+            'python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role planner --task <task_id>',
             text,
         )
         self.assertIn("PLANNER_AUTOBATCH_ATTEMPTED", text)
@@ -281,7 +282,7 @@ class RoleRuntimeContextTests(unittest.TestCase):
         self.assertIn("PLANNER_SYNC_PRIORITY_STREAMS_CREATED", text)
         self.assertIn("PLANNER_SYNC_PRIORITY_TASKS_CREATED", text)
         self.assertIn(
-            "priority-queue.json reste utilisé uniquement pour sync-priority et planner-autobatch",
+            "Source de vérité runtime: SQLite/planner graph; priority-queue.json et parallel-workstreams.json sous logs-codex-runs/orchestrator-state restent uniquement des projections compatibles de travail.",
             text,
         )
 
@@ -323,8 +324,8 @@ class RoleRuntimeContextTests(unittest.TestCase):
         self.assertIn("ADMIN_TSHAPE_STATE_FILE", text)
         self.assertIn("admin_tshape_preflight_if_needed()", text)
         self.assertIn("admin.tshape.state.json", text)
-        self.assertIn("python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json", text)
-        self.assertIn("python3 platform/automation/parallel_workstream.py enforce-sla --apply", text)
+        self.assertIn("python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --queue logs-codex-runs/orchestrator-state/priority-queue.json", text)
+        self.assertIn("python3 platform/automation/runtime/planner/planner_runtime_actions.py enforce-sla --board ${CANONICAL_WORKBOARD_FILE} --queue ${CANONICAL_QUEUE_FILE} --apply", text)
         self.assertIn('values["DELTA"] = "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT"', text)
         self.assertIn('values["NEXT"] = f"owner=admin; action=execute takeover on {target} until blocker resolved"', text)
         self.assertIn('"takeover_mode"', text)
@@ -405,7 +406,7 @@ class RoleRuntimeContextTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             workspace = Path(td)
             (workspace / "docs/orchestrator-ops").mkdir(parents=True, exist_ok=True)
-            (workspace / "docs/planning").mkdir(parents=True, exist_ok=True)
+            (workspace / "docs/product/planning").mkdir(parents=True, exist_ok=True)
             (workspace / "state").mkdir(parents=True, exist_ok=True)
             (workspace / "memory/agents").mkdir(parents=True, exist_ok=True)
             (workspace / "docs/ops").mkdir(parents=True, exist_ok=True)
@@ -414,7 +415,7 @@ class RoleRuntimeContextTests(unittest.TestCase):
             (workspace / "docs/orchestrator-ops/priority-queue.json").write_text(
                 json.dumps({"items": []}), encoding="utf-8"
             )
-            (workspace / "docs/planning/WORKSTATE.md").write_text("runtime context\n", encoding="utf-8")
+            (workspace / "docs/product/planning/WORKSTATE.md").write_text("runtime context\n", encoding="utf-8")
             (workspace / "docs/ops/ADMIN_TEAM_CHAT.md").write_text("chat\n", encoding="utf-8")
             (workspace / "docs/ops/ADMIN_TEAM_ITERATIONS.md").write_text("iter\n", encoding="utf-8")
             (workspace / "state/dev.last_contract").write_text(

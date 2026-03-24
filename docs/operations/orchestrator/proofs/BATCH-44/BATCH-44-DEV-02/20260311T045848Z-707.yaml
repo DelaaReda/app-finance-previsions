@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-44-BATCH-44-DEV-02-20260311T045848Z-707"
+stream_id: "BATCH-44"
+task_id: "BATCH-44-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T04:58:48Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope insider behavior intelligence layer [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_insider_behavior_intelligence_layer_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T04:58:48Z"
+      ended_at_utc: "2026-03-11T04:58:48Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js; node --test apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=3b824225f5219d962a781714e6b60eb98fa1490f; dashboard artifact=`window.FinanceAPI.getInsiderBehavior()` + `window.getLiveDashboardData().data.insiderBehavior` + market-drivers widget insider panel showing ticker, co"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-44-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-44-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=BATCH-44-DEV-02 had no frontend consumption path for the new insider-behavior backend layer, so the dashboard could not expose insider provenance/uncertainty signals even after DEV-01 delivered the endpoint. | fix_applied=Added `getInsiderBehavior()` and live payload wiring in `apps/web/src/domains/forecasts/contracts/apiConnector.js`; normalized insider payloads in `apps/web/src/domains/forecasts/pages/app.js`; rendered the top insider s | verify=before=frontend had no insider-behavior fetcher, no live dashboard field, and no widget output for the DEV-01 endpoint; after=live dashboard carries `insiderBehavior` through the existing contract and the market-drivers  | architecture_check=layer=web forecasts contract + existing market-drivers rendering path; imports_ok=yes; path_target=apps/web/src/domains/forecasts/contracts/apiConnector.js,apps/web/src/domains/forecasts/pages/app.js | vision_alignment=batch=BATCH-44; target=Insider Behavior Intelligence Layer [DEV-02] minimal frontend slice; impact=existing dashboard now exposes insider provenance/uncertainty cues without adding a new component surface."

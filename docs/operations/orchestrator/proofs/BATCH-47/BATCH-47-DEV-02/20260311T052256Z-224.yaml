@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-47-BATCH-47-DEV-02-20260311T052256Z-224"
+stream_id: "BATCH-47"
+task_id: "BATCH-47-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T05:22:56Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope sector-to-company impact transmission [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_sector-to-company_impact_transmission_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T05:22:56Z"
+      ended_at_utc: "2026-03-11T05:22:56Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --check apps/web/src/domains/forecasts/contracts/apiConnector.js; node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js; node --test apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/web/src/domains/forecasts/contracts/apiConnector.js:888; apps/web/src/domains/forecasts/contracts/apiConnector.test.js:1161; apps/web/src/domains/forecasts/contracts/apiConnector.test.js:1499; apps/web/src/domains/f"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-47-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-47-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The BATCH-47-DEV-01 backend added a stable `transmission` contract, but the web connector reduced policy-impact events to jurisdiction/status/sectors/companies only. That dropped the sector-to-company propagation story b | fix_applied=Patched `apps/web/src/domains/forecasts/contracts/apiConnector.js` to summarize backend `transmission` into the existing policy-impact alert description and preserve transmission metadata in `signals`; extended targeted  | verify=before=`/api/forecasts/policy-impact` transmission data was available from the backend but the frontend alert flow collapsed it away, so the reused policy-impact widget only showed generic policy summary copy`; after=`tr | architecture_check=layer=web forecasts connector/test surface only; imports_ok=yes, reused existing policy-impact alert pipeline and existing timeline widget with no new component or cross-domain import; path_target=apps/web/src/domains/fo | vision_alignment=batch=BATCH-47; target=sector-to-company impact transmission; impact=the existing frontend now exposes the backend transmission slice to users in a visible reused widget, advancing the layer-2 to layer-1 story without wi"

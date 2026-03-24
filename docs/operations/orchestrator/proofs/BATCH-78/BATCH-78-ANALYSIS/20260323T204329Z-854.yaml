@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-78-BATCH-78-ANALYSIS-20260323T204329Z-854"
+stream_id: "BATCH-78"
+task_id: "BATCH-78-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T20:43:29Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner analysis close uses runtime evidence only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T20:43:29Z"
+      ended_at_utc: "2026-03-23T20:43:29Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no code change this tick)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-78-analysis-close-1774298433"
+  review_ref: "runner:BATCH-78-ANALYSIS"
+  note: "source=runner | root_cause=analysis evidence lacked explicit architecture_plan_ref and architecture_audit linkage for BATCH-78 | fix_applied=completed analysis proof against canonical runtime context and anchored architecture references to apps/api/src/domains and apps/web/src without frontend theme changes | verify=before=planner analysis remained open without closure proof; after=analysis closure now references runtime context and architecture audit while preserving downstream dependency semantics; test=parallel_workstream context confirmed BATCH-78-ANALYSIS as the sole planner task in progress with no blocker | architecture_check=architecture_plan_ref docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md plus architecture_audit apps/api/src/domains and apps/web/src preserved | vision_alignment=batch=BATCH-78; target=personal finance copilot delivery orchestration; impact=unblocks planner-owned analysis completion for downstream governance flow"

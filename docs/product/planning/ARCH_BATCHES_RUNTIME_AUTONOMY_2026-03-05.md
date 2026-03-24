@@ -29,7 +29,7 @@ Current canonical execution roadmap is:
 Supprimer durablement les dépendances inter-batches bloquantes.
 
 ### Implémentation
-- Fichier: `platform/automation/parallel_workstream.py`
+- Fichier: `platform/automation/compat/projections/parallel_workstream.py`
 - Pipeline appliqué:
   1. `sync-priority` exécute `_decouple_inter_batch_dependencies(...)`.
   2. Tous les `depends_on` queue inter-batch sont migrés vers `legacy_depends_on`.
@@ -205,9 +205,9 @@ Aligner docs ↔ runtime réel, VM-only, sans ambiguïté.
 
 ### Documents mis à jour dans ce cycle
 - `docs/ops/ORCHESTRATION_RELIABILITY_SPEC.md`
-- `docs/ops/RUNNER_MODULAR_ARCHITECTURE.md`
+- `docs/ops/REFERENCE_RUNNER_MODULAR_ARCHITECTURE.md`
 - `docs/ops/MONITOR_ARCHITECTURE_SPEC.md`
-- `docs/ops/API_EDGE_ROUTING_TABLE.md`
+- `docs/ops/REFERENCE_API_EDGE_ROUTING_TABLE.md`
 - `docs/ops/PO_SCRUM_MASTER_CRON_RUNBOOK.md`
 - `docs/ops/DOCTOR_JSON_SPEC.md`
 

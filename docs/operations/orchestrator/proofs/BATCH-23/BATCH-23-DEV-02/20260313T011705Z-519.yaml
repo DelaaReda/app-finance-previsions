@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-23-BATCH-23-DEV-02-20260313T011705Z-519"
+stream_id: "BATCH-23"
+task_id: "BATCH-23-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-13T01:17:05Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope tax fees and slippage awareness [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_tax_fees_and_slippage_awareness_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-13T01:17:05Z"
+      ended_at_utc: "2026-03-13T01:17:05Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`node --test apps/web/src/domains/forecasts/pages/app.test.js` -> PASS (89 tests)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "User-visible artifact: the dashboard rebalance proposal card now shows `Gross edge X -> Net edge Y` and cost detail breakdowns (`Fees`, `Slippage`, `Tax`) before the user acts on the plan."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-23-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-23-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=BATCH-23-DEV-01 exposed tax/fees/slippage data in the rebalancing playbook contract, but the frontend only rendered a single total cost line plus net edge text. Users still could not quickly compare gross edge versus net | fix_applied=Updated `apps/web/src/domains/forecasts/pages/app.js` to reuse the existing rebalancing card wiring and render `gross_expected_return_pct`, `net_expected_return_pct`, `fee_bps`, `slippage_bps`, and `estimated_tax_drag_bp | verify=before=rebalance proposal card only surfaced `Cost drag` and `Net edge`, so gross-vs-net comparison and low-net-edge situations were not explicit; after=the same card now renders gross->net edge plus fee/slippage/tax bre | architecture_check=layer=existing forecasts page UI only; imports_ok=yes (no new modules or cross-layer shortcuts, reused current playbook payload + card wiring); path_target=apps/web/src/domains/forecasts/pages/app.js | vision_alignment=batch=BATCH-23; target=expose gross versus net edge and make low-net-edge situations explicit before action; impact=the live rebalance recommendation now communicates execution friction in a way users can evaluate immedi"

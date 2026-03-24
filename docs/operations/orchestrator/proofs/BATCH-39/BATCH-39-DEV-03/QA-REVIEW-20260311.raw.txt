@@ -1,0 +1,14 @@
+Reproduction before fix:
+200
+{'ok': True, 'data': {'forecast': {}, 'found': False, 'generated_at': '2026-03-11T03:59:03.689329Z', 'freshness': '2026-03-11T03:59:03.689329Z', 'last_update': '2026-03-11T03:59:03.689329Z', 'updated_at': '', 'freshness_status': 'unknown', 'freshness_age': -1.0, 'source': ['forecasts_route', 'critical_route_error_fallback', 'decision_contract_v1'], 'provenance': {}, 'warnings': [], 'message': 'Forecast temporarily unavailable, returning empty response per never-empty pattern.', 'error': 'boom'}}
+
+Targeted pytest after fix:
+...                                                                      [100%]
+
+Backend regression gate after fix:
+== BACKEND REGRESSION GATE ==
+backend_dir=/home/venom/shared/analyse-financiere/apps/api/src
+pytest_bin=/home/venom/shared/analyse-financiere/apps/api/src/.venv/bin/pytest
+pytest_targets=domains/forecasts/tests/test_forecasts_template_parity.py
+.................                                                       [100%]
+VERDICT: PASS

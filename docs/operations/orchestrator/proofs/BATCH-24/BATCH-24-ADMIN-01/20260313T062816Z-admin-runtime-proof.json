@@ -1,0 +1,104 @@
+{
+  "proof_id": "BATCH-24-ADMIN-01-20260313T062816Z",
+  "captured_at_utc": "2026-03-13T06:28:16Z",
+  "task_id": "BATCH-24-ADMIN-01",
+  "stream_id": "BATCH-24",
+  "host_check": {
+    "runtime_is_vm": true,
+    "workspace": "/home/venom/analyse-financiere"
+  },
+  "fixes_applied": [
+    {
+      "path": "apps/monitor/src/collectors/activity_events.py",
+      "summary": "Removed a misplaced action-normalization block from the event collector loop and restored `_DELTA` / `BRIDGE_RESULT` classification inside `_action_from_token()`."
+    },
+    {
+      "path": "apps/monitor/src/aggregators/task_progress.py",
+      "summary": "Repaired the active-task aggregator after stray unindented lines broke module import and monitor startup."
+    },
+    {
+      "path": "apps/api/src/platform/legacy/jobs/alerts.py",
+      "summary": "Extended `_extract_rows()` to read canonical `data.<rows_key>` snapshots so the live alerts job consumes the current `news_feed` shape."
+    }
+  ],
+  "verification": {
+    "monitor_runtime": {
+      "listening_ports": [
+        "0.0.0.0:7779",
+        "192.168.64.9:7780",
+        "127.0.0.1:8050"
+      ],
+      "status_lite": {
+        "ts_utc": "2026-03-13T06:29:02.298630+00:00",
+        "health": "DEGRADED",
+        "execution_mode": "planner_experimental",
+        "active_batch": "BATCH-25",
+        "waiting_dep": 1,
+        "in_progress": 0
+      },
+      "runtime_diagnostics_lite": {
+        "generated_at": "2026-03-13T06:29:11.209368+00:00",
+        "health": "DEGRADED",
+        "planner_delta": "PLANNER_ORCHESTRATOR_BRIDGE_FAILED",
+        "planner_next": "owner=planner; action=repair planner capability bridge now"
+      },
+      "monitor_access": {
+        "mode": "lan_only",
+        "canonical_status_url": "http://192.168.64.9:7780/api/status?lite=1",
+        "vm_local_status_url": "http://127.0.0.1:7779/api/status?lite=1"
+      }
+    },
+    "alerts_route": {
+      "generated_at": "2026-03-13T06:27:45.293688Z",
+      "count": 0,
+      "suppressed_count": 0,
+      "warnings": [],
+      "alerting_metadata": {
+        "suppression_window_minutes": 15,
+        "fatigue_threshold": 2,
+        "duplicate_suppression_reason": "fatigue_window_duplicate",
+        "urgent_bypass_enabled": true,
+        "escalation_delta_bps": 1200,
+        "total_processed": 0,
+        "total_active": 0,
+        "total_suppressed": 0,
+        "urgent_bypass_count": 0
+      }
+    },
+    "brief_route": {
+      "generated_at": "2026-03-13T06:28:02.292839",
+      "top_risks_count": 1,
+      "suppressed_risks_count": 0,
+      "top_risk_sample": {
+        "ticker": "AAPL",
+        "priority": "medium",
+        "alert_fingerprint": "AAPL:1w:bearish",
+        "suppressed": false,
+        "duplicate_count": 0,
+        "urgent_bypass": false
+      },
+      "alerting_metadata": {
+        "suppression_window_minutes": 15,
+        "fatigue_threshold": 2,
+        "duplicate_suppression_reason": "fatigue_window_duplicate",
+        "urgent_bypass_enabled": true,
+        "suppressed_risk_count": 0,
+        "priority_model": "severity_plus_expected_return"
+      }
+    },
+    "planner_brief": {
+      "status_line": "Santé: DEGRADED · mode=planner_experimental · freshness=fresh/-1s",
+      "blocker_line": "Blocages: planner:PLANNER_ORCHESTRATOR_BRIDGE_FAILED · mismatch_count=0 · planner_quality=92"
+    }
+  },
+  "tests": [
+    "PASS python3 -m py_compile apps/monitor/src/collectors/activity_events.py apps/monitor/src/aggregators/task_progress.py",
+    "PASS python3 -m pytest -q apps/monitor/tests/test_activity_collectors.py apps/monitor/tests/test_task_progress.py",
+    "PASS python3 -m py_compile apps/api/src/platform/legacy/jobs/alerts.py",
+    "PASS python3 -m pytest -q apps/api/src/domains/market_data/tests/test_alerts_job_contract.py -k \"reads_news_feed_from_data_wrapper or suppresses_fatigue_duplicates_within_window or keeps_escalated_duplicate_visible_within_window\""
+  ],
+  "residual_blocker": {
+    "id": "ALERTING_LIVE_SAMPLE_MISSING",
+    "summary": "The canonical APIs are back up and now carry the additive alerting contract, but the live snapshot at proof time had zero active alerts and zero suppressed duplicates, so urgent surfacing and <=60s SLA could not be proven from live runtime evidence on this tick."
+  }
+}

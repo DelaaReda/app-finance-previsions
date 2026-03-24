@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-18-BATCH-18-DEV-03-20260311T084654Z-563"
+stream_id: "BATCH-18"
+task_id: "BATCH-18-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T08:46:54Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope event driven copilot [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_event_driven_copilot_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T08:46:54Z"
+      ended_at_utc: "2026-03-11T08:46:54Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 -m pytest domains/copilot/tests/test_copilot_event_timing.py -q; bash scripts/backend_regression_gate.sh --no-live domains/copilot/tests/test_copilot_event_timing.py; python3 -m py_compile apps/api/src/domains/co"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=36d5c310f995cfbf3017fdbe5c3ce48a19676942; files=apps/api/src/domains/copilot/application/copilot_service.py, apps/api/src/domains/copilot/tests/test_copilot_event_timing.py; slice=Event Driven Copilot event-timing"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-18-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-18-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=`_build_event_timing_note()` in `apps/api/src/domains/copilot/application/copilot_service.py` produced only a `source` field. Adjacent copilot/brief contracts preserve both `source` and `sources`, so downstream consumers | fix_applied=Patched `apps/api/src/domains/copilot/application/copilot_service.py` to reuse one normalized source list and emit both `source` and `sources` on `event_timing`. Updated `apps/api/src/domains/copilot/tests/test_copilot_e | verify=before=`event_timing` carried only `source`, so normalized provenance aliases were inconsistent with adjacent copilot contracts; after=`event_timing` carries both `source` and `sources` with the same ordered values (`cop | architecture_check=layer=apps/api copilot application helper + focused domain test; imports_ok=yes(reused existing `_normalize_string_list` helper, no duplicate helper introduced, no cross-layer import drift); path_target=apps/api/src/doma | vision_alignment=batch=BATCH-18; target=Event Driven Copilot event-aware ask contract/provenance consistency; impact=event timing risk notes now expose stable normalized source aliases, reducing frontend/consumer drift without widening s"

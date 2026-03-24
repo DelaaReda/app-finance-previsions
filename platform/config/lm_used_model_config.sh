@@ -6,15 +6,15 @@
 # Les scripts ne lisent QUE ce fichier — aucun modèle hardcodé ailleurs.
 #
 # TIERS:
-#   ORCHESTRATION  planner, admin          gpt-5.2 + high   (fiabilité dispatch)
-#   BUILD          dev                     gpt-5.3-codex-spark + high  (~40% moins cher)
-#   ANALYSIS       data_analyst, integrator gpt-5.3-codex-spark + medium (read-only)
-#   VALIDATION     tester, qa              qwen (agent primaire, zéro quota codex)
+#   ORCHESTRATION  planner                 gpt-5.4 + xhigh  (fiabilite max)
+#   DEFAULT        dev, admin, analysis, qa gpt-5.4 + medium
+#   FALLBACK_2     tous roles codex        gpt-5.3-codex-spark + high
+#   FALLBACK_3     tous roles              qwen
 #   DEEP_DEBUG     override ponctuel       gpt-5.3-codex + high
 #
 # MODÈLES valides : gpt-5.2 | gpt-5.3-codex-spark | gpt-5.3-codex | qwen
 # THINKING valides: minimal | low | medium | high | "" (= défaut config codex)
-# FALLBACK chain  : codex rate-limited → qwen → skip
+# FALLBACK chain  : codex primary → codex secondary (spark) → qwen → skip
 # =============================================================================
 
 set -euo pipefail
@@ -27,17 +27,17 @@ set -euo pipefail
 LM_TIER_ORCHESTRATION_MODEL="${LM_TIER_ORCHESTRATION_MODEL:-gpt-5.4}"
 LM_TIER_ORCHESTRATION_THINKING="${LM_TIER_ORCHESTRATION_THINKING:-xhigh}"
 
-# BUILD — génération code, ops et livraison secondaire — spark
-LM_TIER_BUILD_MODEL="${LM_TIER_BUILD_MODEL:-gpt-5.3-codex-spark}"
+# DEFAULT — generation code, ops, analyse, validation
+LM_TIER_BUILD_MODEL="${LM_TIER_BUILD_MODEL:-gpt-5.4}"
 LM_TIER_BUILD_THINKING="${LM_TIER_BUILD_THINKING:-medium}"
 
-# ANALYSIS — lecture seule, métriques — medium suffit
-LM_TIER_ANALYSIS_MODEL="${LM_TIER_ANALYSIS_MODEL:-gpt-5.3-codex-spark}"
-LM_TIER_ANALYSIS_THINKING="${LM_TIER_ANALYSIS_THINKING:-high}"
+# ANALYSIS — lecture seule, metriques
+LM_TIER_ANALYSIS_MODEL="${LM_TIER_ANALYSIS_MODEL:-${LM_TIER_BUILD_MODEL}}"
+LM_TIER_ANALYSIS_THINKING="${LM_TIER_ANALYSIS_THINKING:-${LM_TIER_BUILD_THINKING}}"
 
-# VALIDATION — tests, docs, QA — qwen natif, zéro quota codex
-LM_TIER_VALIDATION_MODEL="${LM_TIER_VALIDATION_MODEL:-qwen}"
-LM_TIER_VALIDATION_THINKING="${LM_TIER_VALIDATION_THINKING:-}"
+# VALIDATION — tests, docs, QA
+LM_TIER_VALIDATION_MODEL="${LM_TIER_VALIDATION_MODEL:-${LM_TIER_BUILD_MODEL}}"
+LM_TIER_VALIDATION_THINKING="${LM_TIER_VALIDATION_THINKING:-${LM_TIER_BUILD_THINKING}}"
 
 # DEEP_DEBUG — debug profond incidents (override ponctuel)
 # Usage: export LM_ROLE_DEV_MODEL="$LM_TIER_DEEP_DEBUG_MODEL"
@@ -53,11 +53,11 @@ LM_TIER_DEEP_DEBUG_THINKING="${LM_TIER_DEEP_DEBUG_THINKING:-high}"
 LM_ROLE_PLANNER_MODEL="${LM_ROLE_PLANNER_MODEL:-${LM_TIER_ORCHESTRATION_MODEL}}"
 LM_ROLE_PLANNER_THINKING="${LM_ROLE_PLANNER_THINKING:-${LM_TIER_ORCHESTRATION_THINKING}}"
 
-# dev: code + tests + QA consolidé → spark high
+# dev: code + tests + QA consolide -> 5.4 medium
 LM_ROLE_DEV_MODEL="${LM_ROLE_DEV_MODEL:-${LM_TIER_BUILD_MODEL}}"
 LM_ROLE_DEV_THINKING="${LM_ROLE_DEV_THINKING:-${LM_TIER_BUILD_THINKING}}"
 
-# admin: santé système, déblocage, ops → spark par défaut, fallback qwen si quota
+# admin: sante systeme, deblocage, ops -> 5.4 medium
 LM_ROLE_ADMIN_MODEL="${LM_ROLE_ADMIN_MODEL:-${LM_TIER_BUILD_MODEL}}"
 LM_ROLE_ADMIN_THINKING="${LM_ROLE_ADMIN_THINKING:-${LM_TIER_BUILD_THINKING}}"
 
@@ -80,13 +80,15 @@ LM_ROLE_INTEGRATOR_THINKING="${LM_ROLE_INTEGRATOR_THINKING:-${LM_TIER_ANALYSIS_T
 LM_ROLE_INFRA_ENGINEER_MODEL="${LM_ROLE_INFRA_ENGINEER_MODEL:-${LM_TIER_BUILD_MODEL}}"
 LM_ROLE_INFRA_ENGINEER_THINKING="${LM_ROLE_INFRA_ENGINEER_THINKING:-${LM_TIER_BUILD_THINKING}}"
 LM_ROLE_CLAWSENTINEL_MODEL="${LM_ROLE_CLAWSENTINEL_MODEL:-${LM_TIER_BUILD_MODEL}}"
-LM_ROLE_CLAWSENTINEL_THINKING="${LM_ROLE_CLAWSENTINEL_THINKING:-low}"
+LM_ROLE_CLAWSENTINEL_THINKING="${LM_ROLE_CLAWSENTINEL_THINKING:-${LM_TIER_BUILD_THINKING}}"
 LM_ROLE_ANALYST_MODEL="${LM_ROLE_ANALYST_MODEL:-${LM_TIER_ANALYSIS_MODEL}}"
 LM_ROLE_ANALYST_THINKING="${LM_ROLE_ANALYST_THINKING:-${LM_TIER_ANALYSIS_THINKING}}"
 
 # =============================================================================
-# SECTION 3 — FALLBACK CHAIN  (codex rate-limited → qwen → skip)
+# SECTION 3 — FALLBACK CHAIN  (codex primary -> spark high -> qwen -> skip)
 # =============================================================================
+LM_FALLBACK_SECONDARY_MODEL="${LM_FALLBACK_SECONDARY_MODEL:-gpt-5.3-codex-spark}"
+LM_FALLBACK_SECONDARY_THINKING="${LM_FALLBACK_SECONDARY_THINKING:-high}"
 LM_FALLBACK_BIN="${LM_FALLBACK_BIN:-/home/venom/.npm-global/bin/qwen}"
 LM_FALLBACK_MODEL="${LM_FALLBACK_MODEL:-qwen}"
 

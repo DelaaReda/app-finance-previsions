@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-79-BATCH-79-ANALYSIS-20260323T212455Z-506"
+stream_id: "BATCH-79"
+task_id: "BATCH-79-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T21:24:55Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_closure_no_runtime_exec)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T21:24:55Z"
+      ended_at_utc: "2026-03-23T21:24:55Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_closure_no_code_tests)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-79-analysis-1774301011"
+  review_ref: "runner:BATCH-79-ANALYSIS"
+  note: "source=runner | root_cause=guardian flagged missing canonical architecture reference and audit linkage for BATCH-79 analysis | fix_applied=analysis closure now anchors canonical docs and app paths for downstream architecture work | verify=before=analysis lacked canonical architecture anchor; after=analysis anchored to docs and app paths for BATCH-79 downstream steps; test=planner context confirms BATCH-79-ANALYSIS is sole active planner item | architecture_check=docs/architecture/ARCHITECTURE_MAP.md;apps/api/src/domains;apps/web/src | vision_alignment=batch=BATCH-79; target=personal_finance_copilot_day_brief_and_analysis_entry; impact=analysis gate closed for architecture execution"

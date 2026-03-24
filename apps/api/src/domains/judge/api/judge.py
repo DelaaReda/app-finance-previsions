@@ -107,6 +107,17 @@ except Exception:
     validate_llm_response = None
     log_metrics = None
 
+try:
+    from domains.judge.application.execution_costs import (
+        _estimate_execution_costs,
+        _infer_execution_asset_class,
+        _infer_execution_liquidity_bucket,
+    )
+except Exception:
+    _estimate_execution_costs = None
+    _infer_execution_asset_class = None
+    _infer_execution_liquidity_bucket = None
+
 # Codestral fallback client
 try:
     from services.codestral_client import call_codestral  # type: ignore

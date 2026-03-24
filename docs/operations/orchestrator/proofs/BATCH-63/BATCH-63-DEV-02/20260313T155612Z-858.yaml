@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-63-BATCH-63-DEV-02-20260313T155612Z-858"
+stream_id: "BATCH-63"
+task_id: "BATCH-63-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-13T15:56:12Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-13T15:56:12Z"
+      ended_at_utc: "2026-03-13T15:56:12Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test --test-name-pattern \"nested|copilot\" apps/web/src/domains/forecasts/pages/app.test.js apps/web/src/domains/f"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Commit `7169d49a` across 4 forecast files adding nested copilot open-target normalization so starter ask/open actions now reliably open the copilot overlay."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-63-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-63-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=Copilot starter `open` targets with nested copilot routes (for example `/copilot/overview`) were only partially matched by exact checks, causing them to be treated as unsupported/invalid routes instead of opening the per | fix_applied=Updated `normalizeCopilotStartOpenTarget` in `apps/web/src/domains/forecasts/pages/app.js` and `normalizeCopilotOpenTarget` in `apps/web/src/domains/forecasts/contracts/apiConnector.js` to map `/copilot/...` and `copilot | verify=before=Nested `/copilot/*` open action targets could fall through normalization and fail to route.; after=Nested `/copilot/*` open targets now normalize to `copilot`, so `runCopilotStartOpen` opens the copilot overlay as | architecture_check=layer=frontend UI (forecasts page) + contract normalization layer; imports_ok=yes; path_target=apps/web/src/domains/forecasts/pages and apps/web/src/domains/forecasts/contracts | vision_alignment=batch=BATCH-63; target=Personal finance copilot starts with daily brief and supports ask/open user flow; impact=Improves reliability of start action routing so backend-provided open actions reach the copilot flow instead"

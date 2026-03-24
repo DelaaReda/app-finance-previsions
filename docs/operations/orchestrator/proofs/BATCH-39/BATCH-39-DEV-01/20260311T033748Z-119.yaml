@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-39-BATCH-39-DEV-01-20260311T033748Z-119"
+stream_id: "BATCH-39"
+task_id: "BATCH-39-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-11T03:37:48Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope forecast data quality sla + provenance [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_forecast_data_quality_sla_+_provenance_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T03:37:48Z"
+      ended_at_utc: "2026-03-11T03:37:48Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS: PYTHONPATH=apps/api/src pytest apps/api/src/domains/forecasts/tests/test_forecasts_template_parity.py -q -k 'contract_rows_include_required_keys or marks_stale_snapshot_when_too_old or fallback_is_explicit_on_inter"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=16cde1f4163f333e7a6a28a1687e7e174bfadeb4; endpoint=/forecasts; slice=top-level payload + row-level provenance.sla contract"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-39-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-39-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The forecasts contract exposed freshness/source/provider fields in a fragmented way, but it lacked one canonical provenance block with SLA semantics (`updated_at`, age, target window, within-target) for downstream integr | fix_applied=Added provenance builders in `apps/api/src/domains/forecasts/application/forecasts_service.py`, populated `updated_at` and `provenance` on normalized rows and forecast payloads, hardened provider-chain normalization to a | verify=before=`/forecasts` rows/payload had no canonical `provenance` block and no explicit SLA object for integrity checks`; after=`/forecasts` rows/payload now expose `updated_at` and `provenance={source,provider_chain,model_ | architecture_check=layer=business logic in forecasts service + shared contract schema/test only; imports_ok=yes (reused existing forecasts route/service/contracts stack, no new cross-domain imports); path_target=apps/api/src/domains/foreca | vision_alignment=batch=BATCH-39; target=Forecast Data Quality SLA + Provenance; impact=adds explicit machine-checkable provenance/SLA metadata to the canonical forecast API contract without widening scope beyond the forecasts slice"

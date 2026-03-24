@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-77-BATCH-77-ANALYSIS-20260323T190853Z-690"
+stream_id: "BATCH-77"
+task_id: "BATCH-77-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T19:08:53Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_doc_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T19:08:53Z"
+      ended_at_utc: "2026-03-23T19:08:53Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(doc_only_context_validation)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/shared/analyse-financiere/docs/ops/BATCH-77_ANALYSIS_AUDIT.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-77-analysis-20260323t190641z"
+  review_ref: "runner:BATCH-77-ANALYSIS"
+  note: "source=runner | root_cause=preuve architecture et audit manquants sur apps api et apps web | fix_applied=artefact d analyse cree puis committe pour cadrer api runtime et web sans refonte theme | verify=before=analysis in progress sans architecture audit relie; after=artefact analyse committe et dependances aval limitees a waiting dep normal; test=parallel_workstream context role planner confirme ready 0 in_progress 1 waiting_dep 2 | architecture_check=apps/api/src/domains/* linked; apps/api/runtime linked; apps/web/src preserved; forbidden paths excluded | vision_alignment=batch=BATCH-77; target=finance copilot daily brief plus open analysis; impact=analyse livree pour dispatch implementation"

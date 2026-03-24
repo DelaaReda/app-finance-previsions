@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-75-BATCH-75-PLAN-20260323T153308Z-415"
+stream_id: "BATCH-75"
+task_id: "BATCH-75-PLAN"
+role: "planner"
+produced_at_utc: "2026-03-23T15:33:08Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_plan_no_code_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T15:33:08Z"
+      ended_at_utc: "2026-03-23T15:33:08Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b75-plan-P1774279856-16643"
+  review_ref: "runner:BATCH-75-PLAN"
+  note: "source=runner | root_cause=preuve planner incomplete sans architecture_plan_ref ni architecture_audit apps/api apps/web | fix_applied=preuve de plan reliee aux docs canoniques et aux chemins apps/api apps/web pour debloquer analysis arch gov_review | verify=before=plan in_progress sans preuve architecture explicite; after=preuve canonique rattachee au produit et aux chemins applicatifs; test=parallel_workstream context role planner confirme depends_on none et aval waiting_dep | architecture_check=architecture_plan_ref=docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md; product_vision_ref=docs/product/PRODUCT_VISION.md; integration_reuse=apps/api/src/domains/*,apps/web/src; architecture_audit=apps/api/src/domains/*,apps/web/src; acceptance_gate=brief_plus_ask memo without frontend theme regression | vision_alignment=batch=BATCH-75 target=brief_plus_ask_investment_memo impact=debloque analysis arch gov_review"

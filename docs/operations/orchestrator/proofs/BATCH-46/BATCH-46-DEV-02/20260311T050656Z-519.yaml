@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-46-BATCH-46-DEV-02-20260311T050656Z-519"
+stream_id: "BATCH-46"
+task_id: "BATCH-46-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T05:06:56Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope country/continent/world macro regime forecasts [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_country/continent/world_macro_regime_forecasts_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T05:06:56Z"
+      ended_at_utc: "2026-03-11T05:06:56Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js apps/web/src/domains/forecasts/pages/app.test.js apps/web/src/domains/forecasts/tests/test-macro-regime-widget.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Live macro hierarchy widget wiring committed in `5d45236`; evidence is the new end-to-end frontend path from `apps/web/src/domains/forecasts/contracts/apiConnector.js` -> `apps/web/src/domains/forecasts/pages/app.js` ->"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-46-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-46-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=BATCH-46-DEV-01 exposed the macro hierarchy backend contract, but the web app still left `macro-regime-cards.html` as static placeholder content with no API connector path or app.js rendering flow for the country/contine | fix_applied=Added `getMacroRegimeHierarchy()` and live payload propagation in `apiConnector.js`; included macro hierarchy in live dashboard/event payloads; added `renderMacroRegimeCardsWidget()` in `app.js` and invoked it from the s | verify=before=macro regime cards widget was static HTML only and the live dashboard payload omitted macro hierarchy data; after=widget receives `/forecasts/macro-regime-hierarchy` payload, updates world/continent/country cards  | architecture_check=layer=web forecasts UI delivery slice; imports_ok=yes (reused existing widget/app/apiConnector surfaces, no new cross-domain imports); path_target=apps/web/src/domains/forecasts/components/widgets/macro-regime-cards.html | vision_alignment=batch=BATCH-46; target=Country/Continent/World Macro Regime Forecasts [DEV-02]; impact=turns the existing forecasts widget into a live hierarchical macro regime surface aligned to the backend contract and shared live das"

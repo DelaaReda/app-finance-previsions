@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-18-BATCH-18-DEV-01-20260311T083207Z-185"
+stream_id: "BATCH-18"
+task_id: "BATCH-18-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-11T08:32:07Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope event driven copilot [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_event_driven_copilot_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T08:32:07Z"
+      ended_at_utc: "2026-03-11T08:32:07Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest apps/api/src/domains/copilot/tests/test_copilot_ask_route_contract.py -q"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Committed patch `58b048a1f5a4e2b1a1f77ff282a69a4567ce0d09` on current branch; artifact file: apps/api/src/domains/copilot/tests/test_copilot_ask_route_contract.py"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-18-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-18-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The Judge-backed event timing path already existed in `domains.copilot.application.copilot_service`, but there was no route-level contract coverage proving `/api/copilot/ask` kept that payload intact for downstream consu | fix_applied=Added `test_copilot_ask_route_preserves_event_timing_contract` in `apps/api/src/domains/copilot/tests/test_copilot_ask_route_contract.py` to assert the route returns the structured `event_timing` block unchanged when the | verify=before=route contract suite did not assert that `/api/copilot/ask` preserved `event_timing`, leaving BATCH-18 downstream consumers without explicit API proof; after=route contract suite now asserts `event_timing.summary/ | architecture_check=layer=Copilot API route contract test over existing copilot_service -> Judge event timing integration; imports_ok=yes; path_target=apps/api/src/domains/copilot/tests/test_copilot_ask_route_contract.py | vision_alignment=batch=BATCH-18; target=E18.3/E18.4 contract confidence for event-aware recommendations; impact=locks a verifiable API surface proving Event Driven Copilot responses can carry timing-risk guidance from the reused Judge st"

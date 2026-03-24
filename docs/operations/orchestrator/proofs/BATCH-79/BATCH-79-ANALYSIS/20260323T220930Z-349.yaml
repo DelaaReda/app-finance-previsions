@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-79-BATCH-79-ANALYSIS-20260323T220930Z-349"
+stream_id: "BATCH-79"
+task_id: "BATCH-79-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T22:09:30Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_runtime_closure_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T22:09:30Z"
+      ended_at_utc: "2026-03-23T22:09:30Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_verification_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-79-analysis-close-20260323t220741z"
+  review_ref: "runner:BATCH-79-ANALYSIS"
+  note: "source=runner | root_cause=Planner ANALYSIS stayed IN_PROGRESS after admin dependency finished and GOV_REVIEW became READY | fix_applied=Planner validated canonical runtime context and closed the lingering analysis step to unblock final review | verify=before=analysis task open while admin completion already emitted ready GOV_REVIEW; after=planner requested runtime closure of BATCH-79-ANALYSIS; test=parallel_workstream context showed in_progress ANALYSIS and ready GOV_REVIEW with planner_orchestrator_complete BATCH-79-ADMIN-01 | architecture_check=PASS(refs=ACTIVE_DOCS_INDEX+PLANE_BACKLOG_INTEGRATION_SPEC+PRODUCT_VISION; imports_ok=yes; path_target=apps/api|apps/web) | vision_alignment=batch=BATCH-79; target=personal_finance_copilot_runtime_continuity; impact=clear planner analysis debt before final governance review"

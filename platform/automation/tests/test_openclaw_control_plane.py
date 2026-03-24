@@ -14,7 +14,7 @@ AUTOMATION_DIR = ROOT / "platform" / "automation"
 if str(AUTOMATION_DIR) not in sys.path:
     sys.path.insert(0, str(AUTOMATION_DIR))
 
-MODULE_PATH = AUTOMATION_DIR / "openclaw_control_plane.py"
+MODULE_PATH = AUTOMATION_DIR / "operator" / "openclaw" / "openclaw_control_plane.py"
 SPEC = importlib.util.spec_from_file_location("fc_openclaw_control_plane", MODULE_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader

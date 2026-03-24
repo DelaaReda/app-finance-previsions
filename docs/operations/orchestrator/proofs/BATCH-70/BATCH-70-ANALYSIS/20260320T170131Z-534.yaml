@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-70-BATCH-70-ANALYSIS-20260320T170131Z-534"
+stream_id: "BATCH-70"
+task_id: "BATCH-70-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-20T17:01:31Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_completion_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T17:01:31Z"
+      ended_at_utc: "2026-03-20T17:01:31Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_runtime_meta_task)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "planner-b70-analysis-complete-p1774026012-7479"
+  review_ref: "vision=/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md;plan=/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md;audit=apps/api/src/domains|apps/web/src"
+  note: "Cloture planner analysis avec plan et audit d architecture relies a docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md, apps/api/src/domains et apps/web/src pour respecter le guardian feedback et liberer la reprise runtime."

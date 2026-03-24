@@ -1,0 +1,202 @@
+TAP version 13
+# Subtest: buildRobustnessGoNoGoDecision returns GO for healthy state
+ok 1 - buildRobustnessGoNoGoDecision returns GO for healthy state
+  ---
+  duration_ms: 4.053151
+  type: 'test'
+  ...
+# Subtest: buildRobustnessGoNoGoDecision handles case-insensitive degraded states
+ok 2 - buildRobustnessGoNoGoDecision handles case-insensitive degraded states
+  ---
+  duration_ms: 2.801188
+  type: 'test'
+  ...
+# Subtest: buildRobustnessGoNoGoDecision treats warning as NO-GO
+ok 3 - buildRobustnessGoNoGoDecision treats warning as NO-GO
+  ---
+  duration_ms: 2.088036
+  type: 'test'
+  ...
+# Subtest: buildRobustnessGoNoGoDecision returns NO-GO for unhealthy states
+ok 4 - buildRobustnessGoNoGoDecision returns NO-GO for unhealthy states
+  ---
+  duration_ms: 1.874195
+  type: 'test'
+  ...
+# Subtest: buildRobustnessGoNoGoDecision treats unknown state as NO-GO
+ok 5 - buildRobustnessGoNoGoDecision treats unknown state as NO-GO
+  ---
+  duration_ms: 2.470009
+  type: 'test'
+  ...
+# Subtest: openRobustnessDrill opens readiness modal with GO payload
+ok 6 - openRobustnessDrill opens readiness modal with GO payload
+  ---
+  duration_ms: 2.471217
+  type: 'test'
+  ...
+# Subtest: openRobustnessDrill opens readiness modal with NO-GO payload when degraded
+ok 7 - openRobustnessDrill opens readiness modal with NO-GO payload when degraded
+  ---
+  duration_ms: 1.834861
+  type: 'test'
+  ...
+# Subtest: applyLiveDashboardData derives portfolio health from raw risk profile payloads
+ok 8 - applyLiveDashboardData derives portfolio health from raw risk profile payloads
+  ---
+  duration_ms: 2.592847
+  type: 'test'
+  ...
+# Subtest: applyLiveDashboardData backfills portfolio health core fields from the raw risk profile payload
+ok 9 - applyLiveDashboardData backfills portfolio health core fields from the raw risk profile payload
+  ---
+  duration_ms: 2.478217
+  type: 'test'
+  ...
+# Subtest: applyLiveDashboardData hydrates the hero brief from live copilot_start data
+ok 10 - applyLiveDashboardData hydrates the hero brief from live copilot_start data
+  ---
+  duration_ms: 2.164914
+  type: 'test'
+  ...
+# Subtest: runCopilotStartPrompt opens the overlay before sending a hero starter prompt
+ok 11 - runCopilotStartPrompt opens the overlay before sending a hero starter prompt
+  ---
+  duration_ms: 2.430049
+  type: 'test'
+  ...
+# Subtest: runCopilotStartOpen opens the overlay when the hero starter targets copilot
+ok 12 - runCopilotStartOpen opens the overlay when the hero starter targets copilot
+  ---
+  duration_ms: 2.190832
+  type: 'test'
+  ...
+# Subtest: runCopilotStartOpen opens the overlay for a trailing-slash copilot target
+ok 13 - runCopilotStartOpen opens the overlay for a trailing-slash copilot target
+  ---
+  duration_ms: 1.606852
+  type: 'test'
+  ...
+# Subtest: runCopilotStartOpen routes the landing brief to overview and scrolls the live brief widget
+ok 14 - runCopilotStartOpen routes the landing brief to overview and scrolls the live brief widget
+  ---
+  duration_ms: 1.589017
+  type: 'test'
+  ...
+# Subtest: runCopilotStartOpen reports unsupported landing actions instead of opening copilot
+ok 15 - runCopilotStartOpen reports unsupported landing actions instead of opening copilot
+  ---
+  duration_ms: 2.671016
+  type: 'test'
+  ...
+# Subtest: hydrateCopilotOverlayStart falls back to getCopilotContext and persists the shared starter payload
+ok 16 - hydrateCopilotOverlayStart falls back to getCopilotContext and persists the shared starter payload
+  ---
+  duration_ms: 2.174081
+  type: 'test'
+  ...
+# Subtest: hydrateCopilotOverlayStart builds overlay state from sanitized starter payload
+ok 17 - hydrateCopilotOverlayStart builds overlay state from sanitized starter payload
+  ---
+  duration_ms: 2.075244
+  type: 'test'
+  ...
+# Subtest: renderHeroCopilotBrief swaps the static hero copy for live brief and actions
+ok 18 - renderHeroCopilotBrief swaps the static hero copy for live brief and actions
+  ---
+  duration_ms: 3.946189
+  type: 'test'
+  ...
+# Subtest: renderHeroCopilotBrief accepts raw copilot_start payloads from app state
+ok 19 - renderHeroCopilotBrief accepts raw copilot_start payloads from app state
+  ---
+  duration_ms: 2.219708
+  type: 'test'
+  ...
+# Subtest: renderPortfolioHealthFullDetails maps portfolio state and risk profile into the full analysis panel
+ok 20 - renderPortfolioHealthFullDetails maps portfolio state and risk profile into the full analysis panel
+  ---
+  duration_ms: 2.263043
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart preserves starter tickers and normalizes brief open targets
+ok 21 - sanitizeCopilotStart preserves starter tickers and normalizes brief open targets
+  ---
+  duration_ms: 2.091661
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart maps open_copilot open action to copilot without relying on target
+ok 22 - sanitizeCopilotStart maps open_copilot open action to copilot without relying on target
+  ---
+  duration_ms: 1.645436
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart maps trailing-slash copilot open action to copilot
+ok 23 - sanitizeCopilotStart maps trailing-slash copilot open action to copilot
+  ---
+  duration_ms: 2.892275
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart maps trimmed brief open target variants to market
+ok 24 - sanitizeCopilotStart maps trimmed brief open target variants to market
+  ---
+  duration_ms: 3.223162
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart prefers direct ask tickers over prefill tickers
+ok 25 - sanitizeCopilotStart prefers direct ask tickers over prefill tickers
+  ---
+  duration_ms: 2.443924
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart uses ask.question then prefill.question when prompt is missing
+ok 26 - sanitizeCopilotStart uses ask.question then prefill.question when prompt is missing
+  ---
+  duration_ms: 2.487634
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart preserves scoped tickers for downstream hero prompts
+ok 27 - sanitizeCopilotStart preserves scoped tickers for downstream hero prompts
+  ---
+  duration_ms: 2.094078
+  type: 'test'
+  ...
+# Subtest: renderHeroCopilotBrief hydrates the landing brief and wires ask/open actions
+ok 28 - renderHeroCopilotBrief hydrates the landing brief and wires ask/open actions
+  ---
+  duration_ms: 2.58343
+  type: 'test'
+  ...
+# Subtest: renderHeroCopilotBrief accepts normalized backend snake_case brief fields and falls back to opportunities
+ok 29 - renderHeroCopilotBrief accepts normalized backend snake_case brief fields and falls back to opportunities
+  ---
+  duration_ms: 3.453129
+  type: 'test'
+  ...
+# Subtest: renderHeroCopilotBrief surfaces saved portfolio context in hero metadata
+ok 30 - renderHeroCopilotBrief surfaces saved portfolio context in hero metadata
+  ---
+  duration_ms: 2.407673
+  type: 'test'
+  ...
+# Subtest: app.js exposes runCopilotStartOpen for the static landing brief CTA
+ok 31 - app.js exposes runCopilotStartOpen for the static landing brief CTA
+  ---
+  duration_ms: 2.279252
+  type: 'test'
+  ...
+# Subtest: index.html exposes the hero brief slots required by the copilot starter
+ok 32 - index.html exposes the hero brief slots required by the copilot starter
+  ---
+  duration_ms: 0.667317
+  type: 'test'
+  ...
+1..32
+# tests 32
+# suites 0
+# pass 32
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 149.208692

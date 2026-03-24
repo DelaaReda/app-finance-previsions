@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-72-BATCH-72-ANALYSIS-20260321T020241Z-678"
+stream_id: "BATCH-72"
+task_id: "BATCH-72-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-21T02:02:41Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_completion)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-21T02:02:41Z"
+      ended_at_utc: "2026-03-21T02:02:41Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_completion)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b72-analysis-complete-p1774058468-19588"
+  review_ref: "runner:BATCH-72-ANALYSIS"
+  note: "source=runner | root_cause=BATCH-72 restait en analyse planner sans cloture canonique alors que la livraison devait partir | fix_applied=claim puis cloture planner de l analyse avec cadrage du dispatch vers BATCH-72-DEV-01 | verify=before=BATCH-72-ANALYSIS READY_PLANNER non cloture; after=BATCH-72-ANALYSIS complete et dispatch dev debloque; test=parallel_workstream context planner et claim planner reussis | architecture_check=architecture_check=docs/architecture/ARCHITECTURE_MAP.md aligned to apps/api|apps/web; acceptance_gate=dispatch_dev_when_analysis_closed; architecture_plan_ref=docs/architecture/ARCHITECTURE_MAP.md; implementation_tracks=apps/api|apps/web; integration_reuse=apps/api/src/domains/*|apps/web/src | vision_alignment=batch=BATCH-72; target=personal finance copilot avec brief du jour et ouverture guidee; impact=analyse planner fermee pour declencher la livraison dev"

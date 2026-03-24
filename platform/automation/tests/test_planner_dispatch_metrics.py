@@ -2,18 +2,22 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
+from runtime.core.contracts import PlannerGraphState
+from runtime.truth.event_store import EventStore
 
 ROOT = Path(__file__).resolve().parents[3]
 AUTOMATION_DIR = ROOT / "platform" / "automation"
 if str(AUTOMATION_DIR) not in sys.path:
     sys.path.insert(0, str(AUTOMATION_DIR))
 
-MODULE_PATH = AUTOMATION_DIR / "planner_dispatch_metrics.py"
+MODULE_PATH = AUTOMATION_DIR / "runtime" / "planner" / "planner_dispatch_metrics.py"
 SPEC = importlib.util.spec_from_file_location("fc_planner_dispatch_metrics", MODULE_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
@@ -25,6 +29,196 @@ build_planner_dispatch_metrics = MODULE.build_planner_dispatch_metrics
 
 
 class PlannerDispatchMetricsTests(unittest.TestCase):
+    def test_claim_cli_reconciles_queue_state_with_planner_in_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": "BATCH-70",
+                                "state": "READY_PLANNER",
+                                "dispatch_authorized": True,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "streams": [{"id": "BATCH-70", "state": "READY_PLANNER"}],
+                        "tasks": [
+                            {
+                                "id": "BATCH-70-GOV_REVIEW",
+                                "stream_id": "BATCH-70",
+                                "role": "planner",
+                                "state": "READY_PLANNER",
+                                "depends_on": ["BATCH-70-ADMIN-01"],
+                            },
+                            {
+                                "id": "BATCH-70-ADMIN-01",
+                                "stream_id": "BATCH-70",
+                                "role": "admin",
+                                "state": "DONE",
+                                "depends_on": [],
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            automation_pythonpath = str(AUTOMATION_DIR)
+            existing_pythonpath = str(env.get("PYTHONPATH", "") or "").strip()
+            env["PYTHONPATH"] = (
+                automation_pythonpath
+                if not existing_pythonpath
+                else automation_pythonpath + os.pathsep + existing_pythonpath
+            )
+
+            proc = subprocess.run(
+                [
+                    sys.executable,
+                    str(AUTOMATION_DIR / "runtime" / "planner" / "planner_runtime_actions.py"),
+                    "--root",
+                    str(root),
+                    "claim",
+                    "--role",
+                    "planner",
+                    "--task",
+                    "BATCH-70-GOV_REVIEW",
+                ],
+                cwd=str(root),
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            queue = json.loads((orch / "priority-queue.json").read_text(encoding="utf-8"))
+            self.assertEqual(queue["items"][0]["state"], "IN_PROGRESS")
+
+    def test_event_store_primary_quarantines_active_row_conflicting_with_workboard_truth(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "id": "BATCH-70-DEV-01",
+                                "owner": "dev",
+                                "status": "READY_DEV",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-70-ANALYSIS",
+                                "stream_id": "BATCH-70",
+                                "role": "planner",
+                                "state": "DONE",
+                            },
+                            {
+                                "id": "BATCH-70-DEV-01",
+                                "stream_id": "BATCH-70",
+                                "role": "dev",
+                                "state": "READY_DEV",
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-70",
+                    task_id="BATCH-70-ANALYSIS",
+                    task_kind="analysis",
+                    owner_role="planner",
+                    target_role="dev",
+                    status="running",
+                    current_node="wait_or_collect_result",
+                    updated_at="2026-03-20T14:10:00Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-70-ANALYSIS", "target_role": "dev"},
+                    capability_result={"status": "running", "backend": "codex_exec", "summary": ""},
+                )
+            )
+
+            metrics = build_planner_dispatch_metrics(root, recent_limit=12)
+
+            self.assertTrue(metrics["event_store_primary"])
+            self.assertEqual(metrics["active_count"], 0)
+            self.assertEqual(metrics["runtime_inconsistent_active_count"], 1)
+            self.assertEqual(metrics["ready_dev_count"], 1)
+            self.assertEqual(metrics["status"], "dispatch_needed")
+
+    def test_event_store_primary_uses_workboard_ready_planner_when_queue_is_stale(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(json.dumps({"items": []}), encoding="utf-8")
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {
+                                "id": "BATCH-63-ADMIN-01",
+                                "stream_id": "BATCH-63",
+                                "role": "planner",
+                                "state": "READY_PLANNER",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-62",
+                    task_id="BATCH-62-DEV-01",
+                    task_kind="delivery",
+                    owner_role="planner",
+                    target_role="dev",
+                    status="ready_to_merge",
+                    current_node="close_or_requeue",
+                    updated_at="2026-03-13T12:00:00Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-62-DEV-01", "target_role": "dev"},
+                    capability_result={"status": "pass", "backend": "codex_exec", "summary": "done"},
+                )
+            )
+
+            metrics = build_planner_dispatch_metrics(root, recent_limit=12)
+
+            self.assertTrue(metrics["event_store_primary"])
+            self.assertEqual(metrics["runtime_truth_source"], "sqlite")
+            self.assertEqual(metrics["status"], "dispatch_needed")
+            self.assertEqual(metrics["ready_total"], 1)
+            self.assertEqual(metrics["ready_planner_count"], 1)
+            self.assertEqual(metrics["planner_state"], "idle")
+
     def test_build_planner_dispatch_metrics_counts_success_and_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

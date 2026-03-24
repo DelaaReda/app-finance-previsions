@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-67-BATCH-67-DEV-02-20260319T223241Z-784"
+stream_id: "BATCH-67"
+task_id: "BATCH-67-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-19T22:32:41Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-19T22:32:41Z"
+      ended_at_utc: "2026-03-19T22:32:41Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test --test-name-pattern 'hero-what-need component|index.html exposes the hero brief slots' apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=590e75b50b129b9d75b94120d0bb9cfd776ac15a; component=apps/web/src/domains/forecasts/components/sections/hero-what-need.html; proof=shared copilot hero markup now exposes `heroBriefExplainability`, `heroBriefTraceab"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-67-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-67-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The shared `hero-what-need` component had drifted behind the live page contract: it was missing explainability/traceability slots and placed suggestion chips outside the brief card, which weakened reuse of the existing p | fix_applied=Updated the shared hero component to include hidden explainability and traceability brief slots, moved the existing suggestion chips into the brief card to match the live page structure, and tightened the targeted page t | verify=before=the reusable hero component lacked the full brief renderer slot contract and kept suggestion chips outside the brief card; after=the shared component matches the live starter surface expected by the existing rende | architecture_check=layer=web shared forecasts component + targeted page test; imports_ok=yes (no new imports or modules, reused existing starter wiring); path_target=apps/web/src/domains/forecasts/components/sections/hero-what-need.html | vision_alignment=batch=BATCH-67; target=DEV-02 brief-first personal finance copilot entry flow; impact=keeps the reusable hero surface mergeable for the day-brief ask/open experience without creating new UI primitives"

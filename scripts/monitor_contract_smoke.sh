@@ -108,14 +108,22 @@ ensure(isinstance(diag, dict), "runtime_diagnostics_not_object")
 ensure(isinstance(issues_feed, dict), "issues_feed_not_object")
 ensure(isinstance(issues_summary, dict), "issues_summary_not_object")
 
-required_status = ("health", "roles", "queue", "workboard", "agents", "data_freshness_s", "data_source")
+required_status = ("roles", "queue", "workboard", "agents", "data_freshness_s", "data_source", "primary_status", "product_runtime")
 for key in required_status:
     ensure(key in status, f"status_missing_{key}")
 for key in ("issues_recent_by_role", "critical_open_count", "issue_publication_gap_roles"):
     ensure(key in status, f"status_missing_{key}")
 
+primary_status = status.get("primary_status")
+ensure(isinstance(primary_status, str), "status_primary_status_not_string")
+product_runtime = status.get("product_runtime")
+ensure(isinstance(product_runtime, dict), "status_product_runtime_not_object")
+if isinstance(product_runtime, dict):
+    ensure("status" in product_runtime, "status_product_runtime_missing_status")
+
 health = status.get("health")
-ensure(isinstance(health, str), "status_health_not_string")
+if health is not None:
+    ensure(isinstance(health, str), "status_health_not_string")
 
 roles = status.get("roles")
 ensure(isinstance(roles, list), "status_roles_not_list")
@@ -204,7 +212,7 @@ if errors:
 
 print(
     "PASS "
-    f"health={health} "
+    f"primary_status={primary_status} "
     f"roles={len(roles) if isinstance(roles, list) else 0} "
     f"agents={len(agents) if isinstance(agents, dict) else 0} "
     f"queue_states={len(queue.get('state_counts', {})) if isinstance(queue, dict) else 0} "

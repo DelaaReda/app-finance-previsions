@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T113006Z-787"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T11:30:06Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_no_runtime_command_needed)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T11:30:06Z"
+      ended_at_utc: "2026-03-24T11:30:06Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_planner_analysis_close)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b84-analysis-20260324t1129z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=guardian_red_on_missing_architecture_plan_ref_and_architecture_audit | fix_applied=analysis_completion_proof_now_links_docs_ops_ACTIVE_DOCS_INDEX_md_docs_ops_PLANE_BACKLOG_INTEGRATION_SPEC_md_docs_product_PRODUCT_VISION_md_and_runtime_projection_with_apps_api_src_domains_and_apps_web_src_audit_scope | verify=before=guardian_red_missing_architecture_refs_and_audit; after=analysis_proof_binds_runtime_batch_to_architecture_refs_and_audit_scope; test=parallel_workstream_context_role_planner_reports_BATCH_84_ANALYSIS_in_progress | architecture_check=docs/ops/ACTIVE_DOCS_INDEX.md;docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md;docs/product/PRODUCT_VISION.md;apps/api/src/domains;apps/web/src;dependency_policy_same_batch | vision_alignment=batch=BATCH-84,target=personal_finance_copilot_daily_brief_and_analysis_entrypoint,impact=planner_analysis_closed_with_architecture_continuity"

@@ -1,0 +1,45 @@
+{
+  "task_id": "BATCH-65-ADMIN-01",
+  "captured_at": "2026-03-19T16:43:18.766632Z",
+  "validation_type": "admin_runtime_final",
+  "runtime_gate": "pass",
+  "product_runtime_status": "ok",
+  "primary_status": "ok",
+  "endpoints_validated": {
+    "personal_finance_start": {
+      "url": "/api/personal-finance/start?tickers=AAPL",
+      "status": "ok",
+      "brief_available": true
+    },
+    "personal_finance_context": {
+      "url": "/api/personal-finance/context?tickers=AAPL",
+      "status": "ok",
+      "ask_targets_correct": true
+    },
+    "personal_finance_ask": {
+      "url": "/api/personal-finance/ask",
+      "method": "POST",
+      "status": "ok",
+      "verdict_returned": true
+    }
+  },
+  "monitor_health": "OK",
+  "backend_health": "OK",
+  "frontend_health": "OK",
+  "planner_assessment": {
+    "unblock": "BATCH-65 personal finance copilot is fully operational. All three entry points (start/context/ask) are responding correctly with proper personal-finance namespace routing.",
+    "blocker": "none",
+    "next_planner_action": "Apply workboard mutations for BATCH-65-DEV-01/02/03 ready_to_merge tasks and close BATCH-65 stream."
+  },
+  "vision_alignment": {
+    "batch": "BATCH-65",
+    "target": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open",
+    "status": "DELIVERED",
+    "evidence": [
+      "Hero brief renders from normalized copilot starter state (DEV-03)",
+      "Ask/open action chips correctly labeled (DEV-02)",
+      "Starter questions personalized from scope/brief (DEV-01)",
+      "All personal-finance namespace endpoints responding (ADMIN-01)"
+    ]
+  }
+}

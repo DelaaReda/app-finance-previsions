@@ -43,10 +43,10 @@ ensure_info_exclude_block() {
   fi
   {
     printf '\n%s\n' "$block_start"
-    printf '%s\n' "logs-codex-runs/orchestrator-state/planner-subagents-results/*.raw.txt"
-    printf '%s\n' "logs-codex-runs/orchestrator-state/planner-subagents-results/*.result.json"
-    printf '%s\n' "docs/operations/orchestrator/planner-subagents-results/*.raw.txt"
-    printf '%s\n' "docs/operations/orchestrator/planner-subagents-results/*.result.json"
+    printf '%s\n' "logs-codex-runs/orchestrator-state/legacy/planner-subagents-results/*.raw.txt"
+    printf '%s\n' "logs-codex-runs/orchestrator-state/legacy/planner-subagents-results/*.result.json"
+    printf '%s\n' "logs-codex-runs/orchestrator-state/legacy/dynamic-workers-results/*.launcher.log"
+    printf '%s\n' "logs-codex-runs/orchestrator-state/legacy/dynamic-workers-results/*.result.json"
     printf '%s\n' "$block_end"
   } >>"$exclude_file"
 }

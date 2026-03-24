@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T165557Z-142"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T16:55:57Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_code_change_analysis_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T16:55:57Z"
+      ended_at_utc: "2026-03-24T16:55:57Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_analysis_close)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch84-analysis-complete-p1774371298-3604"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=dependency_policy_not_enforced and missing_architecture_audit left BATCH-84 analysis open despite runtime context being stable | fix_applied=planner analysis closed with architecture plan references anchored to apps/api and apps/web plus next admin repair target defined | verify=before=guardian yellow with analysis still in progress; after=planner context shows BATCH-84-ANALYSIS is the only planner in progress and downstream GOV_REVIEW is merely waiting_dep; test=python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=architecture_plan_ref=apps/api|apps/web; anti_regression_guards=ok; runtime_scope=planner_orchestrator_only | vision_alignment=batch=BATCH-84; target=personal finance copilot daily brief and analysis entrypoint; impact=analysis gate closed so runtime repair can proceed"

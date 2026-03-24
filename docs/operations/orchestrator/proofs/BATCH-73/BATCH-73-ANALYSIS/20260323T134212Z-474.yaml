@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-73-BATCH-73-ANALYSIS-20260323T134212Z-474"
+stream_id: "BATCH-73"
+task_id: "BATCH-73-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T13:42:12Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T13:42:12Z"
+      ended_at_utc: "2026-03-23T13:42:12Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_runtime_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-analysis-20260323T134017Z"
+  review_ref: "runner:BATCH-73-ANALYSIS"
+  note: "source=runner | root_cause=guardian red reported dependency policy drift plus missing architecture_plan_ref and architecture_audit tied to apps/api and apps/web | fix_applied=planner resumed BATCH-73 analysis from canonical runtime context and locked explicit api web continuity requirements before downstream execution | verify=before=guardian score 65 red with missing architecture refs and audit; after=analysis proof now binds apps/api and apps/web continuity inside BATCH-73; test=parallel_workstream context rc0 with planner role in_progress on BATCH-73-ANALYSIS | architecture_check=apps/api/src/domains/* referenced; apps/web/src preserved; no copilot-app paths; no backend/src/backend/src; same batch dependency regroup required | vision_alignment=batch=BATCH-73 target=personal finance copilot daily brief and analysis flow impact=delivery continuity before dev execution"

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-79-BATCH-79-ANALYSIS-20260323T214848Z-784"
+stream_id: "BATCH-79"
+task_id: "BATCH-79-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T21:48:48Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_close_no_shell_exec)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T21:48:48Z"
+      ended_at_utc: "2026-03-23T21:48:48Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_canonical_doc_review_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "b79-analysis-close-20260323t214647z"
+  review_ref: "runner:BATCH-79-ANALYSIS"
+  note: "source=runner | root_cause=analysis_contract_missing_architecture_plan_ref_and_architecture_audit | fix_applied=linked_canonical_plan_ref_and_explicit_audit_targets_for_apps_api_and_apps_web | verify=before=guardian_red_missing_plan_ref_and_audit; after=analysis_completion_links_plan_ref_and_audit_targets; test=runtime_context_confirms_single_active_planner_analysis_task | architecture_check=apps/api/src/domains/* reuse path recorded; apps/api/runtime boundary recorded; apps/web/src theme preserved per product vision | vision_alignment=batch=BATCH-79; target=brief_plus_ask_explainable_investment_memo_without_frontend_theme_break; impact=planner_analysis_closed_with_canonical_backend_web_boundary"

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
-import parallel_workstream as pw
+import compat.projections.parallel_workstream as pw
 
 
 def parse_utc(value: str) -> datetime | None:

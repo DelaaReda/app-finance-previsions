@@ -1,0 +1,47 @@
+{
+  "task_id": "BATCH-22-ADMIN-01",
+  "stream_id": "BATCH-22",
+  "role": "admin",
+  "produced_at_utc": "2026-03-12T12:01:45Z",
+  "status": "unblocked",
+  "summary": "Rebalancing Optimizer Lite runtime validation completed. The live backend had been serving a stale API process that predated the DEV-03 delivery and did not expose `/api/judge/rebalancing-optimizer-lite`; after a targeted backend restart from the canonical VM workspace, the new route is live, the rebalancing playbook endpoint responds, and monitor/runtime diagnostics are healthy.",
+  "root_cause": "Runtime truth drift: port 8050 was still owned by an older backend process started on 2026-03-11 from `/home/venom/shared/analyse-financiere/apps/api/src/platform/run_api.py`. That stale process exposed `/api/judge/options` and `/api/judge/strategy-playbooks` but not the new `/api/judge/rebalancing-optimizer-lite` route added by the BATCH-22 dev chain, so live runtime behavior lagged behind repo/test truth.",
+  "fix_applied": "Applied a reversible runtime-only repair. Stopped the stale backend listener on pid 3263392 and relaunched the API from the canonical VM workspace with `python3 -m uvicorn api.main:create_app --factory --host 127.0.0.1 --port 8050`. No repo code or config files were changed.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-22/BATCH-22-ADMIN-01/20260312T120145Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "openapi_route_visibility_before_fix": "FAIL live `/openapi.json` exposed `/api/judge/options` and `/api/judge/strategy-playbooks` but omitted `/api/judge/rebalancing-optimizer-lite`",
+    "backend_process_truth_before_fix": "FAIL port 8050 listener was `/home/venom/shared/analyse-financiere/apps/api/src/platform/run_api.py` started 2026-03-11 09:43:02",
+    "backend_listener_after_fix": "PASS port 8050 now owned by pid 4099320 from canonical workspace launch",
+    "openapi_route_visibility_after_fix": "PASS `/openapi.json` now lists `/api/judge/rebalancing-optimizer-lite`",
+    "rebalancing_route_live": "PASS GET `/api/judge/rebalancing-optimizer-lite?limit=1&ticker=SPY&portfolio_id=pf-rebal&debug=true` => HTTP 200 with `filters_applied.portfolio_id=pf-rebal` and `source` including `judge_explainability_graph_v1`",
+    "rebalancing_playbooks_live": "PASS GET `/api/judge/strategy-playbooks?limit=1&portfolio_id=pf-rebal&profile=rebalancing_optimizer_lite` => HTTP 200 with stable `status/freshness/playbooks` envelope",
+    "monitor_status_lite": "PASS monitor `/api/status?lite=1` => health=OK data_freshness_s<=2 with no active admin blocker",
+    "monitor_runtime_diagnostics_lite": "PASS `/api/runtime-diagnostics?lite=1` => health=OK planner_blocker_id=NONE admin_timeout_events_recent=0",
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=3 workboard_ready=0 admin_timeouts_recent=0 issues_records=7",
+    "backend_contract_tests": "PASS `python3 -m pytest apps/api/src/domains/judge/tests/test_judge_rebalancing_optimizer_route.py apps/api/src/domains/judge/tests/test_judge_rebalancing_playbook_contract.py -q` => 3 passed",
+    "frontend_contract_tests": "PASS `node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js apps/web/src/domains/forecasts/pages/app.test.js --test-name-pattern='rebalanc'` => 131 passed",
+    "fc_status_brief_note": "WARN one immediate post-restart `bash scripts/fc_status_brief.sh` call hit a 15s monitor timeout window, but direct 30s lite probes and `monitor_contract_smoke.sh` passed after settle"
+  },
+  "files_touched": [
+    "docs/operations/orchestrator/proofs/BATCH-22/BATCH-22-ADMIN-01/20260312T120145Z-admin-runtime-proof.json",
+    "memory/2026-03-12.md"
+  ],
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "python3 - <<'PY' ... urllib.request.urlopen('http://127.0.0.1:8050/openapi.json') ... PY",
+    "curl -sS --max-time 25 'http://127.0.0.1:8050/api/judge/rebalancing-optimizer-lite?limit=1&ticker=SPY&portfolio_id=pf-rebal&debug=true'",
+    "curl -sS --max-time 25 'http://127.0.0.1:8050/api/judge/strategy-playbooks?limit=1&portfolio_id=pf-rebal&profile=rebalancing_optimizer_lite'",
+    "python3 -m pytest apps/api/src/domains/judge/tests/test_judge_rebalancing_optimizer_route.py apps/api/src/domains/judge/tests/test_judge_rebalancing_playbook_contract.py -q",
+    "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js apps/web/src/domains/forecasts/pages/app.test.js --test-name-pattern='rebalanc'",
+    "python3 - <<'PY' ... urllib.request.urlopen('http://127.0.0.1:7779/api/status?lite=1', timeout=30) ... PY",
+    "python3 - <<'PY' ... urllib.request.urlopen('http://127.0.0.1:7779/api/runtime-diagnostics?lite=1', timeout=30) ... PY",
+    "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 --timeout 25",
+    "bash scripts/fc_status_brief.sh"
+  ],
+  "commit_sha": "SKIP(no_code_or_config_change)",
+  "architecture_check": "PASS(runtime-only repair): reused the existing backend entrypoint and monitor surfaces, changed no route implementation, config, or planner-owned orchestration artifacts.",
+  "vision_alignment": "PASS(BATCH-22): the admin lane now has explicit live proof that the rebalancing optimizer route introduced by the dev chain is actually served on :8050 and remains observable through the monitor/diagnostics surfaces.",
+  "recommended_next": "Planner can merge BATCH-22-ADMIN-01 as unblocked runtime evidence. Optional follow-up outside this task: tighten `scripts/fc_status_brief.sh` or the monitor timeout budget if the 15s post-restart timeout is considered noisy.",
+  "blocking_issue": "none"
+}

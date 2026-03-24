@@ -1,0 +1,118 @@
+---
+status: complete
+batch: BATCH-24
+task_id: BATCH-24-DEV-02
+task_title: Alerting Intelligence V2 - Frontend Urgency Surfacing
+completed_at: 2026-03-13T06:30:00Z
+completed_by: planner_dev_capability
+---
+
+# BATCH-24-DEV-02 Completion Proof
+
+## Mission
+Expose urgency tiers and prioritization state through existing frontend/monitor surfaces by consuming DEV-01 additive fields.
+
+## Files Analyzed
+- `apps/web/src/domains/forecasts/contracts/apiConnector.js` - transformAlert(), getAlerts()
+- `apps/web/src/domains/forecasts/pages/app.js` - sanitizeAlertTimeline(), renderAlertTimeline(), buildAlertQueueSummary()
+- `apps/web/src/domains/forecasts/components/widgets/alerts-timeline.html` - Widget template
+- `apps/web/src/domains/forecasts/contracts/apiConnector.test.js` - Test evidence
+
+## Urgency Tier Features Already Implemented
+
+### 1. Backend Field Preservation (apiConnector.js)
+```javascript
+function transformAlert(payload) {
+  return {
+    id: ...,
+    priority_band: String(raw.priority_band || raw.priorityBand || '').toLowerCase(),
+    priority_rank: normalizeNumber(raw.priority_rank ?? raw.priorityRank, 0),
+    priority_score: normalizeNumber(raw.priority_score ?? raw.priorityScore, 0),
+    suppression: raw.suppression && typeof raw.suppression === 'object' ? raw.suppression : {},
+    signals: raw.signals && typeof raw.signals === 'object' ? raw.signals : {}
+  };
+}
+```
+
+### 2. Alert Queue Metadata (apiConnector.js)
+```javascript
+window.alertTimelineMeta = {
+  generatedAt: String(alertsPayload?.generatedAt || ''),
+  suppressedCount: normalizeNumber(alertsPayload?.suppressedCount, 0),
+  topPriorityBand: String(alertsPayload?.queue?.top_priority_band || '').toLowerCase(),
+  priorityBands: extractObject(alertsPayload?.stats, ['priority_bands']) || {},
+  suppressionReasons: extractObject(alertsPayload?.stats, ['suppression_reasons']) || {},
+  suppressionWindowMinutes: normalizeNumber(
+    alertsPayload?.pipeline?.suppression_window_minutes, 0
+  ),
+};
+```
+
+### 3. UI Urgency Visualization (app.js)
+- **Filter buttons**: All | Urgent | Action | Monitor
+- **Queue chips**: Show counts per priority band (Urgent X, Action X, Monitor X, Background X)
+- **Suppression context**: "Held X", "15m window", duplicate reason chips
+- **Alert sorting**: By `priorityBandRank` → `priorityRank` → `confidence` → `timestamp`
+- **Per-alert labels**: "Urgent queue", "Action queue", "Monitor queue" visible in each row
+- **Repeat indicator**: "repeat Xx" shown for suppressed duplicates that were released
+
+### 4. User-Visible Urgency Tiers
+| Priority Band | Filter Label | Chip Color | Sort Priority |
+|--------------|--------------|------------|---------------|
+| `urgent` | Urgent | high (red) | 1 (top) |
+| `high` | Action | high (red) | 2 |
+| `medium` | Monitor | medium (yellow) | 3 |
+| `low` | Background | low (gray) | 4 |
+
+## Test Evidence
+From `apiConnector.test.js` (lines 2119-2127):
+```javascript
+assert.equal(sandbox.window.alertTimelineMeta.suppressedCount, 3);
+assert.equal(sandbox.window.alertTimelineMeta.topPriorityBand, 'urgent');
+assert.equal(sandbox.window.alertTimelineMeta.priorityBands.urgent, 1);
+assert.equal(sandbox.window.alertTimelineMeta.suppressionReasons.fatigue_window_duplicate, 3);
+assert.equal(sandbox.window.alertTimelineMeta.suppressionWindowMinutes, 15);
+assert.equal(sandbox.window.alertTimeline[0].priority_band, 'urgent');
+assert.equal(sandbox.window.alertTimeline[0].priority_rank, 1);
+assert.equal(sandbox.window.alertTimeline[0].priority_score, 98);
+assert.equal(sandbox.window.alertTimeline[0].suppression.repeat_count, 4);
+```
+
+## Completion Evidence Summary
+
+### What User Sees
+1. **Top queue summary** shows "Urgent X • Action X • Monitor X • Background X" chips
+2. **Suppression context** shows "Held 3" and "15m window" when duplicates are suppressed
+3. **Each alert row** displays its urgency tier: "Urgent queue • market signal • 98% confidence • 2m ago"
+4. **Filter buttons** let user view only Urgent, Action, or Monitor alerts
+5. **Repeat alerts** show "repeat 4x" indicator when duplicates were held then released
+6. **Alerts are sorted** with urgent/action items at the top
+
+### Backward Compatibility
+- All DEV-01 fields are additive (no schema breaks)
+- Existing alert consumers still parse the payload
+- Fallback behavior works when priority fields are missing
+
+## Files Changed
+**None** - DEV-02 urgency surfacing was already implemented in prior work:
+- `apps/web/src/domains/forecasts/contracts/apiConnector.js` - Already preserves priority/suppression fields
+- `apps/web/src/domains/forecasts/pages/app.js` - Already renders urgency tiers visibly
+- `apps/web/src/domains/forecasts/components/widgets/alerts-timeline.html` - Already has filter buttons
+
+## Contract Handoff to DEV-03
+No residual contract edges identified. The urgency tier surfacing is complete and user-visible.
+
+DEV-03 scope:
+- Close any remaining helper cleanup on the same alerting path
+- Ensure no duplicate helpers exist
+- Keep changes regression-safe and bounded
+
+## Architecture Compliance
+✅ Reused existing widgets (`alerts-timeline.html`)
+✅ Reused shared UI wiring (`app.js` render functions)
+✅ No new frontend subsystem created
+✅ Consumed DEV-01 additive fields without schema changes
+✅ User-visible urgency ordering implemented
+
+## Next Action
+Dispatch `BATCH-24-DEV-03` for bounded cleanup/contract finishing, or proceed to `BATCH-24-ADMIN-01` for runtime proof capture if DEV-03 is deemed unnecessary.

@@ -28,9 +28,9 @@ LAST_PLATEAU_ACTION_FILE="${STATE_DIR}/last_dependency_plateau_epoch"
 LAST_PLATEAU_FINGERPRINT_FILE="${STATE_DIR}/last_dependency_plateau_fingerprint"
 ADMIN_AUTONOMY_STATE_FILE="${FC_ADMIN_AUTONOMY_STATE_FILE:-${ROLE_STATE_DIR}/admin_autonomy_state.json}"
 
-QUEUE_FILE="${FC_ADMIN_DISPATCH_QUEUE_FILE:-${ROOT}/docs/operations/orchestrator/priority-queue.json}"
-BOARD_FILE="${FC_ADMIN_DISPATCH_BOARD_FILE:-${ROOT}/docs/operations/orchestrator/parallel-workstreams.json}"
-EXEC_FILE="${FC_ADMIN_DISPATCH_EXEC_FILE:-${ROOT}/docs/operations/orchestrator/executors-monitoring-latest.json}"
+QUEUE_FILE="${FC_ADMIN_DISPATCH_QUEUE_FILE:-${ROOT}/logs-codex-runs/orchestrator-state/priority-queue.json}"
+BOARD_FILE="${FC_ADMIN_DISPATCH_BOARD_FILE:-${ROOT}/logs-codex-runs/orchestrator-state/parallel-workstreams.json}"
+EXEC_FILE="${FC_ADMIN_DISPATCH_EXEC_FILE:-${ROOT}/logs-codex-runs/orchestrator-state/executors-monitoring-latest.json}"
 TICK_LOG_FILE="${FC_ADMIN_DISPATCH_TICK_LOG:-}"
 
 DISPATCH_ENABLED="${FC_ADMIN_DISPATCH_ENABLED:-1}"
@@ -311,7 +311,7 @@ read_admin_autonomy_json() {
 role_has_fresh_critical_issue() {
   local role="$1"
   local window_min="$2"
-  local issue_file="${ROOT}/docs/operations/orchestrator/agent-iteration-issues.jsonl"
+  local issue_file="${ROOT}/logs-codex-runs/orchestrator-state/agent-iteration-issues.jsonl"
   python3 - "$issue_file" "$role" "$window_min" <<'PY' 2>/dev/null || echo 0
 import json
 import sys
@@ -840,7 +840,7 @@ if [[ "$TSHAPE_MODE" == "full_takeover" && "$takeover_active" == "1" && "$blocke
         AUTO_ACTION_SEQ="${AUTO_ACTION_SEQ:+${AUTO_ACTION_SEQ},}sync"
         autonomy_record_action_outcome "$blocked_role" "${AUTO_TARGET_TASK:-none}" "sync" "1"
       else
-        if run_cmd "autonomy_sync_priority" python3 platform/automation/parallel_workstream.py --board "$BOARD_FILE" sync-priority --queue "$QUEUE_FILE"; then
+        if run_cmd "autonomy_sync_priority" python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --board "$BOARD_FILE" --queue "$QUEUE_FILE"; then
           actions_taken=$((actions_taken + 1))
           auto_sync_done=1
           AUTO_ACTION_SEQ="${AUTO_ACTION_SEQ:+${AUTO_ACTION_SEQ},}sync"
@@ -881,7 +881,7 @@ if [[ "$TSHAPE_MODE" == "full_takeover" && "$takeover_active" == "1" && "$blocke
           autonomy_record_action_outcome "$blocked_role" "$blocked_ready_task" "claim" "1"
         else
           if run_cmd "tshape_claim_ready" \
-            python3 platform/automation/parallel_workstream.py --board "$BOARD_FILE" claim \
+            python3 platform/automation/runtime/planner/planner_runtime_actions.py claim --board "$BOARD_FILE" \
               --role "$blocked_role" \
               --task "$blocked_ready_task" \
               --change-plan "$CHANGE_PLAN" \
@@ -945,7 +945,7 @@ if [[ "$TSHAPE_MODE" == "full_takeover" && "$takeover_active" == "1" && "$blocke
             autonomy_record_action_outcome "$blocked_role" "$in_progress_task" "complete" "1"
           else
             if run_cmd "autonomy_complete" \
-              python3 platform/automation/parallel_workstream.py --board "$BOARD_FILE" complete \
+              python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --board "$BOARD_FILE" \
                 --role "$blocked_role" \
                 --task "$in_progress_task" \
                 --artifact "${role_artifact:-admin_autonomy_takeover}" \
@@ -1009,7 +1009,7 @@ if (( open_handoff_count > 0 )) && (( actions_taken < DISPATCH_MAX_ACTIONS )); t
       action "name=handoff_ack dry_run=1 handoff=${hid} to_role=${hto} stream=${hs:-none} task=${ht:-none}"
       actions_taken=$((actions_taken + 1))
     else
-      if run_cmd "handoff_ack" python3 platform/automation/parallel_workstream.py --board "$BOARD_FILE" handoff-ack --role "$hto" --handoff "$hid"; then
+      if run_cmd "handoff_ack" python3 platform/automation/runtime/planner/planner_runtime_actions.py handoff-ack --board "$BOARD_FILE" --role "$hto" --handoff "$hid"; then
         actions_taken=$((actions_taken + 1))
       fi
     fi
@@ -1053,7 +1053,7 @@ if (( plateau_detected == 1 )) && (( actions_taken < DISPATCH_MAX_ACTIONS )); th
         actions_taken=$((actions_taken + 1))
         plateau_action_taken=1
       else
-        if run_cmd "plateau_sync_priority" python3 platform/automation/parallel_workstream.py --board "$BOARD_FILE" sync-priority --queue "$QUEUE_FILE"; then
+        if run_cmd "plateau_sync_priority" python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --board "$BOARD_FILE" --queue "$QUEUE_FILE"; then
           actions_taken=$((actions_taken + 1))
           plateau_action_taken=1
         fi
@@ -1107,7 +1107,7 @@ if (( actions_taken < DISPATCH_MAX_ACTIONS )) && (( ready_queue_count > 0 )) && 
     if [[ "$DISPATCH_DRY_RUN" == "1" ]]; then
       action "name=dev_claim_sync_priority dry_run=1 queue=${QUEUE_FILE}"
     else
-      run_cmd "dev_claim_sync_priority" python3 platform/automation/parallel_workstream.py --board "$BOARD_FILE" sync-priority --queue "$QUEUE_FILE" || true
+      run_cmd "dev_claim_sync_priority" python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --board "$BOARD_FILE" --queue "$QUEUE_FILE" || true
     fi
   fi
   fairness_pick="$(fairness_pick_ready_task "dev")"
@@ -1139,7 +1139,7 @@ if (( actions_taken < DISPATCH_MAX_ACTIONS )) && (( ready_queue_count > 0 )) && 
         DISPATCH_REASON_CODE="$dev_dispatch_reason"
         DISPATCH_FAIRNESS_SLOT="$dev_fairness_slot"
       else
-        if run_cmd "dev_claim_ready"           python3 platform/automation/parallel_workstream.py --board "$BOARD_FILE" claim             --role dev             --task "$dev_ready_task"             --change-plan "$CHANGE_PLAN"             --architecture-checks "$ARCH_CHECKS"; then
+        if run_cmd "dev_claim_ready"           python3 platform/automation/runtime/planner/planner_runtime_actions.py claim --board "$BOARD_FILE"             --role dev             --task "$dev_ready_task"             --change-plan "$CHANGE_PLAN"             --architecture-checks "$ARCH_CHECKS"; then
           action "name=dev_claim_ready_result role=dev task=${dev_ready_task} dispatch_reason_code=${dev_dispatch_reason} stream_fairness_slot=${dev_fairness_slot}"
           actions_taken=$((actions_taken + 1))
           DISPATCH_REASON_CODE="$dev_dispatch_reason"
@@ -1167,7 +1167,7 @@ if (( actions_taken < DISPATCH_MAX_ACTIONS )) && (( ready_queue_count > 0 )) && 
       if [[ "$DISPATCH_DRY_RUN" == "1" ]]; then
         action "name=sync_priority dry_run=1 queue=${QUEUE_FILE}"
       else
-        if ! run_cmd "sync_priority" python3 platform/automation/parallel_workstream.py --board "$BOARD_FILE" sync-priority --queue "$QUEUE_FILE"; then
+        if ! run_cmd "sync_priority" python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --board "$BOARD_FILE" --queue "$QUEUE_FILE"; then
           sync_ok=0
         fi
       fi
@@ -1189,7 +1189,7 @@ if (( actions_taken < DISPATCH_MAX_ACTIONS )) && (( ready_queue_count > 0 )) && 
           printf '%s\n' "$fingerprint" > "$LAST_FINGERPRINT_FILE"
         else
           if run_cmd "planner_claim_ready" \
-            python3 platform/automation/parallel_workstream.py --board "$BOARD_FILE" claim \
+            python3 platform/automation/runtime/planner/planner_runtime_actions.py claim --board "$BOARD_FILE" \
               --role planner \
               --task "$planner_ready_task" \
               --change-plan "$CHANGE_PLAN" \

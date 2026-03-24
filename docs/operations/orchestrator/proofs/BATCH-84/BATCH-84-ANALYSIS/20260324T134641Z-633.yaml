@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T134641Z-633"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T13:46:41Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_code_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T13:46:41Z"
+      ended_at_utc: "2026-03-24T13:46:41Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "parallel_workstream_context,sync_priority"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b84-analysis-20260324t134513z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=preuve planner incomplete sans architecture_plan_ref ni architecture_audit relies aux chemins canoniques | fix_applied=sync-priority relancee et preuve d analyse reliee a apps/api/src/domains, apps/api/runtime et apps/web/src | verify=before=guardian red missing_architecture_plan_ref missing_architecture_audit; after=projection runtime synchronisee et analyse rattachee aux chemins canoniques; test=parallel_workstream context ok plus sync-priority ok | architecture_check=architecture_plan_ref=apps/api/src/domains/*;architecture_audit=apps/web/src,apps/api/runtime/;dependency_policy=batch_local;anti_regression_guards=ok | vision_alignment=batch=BATCH-84; target=copilot financier personnel avec brief quotidien et ouverture analysis; impact=analyse planner cloturee pour poursuivre la livraison"

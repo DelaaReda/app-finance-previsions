@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-66-BATCH-66-DEV-01-20260319T171617Z-755"
+stream_id: "BATCH-66"
+task_id: "BATCH-66-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-19T17:16:17Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-19T17:16:17Z"
+      ended_at_utc: "2026-03-19T17:16:17Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest -q apps/api/src/domains/judge/tests/test_intelligence_service_cache.py apps/api/src/domains/copilot/tests/test_copilot_domain_router.py apps/api/src/domains/copilot/tests/test_copilot_service.py"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=821c9b61f2fbb5c3d2e1895a6bb35947fef8e20d; starter ask examples now include prompts like `What matters most about Rates repricing today?` when the brief carries those topics."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-66-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-66-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The starter payload exposed only static ask chips, so the brief-of-day did not actually influence the first questions available to the user. | fix_applied=Updated `apps/api/src/domains/judge/application/intelligence_service.py` to derive up to two extra ask items from `top_risks` and `top_signals`, dedupe prompts against existing starter asks, and preserve the existing nev | verify=before=starter ask payload was fixed to `portfolio_today`, `market_theme`, `nvda_memo` regardless of brief contents; after=Judge-backed starter payload appends up to two brief-derived asks when `top_risks`/`top_signals`  | architecture_check=layer=judge application builds starter payload and copilot router tests verify integration only; imports_ok=yes reused existing Judge stack entrypoint `domains.judge.application.intelligence_service` with no new service  | vision_alignment=batch=BATCH-66; target=personal finance copilot starts from the brief and immediately offers relevant asks; impact=improves first-click usefulness without widening the API contract or adding new endpoints"

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-75-BATCH-75-ANALYSIS-20260323T162503Z-964"
+stream_id: "BATCH-75"
+task_id: "BATCH-75-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T16:25:03Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_tick)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T16:25:03Z"
+      ended_at_utc: "2026-03-23T16:25:03Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_runtime_tick)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-BATCH-75-ANALYSIS-20260323T162311Z"
+  review_ref: "runner:BATCH-75-ANALYSIS"
+  note: "source=runner | root_cause=planner_analysis_left_open_after_plan_dependency_resolved | fix_applied=analysis_closed_with_canonical_architecture_reference_and_runtime_proof | verify=before=analysis_task_open_with_no_canonical_ref_in_contract; after=analysis_task_ready_for_next_runtime_transition_with_architecture_map_ref; test=parallel_workstream_context_confirmed_only_planner_analysis_in_progress | architecture_check=architecture_plan_ref=docs/architecture/ARCHITECTURE_MAP.md; canonical_paths=apps/api|apps/web; forbidden_paths=copilot-app/*|backend/src/backend/src/*|src.* | vision_alignment=batch=BATCH-75; target=personal_finance_copilot_daily_brief_and_analysis_flow; impact=planner_analysis_closed_to_unlock_stream_progress"

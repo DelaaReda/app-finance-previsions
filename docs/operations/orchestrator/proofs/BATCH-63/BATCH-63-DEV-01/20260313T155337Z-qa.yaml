@@ -1,0 +1,18 @@
+review_id: BATCH-63-DEV-01
+batch: BATCH-63
+task_title: "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open"
+result: PASS
+timestamp_utc: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+checks:
+  - command: "platform/policies/exec_safe.sh --workdir /home/venom/analyse-financiere -- pytest apps/api/src/domains/judge/tests/test_judge_route_orchestration.py -k personal_finance_start --maxfail=1"
+    outcome: "1 passed, 20 deselected"
+  - command: "platform/policies/exec_safe.sh --workdir /home/venom/analyse-financiere -- pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -k judge_options_fallback_exposes_degraded_metadata --maxfail=1"
+    outcome: "1 passed, 9 deselected"
+  - command: "platform/policies/exec_safe.sh --workdir /home/venom/analyse-financiere -- pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -k judge_options_expose_available_profiles --maxfail=1"
+    outcome: "1 passed, 9 deselected"
+artifacts_reviewed:
+  - apps/api/src/domains/judge/application/judge_endpoint_service.py
+  - apps/api/src/domains/judge/api/judge.py
+  - apps/api/src/domains/judge/tests/test_judge_route_orchestration.py
+notes:
+  - "get_judge_options_payload is now standalone and complete.\n  - get_judge_personal_finance_start_payload is top-level and route calls it directly."

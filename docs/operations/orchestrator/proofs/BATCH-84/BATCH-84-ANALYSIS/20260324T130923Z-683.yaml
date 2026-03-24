@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T130923Z-683"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T13:09:23Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_closure_no_runtime_exec)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T13:09:23Z"
+      ended_at_utc: "2026-03-24T13:09:23Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_proof_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-complete-batch-84-analysis-20260324t130804z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=preuve_analysis_incomplete_missing_architecture_plan_ref_and_architecture_audit | fix_applied=analysis_proof_completed_with_architecture_refs_apps_api_apps_web_and_dependency_policy_alignment | verify=before=guardian_red_missing_refs; after=analysis_proof_complete_and_ready_for_admin_dispatch; test=parallel_workstream_context_planner_in_progress_confirmed | architecture_check=paths=apps/api/src/domains/*,apps/web/src,apps/api/runtime;guards=no_copilot_app,no_backend_src_dup,no_legacy_src_imports;dependency_policy=same_batch | vision_alignment=batch=BATCH-84; target=finance_copilot_daily_brief_and_analysis_flow; impact=planner_analysis_closed_to_unlock_admin_track"

@@ -34,7 +34,7 @@ Ship fast **without** shipping garbage.
 No batch can be marked DONE unless all gates pass.
 
 ### Gate 1 — Command Safety Precheck
-- Every shell command must pass `scripts/command_safety_gate.py` via `scripts/exec_safe.sh`.
+- Every shell command must pass `platform/policies/command_safety_gate.py` via `platform/policies/exec_safe.sh`.
 - Decisions:
   - `ALLOW` → run
   - `CONFIRM` → run with risk logged (policy: no wait)
@@ -189,7 +189,7 @@ Evidence schema reference (recommended):
 - All new endpoint work must reuse the template pattern via:
   - `/api/routes/*` new endpoints using contract/reliability reuse modules
   - tests and UI adapters that consume the template contract, not duplicate it
-- Violations are BLOCKED and must be logged in `ADMIN_TEAM_CHAT.md` + role handoff.
+- Violations are BLOCKED and must be logged in `ADMIN_ARCHIVE_TEAM_CHAT.md` + role handoff.
 
 ---
 

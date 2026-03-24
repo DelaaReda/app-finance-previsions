@@ -34,7 +34,7 @@ Objectif: réduire la charge mentale en standardisant les problèmes d’exécut
 
 ## Reporting format (obligatoire)
 
-Dans `docs/ops/ADMIN_TEAM_CHAT.md`:
+Dans `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`:
 
 - `[ts] [admin] TYPE: ALERT MSG: exec_issue=<CODE>; scope=<role|cron|system>; evidence=<file:line|jobId|contract_ref>; impact=<delivery|ops|cost>; suggestion=<NEXT_ACTION_UNIQUE>`
 

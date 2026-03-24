@@ -1,0 +1,76 @@
+proof_id: "QA-BATCH-64-BATCH-64-DEV-03-20260314T040000Z-QA"
+stream_id: "BATCH-64"
+task_id: "BATCH-64-DEV-03"
+role: "qa_review_worker"
+produced_at_utc: "2026-03-14T04:00:00Z"
+review_scope:
+  - "Validate FinanceAPI.getCopilotStart() fallback fix"
+  - "Verify ask/open starter actions preserved in degraded path"
+  - "Confirm /personal-finance/ask classification works correctly"
+  
+preconditions_validated:
+  - "Change scope: minimal patch to apiConnector.js"
+  - "No UI styling refactoring"
+  - "Frontend theme preserved"
+
+execution:
+  commands:
+    - cmd: "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js"
+      rc: 0
+      result: "PASS"
+      tests_run: 53
+      tests_pass: 53
+      tests_fail: 0
+      
+validations:
+  code_review:
+    - file: "apps/web/src/domains/forecasts/contracts/apiConnector.js"
+      changes_verified:
+        - "getCopilotStart() no longer short-circuits after /brief/daily fallback"
+        - "dailyBrief variable hoisted to merge into context payload"
+        - "transformCopilotStart() merges recovered brief into starter payload"
+        - "isCopilotAskTarget() helper added for /personal-finance/ask classification"
+        - "Ask/open starter actions preserved through fallback chain"
+      
+  test_coverage:
+    - test: "getCopilotStart falls back to copilot context when starter route unavailable"
+      result: "PASS"
+      validates: "Fallback chain: start -> daily brief -> context preserves actions"
+    - test: "getCopilotStart keeps ask/open starter actions when namespaced start falls back"
+      result: "PASS"
+      validates: "Ask/open actions survive degraded startup path"
+    - test: "askCopilot preserves normalized memo metadata and context influence cues"
+      result: "PASS"
+      validates: "/personal-finance/ask entry points classified correctly"
+      
+  architecture_check:
+    layer: "web shared API connector"
+    imports_ok: true
+    path_target: "apps/web/src/domains/forecasts/contracts/apiConnector.js"
+    side_effects: "none"
+    theme_changes: "none"
+
+outputs:
+  artifacts:
+    - "commit=642b0581270b19e30ebedab6421fc464d3dadbf0"
+    - "fix: preserve copilot starter fallback actions"
+    - "tests: 53/53 PASS"
+    
+vision_alignment:
+  batch: "BATCH-64"
+  target: "personal finance copilot brief-first flow with immediate ask/open actions"
+  impact: "degraded startup path now gives usable brief + next actions instead of dead-end"
+
+handoff:
+  to_role: "planner"
+  handoff_id: "BATCH-64-DEV-03-QA-COMPLETE"
+  
+signoff:
+  producer_agent: "qa_review_worker"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+  
+meta:
+  idempotency_key: "QA-BATCH-64-DEV-03-20260314T040000Z"
+  review_ref: "planner_subagent_manager:BATCH-64-DEV-03"
+  parent_proof: "PRF-BATCH-64-BATCH-64-DEV-03-20260314T033854Z-880"

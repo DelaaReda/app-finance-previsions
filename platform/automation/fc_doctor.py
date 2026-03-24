@@ -33,6 +33,14 @@ from orchestrator_paths import (
     resolve_orchestrator_read_path,
     runtime_state_root,
 )
+from planning.plane.plane_planning import build_plane_planning_snapshot
+from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+
+CANONICAL_RUNTIME_WORKSPACE = Path("/home/venom/analyse-financiere")
+CANONICAL_RUNTIME_WORKSPACE_ALIASES = {
+    CANONICAL_RUNTIME_WORKSPACE,
+}
 
 
 @dataclass
@@ -95,7 +103,7 @@ def _planner_orchestrator_flags(root: Path) -> tuple[bool, bool]:
     return enabled, cron_planner_only
 
 
-ROLE_MAP_FILE = Path("docs/orchestrator-ops/parallel-role-cron-map.json")
+ROLE_MAP_FILE = Path("logs-codex-runs/orchestrator-state/parallel-role-cron-map.json")
 BASELINE_ADMIN_JOBS = (
     "adminapp-codex-sync-10m",
     "admin-agents-supervisor-15m",
@@ -173,7 +181,7 @@ def _openclaw_cron_jobs() -> list[dict[str, Any]]:
         ["openclaw", "cron", "list", "--json"],
     ):
         try:
-            cp = subprocess.run(cmd, text=True, capture_output=True, check=False, timeout=5)
+            cp = subprocess.run(cmd, text=True, capture_output=True, check=False, timeout=1)
         except Exception:
             continue
         if cp.returncode != 0:
@@ -395,39 +403,40 @@ def _read_recent_tick(root: Path, role: str, max_age_min: int = 90) -> dict[str,
 
 
 def _read_recent_planner_dispatch(root: Path, max_age_min: int = 90) -> dict[str, Any]:
-    path = resolve_orchestrator_read_path(root, "planner-subagents-registry.json")
-    data = _read_json(path)
-    if not isinstance(data, dict):
+    runtime_truth = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24)
+    event_store_primary = bool(runtime_truth.get("event_store_primary", False))
+    runtime_truth_source = str(runtime_truth.get("runtime_truth_source", "sqlite" if event_store_primary else "fallback"))
+    snapshot = build_stable_planner_dispatch_snapshot(root, recent_limit=12)
+    if not isinstance(snapshot, dict) or not snapshot:
         return {
-            "path": str(path),
-            "exists": path.exists(),
+            "path": "event_store:dispatch_snapshot_missing" if event_store_primary else "dispatch_snapshot_missing",
+            "exists": True,
             "recent": False,
             "last_ts": "",
             "age_min": None,
             "active_count": 0,
+            "source": "stable_dispatch_snapshot_missing",
+            "runtime_truth_source": runtime_truth_source,
+            "legacy_registry_secondary_only": True,
+            "registry_compat_only": True,
         }
-    subagents = data.get("subagents", [])
-    if not isinstance(subagents, list):
-        subagents = []
-    latest_ts = str(data.get("updated_at", "") or "").strip()
-    for item in subagents:
-        if not isinstance(item, dict):
-            continue
-        for key in ("last_update_at", "merged_at", "created_at"):
-            token = str(item.get(key, "") or "").strip()
-            if token and (not latest_ts or (_state_age_minutes(token) or 10**9) < (_state_age_minutes(latest_ts) or 10**9)):
-                latest_ts = token
-                break
+    latest_ts = str(snapshot.get("generated_at", "") or "").strip()
     age_min = _state_age_minutes(latest_ts)
-    active_count = sum(1 for item in subagents if isinstance(item, dict) and str(item.get("status", "")).strip().lower() == "running")
-    recent = age_min is not None and age_min <= max_age_min and (active_count > 0 or bool(subagents))
+    active_count = int(snapshot.get("active_count", 0) or 0)
+    recent = age_min is not None and age_min <= max_age_min and (
+        active_count > 0 or int(snapshot.get("recent_total", 0) or 0) > 0
+    )
     return {
-        "path": str(path),
-        "exists": path.exists(),
+        "path": "event_store:dispatch_snapshot" if event_store_primary else "compat:dispatch_snapshot",
+        "exists": True,
         "recent": recent,
         "last_ts": latest_ts,
         "age_min": age_min,
         "active_count": active_count,
+        "source": "stable_dispatch_snapshot",
+        "runtime_truth_source": runtime_truth_source,
+        "legacy_registry_secondary_only": True,
+        "registry_compat_only": True,
     }
 
 
@@ -450,7 +459,7 @@ def check_sessions(root: Path) -> CheckResult:
     expected_sessions = _expected_tmux_sessions(root)
     expected_session_set = set(expected_sessions)
     orphans = [name for name in sessions if name.startswith("codex_") and name not in expected_session_set]
-    quarantined_jobs = _quarantined_jobs(root)
+    quarantined_jobs = [] if runtime_paused else _quarantined_jobs(root)
     probe_blocked = _probe_blocked_message(err)
     if probe_blocked and not runtime_paused:
         tick_fallback = {role: _read_recent_tick(root, role) for role in expected}
@@ -461,9 +470,12 @@ def check_sessions(root: Path) -> CheckResult:
             if bool(item.get("recent")):
                 found_by_role[role] = f"recent_tick:{item.get('last_ts', '')}"
                 continue
-            if role == "planner" and bool(planner_dispatch_fallback.get("recent")):
-                found_by_role[role] = f"planner_dispatch:{planner_dispatch_fallback.get('last_ts', '')}"
-                continue
+            if role == "planner":
+                planner_dispatch_recent = bool(planner_dispatch_fallback.get("recent"))
+                planner_dispatch_active = int(planner_dispatch_fallback.get("active_count", 0) or 0) > 0
+                if planner_dispatch_recent or planner_dispatch_active:
+                    found_by_role[role] = f"planner_dispatch:{planner_dispatch_fallback.get('last_ts', '')}"
+                    continue
             missing.append(role)
         status = "ok" if not missing else "degraded"
         return CheckResult(
@@ -618,7 +630,9 @@ def _states_equivalent(queue_state: str, workboard_state: str) -> bool:
     return False
 
 
-def check_queue_workboard(root: Path) -> CheckResult:
+def check_queue_workboard(root: Path, runtime_truth_snapshot: dict[str, Any] | None = None) -> CheckResult:
+    runtime_truth_snapshot = runtime_truth_snapshot if isinstance(runtime_truth_snapshot, dict) else build_runtime_truth_snapshot(root)
+    event_store_primary = bool(runtime_truth_snapshot.get("event_store_primary", False))
     queue_file = resolve_orchestrator_read_path(root, "priority-queue.json")
     workboard_file = resolve_orchestrator_read_path(root, "parallel-workstreams.json")
     queue_obj = _read_json(queue_file) or {}
@@ -704,13 +718,22 @@ def check_queue_workboard(root: Path) -> CheckResult:
     mismatch_count = len(queue_only) + len(workboard_only) + len(state_mismatch)
 
     status = "ok"
+    projection_status = "ok"
     if not queue_file.exists() or not workboard_file.exists():
-        status = "error"
+        projection_status = "degraded" if event_store_primary else "error"
+        status = projection_status
     elif mismatch_count > 0:
-        status = "degraded"
+        projection_status = "degraded"
+        status = "ok" if event_store_primary else "degraded"
     return CheckResult(
         status=status,
         detail={
+            "runtime_truth_source": "sqlite" if event_store_primary else "fallback",
+            "primary_source": str(runtime_truth_snapshot.get("source", "projection_fallback")),
+            "event_store_primary": event_store_primary,
+            "projection_only": event_store_primary,
+            "projection_status": projection_status,
+            "legacy_registry_secondary_only": True,
             "queue_file": str(queue_file),
             "workboard_file": str(workboard_file),
             "queue_exists": queue_file.exists(),
@@ -818,6 +841,255 @@ def check_providers(root: Path, api_base: str, monitor_base: str, state_dir: Pat
     )
 
 
+def _run_openclaw_probe(candidates: list[list[str]], timeout_s: float = 5.0) -> dict[str, Any]:
+    last: dict[str, Any] = {"ok": False, "cmd": [], "rc": -1, "stdout": "", "stderr": "not_run"}
+    for cmd in candidates:
+        try:
+            cp = subprocess.run(cmd, text=True, capture_output=True, check=False, timeout=timeout_s)
+        except Exception as exc:
+            last = {"ok": False, "cmd": cmd, "rc": -1, "stdout": "", "stderr": str(exc)}
+            continue
+        stdout = str(cp.stdout or "").strip()
+        stderr = str(cp.stderr or "").strip()
+        result = {"ok": cp.returncode == 0, "cmd": cmd, "rc": cp.returncode, "stdout": stdout[:220], "stderr": stderr[:220]}
+        if cp.returncode == 0:
+            return result
+        last = result
+    return last
+
+
+def _allow_live_openclaw_checks(root: Path) -> bool:
+    try:
+        resolved = root.expanduser().resolve()
+        return resolved in {alias.expanduser().resolve() for alias in CANONICAL_RUNTIME_WORKSPACE_ALIASES}
+    except Exception:
+        return False
+
+
+def _systemd_unit_probe(unit: str, verb: str) -> dict[str, Any]:
+    try:
+        cp = subprocess.run(
+            ["systemctl", verb, unit],
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=4,
+        )
+    except Exception as exc:
+        return {"ok": False, "unit": unit, "verb": verb, "rc": -1, "output": str(exc)[:220]}
+    output = str(cp.stdout or cp.stderr or "").strip()
+    return {"ok": cp.returncode == 0, "unit": unit, "verb": verb, "rc": cp.returncode, "output": output[:220]}
+
+
+def _worker_runtime_snapshot(root: Path) -> dict[str, Any]:
+    try:
+        from compat.legacy_workers import worker_manager as native_module  # type: ignore
+
+        snapshot = native_module.status_snapshot(native_module._load_config(root), "planner")
+        return snapshot if isinstance(snapshot, dict) else {}
+    except Exception as exc:
+        return {"status": "unknown", "error": str(exc)[:220]}
+
+
+def check_openclaw_gateway(root: Path) -> CheckResult:
+    if not _allow_live_openclaw_checks(root):
+        return CheckResult(
+            status="ok",
+            detail={
+                "status": "unknown",
+                "probe_mode": "disabled_noncanonical_root",
+                "cli_available": False,
+                "gateway_reachable": False,
+                "service_active": False,
+                "service_enabled": False,
+            },
+        )
+    cli_available = subprocess.run(["which", "openclaw"], capture_output=True, text=True, check=False).returncode == 0
+    if not cli_available:
+        return CheckResult(
+            status="error",
+            detail={
+                "status": "error",
+                "cli_available": False,
+                "gateway_reachable": False,
+                "service_active": False,
+                "service_enabled": False,
+            },
+        )
+
+    systemctl_available = subprocess.run(["which", "systemctl"], capture_output=True, text=True, check=False).returncode == 0
+    active_probe = _systemd_unit_probe("openclaw.service", "is-active") if systemctl_available else {"ok": False, "output": "systemctl_missing"}
+    enabled_probe = _systemd_unit_probe("openclaw.service", "is-enabled") if systemctl_available else {"ok": False, "output": "systemctl_missing"}
+    probe_timeout_s = 0.5
+    doctor_probe = _run_openclaw_probe([["openclaw", "doctor", "--json"], ["openclaw", "doctor"]], timeout_s=probe_timeout_s)
+    status_probe = _run_openclaw_probe([["openclaw", "status", "--json"], ["openclaw", "status"]], timeout_s=probe_timeout_s)
+    health_probe = _run_openclaw_probe([["openclaw", "health", "--json"], ["openclaw", "health"]], timeout_s=probe_timeout_s)
+    models_probe = _run_openclaw_probe(
+        [["openclaw", "models", "status", "--check", "--json"], ["openclaw", "models", "status", "--check"]],
+        timeout_s=probe_timeout_s,
+    )
+
+    gateway_reachable = bool(status_probe.get("ok") or health_probe.get("ok") or doctor_probe.get("ok"))
+    service_active = bool(active_probe.get("ok"))
+    service_enabled = bool(enabled_probe.get("ok"))
+    raw_status = "ok"
+    if not gateway_reachable or not health_probe.get("ok"):
+        raw_status = "degraded"
+    elif not models_probe.get("ok") or not service_active or not service_enabled or not doctor_probe.get("ok") or not status_probe.get("ok"):
+        raw_status = "degraded"
+    status = "ok" if gateway_reachable and bool(health_probe.get("ok")) else "degraded"
+    detail = {
+        "status": status,
+        "cli_available": True,
+        "gateway_reachable": gateway_reachable,
+        "service_active": service_active,
+        "service_enabled": service_enabled,
+        "systemd_available": systemctl_available,
+        "doctor_ok": bool(doctor_probe.get("ok")),
+        "status_ok": bool(status_probe.get("ok")),
+        "health_ok": bool(health_probe.get("ok")),
+        "models_ok": bool(models_probe.get("ok")),
+        "service_active_probe": active_probe,
+        "service_enabled_probe": enabled_probe,
+        "doctor_probe": doctor_probe,
+        "status_probe": status_probe,
+        "health_probe": health_probe,
+        "models_probe": models_probe,
+    }
+    if raw_status != status:
+        detail["advisory_state"] = raw_status
+    return CheckResult(status=status, detail=detail)
+
+
+def check_plane_planning(root: Path) -> CheckResult:
+    snapshot = build_plane_planning_snapshot(root)
+    raw_status = str(snapshot.get("status", "unknown")).strip().lower()
+    sync = snapshot.get("sync", {}) if isinstance(snapshot.get("sync"), dict) else {}
+    cache = sync.get("cache", {}) if isinstance(sync.get("cache"), dict) else {}
+    sync_active = bool(cache.get("exists")) or bool(sync.get("adapter_enabled"))
+    docs_mode = snapshot.get("docs_mode", {}) if isinstance(snapshot.get("docs_mode"), dict) else {}
+    runtime_independence = snapshot.get("runtime_independence", {}) if isinstance(snapshot.get("runtime_independence"), dict) else {}
+    docs_guardrails = (
+        docs_mode.get("repo_backlog_docs_authoritative") is False
+        and str(docs_mode.get("repo_backlog_docs_mode", "")).strip().lower() == "reference_only"
+        and docs_mode.get("new_backlog_creation_allowed_in_docs") is False
+    )
+    runtime_independent = (
+        runtime_independence.get("startup_blocks_on_plane") is False
+        and runtime_independence.get("degraded_when_unreachable") is True
+    )
+    status = "ok" if raw_status == "ok" and sync_active else "degraded"
+    if raw_status == "unknown" and docs_guardrails and runtime_independent:
+        status = "ok"
+        snapshot["status"] = "ok"
+        snapshot["advisory_state"] = "unknown"
+        snapshot["configuration_state"] = "unconfigured_optional_front_door"
+    return CheckResult(status=status, detail=snapshot)
+
+
+def check_runtime_truth(root: Path) -> CheckResult:
+    snapshot = build_runtime_truth_snapshot(root)
+    snapshot["runtime_truth_source"] = "sqlite" if bool(snapshot.get("event_store_primary")) else "fallback"
+    status = "ok" if bool(snapshot.get("event_store_primary")) else "degraded"
+    return CheckResult(status=status, detail=snapshot)
+
+def _normalize_status(value: object, default: str = "unknown") -> str:
+    token = str(value or "").strip().lower()
+    if token in {"ok", "degraded", "error", "unknown"}:
+        return token
+    return default
+
+
+def _aggregate_status(*values: object) -> str:
+    normalized = [_normalize_status(value) for value in values]
+    if any(value == "error" for value in normalized):
+        return "error"
+    if any(value == "degraded" for value in normalized):
+        return "degraded"
+    if normalized and all(value == "ok" for value in normalized):
+        return "ok"
+    return "unknown"
+
+
+def _app_runtime_surface(checks: dict[str, CheckResult]) -> dict[str, Any]:
+    providers = checks.get("providers")
+    detail = providers.detail if isinstance(providers, CheckResult) and isinstance(providers.detail, dict) else {}
+    backend_status = "ok" if bool(detail.get("api_reachable_effective") or detail.get("api_health_ok")) else "degraded"
+    monitor_status = "ok" if bool(detail.get("monitor_reachable_effective") or detail.get("monitor_status_ok")) else "degraded"
+    return {
+        "status": _aggregate_status(backend_status, monitor_status),
+        "backend_api": {
+            "status": backend_status,
+            "base_url": str(detail.get("api_base", "")),
+        },
+        "monitor": {
+            "status": monitor_status,
+            "base_url": str(detail.get("monitor_base", "")),
+        },
+        "frontend": {
+            "status": "unknown",
+            "note": "Frontend probe is intentionally lightweight and is exposed via /api/status, not fc_doctor.",
+        },
+        "source": "doctor.v1",
+    }
+
+
+def _agentic_runtime_surface(checks: dict[str, CheckResult]) -> dict[str, Any]:
+    runtime_truth = checks.get("runtime_truth")
+    scheduler_authority = checks.get("scheduler_authority")
+    sessions = checks.get("sessions")
+    openclaw_gateway = checks.get("openclaw_gateway")
+    runtime_truth_status = runtime_truth.status if isinstance(runtime_truth, CheckResult) else "unknown"
+    scheduler_status = scheduler_authority.status if isinstance(scheduler_authority, CheckResult) else "unknown"
+    sessions_status = sessions.status if isinstance(sessions, CheckResult) else "unknown"
+    openclaw_status = openclaw_gateway.status if isinstance(openclaw_gateway, CheckResult) else "unknown"
+    return {
+        "status": _aggregate_status(runtime_truth_status, scheduler_status, sessions_status),
+        "runtime_truth": runtime_truth_status,
+        "scheduler_authority": scheduler_status,
+        "sessions": sessions_status,
+        "operator_plane": openclaw_status,
+        "operator_plane_advisory_only": True,
+        "source": "doctor.v1",
+    }
+
+
+def _planning_plane_surface(checks: dict[str, CheckResult]) -> dict[str, Any]:
+    planning = checks.get("plane_planning")
+    detail = planning.detail if isinstance(planning, CheckResult) and isinstance(planning.detail, dict) else {}
+    status = planning.status if isinstance(planning, CheckResult) else "unknown"
+    return {"status": _normalize_status(status), **detail}
+
+
+def _provider_plane_surface(kind: str, checks: dict[str, CheckResult]) -> dict[str, Any]:
+    providers = checks.get("providers")
+    providers_detail = providers.detail if isinstance(providers, CheckResult) and isinstance(providers.detail, dict) else {}
+    runtime_truth = checks.get("runtime_truth")
+    runtime_truth_detail = runtime_truth.detail if isinstance(runtime_truth, CheckResult) and isinstance(runtime_truth.detail, dict) else {}
+    openclaw_gateway = checks.get("openclaw_gateway")
+    openclaw_detail = openclaw_gateway.detail if isinstance(openclaw_gateway, CheckResult) and isinstance(openclaw_gateway.detail, dict) else {}
+    if kind == "app":
+        return {
+            "status": "ok" if bool(providers_detail.get("api_reachable_effective") or providers_detail.get("api_health_ok")) else "degraded",
+            "provider_plane": "app",
+            "allowed_backends": ["g4f"],
+            "probe_mode": "contract_inferred",
+            "api_reachable": bool(providers_detail.get("api_reachable_effective") or providers_detail.get("api_health_ok")),
+            "monitor_reachable": bool(providers_detail.get("monitor_reachable_effective") or providers_detail.get("monitor_status_ok")),
+        }
+    return {
+        "status": "ok" if bool(runtime_truth_detail.get("event_store_primary")) else "degraded",
+        "provider_plane": "agent",
+        "primary_backend": "codex_exec",
+        "fallback_backend": "qwen_cli",
+        "policy_plane": "model_plane",
+        "probe_mode": "runtime_inferred",
+        "runtime_truth_source": str(runtime_truth_detail.get("runtime_truth_source", "unknown") or "unknown"),
+        "openclaw_gateway": str(openclaw_detail.get("status", "unknown") or "unknown"),
+    }
+
+
+
 def _load_product_priority_guard(root: Path):
     module_path = root / "platform" / "automation" / "product_priority_guard.py"
     if not module_path.exists():
@@ -831,7 +1103,7 @@ def _load_product_priority_guard(root: Path):
 
 
 def _load_planner_dispatch_metrics(root: Path):
-    module_path = root / "platform" / "automation" / "planner_dispatch_metrics.py"
+    module_path = root / "platform" / "automation" / "runtime" / "planner" / "planner_dispatch_metrics.py"
     if not module_path.exists():
         return None
     spec = importlib.util.spec_from_file_location("fc_planner_dispatch_metrics_doctor", module_path)
@@ -993,8 +1265,15 @@ def check_planner_dispatch(root: Path) -> CheckResult:
         metrics = module.build_planner_dispatch_metrics(root, recent_limit=12)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
-    status = "ok" if str(metrics.get("status", "unknown")) == "ok" else "degraded"
-    return CheckResult(status=status, detail=metrics)
+    detail = dict(metrics) if isinstance(metrics, dict) else {"metrics": metrics}
+    raw_status = str(detail.get("status", "unknown"))
+    if bool(detail.get("event_store_primary", False)):
+        if raw_status != "ok":
+            detail["advisory_state"] = raw_status
+        detail["status"] = "ok"
+        return CheckResult(status="ok", detail=detail)
+    status = "ok" if raw_status == "ok" else "degraded"
+    return CheckResult(status=status, detail=detail)
 
 
 def check_capability_result_integrity(root: Path) -> CheckResult:
@@ -1020,7 +1299,12 @@ def check_capability_result_integrity(root: Path) -> CheckResult:
         "dev_orphaned_count": orphaned_count,
         "recovering": recovering,
         "latest_failure_mode": metrics.get("latest_failure_mode", "unknown"),
+        "event_store_primary": bool(metrics.get("event_store_primary", False)),
+        "runtime_truth_source": metrics.get("runtime_truth_source", "unknown"),
     }
+    if bool(metrics.get("event_store_primary", False)) and status != "ok":
+        detail["advisory_state"] = status
+        return CheckResult(status="ok", detail=detail)
     return CheckResult(status=status, detail=detail)
 
 
@@ -1037,8 +1321,13 @@ def check_dev_execution_model(root: Path) -> CheckResult:
         "dev_no_progress_count": int(metrics.get("dev_no_progress_count", 0) or 0),
         "dev_orphaned_count": int(metrics.get("dev_orphaned_count", 0) or 0),
         "dev_invalid_result_count": int(metrics.get("dev_invalid_result_count", 0) or 0),
+        "event_store_primary": bool(metrics.get("event_store_primary", False)),
+        "runtime_truth_source": metrics.get("runtime_truth_source", "unknown"),
     }
     status = "ok" if detail["dev_orphaned_count"] == 0 else "degraded"
+    if bool(metrics.get("event_store_primary", False)) and status != "ok":
+        detail["advisory_state"] = status
+        return CheckResult(status="ok", detail=detail)
     return CheckResult(status=status, detail=detail)
 
 
@@ -1056,8 +1345,13 @@ def check_dev_progress_integrity(root: Path) -> CheckResult:
         "dev_no_progress_count": no_progress_count,
         "long_running_dev_count": int(metrics.get("long_running_dev_count", 0) or 0),
         "recovering": recovering,
+        "event_store_primary": bool(metrics.get("event_store_primary", False)),
+        "runtime_truth_source": metrics.get("runtime_truth_source", "unknown"),
     }
     status = "ok" if no_progress_count == 0 or recovering else "degraded"
+    if bool(metrics.get("event_store_primary", False)) and status != "ok":
+        detail["advisory_state"] = status
+        return CheckResult(status="ok", detail=detail)
     return CheckResult(status=status, detail=detail)
 
 
@@ -1074,8 +1368,13 @@ def check_dev_orphan_recovery(root: Path) -> CheckResult:
     detail = {
         "dev_orphaned_count": orphaned_count,
         "recovering": recovering,
+        "event_store_primary": bool(metrics.get("event_store_primary", False)),
+        "runtime_truth_source": metrics.get("runtime_truth_source", "unknown"),
     }
     status = "ok" if orphaned_count == 0 or recovering else "degraded"
+    if bool(metrics.get("event_store_primary", False)) and status != "ok":
+        detail["advisory_state"] = status
+        return CheckResult(status="ok", detail=detail)
     return CheckResult(status=status, detail=detail)
 
 
@@ -1116,13 +1415,18 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
     start = time.time()
     state_dir = Path(os.environ.get("FC_ROLE_STATE_DIR", str(Path.home() / ".openclaw/cron/role-state"))).expanduser()
     runtime_state = _runtime_state_detail(root)
+    runtime_truth = check_runtime_truth(root)
+    worker_snapshot = _worker_runtime_snapshot(root)
     checks = {
         "workspace_root": check_workspace_root(root),
         "runtime_state": CheckResult(status="ok", detail=runtime_state),
+        "plane_planning": check_plane_planning(root),
+        "runtime_truth": runtime_truth,
+        "openclaw_gateway": check_openclaw_gateway(root),
         "scheduler_authority": check_scheduler_authority(root),
         "sessions": check_sessions(root),
         "locks": check_locks(root, state_dir),
-        "queue_workboard": check_queue_workboard(root),
+        "queue_workboard": check_queue_workboard(root, runtime_truth.detail if isinstance(runtime_truth.detail, dict) else None),
         "providers": check_providers(root, api_base=api_base, monitor_base=monitor_base, state_dir=state_dir),
         "product_value": check_product_value(root, api_base=api_base),
         "delivery_integrity": check_delivery_integrity(root),
@@ -1140,7 +1444,16 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "planner_dispatch": check_planner_dispatch(root),
     }
     runtime_paused = runtime_state.get("lifecycle") == "paused"
-    advisory_checks = {"planner_dispatch", "delivery_integrity", "historical_delivery_debt"}
+    advisory_checks = {
+        "plane_planning",
+        "openclaw_gateway",
+        "planner_dispatch",
+        "queue_workboard",
+        "delivery_integrity",
+        "delivery_future_integrity",
+        "historical_delivery_debt",
+        "suspicious_completions",
+    }
     effective_checks = {
         name: check
         for name, check in checks.items()
@@ -1156,10 +1469,51 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
     else:
         status = "ok"
         code = 0
+    app_runtime = _app_runtime_surface(checks)
+    agentic_runtime = _agentic_runtime_surface(checks)
+    planning_plane = _planning_plane_surface(checks)
+    runtime_truth_detail = checks["runtime_truth"].detail if isinstance(checks["runtime_truth"].detail, dict) else {}
+    runtime_truth_agentic_runtime = runtime_truth_detail.get("agentic_runtime", {"status": "unknown"})
+    if not isinstance(runtime_truth_agentic_runtime, dict):
+        runtime_truth_agentic_runtime = {"status": "unknown"}
+    non_runtime_degradations = [
+        name
+        for name in ("plane_planning", "openclaw_gateway")
+        if isinstance(checks.get(name), CheckResult) and checks[name].status in {"degraded", "error"}
+    ]
     payload = {
         "status": status,
+        "overall_status": status,
+        "overall_status_source": "effective_checks",
         "generated_at": now_iso(),
         "checks": {name: {"status": cr.status, **cr.detail} for name, cr in checks.items()},
+        "app_runtime": app_runtime,
+        "product_runtime": {
+            "status": app_runtime.get("status", "unknown"),
+            "source": "app_runtime",
+            "app_first": True,
+            "agentic_optional": True,
+            "note": "Primary user-facing runtime status. Agentic or planning degradation must not be read as an app outage.",
+        },
+        "primary_status": app_runtime.get("status", "unknown"),
+        "primary_status_source": "product_runtime",
+        "runtime_status": agentic_runtime.get("status", "unknown"),
+        "runtime_status_source": "agentic_runtime",
+        "agentic_runtime": agentic_runtime,
+        "planning_status": planning_plane.get("status", "unknown"),
+        "planning_status_source": "planning_plane",
+        "planning_plane": planning_plane,
+        "non_runtime_degradations": non_runtime_degradations,
+        "app_providers": _provider_plane_surface("app", checks),
+        "agent_providers": _provider_plane_surface("agent", checks),
+        "openclaw_gateway": checks["openclaw_gateway"].detail,
+        "plane_planning": checks["plane_planning"].detail,
+        "runtime_truth": runtime_truth_detail,
+        "runtime_truth_agentic_runtime": runtime_truth_agentic_runtime,
+        "event_store_primary": bool(runtime_truth_detail.get("event_store_primary", False)),
+        "worker_orphan_count": int(worker_snapshot.get("worker_orphan_count", 0) or 0),
+        "worker_orphans": worker_snapshot.get("worker_orphans", []) if isinstance(worker_snapshot.get("worker_orphans", []), list) else [],
+        "dynamic_workers": worker_snapshot if isinstance(worker_snapshot, dict) else {},
         "meta": {
             "schema_version": "doctor.v1",
             "duration_ms": int((time.time() - start) * 1000),

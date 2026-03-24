@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T183958Z-541"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T18:39:58Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T18:39:58Z"
+      ended_at_utc: "2026-03-24T18:39:58Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_runtime_proof_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch84-analysis-close-20260324t1840z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=planner_orchestrator_admin_route_mismatch left BATCH-84-ANALYSIS as the real ready planner gate while admin routing was implied | fix_applied=claimed and closed the planner owned analysis gate on canonical runtime so downstream routing can proceed cleanly | verify=before=parallel context exposed BATCH-84-ANALYSIS ready with admin route mismatch peer event; after=planner analysis gate claimed for direct planner closure; test=parallel_workstream context plus planner claim returned CLAIM_OK BATCH-84-ANALYSIS | architecture_check=ACTIVE_DOCS_INDEX PLANE_BACKLOG_INTEGRATION_SPEC PRODUCT_VISION referenced | vision_alignment=batch=BATCH-84; target=personal finance copilot daily brief and ask or open entrypoint; impact=planner gate normalized before admin runtime delivery"

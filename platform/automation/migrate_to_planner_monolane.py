@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from parallel_workstream import (
+from compat.projections.parallel_workstream import (
     ADMIN_GROUP_ROLES,
     DEV_GROUP_ROLES,
     PLANNER_GROUP_ROLES,

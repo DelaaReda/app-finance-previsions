@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-19-BATCH-19-DEV-01-20260311T085816Z-801"
+stream_id: "BATCH-19"
+task_id: "BATCH-19-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-11T08:58:16Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope explainability graph + source traceability [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_explainability_graph_+_source_traceability_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T08:58:16Z"
+      ended_at_utc: "2026-03-11T08:58:16Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 -m pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "`/api/judge` response now includes `data.explainability = { schema_version, generated_at, graph:{nodes,edges}, source_traceability, stats }` with source weights and freshness markers for each verdict."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-19-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-19-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=BATCH-19-DEV-01 had no contract-level explainability payload on top of Judge verdicts, so downstream consumers could not inspect weighted supporting sources or freshness markers from the canonical Judge endpoint stack. | fix_applied=Patched `apps/api/src/domains/judge/application/judge_endpoint_service.py` to build `judge_explainability_graph_v1` during `get_judge_verdicts_payload(...)`, exposing graph nodes/edges, weighted supporting sources, and f | verify=before=`/api/judge` verdict payload exposed decision metadata and journal projection but no explainability/source-traceability contract`; after=`/api/judge` verdict payload includes `judge_explainability_graph_v1` with w | architecture_check=layer=Judge application service + Judge metadata contract tests; imports_ok=yes (reused existing Judge endpoint stack/service_standard helpers, no new cross-domain layer); path_target=apps/api/src/domains/judge/applicati | vision_alignment=batch=BATCH-19; target=Explainability Graph + Source Traceability [DEV-01]; impact=small vertical slice delivered on the canonical Judge payload so recommendations can now expose weighted sources and freshness markers fo"

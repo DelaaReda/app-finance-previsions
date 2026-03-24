@@ -1,0 +1,44 @@
+{
+  "task_id": "BATCH-20-ADMIN-01",
+  "stream_id": "BATCH-20",
+  "title": "Personal Policy Guardrails [ADMIN-01]",
+  "captured_at": "2026-03-11T10:03:19Z",
+  "runtime_host_check": {
+    "runtime_host_kind": "vm_runtime",
+    "runtime_is_vm": 1,
+    "os": "Linux",
+    "hostname": "venom-Apple-Virtualization-Generic-Platform",
+    "pwd": "/home/venom/analyse-financiere"
+  },
+  "root_cause": "The monitor listener on :7779 was present but unhealthy for deep probes during this validation window. `scripts/monitor_contract_smoke.sh` could pass while direct `/api/runtime-diagnostics` requests still reset or timed out against the stale wrapper-backed process.",
+  "fix_applied": [
+    "Reversible runtime repair only: stopped the stale :7779 monitor process.",
+    "Reversible runtime repair only: restarted the canonical monitor server directly with `python3 apps/monitor/server.py` in a detached session."
+  ],
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "judge_runtime": {
+      "url": "http://127.0.0.1:8050/api/judge?limit=1&debug=true",
+      "count": 1,
+      "top_level_guardrails_present": true,
+      "policy_id": "test_policy",
+      "policy_version": "v1",
+      "policy_updated_at": "2026-03-11T09:56:48.374909Z",
+      "violations_count": 0
+    },
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=3 workboard_ready=0 admin_timeouts_recent=0 issues_records=2",
+    "runtime_diagnostics_lite": {
+      "elapsed_s": 8.11,
+      "health": "OK",
+      "findings_count": 0,
+      "agents_keys": [
+        "admin",
+        "dev",
+        "planner",
+        "scrum_master"
+      ]
+    },
+    "fc_status_brief": "Santé: OK · mode=planner_experimental · freshness=fresh/8s"
+  },
+  "scope": "Runtime validation and repair only. No code or config files changed."
+}

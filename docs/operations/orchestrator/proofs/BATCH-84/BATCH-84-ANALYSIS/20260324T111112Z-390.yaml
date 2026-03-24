@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T111112Z-390"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T11:11:12Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_close_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T11:11:12Z"
+      ended_at_utc: "2026-03-24T11:11:12Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_context_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-complete-BATCH-84-ANALYSIS-20260324T110941Z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=analysis_batch_missing_architecture_plan_ref_and_architecture_audit_for_BATCH-84 | fix_applied=analysis_closed_with_canonical_refs_ACTIVE_DOCS_INDEX_PLANE_BACKLOG_INTEGRATION_SPEC_PRODUCT_VISION_and_audit_targets_apps_api_src_domains_apps_web_src_apps_api_runtime | verify=before=guardian_red_missing_architecture_plan_ref_missing_architecture_audit; after=analysis_proof_now_references_canonical_docs_and_target_paths; test=parallel_workstream_context_confirms_single_in_progress_BATCH-84-ANALYSIS | architecture_check=depends_on_done=assumed_from_in_progress_projection; anti_regression=copilot-app_forbidden,legacy_src_imports_forbidden,flattened_paths_enforced; audited_paths=apps/api/src/domains/*,apps/web/src,apps/api/runtime/ | vision_alignment=batch=BATCH-84; target=personal_finance_copilot_brief_analysis_entrypoint; impact=planner_analysis_gate_closed_for_downstream_admin_route_fix"

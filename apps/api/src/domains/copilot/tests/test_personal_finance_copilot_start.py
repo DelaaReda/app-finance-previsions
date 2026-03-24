@@ -1,5 +1,5 @@
 """
-BATCH-74-DEV-02: Personal Finance Copilot - Minimal Slice Verification
+BATCH-83-DEV-01: Personal Finance Copilot - Minimal Slice Verification
 
 Test the personal finance copilot start endpoint that delivers:
 1. Brief of the day (market summary, sentiment, risks, macro, sectors)

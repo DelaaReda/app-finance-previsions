@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-19-BATCH-19-DEV-02-20260311T090304Z-862"
+stream_id: "BATCH-19"
+task_id: "BATCH-19-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T09:03:04Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope explainability graph + source traceability [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_explainability_graph_+_source_traceability_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T09:03:04Z"
+      ended_at_utc: "2026-03-11T09:03:04Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "copilot chat HTML now includes `Explainability graph:` and `Source traceability:` sections for normalized memo responses; commit=`de737643d3625e7bf75f99ecd995510e039fe06a`"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-19-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-19-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=Explainability and provenance data already existed in the normalized copilot contract, but the current web rendering only exposed fragments (sources badges, context, regime/event notes) and did not assemble a readable ca | fix_applied=Patched `apps/web/src/domains/forecasts/pages/app.js` to compose explainability nodes from existing `contextInfluence`, `regimeDetection`, `eventTiming`, `reasoning`, and verdict fields, plus a deduplicated source tracea | verify=before=copilot responses showed separate badges/notes but no assembled causal graph or unified traceability chain; after=responses render a readable explainability path and deduplicated source lineage from existing paylo | architecture_check=layer=web presentation only; imports_ok=yes (no new imports/components, reused existing normalized payload wiring in app.js); path_target=apps/web/src/domains/forecasts/pages/app.js | vision_alignment=batch=BATCH-19; target=Explainability Graph + Source Traceability minimal vertical slice on existing copilot UI; impact=surfaces backend explainability/provenance signals directly in the user-visible memo without widenin"

@@ -112,8 +112,8 @@
       "backend_by_role": {
         "admin": "codex_exec",
         "runtime": "codex_exec",
-        "dev": "openclaw",
-        "qa": "openclaw",
+        "dev": "codex_exec",
+        "qa": "codex_exec",
         "scrum_master": "codex_exec"
       },
       "managed_roles": ["dev", "admin", "scrum_master"]

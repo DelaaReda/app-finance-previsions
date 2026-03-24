@@ -20,9 +20,9 @@ cd "$ROOT"
 
 TICK_DIR="$ROOT/logs-codex-runs/fc-ticks"
 LIVE_DIR="$ROOT/logs-codex-runs/role-runner"
-ORCH_DIR="$ROOT/docs/operations/orchestrator"
-if [[ ! -d "$ORCH_DIR" ]] && [[ -d "$ROOT/docs/orchestrator-ops" ]]; then
-  ORCH_DIR="$ROOT/docs/orchestrator-ops"
+ORCH_DIR="$ROOT/logs-codex-runs/orchestrator-state"
+if [[ ! -d "$ORCH_DIR" ]]; then
+  ORCH_DIR="$ROOT/docs/operations/orchestrator"
 fi
 WORKBOARD_JSON="$ORCH_DIR/parallel-workstreams.json"
 QUEUE_JSON="$ORCH_DIR/priority-queue.json"

@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-42-BATCH-42-DEV-02-20260311T041521Z-189"
+stream_id: "BATCH-42"
+task_id: "BATCH-42-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T04:15:21Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope geopolitical risk graph + conflict escalation [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_geopolitical_risk_graph_+_conflict_escalation_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T04:15:21Z"
+      ended_at_utc: "2026-03-11T04:15:21Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS `node apps/web/src/domains/forecasts/contracts/apiConnector.test.js`; PASS `node apps/web/src/domains/forecasts/pages/app.test.js`"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=6dea10803ce7d719e0c8c5ed46b55ae0504f67c1; ui=forecast-scenarios widget now renders geopolitical risk graph rows + conflict escalation copy from `/api/judge/geopolitical-risk-graph`; api_hook=window.FinanceAPI.getG"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-42-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-42-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The backend already exposed `/api/judge/geopolitical-risk-graph`, but the web forecasts surface did not fetch, persist, or render that payload anywhere, so geopolitical escalation context never reached the user-facing gr | fix_applied=Added `getGeopoliticalRiskGraph()` to `apps/web/src/domains/forecasts/contracts/apiConnector.js`, loaded it during live dashboard hydration, forwarded it through the existing live-dashboard event payload, stored it in `a | verify=before=forecast scenarios only showed bull/base/bear bars with no geopolitical payload fetch or escalation UI; after=live dashboard fetches geopolitical risk graph, persists it in liveDataMeta, and renders hotspot bars p | architecture_check=layer=web forecasts domain using existing widget + shared live-data connector/event pipeline; imports_ok=yes (no new cross-domain imports, reused existing `window.FinanceAPI`/live dashboard flow); path_target=apps/web/sr | vision_alignment=batch=BATCH-42; target=Geopolitical Risk Graph + Conflict Escalation [DEV-02]; impact=smallest vertical slice that exposes geopolitical escalation in an existing forecast widget without widening scope into new screens or"

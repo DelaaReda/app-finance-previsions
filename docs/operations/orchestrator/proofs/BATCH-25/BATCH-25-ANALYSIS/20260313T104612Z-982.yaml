@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-25-BATCH-25-ANALYSIS-20260313T104612Z-982"
+stream_id: "BATCH-25"
+task_id: "BATCH-25-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-13T10:46:12Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_runtime_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-13T10:46:12Z"
+      ended_at_utc: "2026-03-13T10:46:12Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_tests)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b25-analysis-complete-20260313t1046"
+  review_ref: "workboard:BATCH-25-ANALYSIS"
+  note: "planner_complete_replay_after_analysis_proof_attach"

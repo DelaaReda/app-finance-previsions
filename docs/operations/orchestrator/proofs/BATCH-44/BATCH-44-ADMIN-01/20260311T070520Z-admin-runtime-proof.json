@@ -1,0 +1,77 @@
+{
+  "task_id": "BATCH-44-ADMIN-01",
+  "stream_id": "BATCH-44",
+  "title": "Insider Behavior Intelligence Layer",
+  "captured_at_utc": "2026-03-11T07:05:20Z",
+  "scope": "Runtime truth and observability validation after BATCH-44 DEV chain.",
+  "host_check": {
+    "command": "bash scripts/runtime_host_check.sh",
+    "result": "PASS",
+    "runtime_is_vm": 1,
+    "workspace": "/home/venom/analyse-financiere"
+  },
+  "feature_probe": {
+    "command": "curl -fsS --max-time 16 http://127.0.0.1:8050/api/forecasts/insider-behavior",
+    "result": "PASS",
+    "summary": "ok=true fallback_used=true returned_signal_count=1 source includes forecasts_insider_behavior + sec_edgar_form4",
+    "contract_markers": {
+      "engine_id": "insider_behavior_intelligence_v1",
+      "verdict": "hold",
+      "risk_level": "medium",
+      "warnings": [
+        "no_ownership_snapshot_rows"
+      ]
+    }
+  },
+  "runtime_probes": {
+    "monitor_contract_smoke": {
+      "command": "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 --timeout 16",
+      "result": "PASS",
+      "summary": "health=OK roles=1 agents=4 queue_states=4 workboard_ready=0 admin_timeouts_recent=0 issues_records=10"
+    },
+    "fc_status_brief": {
+      "command": "bash scripts/fc_status_brief.sh",
+      "result": "PASS",
+      "summary": "Santé: OK; mode=planner_experimental; ready=0; in_progress=2; waiting_dep=9; mismatch_count=0; planner_quality=89"
+    },
+    "fc_doctor": {
+      "command": "bash scripts/fc_doctor.sh --json",
+      "result": "DEGRADED",
+      "scope_read": "runtime core is healthy; degraded roll-up comes from delivery/browser-proof debt outside BATCH-44 runtime scope",
+      "notable_debt": [
+        "VB-04-ADMIN-01 missing browser proof",
+        "recent_invalid_result_count=1",
+        "recent_timeout_like_count=1"
+      ]
+    },
+    "stale_cron_sweep": {
+      "command": "bash scripts/stale_cron_sweep.sh --dry-run --threshold 330",
+      "result": "PASS",
+      "summary": "matched=0 stale=0 reset_ok=0 reset_failed=0"
+    },
+    "workboard_stale_task_sweep": {
+      "command": "python3 scripts/workboard_stale_task_sweep.py --threshold-seconds 14400",
+      "result": "PASS",
+      "summary": "matched=2 stale=0 changed=0; BATCH-44-ADMIN-01 stale=0 action=none"
+    }
+  },
+  "targeted_validation": {
+    "frontend_regression": {
+      "command": "node --test apps/web/src/domains/forecasts/pages/app.test.js",
+      "result": "PASS",
+      "summary": "55 passed"
+    },
+    "backend_regression": {
+      "command": "timeout 30 pytest apps/api/src/domains/forecasts/tests/test_global_signal_mesh_route.py -q",
+      "result": "TIMEOUT",
+      "summary": "6 tests emitted progress dots before timeout; no failure signal captured inside the 30s bound"
+    }
+  },
+  "conclusion": {
+    "task_scope_verdict": "UNBLOCKED",
+    "root_cause": "No BATCH-44-specific runtime outage, stale lock, or broken execution path was present. The only negative signals were shared observability debt and a transient prior admin timeout record in global doctor metrics.",
+    "fix_applied": "SKIP(no runtime repair required). Captured fresh runtime truth and explicit blocker separation only.",
+    "planner_merge_signal": "BATCH-44-ADMIN-01 is runtime-unblocked for planner merge or GOV review. If planner wants stricter proof, rerun the backend pytest lane without the 30s bound; current timeout is validation debt, not runtime failure."
+  },
+  "repo_head": "3a0512d77b453cf8328564a679eae20ce4b8bed3"
+}

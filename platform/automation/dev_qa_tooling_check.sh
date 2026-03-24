@@ -45,7 +45,7 @@ OPENCLAW_BIN=""
 OPENCLAW_VERSION="unknown"
 SKILLS_OUTPUT=""
 
-WORKBOARD_VALIDATE_FILE="${WORKBOARD_VALIDATE_FILE:-docs/orchestrator-ops/parallel-workstreams-plumbing.json}"
+WORKBOARD_VALIDATE_FILE="${WORKBOARD_VALIDATE_FILE:-logs-codex-runs/orchestrator-state/parallel-workstreams-plumbing.json}"
 
 if command -v openclaw >/dev/null 2>&1; then
   OPENCLAW_BIN="$(command -v openclaw)"
@@ -83,10 +83,10 @@ if [[ -n "$OPENCLAW_BIN" ]]; then
 fi
 
 check_file_exists "scripts/exec_safe.sh"
-check_file_exists "scripts/preflight_dispatch.sh"
 check_file_exists "scripts/backend_regression_gate.sh"
 check_file_exists "scripts/run_delivery_gate.sh"
-check_file_exists "scripts/parallel_workstream.py"
+check_file_exists "platform/policies/validate_batch_state.py"
+check_file_exists "platform/automation/compat/projections/parallel_workstream.py"
 check_file_exists "scripts/cron_tmux_role_runner.sh"
 
 if bash -n scripts/cron_tmux_role_runner.sh; then
@@ -95,14 +95,20 @@ else
   check_fail "bash_syntax:cron_tmux_role_runner"
 fi
 
-if python3 -m py_compile scripts/parallel_workstream.py; then
+if python3 -m py_compile platform/automation/compat/projections/parallel_workstream.py; then
   check_ok "python_compile:parallel_workstream"
 else
   check_fail "python_compile:parallel_workstream"
 fi
 
+if python3 -m py_compile platform/policies/validate_batch_state.py; then
+  check_ok "python_compile:validate_batch_state"
+else
+  check_fail "python_compile:validate_batch_state"
+fi
+
 validate_output=""
-if validate_output="$(python3 scripts/parallel_workstream.py --board "$WORKBOARD_VALIDATE_FILE" validate --queue docs/orchestrator-ops/priority-queue.json --require-proof-manifest 2>&1)"; then
+if validate_output="$(python3 platform/automation/compat/projections/parallel_workstream.py --board "$WORKBOARD_VALIDATE_FILE" validate --queue logs-codex-runs/orchestrator-state/priority-queue.json --require-proof-manifest 2>&1)"; then
   if printf '%s\n' "$validate_output" | rg -q "INV-QUEUE-CLOSED-WITH-OPEN-TASKS"; then
     check_fail "workboard_validate=queue_closed_with_open_tasks"
   else

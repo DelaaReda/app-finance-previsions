@@ -1,0 +1,58 @@
+{
+  "ts_utc": "2026-03-11T08:22:45Z",
+  "stream_id": "BATCH-17",
+  "task_id": "BATCH-17-ADMIN-01",
+  "task_title": "Regime Detection + Allocation Drift Alerts [ADMIN-01]",
+  "role": "admin",
+  "status": "PASS",
+  "summary": "Runtime truth and observability were validated for BATCH-17 after the dev chain. The monitor contract was briefly hung on `/api/status` and `/api/runtime-diagnostics`; a stale monitor process was recycled and the monitor contract recovered cleanly.",
+  "root_cause": "A long-lived `scripts/monitor_server.py` process was still listening on port 7779 but had stopped serving the monitor contract endpoints, causing repeat timeouts on `/api/status?lite=1`, `/api/runtime-diagnostics?lite=1`, and `monitor_contract_smoke.sh`.",
+  "fix_applied": "Reversible runtime repair only. Killed the stuck monitor process, removed the stale monitor lock, and restarted `scripts/monitor_server.py`. No code or config change was required.",
+  "runtime_probes": {
+    "runtime_host_check": {
+      "result": "PASS",
+      "details": "runtime_is_vm=1 hostname=venom-Apple-Virtualization-Generic-Platform pwd=/home/venom/analyse-financiere"
+    },
+    "monitor_failure_before_fix": {
+      "result": "FAIL",
+      "details": "curl timeouts on `/api/status?lite=1` and `/api/runtime-diagnostics?lite=1` at 20s; `monitor_contract_smoke.sh` timed out; stuck pid=2165277 cpu=22.3% etime=28m27s"
+    },
+    "monitor_restart": {
+      "result": "PASS",
+      "details": "restarted `python3 scripts/monitor_server.py`; new listener pid=2297639 on 0.0.0.0:7779"
+    },
+    "monitor_access": {
+      "result": "PASS",
+      "details": "/api/monitor/access=200 root=/=200"
+    },
+    "monitor_status_lite": {
+      "result": "PASS",
+      "details": "health=OK execution_mode=planner_experimental batch=BATCH-17 state=IN_PROGRESS done=326 ready=0"
+    },
+    "runtime_diagnostics_lite": {
+      "result": "PASS",
+      "details": "health=OK doctor_status=degraded planner=IN_PROGRESS admin=IN_PROGRESS dev=IDLE blocker=NONE"
+    },
+    "monitor_contract_smoke": {
+      "result": "PASS",
+      "details": "health=OK roles=1 agents=4 queue_states=3 workboard_ready=0 admin_timeouts_recent=0 issues_records=4"
+    },
+    "doctor_after_fix": {
+      "result": "PASS_WITH_SHARED_DEBT",
+      "details": "providers.monitor_status_ok=true after restart; doctor remains degraded due shared non-BATCH-17 debt (`browser_proof_missing_task_ids=[VB-04-ADMIN-01]`, `qa_review_pipeline.pending_count=1`), not due runtime availability"
+    }
+  },
+  "planner_signal": {
+    "verdict": "UNBLOCKED_AFTER_RUNTIME_REPAIR",
+    "note": "BATCH-17 runtime scope is unblocked. The admin lane found and repaired a real monitor availability defect, then revalidated the monitor contract successfully. Remaining doctor degradation is shared delivery debt outside BATCH-17."
+  },
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-17/BATCH-17-ADMIN-01/20260311T082245Z-admin-runtime-proof.json",
+  "verify": "runtime_host_check=PASS; pre-fix monitor contract timeout reproduced; monitor pid recycled; `/api/monitor/access`=200; `/api/status?lite=1`=OK; `/api/runtime-diagnostics?lite=1`=OK; `bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 --timeout 12`=PASS",
+  "files_touched": "1 file: docs/operations/orchestrator/proofs/BATCH-17/BATCH-17-ADMIN-01/20260311T082245Z-admin-runtime-proof.json",
+  "tests_run": "SKIP(unit/integration tests not applicable); runtime probes only",
+  "commit_sha": "SKIP(no_code_or_config_change)",
+  "architecture_check": "PASS - repair stayed inside existing runtime surfaces (`scripts/monitor_server.py`, monitor port 7779) with no code-path or contract changes",
+  "vision_alignment": "PASS - BATCH-17 admin mission was runtime truth and observability after the regime/drift dev chain; explicit unblock evidence is now captured and scoped to this batch",
+  "recommended_next": "Planner should merge this runtime proof, mark BATCH-17-ADMIN-01 done, and close BATCH-17 if no further batch-local QA gate remains.",
+  "blocking_issue": "none"
+}

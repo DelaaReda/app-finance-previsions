@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-83-BATCH-83-PLAN-20260324T062459Z-472"
+stream_id: "BATCH-83"
+task_id: "BATCH-83-PLAN"
+role: "planner"
+produced_at_utc: "2026-03-24T06:24:59Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_task_runtime_closure)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T06:24:59Z"
+      ended_at_utc: "2026-03-24T06:24:59Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_proof_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-complete-BATCH-83-PLAN-1774333432-21136"
+  review_ref: "runner:BATCH-83-PLAN"
+  note: "source=runner | root_cause=la tache planner PLAN restait ouverte alors que depends_on=none et que les items aval attendaient seulement sa cloture | fix_applied=cloture runtime de BATCH-83-PLAN avec preuve de reprise planner et alignement backlog vision | verify=before=BATCH-83-PLAN in_progress et ANALYSIS/ARCH/GOV_REVIEW en waiting_dep; after=cloture demandee pour debloquer la suite planner du stream; test=parallel_workstream context role planner confirme ready=0 et in_progress=BATCH-83-PLAN | architecture_check=respect apps/api src domains et apps/web src; aucun chemin legacy src.*; orchestration planner-only conservee; theme frontend intact | vision_alignment=batch=BATCH-83; target=copilot finance personnelle avec brief du jour et analyse ouvrable; impact=deblocage immediat de l or orchestration planner"

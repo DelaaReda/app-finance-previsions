@@ -1,0 +1,47 @@
+"""Canonical model-plane package."""
+
+from .codex_cli_adapter import CodexCliAdapter
+from .model_plane import (
+    CollectInvocationRequest,
+    ModelInvocationPort,
+    QWEN_AUTH_MARKERS,
+    RATE_LIMIT_MARKERS,
+    ResumeInvocationRequest,
+    StartInvocationRequest,
+    StatusInvocationRequest,
+    active_rate_limit_reason,
+    looks_like_auth_prompt,
+    looks_like_rate_limited,
+    planner_qwen_fallback_enabled,
+    rate_limit_state_dir,
+    resolve_effective_backend_details,
+    resolve_qwen_bin,
+    resolve_secondary_codex_fallback,
+    run_qwen_cli,
+    run_qwen_cli_fallback,
+    run_secondary_codex_fallback,
+    run_secondary_then_qwen_fallback,
+)
+
+__all__ = [
+    "CodexCliAdapter",
+    "CollectInvocationRequest",
+    "ModelInvocationPort",
+    "QWEN_AUTH_MARKERS",
+    "RATE_LIMIT_MARKERS",
+    "ResumeInvocationRequest",
+    "StartInvocationRequest",
+    "StatusInvocationRequest",
+    "active_rate_limit_reason",
+    "looks_like_auth_prompt",
+    "looks_like_rate_limited",
+    "planner_qwen_fallback_enabled",
+    "rate_limit_state_dir",
+    "resolve_effective_backend_details",
+    "resolve_qwen_bin",
+    "resolve_secondary_codex_fallback",
+    "run_qwen_cli",
+    "run_qwen_cli_fallback",
+    "run_secondary_codex_fallback",
+    "run_secondary_then_qwen_fallback",
+]

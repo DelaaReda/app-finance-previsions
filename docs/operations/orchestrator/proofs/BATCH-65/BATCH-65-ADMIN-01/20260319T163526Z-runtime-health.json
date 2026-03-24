@@ -1,0 +1,127 @@
+{
+  "task_id": "BATCH-65-ADMIN-01",
+  "captured_at": "2026-03-19T16:35:45.978379+00:00",
+  "runtime_gate": "pass",
+  "product_runtime_status": "ok",
+  "primary_status": "ok",
+  "app_runtime": {
+    "status": "degraded",
+    "source": "status_service.v3",
+    "backend_api": {
+      "status": "degraded",
+      "base_url": "http://127.0.0.1:8050"
+    },
+    "frontend": {
+      "status": "ok",
+      "url": "http://127.0.0.1:5173/"
+    },
+    "monitor": {
+      "status": "ok",
+      "reason": "current_status_endpoint_responded"
+    }
+  },
+  "monitor_health": "OK",
+  "monitor_access": {
+    "mode": "lan_only",
+    "canonical_ui_url": "http://192.168.64.9:7780/",
+    "canonical_status_url": "http://192.168.64.9:7780/api/status?lite=1",
+    "lan_ui_url": "http://192.168.64.9:7780/",
+    "lan_status_url": "http://192.168.64.9:7780/api/status?lite=1",
+    "vm_local_ui_url": "http://127.0.0.1:7779/",
+    "vm_local_status_url": "http://127.0.0.1:7779/api/status?lite=1",
+    "public_tunnels_enabled": false,
+    "state_file": "/home/venom/analyse-financiere/logs-codex-runs/monitor-lan-url.txt"
+  },
+  "runtime_truth": {
+    "queue_workboard_integrity": {
+      "status": "unknown",
+      "mismatch_count": 0,
+      "oldest_mismatch_age_s": -1,
+      "queue_only": [],
+      "workboard_only": [],
+      "state_mismatch": []
+    },
+    "runtime_freshness": {
+      "seconds": 139,
+      "state": "fresh"
+    },
+    "workboard": {
+      "total": 395,
+      "done": 393,
+      "ready": 0,
+      "in_progress": 1,
+      "ready_tasks": [],
+      "in_progress_tasks": [
+        {
+          "id": "BATCH-65-ADMIN-01",
+          "role": "admin",
+          "title": "Build a personal finance copilot that starts with a brief of"
+        }
+      ],
+      "state_counts": {
+        "DONE": 393,
+        "IN_PROGRESS": 1,
+        "WAITING_DEP": 1
+      }
+    },
+    "active_batch": [
+      {
+        "id": "BATCH-65",
+        "state": "IN_PROGRESS"
+      }
+    ]
+  },
+  "non_blocking_degradations": {
+    "doctor_status": "error",
+    "openclaw_gateway": null,
+    "non_runtime_degradations": null,
+    "note": "Full monitor status kept health=OK and product_runtime.status=ok during validation; doctor remained noisy but did not block the app-first runtime verdict."
+  },
+  "personal_finance_start": {
+    "ok": true,
+    "ask_targets": [
+      "/personal-finance/ask",
+      "/personal-finance/ask",
+      "/personal-finance/ask"
+    ],
+    "open_targets": [
+      "market",
+      "opportunities",
+      "/personal-finance"
+    ],
+    "brief_summary": "Daily market brief: BEARISH. 0 opportunit\u00e9s haussi\u00e8res, 1 risques majeurs. 183 top nouvelles positives, 0 n\u00e9gatives. Leaders: Unknown",
+    "scope_tickers": [
+      "MSFT",
+      "NVDA"
+    ]
+  },
+  "personal_finance_context": {
+    "regime": "NORMAL",
+    "entry_point_targets": [
+      "/brief/daily",
+      "/copilot/ask",
+      "/copilot"
+    ],
+    "starter_ask_targets": [
+      "/personal-finance/ask",
+      "/personal-finance/ask",
+      "/personal-finance/ask"
+    ],
+    "scope_tickers": [
+      "MSFT",
+      "NVDA"
+    ]
+  },
+  "personal_finance_ask": {
+    "ok": true,
+    "verdict": "hold",
+    "quality_status": "insufficient_sources",
+    "sources_count": 5,
+    "risk_level": "high"
+  },
+  "planner_assessment": {
+    "unblock": "Product runtime is healthy and the personal-finance starter flow is live for BATCH-65 handoff.",
+    "blocker": "none",
+    "next_planner_action": "merge BATCH-65 delivery proofs and continue planner collect/apply workflow."
+  }
+}

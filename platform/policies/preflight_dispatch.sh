@@ -12,9 +12,10 @@ if [[ ! -d "$GATES_DIR" ]]; then
 fi
 
 echo "== PREFLIGHT DISPATCH =="
+QUEUE_FILE="logs-codex-runs/orchestrator-state/priority-queue.json"
 
 # 1) state machine validation
-python3 scripts/validate_batch_state.py --file docs/orchestrator-ops/priority-queue.json
+python3 scripts/validate_batch_state.py --file "$QUEUE_FILE"
 
 # 2) health check (soft)
 if command -v curl >/dev/null 2>&1; then
@@ -26,7 +27,7 @@ if command -v curl >/dev/null 2>&1; then
 fi
 
 # 3) gate artifact requirement for Batch-02
-if rg -n '"id"\s*:\s*"BATCH-02"[\s\S]*"state"\s*:\s*"(IN_SPRINT|RUNNING|QA_REVIEW|PASS|CLOSED)"' docs/orchestrator-ops/priority-queue.json -U >/dev/null 2>&1; then
+if rg -n '"id"\s*:\s*"BATCH-02"[\s\S]*"state"\s*:\s*"(IN_SPRINT|RUNNING|QA_REVIEW|PASS|CLOSED)"' "$QUEUE_FILE" -U >/dev/null 2>&1; then
   latest_batch01="$(ls -1t "$GATES_DIR"/batch-01-*.md 2>/dev/null | head -n 1 || true)"
   if [[ -z "$latest_batch01" ]]; then
     echo "BLOCKED: Batch-02 cannot start without batch-01 PASS artifact"

@@ -12,6 +12,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "automation" / "planner_autonomy_tick.sh"
+STATE_ROOT = Path("logs-codex-runs") / "orchestrator-state"
 
 
 def _write_exec_safe(path: Path) -> None:
@@ -44,7 +45,7 @@ bash -lc "$cmd"
     path.chmod(0o755)
 
 
-def _write_parallel_workstream_stub(path: Path) -> None:
+def _write_planner_runtime_actions_stub(path: Path) -> None:
     path.write_text(
         """#!/usr/bin/env python3
 from __future__ import annotations
@@ -54,9 +55,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path.cwd()
-queue_path = ROOT / "docs" / "operations" / "orchestrator" / "priority-queue.json"
-board_path = ROOT / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+queue_path = ROOT / "logs-codex-runs" / "orchestrator-state" / "priority-queue.json"
+board_path = ROOT / "logs-codex-runs" / "orchestrator-state" / "parallel-workstreams.json"
 force_claim_fail = ROOT / "force_claim_fail"
+force_bridge_dispatch = ROOT / "force_bridge_dispatch"
 
 
 def load(path: Path, fallback: dict) -> dict:
@@ -72,7 +74,53 @@ def dump(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=True, indent=2) + "\\n", encoding="utf-8")
 
 
-sub = sys.argv[1] if len(sys.argv) > 1 else ""
+args = sys.argv[1:]
+sub = ""
+i = 0
+options_with_value = {
+    "--root",
+    "--board",
+    "--queue",
+    "--role",
+    "--source",
+    "--backend",
+    "--contract-file",
+    "--reason",
+    "--cooldown-s",
+    "--task",
+    "--artifact",
+    "--note",
+    "--notes",
+    "--summary",
+    "--handoff-to",
+    "--exec-cmd",
+    "--tests-run",
+    "--review-ref",
+    "--reviewer-role",
+    "--review-verdict",
+    "--change-plan",
+    "--architecture-checks",
+    "--idempotency-key",
+    "--proof-root",
+}
+while i < len(args):
+    token = args[i]
+    if token in options_with_value:
+        i += 2
+        continue
+    if token.startswith("--"):
+        i += 1
+        continue
+    sub = token
+    break
+
+if not sub and force_bridge_dispatch.exists():
+    print(json.dumps({"ok": True, "actions": ["dev_dispatch:BATCH-10-DEV-01"], "dispatch": {"dispatched": True, "task_id": "BATCH-10-DEV-01", "reason": "ready_dev_dispatched"}}))
+    raise SystemExit(0)
+if not sub:
+    print(json.dumps({"ok": True, "actions": [], "dispatch": {"dispatched": False, "reason": "not_needed"}}))
+    raise SystemExit(0)
+
 queue = load(queue_path, {"items": []})
 board = load(board_path, {"tasks": []})
 queue.setdefault("items", [])
@@ -108,13 +156,13 @@ if sub == "claim":
     task_id = ""
     change_plan = ""
     architecture_checks = ""
-    for idx, arg in enumerate(sys.argv):
-        if arg == "--task" and idx + 1 < len(sys.argv):
-            task_id = sys.argv[idx + 1]
-        if arg == "--change-plan" and idx + 1 < len(sys.argv):
-            change_plan = sys.argv[idx + 1]
-        if arg == "--architecture-checks" and idx + 1 < len(sys.argv):
-            architecture_checks = sys.argv[idx + 1]
+    for idx, arg in enumerate(args):
+        if arg == "--task" and idx + 1 < len(args):
+            task_id = args[idx + 1]
+        if arg == "--change-plan" and idx + 1 < len(args):
+            change_plan = args[idx + 1]
+        if arg == "--architecture-checks" and idx + 1 < len(args):
+            architecture_checks = args[idx + 1]
     if not change_plan or not architecture_checks:
         print("PRECHANGE_PLAN_INVALID", file=sys.stderr)
         raise SystemExit(8)
@@ -143,33 +191,21 @@ raise SystemExit(2)
 def _setup_workspace() -> Path:
     td = Path(tempfile.mkdtemp(prefix="planner-autonomy-"))
     (td / "scripts").mkdir(parents=True, exist_ok=True)
-    (td / "platform" / "automation").mkdir(parents=True, exist_ok=True)
+    (td / "platform" / "automation" / "compat" / "projections").mkdir(parents=True, exist_ok=True)
     (td / "platform" / "policies").mkdir(parents=True, exist_ok=True)
     (td / "docs" / "operations" / "orchestrator").mkdir(parents=True, exist_ok=True)
-    (td / "logs-codex-runs").mkdir(parents=True, exist_ok=True)
+    (td / "logs-codex-runs" / "orchestrator-state").mkdir(parents=True, exist_ok=True)
     (td / "state").mkdir(parents=True, exist_ok=True)
 
     _write_exec_safe(td / "platform" / "policies" / "exec_safe.sh")
-    _write_parallel_workstream_stub(td / "platform" / "automation" / "parallel_workstream.py")
-    (td / "platform" / "automation" / "planner_orchestrator_bridge.py").write_text(
-        """#!/usr/bin/env python3
-from __future__ import annotations
-import json
-from pathlib import Path
+    (td / "platform" / "automation" / "runtime" / "planner").mkdir(parents=True, exist_ok=True)
+    _write_planner_runtime_actions_stub(td / "platform" / "automation" / "runtime" / "planner" / "planner_runtime_actions.py")
+    _write_planner_runtime_actions_stub(td / "platform" / "automation" / "compat" / "projections" / "parallel_workstream.py")
 
-ROOT = Path.cwd()
-if (ROOT / "force_bridge_dispatch").exists():
-    print(json.dumps({"ok": True, "actions": ["dev_dispatch:BATCH-10-DEV-01"], "dispatch": {"dispatched": True, "task_id": "BATCH-10-DEV-01", "reason": "ready_dev_dispatched"}}))
-else:
-    print(json.dumps({"ok": True, "actions": [], "dispatch": {"dispatched": False, "reason": "not_needed"}}))
-""",
-        encoding="utf-8",
-    )
-
-    (td / "docs" / "operations" / "orchestrator" / "priority-queue.json").write_text(
+    (td / STATE_ROOT / "priority-queue.json").write_text(
         json.dumps({"items": []}), encoding="utf-8"
     )
-    (td / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json").write_text(
+    (td / STATE_ROOT / "parallel-workstreams.json").write_text(
         json.dumps({"tasks": []}), encoding="utf-8"
     )
     return td
@@ -210,7 +246,7 @@ class PlannerAutonomyTickTests(unittest.TestCase):
         ws = _setup_workspace()
         self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
 
-        board_path = ws / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+        board_path = ws / STATE_ROOT / "parallel-workstreams.json"
         board = {"tasks": [{"id": "BATCH-10-PLAN", "role": "planner", "state": "IN_PROGRESS"}]}
         board_path.write_text(json.dumps(board), encoding="utf-8")
 
@@ -237,7 +273,7 @@ class PlannerAutonomyTickTests(unittest.TestCase):
     def test_create_and_claim_hard_fails_when_all_claim_paths_fail(self) -> None:
         ws = _setup_workspace()
         self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
-        stub = ws / "platform" / "automation" / "parallel_workstream.py"
+        stub = ws / "platform" / "automation" / "runtime" / "planner" / "planner_runtime_actions.py"
         original = stub.read_text(encoding="utf-8")
         stub.write_text(
             original.replace(
@@ -262,7 +298,7 @@ class PlannerAutonomyTickTests(unittest.TestCase):
         ws = _setup_workspace()
         self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
 
-        board_path = ws / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+        board_path = ws / STATE_ROOT / "parallel-workstreams.json"
         board_path.write_text(
             json.dumps(
                 {
@@ -276,17 +312,17 @@ class PlannerAutonomyTickTests(unittest.TestCase):
         cp = _run_script(ws)
         self.assertEqual(cp.returncode, 0, msg=cp.stderr)
         self.assertIn("action=repair_only", cp.stdout)
-        self.assertIn("issue=planner_ready_bridge_missing", cp.stdout)
+        self.assertIn("issue=planner_ready_runtime_dispatch_missing", cp.stdout)
 
         state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
         self.assertEqual(state.get("last_action"), "repair_only")
-        self.assertEqual(state.get("issue_code"), "planner_ready_bridge_missing")
+        self.assertEqual(state.get("issue_code"), "planner_ready_runtime_dispatch_missing")
 
     def test_repair_only_dispatches_bridge_when_runway_not_empty(self) -> None:
         ws = _setup_workspace()
         self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
 
-        board_path = ws / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+        board_path = ws / STATE_ROOT / "parallel-workstreams.json"
         board_path.write_text(
             json.dumps(
                 {
@@ -300,12 +336,12 @@ class PlannerAutonomyTickTests(unittest.TestCase):
 
         cp = _run_script(ws)
         self.assertEqual(cp.returncode, 0, msg=cp.stderr)
-        self.assertIn("action=repair_bridge_dispatch", cp.stdout)
+        self.assertIn("action=repair_runtime_dispatch", cp.stdout)
         self.assertIn("outcome=resolved", cp.stdout)
         self.assertIn("task_id=BATCH-10-DEV-01", cp.stdout)
 
         state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
-        self.assertEqual(state.get("last_action"), "repair_bridge_dispatch")
+        self.assertEqual(state.get("last_action"), "repair_runtime_dispatch")
         self.assertEqual(state.get("last_outcome"), "resolved")
         self.assertEqual(state.get("target_task"), "BATCH-10-DEV-01")
 

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-70-BATCH-70-ANALYSIS-20260320T130154Z-696"
+stream_id: "BATCH-70"
+task_id: "BATCH-70-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-20T13:01:54Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(analysis_only_no_runtime_exec)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T13:01:54Z"
+      ended_at_utc: "2026-03-20T13:01:54Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(analysis_task_no_code_changes)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b70-analysis-complete-1774011615-24715-r2"
+  review_ref: "runner:BATCH-70-ANALYSIS"
+  note: "source=runner | root_cause=delivery_proof_fields_missing_on_prior_analysis_closeout | fix_applied=provided_named_proof_bundle_from_canonical_runtime_context | verify=before=proof_missing; after=proof_bundle_present; test=planner_complete_contract_replayed | architecture_check=apps/api/src/domains+apps/web/src+apps/api/runtime+docs/ops/AGENTS_READY.md | vision_alignment=batch=BATCH-70,target=personal_finance_copilot_day_brief_and_analysis,impact=analysis_closed_for_arch_followup"

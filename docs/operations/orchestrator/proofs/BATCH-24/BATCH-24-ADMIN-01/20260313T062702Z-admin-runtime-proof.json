@@ -1,0 +1,36 @@
+{
+  "task_id": "BATCH-24-ADMIN-01",
+  "stream_id": "BATCH-24",
+  "role": "admin",
+  "produced_at_utc": "2026-03-13T06:27:02Z",
+  "status": "blocked",
+  "summary": "Patched the planner bridge workboard loader so a malformed projected `parallel-workstreams.json` copy no longer hard-blocks planner dispatch. The BATCH-24 admin capability did dispatch successfully after the patch, but live batch proof is still blocked because the canonical monitor process is flapping and the current alerts snapshot contains zero generated or suppressed alerts.",
+  "root_cause": "Planner/runtime truth was vulnerable to a single corrupt board alias copy: `parallel_workstream.load_board()` failed on the first unreadable file instead of falling back to the valid runtime projection. After that fix, live proof is still blocked by monitor instability on `127.0.0.1:7779` and by an empty alert dataset (`warnings=[\"no_news_rows\"]`), so there is no runtime evidence for duplicate suppression or urgent-bypass behavior.",
+  "fix_applied": "Updated `platform/automation/parallel_workstream.py` so `load_board()` tries the normalized runtime path plus orchestrator read candidates before raising `BOARD_READ_ERROR`, and added a regression test covering fallback from a corrupt alias path to the runtime projection.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-24/BATCH-24-ADMIN-01/20260313T062702Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1 workspace=/home/venom/analyse-financiere",
+    "targeted_tests": "PASS python3 platform/automation/tests/test_orchestrator_paths.py",
+    "planner_dispatch_trace": "PASS docs/operations/orchestrator/planner-timeline.log contains 2026-03-13T06:19:48Z planner_orchestrator_bridge_result ... task_id=BATCH-24-ADMIN-01 backend=codex_exec status=running",
+    "planner_contract_trace": "PASS logs-codex-runs/fc-ticks/planner.tick.log contains 2026-03-13T02:19:50 [CONTRACT] status=IN_PROGRESS delta=PLANNER_DISPATCH_ACTIVE blocker=NONE next_action=PLANNER_DISPATCH_ACTIVE_BATCH-24-ADMIN-01",
+    "monitor_status_brief_after_restore": "BLOCKED bash scripts/fc_status_brief.sh reached monitor again at 2026-03-13T02:25-04 but reported planner degraded; subsequent direct checks failed with monitor_unreachable on 127.0.0.1:7779",
+    "monitor_process_check": "BLOCKED logs-codex-runs/monitor/server.pid=43159 but `ps -fp 43159` returned no live process",
+    "socket_snapshot": "PASS ss -ltnp observed 7779/7780/8050/5173 listening during the recovery window, confirming stack restart attempts did succeed transiently",
+    "alerts_snapshot": "BLOCKED apps/api/runtime/data/alerts.json generated_at=2026-03-13T06:26:25.743542Z count=0 suppressed_count=0 warnings=[\"no_news_rows\"]",
+    "urgent_sla_proof": "SKIP(no live urgent alert generated on the canonical path)",
+    "dedupe_noise_reduction_proof": "SKIP(no active or suppressed alerts in runtime snapshot)"
+  },
+  "files_touched": [
+    "platform/automation/parallel_workstream.py",
+    "platform/automation/tests/test_orchestrator_paths.py",
+    "docs/operations/orchestrator/proofs/BATCH-24/BATCH-24-ADMIN-01/20260313T062702Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "python3 platform/automation/tests/test_orchestrator_paths.py"
+  ],
+  "commit_sha": "f7efdbfabb8ea0218ea94889d9a7db4e84b90f38",
+  "architecture_check": "The code fix stays in the control-plane board loader and does not change batch schemas or alert payload contracts. It hardens planner/runtime reads against projected-file corruption without introducing a second runtime path.",
+  "vision_alignment": "BATCH-24 needs runtime truth and explicit proof on the existing alerting and monitor pipeline. This fix restores planner dispatch resilience on that path and leaves a concrete blocker artifact instead of another narrative-only failure.",
+  "recommended_next": "Planner should keep BATCH-24 active and route the next admin tick to stabilize `scripts/monitor_server.py` / `scripts/monitor_stack_guard.sh`, then rerun live proof once alerts.json contains at least one active or suppressed alert.",
+  "blocking_issue": "Canonical monitor runtime is unstable on `127.0.0.1:7779`, and the current alert snapshot has no generated alerts (`no_news_rows`), so ADMIN-01 cannot yet prove duplicate suppression, urgent bypass, or <=60s urgent surfacing."
+}

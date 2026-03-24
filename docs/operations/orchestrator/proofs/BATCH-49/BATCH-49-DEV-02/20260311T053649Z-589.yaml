@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-49-BATCH-49-DEV-02-20260311T053649Z-589"
+stream_id: "BATCH-49"
+task_id: "BATCH-49-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T05:36:49Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope multi-layer forecast fusion + attribution [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_multi-layer_forecast_fusion_+_attribution_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T05:36:49Z"
+      ended_at_utc: "2026-03-11T05:36:49Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest apps/api/src/domains/forecasts/tests/test_recommendations_playbook_integration.py -q"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=78e542b7afe942e7a0813d88cb2c58a50c0b2700 ; contract=forecast_fusion now includes layers[*].normalized_contribution, layers[*].contribution_pct, contribution_normalization, stability"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-49-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-49-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The existing multi-layer fusion output exposed raw weighted contributions only. It did not provide normalized layer weights summing to 1.0 or a deterministic stability signal for attribution ranking, so the contract was  | fix_applied=Patched `apps/api/src/domains/forecasts/application/recommendations_service.py` inside `_build_forecast_fusion()` to compute `normalized_contribution` and `contribution_pct` for each layer, add `contribution_normalizatio | verify=before=forecast_fusion exposed raw weighted contributions only, with no normalized share contract and no explicit attribution stability signal ; after=forecast_fusion returns normalized per-layer shares summing to 1.0 pl | architecture_check=layer=application service + targeted domain test ; imports_ok=yes (no new cross-layer imports, reused existing recommendations service contract) ; path_target=apps/api/src/domains/forecasts/application/recommendations_se | vision_alignment=batch=BATCH-49 ; target=Multi-Layer Forecast Fusion + Attribution [DEV-02] ; impact=adds the first normalized attribution-weight and stability contract on the existing forecast fusion output without widening scope or cre"

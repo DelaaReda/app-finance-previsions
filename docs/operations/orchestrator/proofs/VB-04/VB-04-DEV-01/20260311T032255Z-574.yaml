@@ -1,0 +1,53 @@
+proof_id: "PRF-VB-04-VB-04-DEV-01-20260311T032255Z-574"
+stream_id: "VB-04"
+task_id: "VB-04-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-11T03:22:55Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope minimal frontend wiring [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_minimal_frontend_wiring_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T03:22:55Z"
+      ended_at_utc: "2026-03-11T03:22:55Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "js_repl targeted verification for apps/web/src/domains/forecasts/pages/app.js buildCopilotChatResponseHtml cue rendering"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=ba39b49ba4e250c38d12aa62bebb197068dcfe07"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_VB-04-DEV-01"
+  review_ref: "planner_subagent_manager:VB-04-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The current shell still consumed parts of the copilot payload through legacy fields, which dropped normalized memo/context metadata and hid degraded/source/freshness cues even though backend normalization was already pre | fix_applied=Patched the frontend connector to normalize and retain memo/context metadata on /copilot/ask, including degraded_reason, quality_status, next_steps, invalidation, and context_influence aliases. Patched the shell copilot  | verify=before=normalized memo/context fields were partially dropped by the connector and the shell showed generic or missing degraded/source/context cues; after=connector preserves normalized memo/context metadata and the shell | architecture_check=layer=frontend shell only; imports_ok=yes (no backend or cross-layer import changes); path_target=apps/web/src/domains/forecasts/contracts/apiConnector.js + apps/web/src/domains/forecasts/pages/app.js | vision_alignment=batch=VB-04; target=current shell frontend surfaces only; impact=legacy shell consumers now honor normalized brief/memo/context_influence and visibly expose degraded, freshness, and source cues without redesign"

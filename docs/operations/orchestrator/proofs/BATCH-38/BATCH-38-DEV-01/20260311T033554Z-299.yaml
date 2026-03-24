@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-38-BATCH-38-DEV-01-20260311T033554Z-299"
+stream_id: "BATCH-38"
+task_id: "BATCH-38-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-11T03:35:54Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope walk-forward forecast scoreboard [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_walk-forward_forecast_scoreboard_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T03:35:54Z"
+      ended_at_utc: "2026-03-11T03:35:54Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS: bash scripts/runtime_host_check.sh ; PASS: python3 -m py_compile apps/api/src/domains/forecasts/application/forecasts_service.py apps/api/src/domains/forecasts/api/forecasts.py packages/contracts/forecast_v1.py ; P"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "endpoint=/api/forecasts/scoreboard ; commit=21dd119 ; tests=apps/api/src/domains/forecasts/tests/test_walk_forward_scoreboard_route.py"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-38-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-38-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=BATCH-38-DEV-01 had no backend scorecard endpoint for walk-forward forecast quality, so rolling quality metrics existed only as raw analyzer data/snapshots and were not exposed through the canonical forecasts API contrac | fix_applied=Implemented `get_walk_forward_scoreboard_payload(...)` in the forecasts application service, added `GET /forecasts/scoreboard` route orchestration, added DTOs for the scoreboard response contract, and added targeted rout | verify=before=no canonical forecast scoreboard endpoint or stable response contract for walk-forward metrics; after=`/api/forecasts/scoreboard` returns cached never-empty scoreboard rows + threshold summary + debug traces, sour | architecture_check=layer=apps/api/src/domains/forecasts + packages/contracts; imports_ok=yes (route->service reuse, service->prediction_analyzer fallback reuse, no new cross-domain route logic); path_target=apps/api/src/domains/forecasts/a | vision_alignment=batch=BATCH-38; target=Walk-Forward Forecast Scoreboard [DEV-01]; impact=smallest backend slice now exposes walk-forward quality metrics through the canonical forecasts endpoint stack so frontend/planner can consume a st"

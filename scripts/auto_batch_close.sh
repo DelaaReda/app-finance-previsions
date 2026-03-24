@@ -14,8 +14,8 @@ from pathlib import Path
 from collections import defaultdict
 
 # Use canonical paths (orchestrator-ops is a symlink to operations/orchestrator)
-wb_path = Path('docs/operations/orchestrator/parallel-workstreams.json')
-pq_path = Path('docs/operations/orchestrator/priority-queue.json')
+wb_path = Path('logs-codex-runs/orchestrator-state/parallel-workstreams.json')
+pq_path = Path('logs-codex-runs/orchestrator-state/priority-queue.json')
 wb = json.loads(wb_path.read_text())
 pq = json.loads(pq_path.read_text())
 ts = datetime.now(timezone.utc).isoformat()
@@ -99,7 +99,13 @@ if closed or unlocked:
     if unlocked:
         import subprocess
         r = subprocess.run(
-            ['python3', 'platform/automation/parallel_workstream.py', 'sync-priority'],
+            [
+                'python3',
+                'platform/automation/runtime/planner/planner_runtime_actions.py',
+                'sync-priority',
+                '--queue',
+                'logs-codex-runs/orchestrator-state/priority-queue.json',
+            ],
             capture_output=True, text=True
         )
         print(f'sync-priority: {r.stdout.strip() or r.stderr.strip()}')

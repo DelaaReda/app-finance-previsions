@@ -21,7 +21,7 @@
    - reponse directe de l'equipe livraison vers `main` hors circuit admin.
 
 ## Routage documentaire (obligatoire)
-1. directive recue sur WhatsApp (`main`) -> publiee dans `docs/ops/ADMIN_TEAM_CHAT.md`;
+1. directive recue sur WhatsApp (`main`) -> publiee dans `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`;
 2. adaptation process par admins -> tracee dans `docs/ops/ADMIN_TEAM_ITERATIONS.md`;
 3. execution equipe livraison -> suivie via `docs/orchestrator-ops/agent-watchdog.md`;
 4. continuité journaliere -> consignée dans `memory/YYYY-MM-DD.md`;
@@ -43,7 +43,7 @@
 
 ## Fichiers partages uniques (single place)
 - Chat de coordination tri-admin (avant toute action):
-  - `docs/ops/ADMIN_TEAM_CHAT.md`
+  - `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`
 - Avancement tri-admin par iteration (source primaire):
   - `docs/ops/ADMIN_TEAM_ITERATIONS.md`
 - Politique et responsabilites:
@@ -58,13 +58,13 @@
 - Journal quotidien:
   - `memory/YYYY-MM-DD.md`
 - Regle anti-dispersion:
-  - toute intention d'action doit etre postee d'abord dans `ADMIN_TEAM_CHAT.md`,
+  - toute intention d'action doit etre postee d'abord dans `ADMIN_ARCHIVE_TEAM_CHAT.md`,
   - toute iteration doit etre ecrite d'abord dans `ADMIN_TEAM_ITERATIONS.md`,
   - puis referencee dans `agent-watchdog.md` et `memory/YYYY-MM-DD.md`.
 
 ## Cadence d'iteration synchronisee (obligatoire)
 Chaque iteration cron admin suit cet ordre:
-1. intention courte dans `docs/ops/ADMIN_TEAM_CHAT.md`,
+1. intention courte dans `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`,
 2. note d'iteration dans `docs/ops/ADMIN_TEAM_ITERATIONS.md`,
 3. decision runtime recopiee dans `docs/orchestrator-ops/agent-watchdog.md`,
 4. trace de continuite dans `memory/YYYY-MM-DD.md`.
@@ -163,7 +163,7 @@ Rotation recommandée: changer les rôles toutes les 2 heures.
 scripts/exec_safe.sh --workdir /home/venom/analyse-financiere -- "bash scripts/preannounce_intent.sh preannounce --role adminapp-codex --scope cron_runtime_change --files scripts/configure_parallel_team_crons.sh,docs/ops/ADMIN_TEAM_CRON_PLAYBOOK.md --eta-minutes 20"
 ```
 - Cette commande:
-  - publie l’`INTENT` dans `docs/ops/ADMIN_TEAM_CHAT.md`,
+  - publie l’`INTENT` dans `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`,
   - écrit la pre-annonce dans `memory/YYYY-MM-DD.md`,
   - réserve le scope dans `docs/orchestrator-ops/intent-registry.json` et bloque les chevauchements.
 

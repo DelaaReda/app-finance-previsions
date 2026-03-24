@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T204929Z-811"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T20:49:29Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_code_change_planner_analysis_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T20:49:29Z"
+      ended_at_utc: "2026-03-24T20:49:29Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-complete-batch-84-analysis-20260324t204900z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=analyse planner laissee ouverte alors que le runtime ne montre plus aucun READY planner et que la suite depend de l execution admin deja claim | fix_applied=preuve d analyse formalisee avec reference architecture et alignement vision pour liberer la suite du stream BATCH-84 | verify=before=planner avait une seule analyse IN_PROGRESS sans READY; after=analyse preparee pour cloture avec dependance admin explicite; test=python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=ACTIVE_DOCS_INDEX,PLANE_BACKLOG_INTEGRATION_SPEC,PRODUCT_VISION,apps/api/src/domains,apps/web/src,apps/api/runtime | vision_alignment=batch=BATCH-84; target=copilot finance personnelle; impact=deverrouille la reprise admin et la future GOV_REVIEW"

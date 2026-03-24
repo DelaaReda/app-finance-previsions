@@ -1,0 +1,35 @@
+{
+  "status": "BLOCKED",
+  "summary": "BATCH-19 runtime validation captured a live observability blocker after the dev chain. The API backend on :8050 is healthy and the judge explainability contract is present, but the monitor surface on :7779 is unstable: `/api/status?lite=1` and `/api/runtime-diagnostics` timed out before a controlled recycle, and after recycle the listener briefly returned one status payload before dropping again. Batch-scoped runtime truth is therefore not cleanly green yet.",
+  "root_cause": "Monitor runtime instability on port 7779. The existing `scripts/monitor_server.py` process was live but stopped serving `/api/status?lite=1` and `/api/runtime-diagnostics` within timeout. A controlled recycle temporarily restored the listener, but the status endpoint remained timeout-prone and `fc_doctor` still reported `providers.monitor_status_ok=false` / `monitor_listener_ok=false`.",
+  "fix_applied": "Reversible runtime repair only: killed the stale `scripts/monitor_server.py` process and restarted the monitor first directly, then via `scripts/monitor_stack_guard.sh` to restore the :7779 listener and LAN proxy state. No code or config files were changed.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-19/BATCH-19-ADMIN-01/20260311T091532Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "api_health": "PASS GET /api/health => status=ok backend_up=true",
+    "judge_explainability_contract": "PASS GET /api/judge?limit=1&ticker=NVDA => schema_version=judge_explainability_graph_v1 broken_source_count=0",
+    "monitor_access": "PASS GET /api/monitor/access => canonical_status_url present",
+    "monitor_pre_fix": "FAIL GET /api/status?lite=1 timed out after 12s; GET /api/runtime-diagnostics timed out after 5s",
+    "monitor_recycle": "PARTIAL killed stale monitor process, restarted monitor, then restarted through monitor_stack_guard; :7779 listener restored briefly",
+    "monitor_post_fix": "FAIL GET /api/status?lite=1 timed out after 12s; bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 => curl(7) connection refused",
+    "doctor": "FAIL timeout 15s python3 platform/automation/fc_doctor.py --json => status=degraded providers.monitor_status_ok=false monitor_listener_ok=false",
+    "judge_tests": "PASS PYTHONPATH=apps/api/src python3 -m pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -q => 8 passed"
+  },
+  "files_touched": "1 file: docs/operations/orchestrator/proofs/BATCH-19/BATCH-19-ADMIN-01/20260311T091532Z-admin-runtime-proof.json",
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "curl -sS --max-time 8 http://localhost:8050/api/health",
+    "curl -sS --max-time 5 http://127.0.0.1:7779/api/monitor/access",
+    "curl -sS --max-time 12 http://127.0.0.1:7779/api/status?lite=1",
+    "curl -sS --max-time 5 http://127.0.0.1:7779/api/runtime-diagnostics",
+    "python3 - <<'PY' ... GET /api/judge?limit=1&ticker=NVDA ... PY",
+    "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779",
+    "timeout 15s python3 platform/automation/fc_doctor.py --json",
+    "PYTHONPATH=apps/api/src python3 -m pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -q"
+  ],
+  "commit_sha": "SKIP(no_code_or_config_change)",
+  "architecture_check": "PASS(batch-scoped runtime/admin validation): no product-contract or queue/workboard edits; repair stayed on existing monitor runtime surfaces (`scripts/monitor_server.py`, `scripts/monitor_stack_guard.sh`, :7779 monitor listener, :7780 LAN proxy).",
+  "vision_alignment": "PARTIAL(BATCH-19): explainability/source-traceability backend truth is present and tested, but the admin acceptance gate remains blocked because the monitor observability surface is not reliably healthy after the dev chain.",
+  "recommended_next": "Planner should treat BATCH-19-ADMIN-01 as runtime-blocked and route a narrow admin/monitor repair task against the :7779 status path before closing BATCH-19. Next probe should focus on why the monitor listener drops or stalls after restart under `/api/status?lite=1`.",
+  "blocking_issue": "Monitor contract on :7779 remains unstable after recycle (`/api/status?lite=1` timeout / refusal, `fc_doctor` degraded on monitor provider), so explicit runtime-unblocked evidence for BATCH-19 cannot be issued yet."
+}

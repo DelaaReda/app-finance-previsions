@@ -42,8 +42,8 @@ STATE_DIR="${ADMIN_AGENTS_AUTO_DISPATCH_STATE_DIR:-$HOME/.openclaw/cron/admin-st
 LOCK_FILE="$STATE_DIR/admin-agents-auto-dispatch.lock"
 STATE_FILE="${ADMIN_DISPATCHER_STATE_FILE:-$STATE_DIR/admin-dispatcher-state.json}"
 EVENTS_FILE="${ADMIN_DISPATCHER_EVENTS_FILE:-$ROOT/logs-codex-runs/admin-dispatcher/events.jsonl}"
-QUEUE_FILE="${ADMIN_AGENTS_PRIORITY_QUEUE_FILE:-docs/orchestrator-ops/priority-queue.json}"
-BOARD_FILE="${ADMIN_AGENTS_WORKBOARD_FILE:-docs/orchestrator-ops/parallel-workstreams.json}"
+QUEUE_FILE="${ADMIN_AGENTS_PRIORITY_QUEUE_FILE:-logs-codex-runs/orchestrator-state/priority-queue.json}"
+BOARD_FILE="${ADMIN_AGENTS_WORKBOARD_FILE:-logs-codex-runs/orchestrator-state/parallel-workstreams.json}"
 
 CHANGE_PLAN="${ADMIN_DISPATCHER_CHANGE_PLAN:-1 definir scope endpoint forecast ui; 2 verifier dependencies et impact upstream downstream; 3 analyser risk de regression forecast; 4 executer verification tests pytest snapshot; 5 preparer rollback fallback mitigation}"
 ARCH_CHECKS="${ADMIN_DISPATCHER_ARCH_CHECKS:-forecast_contract; schema_stability; observability}"
@@ -534,41 +534,11 @@ state["last_run_at"] = int(now_ts().timestamp())
 
 tick_id = f"admin_dispatch_{int(now_ts().timestamp())}"
 
-if not skip_preflight:
-    rc, _out, err = run_cmd(["bash", "scripts/preflight_dispatch.sh"])
-    if rc != 0:
-        queue_data = load_json_file(queue_file)
-        board_data = load_json_file(board_file)
-        queue_version = str(queue_data.get("version") or "unknown")
-        workboard_version = str(board_data.get("version") or "unknown")
-        append_event(
-            event_base(
-                event_name="dispatch_result",
-                tick_id=tick_id,
-                batch_id="none",
-                task_id="none",
-                target_role="admin",
-                reason_code="NO_ACTIONABLE_READY",
-                cooldown_hit=False,
-                result="blocked_soft",
-                queue_version=queue_version,
-                workboard_version=workboard_version,
-                data_source=f"{queue_file}:{board_file}",
-            )
-            | {"error": f"preflight_failed_rc_{rc}", "stderr": err[:240]}
-        )
-        save_state(state_file, state)
-        if soft_fail:
-            print("AUTO_DISPATCH status=WARN reason=preflight_failed")
-            raise SystemExit(0)
-        print("AUTO_DISPATCH status=ERROR reason=preflight_failed")
-        raise SystemExit(2)
-
 if not skip_sync:
     rc, _out, err = run_cmd(
         [
             sys.executable,
-            "scripts/parallel_workstream.py",
+            "platform/automation/compat/projections/parallel_workstream.py",
             "--board",
             str(board_file),
             "sync-priority",
@@ -817,7 +787,7 @@ for candidate in candidates:
     rc, out, err = run_cmd(
         [
             sys.executable,
-            "scripts/parallel_workstream.py",
+            "platform/automation/compat/projections/parallel_workstream.py",
             "--board",
             str(board_file),
             "claim",

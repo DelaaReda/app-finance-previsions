@@ -96,6 +96,7 @@ def run_guard(
     workboard_has_work: str,
     workboard_has_in_progress: str,
     queue_state: str | None,
+    workboard_payload: dict | None = None,
     previous_contract: str | None = None,
     env_extra: dict[str, str] | None = None,
     normalize_issue_report: bool = True,
@@ -109,6 +110,9 @@ def run_guard(
         else:
             queue_payload = {"items": [{"id": "BATCH-02", "state": queue_state}]}
         (queue_dir / "priority-queue.json").write_text(json.dumps(queue_payload), encoding="utf-8")
+        if workboard_payload is None:
+            workboard_payload = {"tasks": []}
+        (queue_dir / "parallel-workstreams.json").write_text(json.dumps(workboard_payload), encoding="utf-8")
         payload_file = workdir / "payload.txt"
         payload_text = _normalize_issue_report_payload(payload) if normalize_issue_report else payload
         payload_file.write_text(payload_text, encoding="utf-8")
@@ -663,6 +667,57 @@ class RoleContractGuardTests(unittest.TestCase):
         self.assertIn("STATUS: IN_PROGRESS", cp.stdout)
         self.assertIn("issues=dev_passive_with_ready", cp.stdout.lower())
 
+    def test_planner_root_waiting_dep_block_normalizes_to_complete(self) -> None:
+        payload = "\n".join(
+            [
+                "STATUS: BLOCKED",
+                "DELTA: B65_PLAN_REMAINED_IN_PROGRESS_AFTER_RUNTIME_RESYNC",
+                (
+                    "EVIDENCE: task_update=blocked; lock_check=ok; "
+                    "run_note=contexte relu puis sync priority execute avant nouvelle verification du stream; "
+                    "issues=plan_dependencies_not_done; issue_count=1; issue_severity=high; "
+                    "planner_artifact=docs/architecture/ARCHITECTURE_MAP.md; "
+                    "root_cause=la tache planner racine reste in progress alors que les suivantes attendent sa cloture; "
+                    "fix_applied=sync priority relance avant verification du stream; "
+                    "reuse_check=platform/automation/runtime/planner/planner_runtime_actions.py; "
+                    "verify=context rc=0 puis sync rc=0 puis context rc=0; "
+                    "vision_alignment=batch=BATCH-65; "
+                    "batch_created=none; "
+                    "acceptance_gate=materialiser les depends_on intra stream puis completer BATCH-65-PLAN"
+                ),
+                "RISKS: tant que les taches aval restent en waiting dep le stream ne progresse pas",
+                "NEXT: owner=planner; action=materialiser les depends_on intra-stream de BATCH-65 puis completer BATCH-65-PLAN",
+                "VERDICT: BLOCKED",
+                "BLOCKER_ID: PLAN_DEPENDENCIES_NOT_DONE",
+                "NEXT_ACTION_UNIQUE: PLANNER_WAITING_DEP_ROOT_UTEST",
+            ]
+        )
+        cp = run_guard(
+            payload,
+            role="planner",
+            allow_file_edits="1",
+            workboard_has_work="1",
+            workboard_has_in_progress="1",
+            queue_state="IN_PROGRESS",
+            workboard_payload={
+                "tasks": [
+                    {"id": "BATCH-65-PLAN", "stream_id": "BATCH-65", "code": "PLAN", "role": "planner", "state": "IN_PROGRESS", "depends_on": []},
+                    {"id": "BATCH-65-ANALYSIS", "stream_id": "BATCH-65", "code": "ANALYSIS", "role": "planner", "state": "WAITING_DEP", "depends_on": ["BATCH-65-PLAN"]},
+                    {"id": "BATCH-65-ARCH", "stream_id": "BATCH-65", "code": "ARCH", "role": "planner", "state": "WAITING_DEP", "depends_on": ["BATCH-65-ANALYSIS"]},
+                    {"id": "BATCH-65-GOV_REVIEW", "stream_id": "BATCH-65", "code": "GOV_REVIEW", "role": "planner", "state": "WAITING_DEP", "depends_on": ["BATCH-65-ARCH"]},
+                ]
+            },
+            normalize_issue_report=False,
+            env_extra={"TMUX_ROLE_PLANNER_NEVER_WAIT": "1"},
+        )
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("STATUS: IN_PROGRESS", cp.stdout)
+        self.assertIn("DELTA: PLANNER_ROOT_TASK_COMPLETE_REQUIRED", cp.stdout)
+        self.assertIn("BLOCKER_ID: NONE", cp.stdout)
+        self.assertIn("task_update=complete", cp.stdout)
+        self.assertIn("stream_id=BATCH-65", cp.stdout)
+        self.assertIn("task_id=BATCH-65-PLAN", cp.stdout)
+
     def test_accepts_fallback_channels_autofill_payload(self) -> None:
         payload = "\n".join(
             [
@@ -708,7 +763,7 @@ class RoleContractGuardTests(unittest.TestCase):
                     "channels_read=runtime_context; impact_assessment=medium; impact_action=wait_for_quota_recovery; "
                     "dev_artifact=platform/automation/cron_tmux_role_runner.sh; "
                     "stream_id=BATCH-26; task_id=BATCH-26-DEV-02; "
-                    "cmd=python3 platform/automation/parallel_workstream.py status --role dev --compact; "
+                    "cmd=python3 platform/automation/compat/projections/parallel_workstream.py status --role dev --compact; "
                     "cmd_err_excerpt=http_429_quota"
                 ),
                 "RISKS: quota",

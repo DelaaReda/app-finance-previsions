@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-39-BATCH-39-DEV-03-20260311T035414Z-523"
+stream_id: "BATCH-39"
+task_id: "BATCH-39-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T03:54:14Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope forecast data quality sla + provenance [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_forecast_data_quality_sla_+_provenance_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T03:54:14Z"
+      ended_at_utc: "2026-03-11T03:54:14Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS `PYTHONPATH=apps/api/src python3 -m pytest apps/api/src/domains/forecasts/tests/test_forecasts_template_parity.py -q -k \"forecast_detail_lookup_supports_forecast_id_and_ticker or forecast_detail_not_found_keeps_snap"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=58cf3a51ca846091dec11448ff1c4336a376441d; contract=forecast detail now returns provenance.sla on `/forecasts/{forecast_id}` for found and not-found payloads."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-39-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-39-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=`/forecasts/{forecast_id}` returned snapshot timing fields but did not publish a canonical `provenance.sla` block, so one core forecast endpoint still lacked the batch’s required provenance/SLA coverage. | fix_applied=Updated `get_forecast_detail_payload()` to emit `updated_at`, `freshness_status`, `freshness_age`, and `provenance` via the existing forecasts provenance helpers, and extended the forecast detail DTO/tests to lock that c | verify=before=forecast detail payload had no explicit `provenance` or SLA freshness fields even though BATCH-39 requires provenance coverage on core forecast endpoints; after=forecast detail payload now includes `updated_at`, ` | architecture_check=layer=domains/contracts; imports_ok=yes (reused existing `_build_payload_provenance`, `_freshness_age_seconds`, `_freshness_status_from_age` helpers; no new cross-layer dependency); path_target=apps/api/src/domains/forec | vision_alignment=batch=BATCH-39; target=close provenance/SLA coverage on a remaining core forecast endpoint with one minimal vertical slice; impact=forecast detail responses now align with the batch’s data-quality and provenance contract"

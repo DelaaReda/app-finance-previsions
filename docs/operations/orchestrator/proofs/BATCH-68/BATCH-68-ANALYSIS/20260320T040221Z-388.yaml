@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-68-BATCH-68-ANALYSIS-20260320T040221Z-388"
+stream_id: "BATCH-68"
+task_id: "BATCH-68-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-20T04:02:21Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T04:02:21Z"
+      ended_at_utc: "2026-03-20T04:02:21Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_close)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "planner-complete-BATCH-68-ANALYSIS-20260320T040058Z"
+  review_ref: "planner:BATCH-68-ANALYSIS:2026-03-20T04:00:58Z"
+  note: "Analyse planner fermee apres verification runtime depends_on none et attente aval legitime"

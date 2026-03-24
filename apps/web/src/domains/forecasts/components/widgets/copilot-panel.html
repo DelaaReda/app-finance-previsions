@@ -1,7 +1,7 @@
 <!--
   COPILOT PANEL - Personal Finance Copilot UI
   Reuses existing widget patterns from forecasts/components/widgets/*
-  Wires to backend: /api/copilot/start and /api/copilot/ask
+  Wires to backend via namespace-aware endpoints: /api/<namespace>/start and /api/<namespace>/ask
 -->
 <style>
 /* BATCH-80-DEV-02: Conversation Indicator Styles */
@@ -277,7 +277,7 @@
 <script>
 /**
  * Copilot Panel Controller
- * Wires to /api/copilot/start and /api/copilot/ask
+ * Wires to /api/<namespace>/start and /api/<namespace>/ask
  */
 
 // State

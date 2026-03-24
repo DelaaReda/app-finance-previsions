@@ -1,0 +1,42 @@
+{
+  "task_id": "BATCH-43-ADMIN-01",
+  "stream_id": "BATCH-43",
+  "role": "admin",
+  "produced_at_utc": "2026-03-11T07:01:12Z",
+  "status": "blocked",
+  "summary": "Batch-scoped product runtime stays live on :8050, but monitor observability on :7779 is degraded. The policy-impact endpoint returns a fresh payload, while `/api/status?lite=1`, `/api/runtime-diagnostics`, `monitor_contract_smoke`, and `fc_status_brief` all fail because the monitor status surface does not answer.",
+  "root_cause": "Monitor listener `scripts/monitor_server.py` serves `/api/monitor/access` again after a controlled recycle, but the heavier status/runtime endpoints on :7779 still time out. This leaves BATCH-43 blocked on observability/runtime truth rather than on the policy-impact feature path itself.",
+  "fix_applied": "Performed a reversible runtime repair attempt only: recycled the existing monitor process and relaunched it through `scripts/monitor_server.py`. No repo code or config change was applied.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-43/BATCH-43-ADMIN-01/20260311T070112Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "policy_impact_runtime": "PASS GET /api/forecasts/policy-impact?jurisdiction=US&limit=3 => engine_id=policy_change_impact_v1, cache.hit=true, provenance.sla.within_target=true",
+    "monitor_access_after_recycle": "PASS GET /api/monitor/access => mode=lan_only, vm_local_status_url=http://127.0.0.1:7779/api/status?lite=1",
+    "monitor_status_before_repair": "FAIL GET /api/status?lite=1 => curl(28) timeout",
+    "monitor_status_after_repair": "FAIL GET /api/status?lite=1 => curl(28) timeout",
+    "runtime_diagnostics_after_repair": "FAIL GET /api/runtime-diagnostics => curl(28) timeout",
+    "monitor_contract_smoke": "FAIL bash scripts/monitor_contract_smoke.sh => curl(7) failed to connect during recycle, then status surface stayed unavailable",
+    "fc_status_brief": "FAIL bash scripts/fc_status_brief.sh --json => monitor_unreachable",
+    "health_snapshot": "WARN bash scripts/health_snapshot.sh => health=DEGRADED critical_widgets=unknown",
+    "monitor_tests": "PASS python3 -m pytest apps/monitor/tests/test_status_never_null.py apps/monitor/tests/test_activity_endpoints.py -q -rA => 4 passed"
+  },
+  "files_touched": [
+    "docs/operations/orchestrator/proofs/BATCH-43/BATCH-43-ADMIN-01/20260311T070112Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "curl -sS --max-time 10 http://127.0.0.1:7779/api/status?lite=1",
+    "curl -sS --max-time 12 http://127.0.0.1:7779/api/runtime-diagnostics",
+    "curl -sS --max-time 10 http://127.0.0.1:7779/api/monitor/access",
+    "curl -sS --max-time 10 \"http://127.0.0.1:8050/api/forecasts/policy-impact?jurisdiction=US&limit=3\"",
+    "bash scripts/monitor_contract_smoke.sh",
+    "bash scripts/fc_status_brief.sh --json",
+    "bash scripts/health_snapshot.sh",
+    "python3 -m pytest apps/monitor/tests/test_status_never_null.py apps/monitor/tests/test_activity_endpoints.py -q -rA"
+  ],
+  "commit_sha": "SKIP(no_code_or_config_change)",
+  "architecture_check": "PASS(batch-scoped runtime validation only): no policy-impact API/UI code changed; observed failure is confined to monitor observability surfaces on :7779.",
+  "vision_alignment": "MIXED(BATCH-43): the law/policy impact engine is runtime-servable and fresh on :8050, but the required monitor/runtime health evidence remains incomplete because status/diagnostics endpoints are timing out.",
+  "recommended_next": "Planner should route a follow-up admin/dev fix for the monitor status/runtime-diagnostics handler on :7779, then rerun BATCH-43-ADMIN-01. Do not reopen the BATCH-43 feature implementation itself.",
+  "blocking_issue": "monitor_status_timeout_on_7779_after_recycle"
+}

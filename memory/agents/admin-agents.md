@@ -1,10 +1,52 @@
 # Agent Memory: admin-agents
 
-- Role focus:
+## Coordination Board
+- last_updated: 2026-03-24 America/New_York (value-delivery recheck since 2026-03-20)
+- purpose: shared cross-agent manual coordination board
+- authority: advisory only; canonical truth remains queue/workboard + runtime truth
+- canonical_active_cycle: BATCH-84 (from canonical queue/workboard `active_cycle.active_batch_ids=["BATCH-84"]`)
+- planner_lane: `codex_planner_cron` is not visible in `tmux list-panes` at this check; tmux is secondary only, and the canonical signal is that `BATCH-84` is `IN_PROGRESS` and owned by `planner`
+- dev_lane: `codex_dev_cron` exists as a live shell/Codex lane, but there is no fresh canonical `READY_DEV` work yet on `BATCH-84`
+- admin_lane: `codex_admin_cron` exists as a live shell/Codex lane; canonical batch-level next action now points to admin work: `compléter BATCH-84-ADMIN-01 (READY_PLANNER pour admin)`
+- planner_mission_now: keep automated orchestration advancing on canonical `BATCH-84`, emit/confirm the real planner-side handoff, and avoid any fallback to stale `BATCH-71` or older memory
+- dev_mission_now: stay strictly downstream; do not invent work or wake on stale role memory until canonical `BATCH-84` emits a real dev-ready task
+- admin_mission_now: support autonomous flow by picking up the canonical admin handoff for `BATCH-84-ADMIN-01` only through canonical runtime/planning truth, while keeping bootstrap/session hygiene stable
+- auxiliary_sessions: `adminapp_codex_sync` visible; `admin-agents-sync-cron` / `clawsentinel` not observed in current `tmux list-panes`
+- next_architecture_fix: keep lane startup independent from session presence and ensure canonical batch-level handoffs (`planner -> admin/dev`) are the only triggers for autonomous work
+- ownership_now: architecture/admin infra owns runtime reliability only: preserve bootstrap/session hygiene, keep `BATCH-84` canonical, let planner own planner-task orchestration, keep dev strictly downstream, and let admin help only on the explicit canonical handoff
+- lane_repaired: partial (dev/admin shells are live again, but productivity must still be measured from fresh canonical work, not pane presence)
+- canonical_source_checked: yes
+- current_safe_step: take canonical `BATCH-84 IN_PROGRESS` and its explicit `next_action` as source of truth, let planner/admin work the live batch-level handoff, keep dev in standby until a real dev-ready task appears, and ignore stale March 20 board/history
+- current_coordination_blocker: old board state and old role memory are stale; current orchestration risk is not bootstrap drift but agents acting from historical `BATCH-71` assumptions instead of the live `BATCH-84` handoff
+- proof_fraiche_utile_observee: yes (fresh canonical state on 2026-03-24 shows `active_cycle.active_batch_ids=["BATCH-84"]`, batch `BATCH-84` is `IN_PROGRESS`, owned by `planner`, with explicit next action toward `BATCH-84-ADMIN-01`)
+- live_recheck_2026-03-24: queue/workboard are aligned on `BATCH-84`; tmux remains secondary and partly incomplete, but canonical planning truth is clear enough to drive autonomous missions without waiting for tmux perfection
+- required_adjustment_now: stop reasoning from stale March 20 state, follow only canonical `BATCH-84`, and let missions be driven by explicit canonical handoffs rather than by session presence or old role memory
+- value_delivery_assessment_since_2026-03-20: yes, substantive user-facing value was delivered. Strongest evidence is `BATCH-80` and `BATCH-82`, which ship and validate the personal finance copilot vertical slice: start/ask/context endpoints, conversation history, decision journal, frontend copilot widget/page, and runtime validation. `BATCH-81` and `BATCH-83` look mostly like reuse/revalidation/proof closure rather than net-new product surface.
+- anti_self_deception_rule: do not confuse high batch throughput with high incremental user value. Count `BATCH-80` and `BATCH-82` as major value delivery; treat `BATCH-81` / `BATCH-83` primarily as hardening/reuse/validation unless a clearly new user-visible capability is proven.
+- root_causes_low_incremental_value: (1) batch churn on a duplicated objective: `BATCH-68` through `BATCH-84` keep the same title/scope instead of moving to a new capability frontier; (2) reuse/verification is being counted as fresh delivery (`already implemented`, `reuse existing`, `no code changes required` appear repeatedly in proofs); (3) planner lacks a novelty gate to stop reopening the same slice once the vertical slice is already live; (4) orchestration optimizes for closing batches/proofs, not for maximizing new user-visible delta; (5) admin/gov/proof closure overhead is large relative to net-new product work.
+- anti_stagnation_plan_now:
+  - `1_novelty_gate`: planner must classify every batch as `net_new`, `hardening`, `validation`, or `reuse_only` before opening downstream work
+  - `2_no_duplicate_scope_loop`: if the last delivered batch on the same title/scope was `net_new`, the next same-scope batch must justify a new user-visible delta or be demoted to hardening/validation instead of counting as fresh delivery
+  - `3_stagnation_escalation`: two consecutive `reuse_only`/`validation` batches on the same scope trigger a stagnation alert and force planner to write the next novelty target before continuing
+  - `4_mission_discipline`: planner pursues novelty or explicit hardening; admin only validates canonical handoffs; dev never invents work outside canonical `READY_DEV`
+  - `5_scoreboard`: team reports both `throughput` and `net_new_user_value`; only the latter counts as real delivery progress
+
+## Usage Rules
+- update this top board, not the historical log below, when coordinating cross-agent work
+- do not use this file as a chat transcript
+- do not override queue/workboard, runtime truth, or planner dispatch snapshots with notes from this file
+- record architecture decisions in `memory/YYYY-MM-DD.md`; keep this file focused on current ownership/blockers/next action
+
+- Role focus: eliminate stale-active/false-active runtime blockers without taking feature work away from planner/dev; current ownership=`active_cycle_dispatch_gate` in `platform/automation/runtime/planner/planner_runtime_actions.py` + `platform/automation/state_reconciler.py`
 - Stable decisions:
+- queue/workboard `active_cycle` wins over stale planner/subagent residue; out-of-cycle capability rows are orchestration drift and must be ignored/quarantined, not merged as delivery truth
 - Useful commands:
-- Recurring blockers:
+- Recurring blockers: stale planner subagents, dispatch-cycle drift, session freshness, run-lock backpressure misread as canonical state, out_of_cycle_dispatch_drift
 - Handoff expectations:
+- lane repaired: yes
+- canonical source checked: yes
+- current ownership: admin/infra bootstrap + session hygiene + samefile-aware lane validity + active-cycle dispatch gate
+- next safe step: add or read a fresh lane execution proof (tick artifact or equivalent) before treating any tmux session as productive; continue ignoring tmux-only evidence when queue/workboard/runtime truth disagree
 - [2026-02-26 18:38:50 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260226T233841Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_errors_present next_action=force_run_failed_roles_then_recheck exec_report=role_ok_13_on_14_sessions_12_on_12_ready_1_errors_1_stale_0 issues=role_errors_present suggestions=force_run_failed_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260226T233841Z.json
 - [2026-02-26 18:43:23 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260226T234314Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260226T234314Z.json
 - [2026-02-26 18:55:37 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260226T235528Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260226T235528Z.json
@@ -104,3 +146,9 @@
 - [2026-03-04 15:23:20 EST] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=none task_id=AA_20260304T202310Z_none next_action_unique=admin-agents-tick-20260304T202310Z directive=none/none message=none/none exec_report=tick=20260304T202310Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring_no_ready_items exec_report=role_ok_0_on_0_sessions_3_on_ issues=none suggestions=none
 - [2026-03-06 16:47:10 EST] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=none task_id=AA_20260306T214701Z_none next_action_unique=admin-agents-tick-20260306T214701Z directive=none/none message=none/none exec_report=tick=20260306T214701Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring_no_ready_items exec_report=role_ok_0_on_0_sessions_1_on_ issues=none suggestions=none
 - [2026-03-06 16:47:42 EST] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=none task_id=AA_20260306T214731Z_none next_action_unique=admin-agents-tick-20260306T214731Z directive=none/none message=none/none exec_report=tick=20260306T214731Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring_no_ready_items exec_report=role_ok_0_on_0_sessions_1_on_ issues=none suggestions=none
+
+## 2026-03-20 live admin/infra recheck
+- ownership_now: admin/infra owns lane bootstrap, startup/session hygiene, workdir correctness, anti-interactive safeguards, stale-active quarantine, and active-cycle dispatch guardrails.
+- proof_fraiche_utile_observee: yes (`active_cycle.active_batch_ids=["BATCH-71"]`; `BATCH-71-PLAN` is `DONE`; `BATCH-71-ANALYSIS` is `IN_PROGRESS` for planner on the live workboard).
+- current_coordination_blocker: planner proof transport is fixed, but downstream proof freshness is still missing; `dev/admin` have no fresh useful-work proof on `BATCH-71`, and auxiliary sessions `admin-agents-sync-cron`, `adminapp_codex_sync`, and `clawsentinel` are confirmed absent on the live VM.
+- current_safe_step: keep the repaired non-interactive bootstrap unchanged, let planner complete `BATCH-71-ANALYSIS` under the tightened proof contract, recreate the three auxiliary sessions only if they are still needed, and do not count `dev/admin` as productive until `BATCH-71` emits fresh downstream work.

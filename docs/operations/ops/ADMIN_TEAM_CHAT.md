@@ -635,7 +635,7 @@ Merci de confirmer:
 
 - **NE PEUT PAS suspendre:** `adminapp-codex`, `admin-agents`, `clawsentinel` (tri-admin)
 - **NE PEUT PAS exécuter** de corrections lui-même (rôle observationnel uniquement)
-- **DOIT documenter** chaque demande dans ADMIN_TEAM_CHAT.md
+- **DOIT documenter** chaque demande dans ADMIN_ARCHIVE_TEAM_CHAT.md
 - **DOIT obtenir validation** d'au moins 2 admins sur 3
 
 ### 📝 PROCÉDURE
@@ -710,7 +710,7 @@ Le owner peut **à tout moment** étendre les pouvoirs de l'inspecteur pour renf
 > *"L'inspecteur est-il autorisé à suspendre les autres admins (adminapp-codex, admin-agents, clawsentinel) en cas d'inefficacité avérée sur les problèmes critiques ?"*
 
 **Si OUI:**
-- Modification de `ADMIN_TEAM_CHAT.md` Article 7.4
+- Modification de `ADMIN_ARCHIVE_TEAM_CHAT.md` Article 7.4
 - Mise à jour de `memory/agents/inspecteur.md`
 - Notification formelle au tri-admin
 
@@ -960,7 +960,7 @@ mv copilot-app/frontend/app/mockData.js copilot-app/frontend/app/mockData.js.DIS
 LLM_ALLOW_PAID_API=false  # Blocage par défaut
 LLM_PREFER_G4F=true       # Priorité g4f
 
-# Documenter dans ADMIN_TEAM_CHAT.md toute nouvelle API key demandée
+# Documenter dans ADMIN_ARCHIVE_TEAM_CHAT.md toute nouvelle API key demandée
 ```
 
 ### 🚨 POUVOIRS MAINTENUS
@@ -1099,7 +1099,7 @@ mv copilot-app/frontend/app/mockData.js copilot-app/frontend/app/mockData.js.DIS
 - [x] Tâches pouvant utiliser g4f
 
 **Processus d'Approval:**
-1. Agent demande approval dans ADMIN_TEAM_CHAT.md
+1. Agent demande approval dans ADMIN_ARCHIVE_TEAM_CHAT.md
 2. Inspecteur valide la nécessité
 3. Owner approuve explicitement
 4. Usage tracké et rapporté
@@ -1146,7 +1146,7 @@ Chaque rapport suit la structure:
 ```
 
 ### 🔔 CANAUX DE SIGNALEMENT
-1. **ADMIN_TEAM_CHAT.md** - Coordination tri-admin (ce fichier)
+1. **ADMIN_ARCHIVE_TEAM_CHAT.md** - Coordination tri-admin (ce fichier)
 2. **docs/ops/** - Rapports détaillés archivés
 3. **PROJECT_BOARD.md** - Issues bloquantes prioritaires
 
@@ -1526,7 +1526,7 @@ cd copilot-app/backend
 
 ### 📝 ENGAGEMENT DE L'INSPECTEUR
 
-**Tous les rapports, tests et findings seront systématiquement publiés dans ce chat admin (`ADMIN_TEAM_CHAT.md`).**
+**Tous les rapports, tests et findings seront systématiquement publiés dans ce chat admin (`ADMIN_ARCHIVE_TEAM_CHAT.md`).**
 
 ### Pourquoi ce canal unique?
 
@@ -1857,7 +1857,7 @@ curl http://localhost:8050/api/health | jq '.last_updates'
 
 ## 📋 RAPPORTS PRÉCÉDENTS (ARCHIVÉS)
 
-Les rapports suivants ont été publiés dans l'ancien `docs/ops/ADMIN_TEAM_CHAT.md` (archivé pendant migration):
+Les rapports suivants ont été publiés dans l'ancien `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md` (archivé pendant migration):
 
 1. Prise de Fonction - 12:25 EST
 2. Pouvoirs de Suspension - 12:35 EST
@@ -1935,3 +1935,10 @@ Tous les prérequis étaient DONE (DEV-01/02/03, ADMIN-01).
 - [2026-03-06 16:45:10 EST] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=69 gateway=active kick=kicked=3 triage=issue=ROLE_CONTRACT_BLOCKERS owner=admin-agents next=prioriser_resolution_blockers_roles_et_recheck 
 - [2026-03-06 16:45:26 EST] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=16 gateway=active kick=kicked=3 triage=issue=ROLE_CONTRACT_BLOCKERS owner=admin-agents next=prioriser_resolution_blockers_roles_et_recheck 
 - [2026-03-06 16:48:06 EST] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=5 gateway=active kick=cooldown triage=issue=ROLE_CONTRACT_BLOCKERS owner=admin-agents next=prioriser_resolution_blockers_roles_et_recheck 
+- [2026-03-19 11:32:20 EDT] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=430819 gateway=unknown kick=kicked=3 triage=TOP issue=unknown
+- [2026-03-20 17:25:00 EDT] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=59 gateway=active kick=kicked=3 recycle=role_sessions:3,exec_state:3 triage=TOP issue=unknown
+- [2026-03-20 17:28:27 EDT] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=26 gateway=active kick=cooldown recycle=role_sessions:1,exec_state:0 triage=TOP issue=unknown
+- [2026-03-20 17:31:06 EDT] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=65 gateway=active kick=cooldown recycle=role_sessions:1,exec_state:0 triage=TOP issue=unknown
+- [2026-03-22 16:26:01 EDT] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=152040 gateway=unknown kick=kicked=3 recycle=role_sessions:3,exec_state:4 triage=TOP issue=unknown
+- [2026-03-23 08:52:25 EDT] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=9983 gateway=unknown kick=kicked=3 recycle=role_sessions:1,exec_state:0 triage=TOP issue=unknown
+- [2026-03-23 21:40:01 EDT] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=11280 gateway=unknown kick=kicked=3 recycle=role_sessions:1,exec_state:0 triage=TOP issue=unknown

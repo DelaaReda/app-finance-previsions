@@ -1,0 +1,298 @@
+TAP version 13
+# Subtest: buildRobustnessGoNoGoDecision returns GO for healthy state
+ok 1 - buildRobustnessGoNoGoDecision returns GO for healthy state
+  ---
+  duration_ms: 3.871326
+  type: 'test'
+  ...
+# Subtest: buildRobustnessGoNoGoDecision handles case-insensitive degraded states
+ok 2 - buildRobustnessGoNoGoDecision handles case-insensitive degraded states
+  ---
+  duration_ms: 2.93087
+  type: 'test'
+  ...
+# Subtest: buildRobustnessGoNoGoDecision treats warning as NO-GO
+ok 3 - buildRobustnessGoNoGoDecision treats warning as NO-GO
+  ---
+  duration_ms: 1.910413
+  type: 'test'
+  ...
+# Subtest: buildRobustnessGoNoGoDecision returns NO-GO for unhealthy states
+ok 4 - buildRobustnessGoNoGoDecision returns NO-GO for unhealthy states
+  ---
+  duration_ms: 5.886948
+  type: 'test'
+  ...
+# Subtest: buildRobustnessGoNoGoDecision treats unknown state as NO-GO
+ok 5 - buildRobustnessGoNoGoDecision treats unknown state as NO-GO
+  ---
+  duration_ms: 5.961448
+  type: 'test'
+  ...
+# Subtest: openRobustnessDrill opens readiness modal with GO payload
+ok 6 - openRobustnessDrill opens readiness modal with GO payload
+  ---
+  duration_ms: 2.648078
+  type: 'test'
+  ...
+# Subtest: openRobustnessDrill opens readiness modal with NO-GO payload when degraded
+ok 7 - openRobustnessDrill opens readiness modal with NO-GO payload when degraded
+  ---
+  duration_ms: 1.66308
+  type: 'test'
+  ...
+# Subtest: applyLiveDashboardData derives portfolio health from raw risk profile payloads
+ok 8 - applyLiveDashboardData derives portfolio health from raw risk profile payloads
+  ---
+  duration_ms: 2.635662
+  type: 'test'
+  ...
+# Subtest: applyLiveDashboardData backfills portfolio health core fields from the raw risk profile payload
+ok 9 - applyLiveDashboardData backfills portfolio health core fields from the raw risk profile payload
+  ---
+  duration_ms: 2.564871
+  type: 'test'
+  ...
+# Subtest: applyLiveDashboardData hydrates the hero brief from live copilot_start data
+ok 10 - applyLiveDashboardData hydrates the hero brief from live copilot_start data
+  ---
+  duration_ms: 1.75708
+  type: 'test'
+  ...
+# Subtest: applyLiveDashboardData stores walk-forward scoreboard payloads for forecast widgets
+ok 11 - applyLiveDashboardData stores walk-forward scoreboard payloads for forecast widgets
+  ---
+  duration_ms: 2.07858
+  type: 'test'
+  ...
+# Subtest: applyLiveDashboardData stores insider behavior payloads for existing widgets
+ok 12 - applyLiveDashboardData stores insider behavior payloads for existing widgets
+  ---
+  duration_ms: 1.985913
+  type: 'test'
+  ...
+# Subtest: sanitizeInsiderBehavior preserves already-normalized guardrail and provenance fields
+ok 13 - sanitizeInsiderBehavior preserves already-normalized guardrail and provenance fields
+  ---
+  duration_ms: 1.741997
+  type: 'test'
+  ...
+# Subtest: renderMarketDrivers appends insider behavior summary to the existing widget
+ok 14 - renderMarketDrivers appends insider behavior summary to the existing widget
+  ---
+  duration_ms: 1.902246
+  type: 'test'
+  ...
+# Subtest: renderForecastScenarioWidget prefers threshold_summary over scoreboard rows for hit-rate copy
+ok 15 - renderForecastScenarioWidget prefers threshold_summary over scoreboard rows for hit-rate copy
+  ---
+  duration_ms: 2.633579
+  type: 'test'
+  ...
+# Subtest: renderForecastScenarioWidget surfaces geopolitical conflict escalation from live payload
+ok 16 - renderForecastScenarioWidget surfaces geopolitical conflict escalation from live payload
+  ---
+  duration_ms: 1.503705
+  type: 'test'
+  ...
+# Subtest: renderForecastScenarioWidget surfaces a supply-chain shock propagation chain from existing live datasets
+ok 17 - renderForecastScenarioWidget surfaces a supply-chain shock propagation chain from existing live datasets
+  ---
+  duration_ms: 1.812789
+  type: 'test'
+  ...
+# Subtest: renderForecastScenarioWidget surfaces macro hierarchy coverage and contradiction copy
+ok 18 - renderForecastScenarioWidget surfaces macro hierarchy coverage and contradiction copy
+  ---
+  duration_ms: 1.852372
+  type: 'test'
+  ...
+# Subtest: runCopilotStartPrompt opens the overlay before sending a hero starter prompt
+ok 19 - runCopilotStartPrompt opens the overlay before sending a hero starter prompt
+  ---
+  duration_ms: 1.628248
+  type: 'test'
+  ...
+# Subtest: runCopilotStartOpen opens the overlay when the hero starter targets copilot
+ok 20 - runCopilotStartOpen opens the overlay when the hero starter targets copilot
+  ---
+  duration_ms: 1.841747
+  type: 'test'
+  ...
+# Subtest: runCopilotStartOpen opens the overlay for a trailing-slash copilot target
+ok 21 - runCopilotStartOpen opens the overlay for a trailing-slash copilot target
+  ---
+  duration_ms: 1.761955
+  type: 'test'
+  ...
+# Subtest: runCopilotStartOpen routes the landing brief to overview and scrolls the live brief widget
+ok 22 - runCopilotStartOpen routes the landing brief to overview and scrolls the live brief widget
+  ---
+  duration_ms: 1.397747
+  type: 'test'
+  ...
+# Subtest: runCopilotStartOpen reports unsupported landing actions instead of opening copilot
+ok 23 - runCopilotStartOpen reports unsupported landing actions instead of opening copilot
+  ---
+  duration_ms: 1.65733
+  type: 'test'
+  ...
+# Subtest: hydrateCopilotOverlayStart falls back to getCopilotContext and persists the shared starter payload
+ok 24 - hydrateCopilotOverlayStart falls back to getCopilotContext and persists the shared starter payload
+  ---
+  duration_ms: 2.218788
+  type: 'test'
+  ...
+# Subtest: hydrateCopilotOverlayStart builds overlay state from sanitized starter payload
+ok 25 - hydrateCopilotOverlayStart builds overlay state from sanitized starter payload
+  ---
+  duration_ms: 1.530414
+  type: 'test'
+  ...
+# Subtest: renderHeroCopilotBrief swaps the static hero copy for live brief and actions
+ok 26 - renderHeroCopilotBrief swaps the static hero copy for live brief and actions
+  ---
+  duration_ms: 2.620829
+  type: 'test'
+  ...
+# Subtest: renderHeroCopilotBrief accepts raw copilot_start payloads from app state
+ok 27 - renderHeroCopilotBrief accepts raw copilot_start payloads from app state
+  ---
+  duration_ms: 2.162538
+  type: 'test'
+  ...
+# Subtest: renderPortfolioHealthFullDetails maps portfolio state and risk profile into the full analysis panel
+ok 28 - renderPortfolioHealthFullDetails maps portfolio state and risk profile into the full analysis panel
+  ---
+  duration_ms: 1.51083
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart preserves starter tickers and normalizes brief open targets
+ok 29 - sanitizeCopilotStart preserves starter tickers and normalizes brief open targets
+  ---
+  duration_ms: 2.54037
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart maps open_copilot open action to copilot without relying on target
+ok 30 - sanitizeCopilotStart maps open_copilot open action to copilot without relying on target
+  ---
+  duration_ms: 1.897038
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart maps trailing-slash copilot open action to copilot
+ok 31 - sanitizeCopilotStart maps trailing-slash copilot open action to copilot
+  ---
+  duration_ms: 1.29679
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart maps trimmed brief open target variants to market
+ok 32 - sanitizeCopilotStart maps trimmed brief open target variants to market
+  ---
+  duration_ms: 1.818122
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart prefers direct ask tickers over prefill tickers
+ok 33 - sanitizeCopilotStart prefers direct ask tickers over prefill tickers
+  ---
+  duration_ms: 1.832871
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart uses ask.question then prefill.question when prompt is missing
+ok 34 - sanitizeCopilotStart uses ask.question then prefill.question when prompt is missing
+  ---
+  duration_ms: 1.339622
+  type: 'test'
+  ...
+# Subtest: sanitizeCopilotStart preserves scoped tickers for downstream hero prompts
+ok 35 - sanitizeCopilotStart preserves scoped tickers for downstream hero prompts
+  ---
+  duration_ms: 1.723122
+  type: 'test'
+  ...
+# Subtest: renderHeroCopilotBrief hydrates the landing brief and wires ask/open actions
+ok 36 - renderHeroCopilotBrief hydrates the landing brief and wires ask/open actions
+  ---
+  duration_ms: 2.34637
+  type: 'test'
+  ...
+# Subtest: renderHeroCopilotBrief accepts normalized backend snake_case brief fields and falls back to opportunities
+ok 37 - renderHeroCopilotBrief accepts normalized backend snake_case brief fields and falls back to opportunities
+  ---
+  duration_ms: 1.402622
+  type: 'test'
+  ...
+# Subtest: renderHeroCopilotBrief surfaces saved portfolio context in hero metadata
+ok 38 - renderHeroCopilotBrief surfaces saved portfolio context in hero metadata
+  ---
+  duration_ms: 1.695622
+  type: 'test'
+  ...
+# Subtest: renderHeroCopilotBrief treats stale normalized brief status as degraded metadata
+ok 39 - renderHeroCopilotBrief treats stale normalized brief status as degraded metadata
+  ---
+  duration_ms: 1.73458
+  type: 'test'
+  ...
+# Subtest: buildCopilotChatResponseHtml renders freshness, source, and degraded badges for normalized memo payloads
+ok 40 - buildCopilotChatResponseHtml renders freshness, source, and degraded badges for normalized memo payloads
+  ---
+  duration_ms: 1.64183
+  type: 'test'
+  ...
+# Subtest: app.js exposes runCopilotStartOpen for the static landing brief CTA
+ok 41 - app.js exposes runCopilotStartOpen for the static landing brief CTA
+  ---
+  duration_ms: 1.790206
+  type: 'test'
+  ...
+# Subtest: index.html exposes the hero brief slots required by the copilot starter
+ok 42 - index.html exposes the hero brief slots required by the copilot starter
+  ---
+  duration_ms: 0.507624
+  type: 'test'
+  ...
+# Subtest: sanitizeForecastRows preserves forecast provenance SLA metadata for UI consumers
+ok 43 - sanitizeForecastRows preserves forecast provenance SLA metadata for UI consumers
+  ---
+  duration_ms: 1.824122
+  type: 'test'
+  ...
+# Subtest: sanitizeForecastRows preserves macro hierarchy metadata for country continent world slices
+ok 44 - sanitizeForecastRows preserves macro hierarchy metadata for country continent world slices
+  ---
+  duration_ms: 1.474039
+  type: 'test'
+  ...
+# Subtest: updateLiveProvenance surfaces aggregated forecast SLA compliance
+ok 45 - updateLiveProvenance surfaces aggregated forecast SLA compliance
+  ---
+  duration_ms: 1.989329
+  type: 'test'
+  ...
+# Subtest: updateLiveProvenance includes global signal mesh source and license coverage
+ok 46 - updateLiveProvenance includes global signal mesh source and license coverage
+  ---
+  duration_ms: 2.274621
+  type: 'test'
+  ...
+# Subtest: sanitizeAlertTimeline surfaces policy status and jurisdiction in alert titles
+ok 47 - sanitizeAlertTimeline surfaces policy status and jurisdiction in alert titles
+  ---
+  duration_ms: 1.852913
+  type: 'test'
+  ...
+# Subtest: renderAlertTimeline includes policy summary copy in the visible card body
+ok 48 - renderAlertTimeline includes policy summary copy in the visible card body
+  ---
+  duration_ms: 1.683997
+  type: 'test'
+  ...
+1..48
+# tests 48
+# suites 0
+# pass 48
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 174.090601

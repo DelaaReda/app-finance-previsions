@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-79-BATCH-79-ARCH-20260323T212829Z-291"
+stream_id: "BATCH-79"
+task_id: "BATCH-79-ARCH"
+role: "planner"
+produced_at_utc: "2026-03-23T21:28:29Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_arch_close_no_runtime_exec)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T21:28:29Z"
+      ended_at_utc: "2026-03-23T21:28:29Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_arch_doc_closure)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch79-arch-close-20260323T2129Z"
+  review_ref: "runner:BATCH-79-ARCH"
+  note: "source=runner | root_cause=runway planner courte avec preuve architecture non referencee explicitement | fix_applied=cloture ARCH avec refs canoniques ACTIVE_DOCS_INDEX, PLANE_BACKLOG_INTEGRATION_SPEC et PRODUCT_VISION reliees a apps/api/src/domains et apps/web/src | verify=before=preuve architecture absente dans le contrat planner; after=preuve architecture canonique rattachee au stream BATCH-79; test=parallel_workstream context role planner confirme BATCH-79-ARCH seul IN_PROGRESS et aucun blocked item | architecture_check=apps_api_domains_reused_apps_web_preserved_runtime_unchanged | vision_alignment=batch=BATCH-79; target=personal_finance_copilot_day_brief_and_arch_open; impact=arch_contract_closed_without_frontend_theme_change"

@@ -8,7 +8,7 @@ description: Validate shell commands before execution. Use when a skill proposes
 Run preflight validation before executing shell commands from skills.
 
 ## Workflow
-1. Evaluate command with `scripts/command_safety_gate.py --cmd "..."`.
+1. Evaluate command with `platform/policies/command_safety_gate.py --cmd "..."`.
 2. If decision is `BLOCK`, do not execute.
 3. If decision is `CONFIRM`, ask the user first (unless already explicitly approved).
 4. If decision is `ALLOW`, execute with correct workdir and minimal privilege.

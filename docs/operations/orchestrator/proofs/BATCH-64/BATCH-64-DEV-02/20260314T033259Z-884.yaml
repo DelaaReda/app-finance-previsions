@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-64-BATCH-64-DEV-02-20260314T033259Z-884"
+stream_id: "BATCH-64"
+task_id: "BATCH-64-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-14T03:32:59Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-14T03:32:59Z"
+      ended_at_utc: "2026-03-14T03:32:59Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS `node --test apps/web/src/domains/forecasts/pages/app.test.js`; PASS `node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js`"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=157165e78e1ef4968a0c7a27eb7ff0d5d33fbe43; scope=apps/web hero brief loader now reuses shared starter connector/state for namespaced personal-finance brief/ask/open flow"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-64-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-64-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=`loadAndRenderHeroBrief()` fetched `/copilot/start` directly and stored raw payload data, which bypassed the shared `FinanceAPI.getCopilotStart()` namespace routing and normalized starter contract. That left the brief-fi | fix_applied=Updated `apps/web/src/domains/forecasts/pages/app.js` so the hero brief loader prefers `window.FinanceAPI.getCopilotStart()`, sanitizes the returned starter payload, builds shared starter state, renders the hero through  | verify=before=hero brief loader bypassed `FinanceAPI.getCopilotStart()` and used a raw `/copilot/start` fetch, so namespaced starter routing and shared ask/open normalization were not guaranteed on the landing brief path; after | architecture_check=layer=web/domain landing brief loader + focused page test only; imports_ok=yes, reused existing `FinanceAPI.getCopilotStart`, `sanitizeCopilotStart`, `buildCopilotStartState`, and `renderHeroCopilotBrief` without adding  | vision_alignment=batch=BATCH-64; target=personal finance copilot brief-first flow with ask/open entry points; impact=the landing brief now honors the same shared starter contract and personal-finance namespace routing as the rest of the"

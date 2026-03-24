@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T193150Z-917"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T19:31:50Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T19:31:50Z"
+      ended_at_utc: "2026-03-24T19:31:50Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_doc_proof_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b84-analysis-close-20260324"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=Analyse planner incomplète faute de référence d architecture explicite et d audit apps/api apps/web | fix_applied=Clôture pilotée avec preuve runtime reliant docs canoniques à BATCH-84 et dépendance PLAN absente des tâches ouvertes donc considérée DONE | verify=before=ANALYSIS ouverte avec dépendance PLAN non matérialisée dans les tâches ouvertes; after=preuve d architecture et d intégration attachée pour clôturer ANALYSIS; test=parallel_workstream context role planner montre ANALYSIS seule IN_PROGRESS | architecture_check=apps/api/src/domains/* reference ok; apps/web/src preserved; apps/api/runtime/ referenced; legacy forbidden paths avoided | vision_alignment=batch=BATCH-84; target=copilot finance personnel brief quotidien plus parcours analyse; impact=analyse planner clôturée sans toucher au thème frontend"

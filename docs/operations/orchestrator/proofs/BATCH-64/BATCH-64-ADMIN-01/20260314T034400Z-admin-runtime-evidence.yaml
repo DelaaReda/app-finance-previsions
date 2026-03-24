@@ -1,0 +1,59 @@
+proof_id: "admin-runtime-check-20260314T034400Z"
+task_id: BATCH-64-ADMIN-01
+stream_id: BATCH-64
+scope: runtime_post_dev_validation
+ts: 20260314T034400Z
+root_cause: "Live runtime drift: the running backend process predated the BATCH-64 DEV changes, so `/api/personal-finance/start`, `/api/personal-finance/context`, and `/api/personal-finance/ask` returned 404 even though the committed router code and tests defined those aliases."
+fix_applied: "Ran the canonical runtime refresh path via `timeout 180s bash scripts/runtime_e2e_gate.sh`, which restarted the Finance Copilot stack and revalidated backend, frontend, and monitor steady state."
+checks:
+  - name: runtime_gate
+    artifact: docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260314T034146Z.json
+    result: OK
+    doctor_status: degraded
+    doctor_runtime_status: ok
+    non_runtime_degraded_checks:
+      - openclaw_gateway
+  - name: personal_finance_start
+    path: /api/personal-finance/start?tickers=NVDA
+    http_code: 200
+    ask_targets:
+      - /personal-finance/ask
+      - /personal-finance/ask
+      - /personal-finance/ask
+    open_targets:
+      - market
+      - opportunities
+      - /personal-finance
+    brief_title: "Brief quotidien"
+  - name: personal_finance_context
+    path: /api/personal-finance/context?tickers=NVDA&tickers=MSFT
+    http_code: 200
+    scope_tickers:
+      - MSFT
+      - NVDA
+    ask_targets:
+      - /personal-finance/ask
+      - /personal-finance/ask
+      - /personal-finance/ask
+    open_targets:
+      - market
+      - opportunities
+      - /personal-finance
+  - name: personal_finance_ask
+    path: /api/personal-finance/ask
+    http_code: 200
+    has_answer: true
+    response_keys:
+      - action
+      - answer
+      - citations
+      - confidence
+      - context_influence
+      - freshness
+      - generated_at
+      - horizon
+observability:
+  fc_health_check: "PASS monitor/api/frontend up; planner-only cron healthy; no open issue reports"
+  monitor_status_lite: "primary_status=ok"
+  runtime_truth: "sqlite event store primary; BATCH-64-ADMIN-01 runner active during capture"
+  note: "Doctor remained degraded only on `openclaw_gateway`, which is an operator-plane advisory outside this product runtime path."

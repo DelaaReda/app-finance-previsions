@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T163646Z-726"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T16:36:46Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_non_code)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T16:36:46Z"
+      ended_at_utc: "2026-03-24T16:36:46Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_non_code)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b84-analysis-close-20260324t163519z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=analyse restee ouverte sans reference architecture_plan_ref explicite ni audit rattache | fix_applied=preuve de cloture rattachee aux chemins apps/api et apps/web avec reprise admin prevue | verify=before=analysis in_progress sans preuve architecture explicite; after=analysis cloturable avec audit rattache; test=parallel_workstream context role planner limit 5 confirme un seul in_progress BATCH-84-ANALYSIS | architecture_check=architecture_plan_ref=/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md; architecture_audit=apps/api/src/domains/*,apps/web/src,apps/api/runtime/; anti_regression_guards=ok | vision_alignment=batch=BATCH-84; target=copilot finance personnel; impact=analyse fermee pour reprise runtime admin"

@@ -1,0 +1,53 @@
+{
+  "task_id": "BATCH-23-ADMIN-01",
+  "stream_id": "BATCH-23",
+  "role": "admin",
+  "captured_at_utc": "2026-03-13T04:43:01Z",
+  "runtime_fix": {
+    "type": "service_recovery",
+    "action": "started_monitor_wrapper",
+    "command": "python3 scripts/monitor_server.py",
+    "reason": "local monitor API on 127.0.0.1:7779 was down while BATCH-23 admin runtime verification was active"
+  },
+  "evidence": {
+    "host_check": {
+      "runtime_is_vm": 1,
+      "workspace": "/home/venom/analyse-financiere"
+    },
+    "before": {
+      "monitor_status": "down",
+      "status_endpoint_error": "curl: (7) Failed to connect to 127.0.0.1 port 7779",
+      "doctor_endpoint_error": "curl: (7) Failed to connect to 127.0.0.1 port 7779",
+      "stale_pid_files": [
+        "logs-codex-runs/monitor/server.pid",
+        "logs-codex-runs/monitor-server.pid"
+      ],
+      "process_alive": false
+    },
+    "after": {
+      "monitor_listener": "0.0.0.0:7779",
+      "status_lite": {
+        "health": "OK",
+        "active_batch": "BATCH-23",
+        "active_task": "BATCH-23-ADMIN-01",
+        "data_source": "runtime_snapshot"
+      },
+      "doctor": {
+        "status": "degraded",
+        "providers_status": "ok",
+        "scheduler_authority": "ok",
+        "sessions": [
+          "codex_planner_cron"
+        ],
+        "delivery_integrity_status": "ok",
+        "browser_proof_pipeline": "degraded",
+        "browser_proof_missing_task_ids": [
+          "BATCH-23-DEV-03"
+        ],
+        "qa_review_pipeline": "degraded"
+      }
+    }
+  },
+  "summary": "Recovered the monitor runtime needed for BATCH-23 admin validation. Local monitor endpoints now answer again and reflect BATCH-23-ADMIN-01 as the only active task.",
+  "residual_blocker": "Delivery integrity still reports missing browser proof for BATCH-23-DEV-03 and degraded QA review pipeline; runtime itself is restored, but planner still needs to resolve that evidence debt before closing the batch."
+}

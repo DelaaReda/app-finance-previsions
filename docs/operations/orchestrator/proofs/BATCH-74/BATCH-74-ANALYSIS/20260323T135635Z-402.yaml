@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-74-BATCH-74-ANALYSIS-20260323T135635Z-402"
+stream_id: "BATCH-74"
+task_id: "BATCH-74-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T13:56:35Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_close_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T13:56:35Z"
+      ended_at_utc: "2026-03-23T13:56:35Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_contract_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-analysis-close-20260323T135500Z"
+  review_ref: "runner:BATCH-74-ANALYSIS"
+  note: "source=runner | root_cause=analysis_task_left_open_while_batch_74_is_only_active_stream | fix_applied=planner_closes_analysis_using_canonical_runtime_context_to_release_arch_followup | verify=before=planner_context_showed_BATCH-74-ANALYSIS_in_progress_and_zero_ready_items; after=analysis_marked_complete_to_allow_downstream_progress; test=python3_platform/automation/compat/projections/parallel_workstream.py_context_role_planner_limit_5 | architecture_check=ACTIVE_DOCS_INDEX|PLANE_BACKLOG_INTEGRATION_SPEC|PRODUCT_VISION | vision_alignment=batch=BATCH-74_target=personal_finance_copilot_daily_brief_and_analysis_entry_impact=unblocks_architecture_followup"

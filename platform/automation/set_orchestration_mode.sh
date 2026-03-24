@@ -25,7 +25,7 @@ EFFECTIVE_MODE=""
 RUNTIME_EXECUTION_MODE=""
 RUNTIME_LIFECYCLE=""
 
-ROLE_MAP_FILE="${ORCHESTRATION_ROLE_MAP_FILE:-${ROOT}/docs/orchestrator-ops/parallel-role-cron-map.json}"
+ROLE_MAP_FILE="${ORCHESTRATION_ROLE_MAP_FILE:-${ROOT}/logs-codex-runs/orchestrator-state/parallel-role-cron-map.json}"
 
 BASELINE_ADMIN_JOBS=(
   "adminapp-codex-sync-10m"
@@ -46,6 +46,7 @@ BASELINE_ADVISORY_JOBS=(
 ROLE_MAP=()
 EXPECTED_NAMES=()
 CURRENT_CRON_JSON='{"jobs":[]}'
+OPENCLAW_CRON_TIMEOUT_SECONDS="${FC_OPENCLAW_CRON_TIMEOUT_SECONDS:-3}"
 
 usage() {
   cat <<'EOF'
@@ -71,7 +72,11 @@ load_runtime_state() {
 }
 
 refresh_current_cron_json() {
-  CURRENT_CRON_JSON="$(openclaw cron list --all --json 2>/dev/null || openclaw cron list --json 2>/dev/null || echo '{"jobs":[]}')"
+  CURRENT_CRON_JSON="$(
+    timeout "$OPENCLAW_CRON_TIMEOUT_SECONDS" openclaw cron list --all --json 2>/dev/null \
+      || timeout "$OPENCLAW_CRON_TIMEOUT_SECONDS" openclaw cron list --json 2>/dev/null \
+      || echo '{"jobs":[]}'
+  )"
 }
 
 job_id_for_name() {
@@ -212,9 +217,9 @@ set_job_state() {
   fi
 
   if [[ "$action" == "enable" ]]; then
-    openclaw cron enable "$id" >/dev/null 2>&1 || true
+    timeout "$OPENCLAW_CRON_TIMEOUT_SECONDS" openclaw cron enable "$id" >/dev/null 2>&1 || true
   else
-    openclaw cron disable "$id" >/dev/null 2>&1 || true
+    timeout "$OPENCLAW_CRON_TIMEOUT_SECONDS" openclaw cron disable "$id" >/dev/null 2>&1 || true
   fi
 }
 
@@ -373,7 +378,7 @@ refresh_current_cron_json
 load_dynamic_role_map
 
 if [[ "$STATUS_ONLY" -eq 1 ]]; then
-  openclaw cron list
+  timeout "$OPENCLAW_CRON_TIMEOUT_SECONDS" openclaw cron list || true
   exit 0
 fi
 
@@ -452,4 +457,4 @@ else
   python3 "$SOURCE_ROOT/platform/automation/runtime_state.py" "${runtime_write_args[@]}" >/dev/null 2>&1 || true
   echo "ORCHESTRATION_MODE_APPLIED requested_mode=${REQUESTED_MODE} effective_mode=${MODE} role=${ROLE} dry_run=${DRY_RUN} stop_sessions=${STOP_SESSIONS} execution_mode=${RUNTIME_EXECUTION_MODE:-none}"
 fi
-openclaw cron list
+timeout "$OPENCLAW_CRON_TIMEOUT_SECONDS" openclaw cron list || true

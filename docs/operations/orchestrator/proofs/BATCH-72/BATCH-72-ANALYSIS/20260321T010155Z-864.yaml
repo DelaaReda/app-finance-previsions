@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-72-BATCH-72-ANALYSIS-20260321T010155Z-864"
+stream_id: "BATCH-72"
+task_id: "BATCH-72-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-21T01:01:55Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_tick)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-21T01:01:55Z"
+      ended_at_utc: "2026-03-21T01:01:55Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b72-analysis-complete-1774054832"
+  review_ref: "runner:BATCH-72-ANALYSIS"
+  note: "source=runner | root_cause=planner-owned analysis remained open while canonical runtime context showed it as the sole in-progress planner item and downstream ARCH/GOV_REVIEW were waiting on it | fix_applied=used the canonical runtime projection to close the planner analysis and unblock the next planner-owned stage without inventing blockers | verify=before=BATCH-72-ANALYSIS in_progress and BATCH-72-ARCH waiting_dep; after=completion requested to release downstream planner stages for BATCH-72; test=parallel_workstream context role planner returned ready=0 in_progress=1 with BATCH-72-ANALYSIS | architecture_check=planner_only_scheduler with canonical runtime queue/workboard and active docs references preserved | vision_alignment=batch=BATCH-72; target=personal finance copilot daily brief and analysis entrypoint; impact=advance the stream from analysis into architecture/review execution"

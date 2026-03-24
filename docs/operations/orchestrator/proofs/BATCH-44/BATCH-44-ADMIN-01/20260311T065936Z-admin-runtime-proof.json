@@ -1,0 +1,62 @@
+{
+  "task_id": "BATCH-44-ADMIN-01",
+  "stream_id": "BATCH-44",
+  "title": "Insider Behavior Intelligence Layer",
+  "captured_at_utc": "2026-03-11T06:59:36Z",
+  "scope": "Validate runtime truth and observability after BATCH-44 DEV chain without broadening into unrelated planner repair.",
+  "host_check": {
+    "command": "bash scripts/runtime_host_check.sh",
+    "result": "PASS",
+    "runtime_is_vm": 1,
+    "workspace": "/home/venom/analyse-financiere"
+  },
+  "runtime_probes": {
+    "monitor_contract_smoke": {
+      "command": "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779",
+      "result": "PASS",
+      "summary": "health=OK roles=1 agents=4 queue_states=4 workboard_ready=0 admin_timeouts_recent=0 issues_records=10"
+    },
+    "fc_status_brief": {
+      "command": "bash scripts/fc_status_brief.sh",
+      "result": "PASS",
+      "summary": "Santé: OK; mode=planner_experimental; freshness=fresh/20s; ready=0; in_progress=2; waiting_dep=9; mismatch_count=0; planner_quality=89"
+    },
+    "fc_doctor": {
+      "command": "bash scripts/fc_doctor.sh --json",
+      "result": "DEGRADED",
+      "scope_read": "runtime core healthy; degradation comes from cross-batch delivery/observability debt, not from a BATCH-44 runtime outage",
+      "details": {
+        "runtime_state": "ok",
+        "scheduler_authority": "ok",
+        "sessions": "ok",
+        "locks": "ok",
+        "queue_workboard": "ok",
+        "providers": "ok",
+        "delivery_integrity": "degraded",
+        "browser_proof_pipeline": "degraded",
+        "capability_result_integrity": "degraded"
+      },
+      "notable_debt": [
+        "VB-04-ADMIN-01 missing browser proof",
+        "recent_invalid_result_count=1 from another admin capability lane"
+      ]
+    },
+    "stale_cron_sweep": {
+      "command": "bash scripts/stale_cron_sweep.sh --dry-run --threshold 330",
+      "result": "PASS",
+      "summary": "matched=0 stale=0 reset_ok=0 reset_failed=0"
+    },
+    "workboard_stale_task_sweep": {
+      "command": "python3 scripts/workboard_stale_task_sweep.py --threshold-seconds 14400",
+      "result": "PASS",
+      "summary": "matched=2 stale=0 changed=0; BATCH-44-ADMIN-01 age_s=66 stale=0 action=none"
+    }
+  },
+  "conclusion": {
+    "task_scope_verdict": "UNBLOCKED",
+    "root_cause": "No BATCH-44-specific runtime or stale-state failure remained after the dev chain. The only negative signal was a doctor roll-up degraded by unrelated observability debt outside this task scope.",
+    "fix_applied": "SKIP(no code/config/runtime repair needed). Captured fresh runtime evidence only.",
+    "planner_merge_signal": "BATCH-44-ADMIN-01 can merge as runtime-unblocked. Separate follow-up may clean shared doctor noise, but it is not a blocker for this batch."
+  },
+  "repo_head": "3a0512d77b453cf8328564a679eae20ce4b8bed3"
+}

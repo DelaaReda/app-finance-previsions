@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-65-BATCH-65-DEV-03-20260319T162422Z-784"
+stream_id: "BATCH-65"
+task_id: "BATCH-65-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-19T16:24:22Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-19T16:24:22Z"
+      ended_at_utc: "2026-03-19T16:24:22Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`node --test apps/web/src/domains/forecasts/pages/app.test.js`; `node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js`"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=423ccda2560d5d0adac2e4caa74bb53d4f309eeb; proof=hero brief now shows 'Starter-only brief is still visible in the hero.' when `FinanceAPI.getCopilotStart()` returns only `copilot_start.brief_of_day`; files=apps/web"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-65-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-65-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=`loadAndRenderHeroBrief()` read hero content from raw top-level `brief_of_day` / `daily_brief` fields instead of the already-normalized shared starter state. When the backend returned only the nested starter contract, th | fix_applied=Updated `apps/web/src/domains/forecasts/pages/app.js` to render summary, signals, risks, freshness, and sentiment from `starterState.brief` and accept both camelCase and snake_case brief fields. Added targeted regression | verify=before=hero landing rendered 'No brief available yet. Check back soon!' for starter-only backend payloads because raw top-level brief fields were missing; after=hero landing renders the normalized brief summary/title/lea | architecture_check=layer=web hero starter rendering in forecasts page; imports_ok=yes, reused existing `buildCopilotStartState`/`sanitizeCopilotStart` flow with no new helpers; path_target=apps/web/src/domains/forecasts/pages/app.js | vision_alignment=batch=BATCH-65; target=Build a personal finance copilot that starts with a brief of the day and lets the user ask or open; impact=the landing brief now remains visible for the shared starter contract shape, removing a re"

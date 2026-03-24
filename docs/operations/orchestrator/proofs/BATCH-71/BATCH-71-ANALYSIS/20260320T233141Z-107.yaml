@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-71-BATCH-71-ANALYSIS-20260320T233141Z-107"
+stream_id: "BATCH-71"
+task_id: "BATCH-71-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-20T23:31:41Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_contract_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T23:31:41Z"
+      ended_at_utc: "2026-03-20T23:31:41Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_contract_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b71-analysis-complete-20260320t233023z"
+  review_ref: "runner:BATCH-71-ANALYSIS"
+  note: "source=runner | root_cause=analyse planner laissee ouverte alors que BATCH-71-PLAN est deja DONE et que le stream est exclusivement porte par BATCH-71 | fix_applied=cloture canonique de BATCH-71-ANALYSIS avec references architecture et vision vers apps/api apps/web et PRODUCT_VISION | verify=before=BATCH-71-ANALYSIS IN_PROGRESS dependance satisfaite; after=gate planner analyse fermee pour laisser avancer le stream actif; test=planner_runtime_actions complete accepte la transition canonique | architecture_check=architecture_plan_ref=docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md; implementation_tracks=apps/api/src/domains/*,apps/web/src; integration_reuse=apps/api/runtime/,apps/web/src; acceptance_gate=downstream step unlocked on active batch BATCH-71 | vision_alignment=batch=BATCH-71 target=personal_finance_copilot_brief_plus_analysis impact=deverrouille la suite de livraison du stream actif"

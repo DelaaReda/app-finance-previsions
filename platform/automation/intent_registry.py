@@ -23,8 +23,23 @@ from typing import Any, Dict, List
 from zoneinfo import ZoneInfo
 
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_REGISTRY = ROOT / "docs" / "orchestrator-ops" / "intent-registry.json"
+def _detect_root() -> Path:
+    candidates = []
+    here = Path(__file__)
+    candidates.append(here)
+    try:
+        candidates.append(here.resolve())
+    except Exception:
+        pass
+    for candidate in candidates:
+        for parent in (candidate.parent, *candidate.parents):
+            if (parent / "AGENTS.md").exists() and (parent / "platform").exists():
+                return parent
+    return here.resolve().parents[2]
+
+
+ROOT = _detect_root()
+DEFAULT_REGISTRY = ROOT / "logs-codex-runs" / "orchestrator-state" / "legacy" / "intent-registry.json"
 DEFAULT_CHAT = ROOT / "docs" / "ops" / "ADMIN_TEAM_CHAT.md"
 DEFAULT_MEMORY_DIR = ROOT / "memory"
 DEFAULT_SHARED_LOCK_DIR = Path(
@@ -65,17 +80,49 @@ def ensure_parent(path: Path) -> None:
 
 def load_registry(path: Path) -> Dict[str, Any]:
     if not path.exists():
-        return {"version": 1, "updatedAtUtc": now_utc_iso(), "intents": []}
+        return {
+            "version": 1,
+            "updatedAtUtc": now_utc_iso(),
+            "legacy_compat_only": True,
+            "decision_capable": False,
+            "new_feature_target": False,
+            "registry_secondary_only": True,
+            "storage_plane": "runtime_mutable",
+            "intents": [],
+        }
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return {"version": 1, "updatedAtUtc": now_utc_iso(), "intents": []}
+        return {
+            "version": 1,
+            "updatedAtUtc": now_utc_iso(),
+            "legacy_compat_only": True,
+            "decision_capable": False,
+            "new_feature_target": False,
+            "registry_secondary_only": True,
+            "storage_plane": "runtime_mutable",
+            "intents": [],
+        }
     if not isinstance(data, dict):
-        return {"version": 1, "updatedAtUtc": now_utc_iso(), "intents": []}
+        return {
+            "version": 1,
+            "updatedAtUtc": now_utc_iso(),
+            "legacy_compat_only": True,
+            "decision_capable": False,
+            "new_feature_target": False,
+            "registry_secondary_only": True,
+            "storage_plane": "runtime_mutable",
+            "intents": [],
+        }
     if "intents" not in data or not isinstance(data["intents"], list):
         data["intents"] = []
     if "version" not in data:
         data["version"] = 1
+    data["legacy_compat_only"] = True
+    data["decision_capable"] = False
+    data["new_feature_target"] = False
+    data["registry_secondary_only"] = True
+    data["storage_plane"] = "runtime_mutable"
     return data
 
 

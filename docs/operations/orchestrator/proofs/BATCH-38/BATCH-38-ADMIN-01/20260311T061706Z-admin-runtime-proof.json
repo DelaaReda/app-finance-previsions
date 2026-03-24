@@ -1,0 +1,60 @@
+{
+  "task_id": "BATCH-38-ADMIN-01",
+  "generated_at": "2026-03-11T06:17:06Z",
+  "status": "blocked",
+  "summary": "Runtime validation refreshed for the walk-forward forecast scoreboard lane. The live API initially served the legacy forecast-detail response on `/api/forecasts/scoreboard`; an API restart restored the expected scoreboard contract. Monitor observability remains degraded because `/api/status` and the monitor smoke probe still time out intermittently at the default threshold.",
+  "root_cause": "Two runtime issues were present after the DEV chain: the API process had not loaded the new scoreboard route contract, and the monitor process was serving heavy status diagnostics with unstable latency that still exceeds the smoke budget on some requests.",
+  "fix_applied": [
+    "Restarted the API runtime so `/api/forecasts/scoreboard` now resolves to the walk-forward scoreboard contract instead of the legacy forecast-detail fallback.",
+    "Restarted the monitor service to restore reachability and reduce endpoint latency, then re-ran targeted probes."
+  ],
+  "evidence": {
+    "api_before_restart": {
+      "endpoint": "http://127.0.0.1:8050/api/forecasts/scoreboard",
+      "observed_meta_source": [
+        "forecasts_route",
+        "forecast_detail"
+      ],
+      "observed_message": "Forecast scoreboard not found."
+    },
+    "api_after_restart": {
+      "endpoint": "http://127.0.0.1:8050/api/forecasts/scoreboard",
+      "observed_meta_source": [
+        "forecasts_route",
+        "walk_forward_scoreboard"
+      ],
+      "count": 2,
+      "rows": 2,
+      "threshold_summary_keys": [
+        "walk_forward_direction_hit_rate"
+      ],
+      "fallback": false
+    },
+    "runtime_status": {
+      "fc_status_brief": "Sante=OK mode=planner_experimental freshness=fresh/12s ready=0 in_progress=3 waiting_dep=9 mismatch_count=0 planner_subagents_active=1",
+      "health_snapshot": "health=DEGRADED blocked=['planner'] blocked_detail=planner:PLANNER_ORCHESTRATOR_BRIDGE_FAILED critical_widgets=ok"
+    },
+    "monitor_observability": {
+      "root_head": "HTTP/1.1 405 Method Not Allowed",
+      "status_probe_fast_path_s": 6.896,
+      "status_probe_after_monitor_restart_s": 2.723,
+      "runtime_diagnostics_after_monitor_restart_s": 5.834,
+      "smoke_default_timeout_result": "FAIL curl(28) timeout",
+      "smoke_timeout_12_result": "FAIL curl(28) timeout",
+      "status_timeout_15_result": "FAIL curl(28) timeout"
+    },
+    "stale_sweeps": {
+      "stale_cron_sweep": "SWEEP_SUMMARY matched=0 stale=0 reset_ok=0 reset_failed=0 skipped_live=0 skipped_timeout=0 apply=0",
+      "workboard_stale_task_sweep": "SKIP(cli_has_no_dry_run_flag)"
+    }
+  },
+  "tests_run": [
+    "pytest apps/api/src/domains/forecasts/tests/test_walk_forward_scoreboard_route.py -q -> PASS (3 passed)",
+    "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js apps/web/src/domains/forecasts/pages/app.test.js -> PASS (92 passed)"
+  ],
+  "planner_signal": {
+    "unblock_state": "partial",
+    "reason": "BATCH-38 feature runtime is fixed on the API side, but admin should not merge as fully green while monitor observability still times out under the canonical smoke probe.",
+    "recommended_next": "Route monitor latency/bridge instability to an admin/runtime follow-up before GOV_REVIEW, or accept a scoped exception that BATCH-38 itself is API-unblocked but monitor health is globally degraded."
+  }
+}

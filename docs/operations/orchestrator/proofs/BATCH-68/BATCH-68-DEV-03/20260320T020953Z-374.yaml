@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-68-BATCH-68-DEV-03-20260320T020953Z-374"
+stream_id: "BATCH-68"
+task_id: "BATCH-68-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-20T02:09:53Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T02:09:53Z"
+      ended_at_utc: "2026-03-20T02:09:53Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/web/src/domains/forecasts/pages/app.js; apps/web/src/domains/forecasts/pages/app.test.js; commit e3f3851179dfc44d0f32d1b0305ac1657cd112fc"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-68-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-68-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=The brief hero reused scoped tickers to generate suggestion chips, but those chips defaulted to open actions, which weakened the brief-to-question flow and duplicated the existing open path instead of offering the next h | fix_applied=Updated `deriveCopilotStartFocusItems` in the forecasts hero to emit `Ask about <TICKER>` starter chips with the existing deep-dive prompt helper, and aligned the page tests to the new ask-first behavior. | verify=before=hero brief suggestion chips turned scoped tickers into `Open <TICKER>` actions, so the brief entry duplicated navigation instead of offering a brief-grounded follow-up question; after=the same scoped ticker chips  | architecture_check=layer=apps/web hero brief rendering only; imports_ok=yes, reused existing `buildCopilotFocusPrompt` and existing hero action wiring with no new helpers or imports; path_target=apps/web/src/domains/forecasts/pages/app.js | vision_alignment=batch=BATCH-68; target=personal finance copilot that starts with a brief of the day and immediately lets the user ask or open; impact=makes the first scoped follow-up from the brief ask-oriented while preserving the exis"

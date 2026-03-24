@@ -34,9 +34,9 @@ Note: ce fichier est un journal. Des entrées anciennes peuvent mentionner des p
 - 2026-02-25 08:08 America/New_York — Itération triade (continuité opérationnelle avec les autres admins):
   - [adminapp-codex] STATUS: IN_PROGRESS DELTA: monitoring consolidé sans modification runtime; métriques récentes (8 runs/job) `total=56`, `ok=54`, `no_delta=43`, `unparseable=26`, `blocked=9`; baseline `codex/tmux/high/240` + retry=30 intacte. NEXT: conserver la stabilité technique et ne changer aucun axe runtime avant la prochaine observation.
   - [admin-agents] STATUS: IN_PROGRESS DELTA: goulot principal = productivité métier (`NO_DELTA`) et non disponibilité scheduler. NEXT: imposer une action MVP unique et prouvable par rôle au prochain cycle (`WORKSTATE`).
-  - [clawsentinel] STATUS: GO_WITH_CAUTION DELTA: risque qualité encore présent sur `blocked` (planner/tester). NEXT: émettre un `BLOCKER` dans `ADMIN_TEAM_CHAT.md` si la tendance blocked/unparseable s’aggrave.
+  - [clawsentinel] STATUS: GO_WITH_CAUTION DELTA: risque qualité encore présent sur `blocked` (planner/tester). NEXT: émettre un `BLOCKER` dans `ADMIN_ARCHIVE_TEAM_CHAT.md` si la tendance blocked/unparseable s’aggrave.
 - 2026-02-25 08:05 America/New_York — Itération triade (canal chat commun activé):
-  - [adminapp-codex] STATUS: DONE DELTA: création du chat commun `docs/ops/ADMIN_TEAM_CHAT.md` pour annoncer chaque intention avant action et prévenir collisions entre admins. NEXT: appliquer ce canal comme étape obligatoire pré-intervention.
+  - [adminapp-codex] STATUS: DONE DELTA: création du chat commun `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md` pour annoncer chaque intention avant action et prévenir collisions entre admins. NEXT: appliquer ce canal comme étape obligatoire pré-intervention.
   - [admin-agents] STATUS: DONE DELTA: protocole partagé validé (`chat -> iterations -> watchdog -> memory`) pour garder la synchronisation des décisions MVP. NEXT: publier toute intention backlog/runtime dans le chat avant exécution.
   - [clawsentinel] STATUS: DONE DELTA: chat utilisé comme canal d'alerte rapide (lock busy, policy drift, KPI). NEXT: signaler tout conflit en `TYPE: BLOCKER` dans le chat avant escalade.
 - 2026-02-25 08:02 America/New_York — Itération triade (documentation analyse + intentions, sans changement runtime):

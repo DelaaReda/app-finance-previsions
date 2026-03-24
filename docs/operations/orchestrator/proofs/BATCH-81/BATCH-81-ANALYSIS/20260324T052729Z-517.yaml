@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-81-BATCH-81-ANALYSIS-20260324T052729Z-517"
+stream_id: "BATCH-81"
+task_id: "BATCH-81-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T05:27:29Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_file_edit_planner_analysis_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T05:27:29Z"
+      ended_at_utc: "2026-03-24T05:27:29Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_projection_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b81-analysis-close-20260324t0528z"
+  review_ref: "runner:BATCH-81-ANALYSIS"
+  note: "source=runner | root_cause=analyse planner laissee ouverte alors que le flux runtime indiquait la poursuite vers la revue gouvernance | fix_applied=cloture de BATCH-81-ANALYSIS avec preuves runtime et references architecture explicites | verify=before=ROLE_CONTEXT montrait BATCH-81-ANALYSIS in_progress et BATCH-81-GOV_REVIEW ready; after=commande complete acceptee et etat planner ferme; test=runtime_host_check vm plus parallel_workstream context planner | architecture_check=architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md; architecture_audit=apps/api/src/domains and apps/web/src boundaries preserved; dependency_policy=sanitize ok | vision_alignment=batch=BATCH-81,target=finance_copilot_brief_du_jour_et_flux_d_analyse,impact=passage explicite a la revue gouvernance"

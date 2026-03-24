@@ -122,19 +122,20 @@ def load_json(p):
     return _json_dict(resolve_orchestrator_json_path(str(p)))
 
 def active_planner_subagent_roles() -> list[str]:
-    registry = load_json('planner-subagents-registry.json')
-    active = registry.get('active', []) if isinstance(registry, dict) else []
-    roles = []
-    for item in active:
-        if not isinstance(item, dict):
-            continue
-        role = str(item.get('target_role') or '').strip().lower()
-        status = str(item.get('status') or '').strip().lower()
-        if not role or status in {'', 'merged', 'closed', 'done', 'pass', 'failed', 'blocked'}:
-            continue
-        if role not in roles:
-            roles.append(role)
-    return roles
+    try:
+        from platform.automation.runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
+
+        snapshot = build_stable_planner_dispatch_snapshot(ROOT, recent_limit=24)
+        roles = []
+        for item in snapshot.get("active", []):
+            if not isinstance(item, dict):
+                continue
+            role = str(item.get("role") or "").strip().lower()
+            if role and role not in roles:
+                roles.append(role)
+        return roles
+    except Exception:
+        return []
 
 def normalize_widget_state(token) -> str:
     value = str(token or '').strip().lower()

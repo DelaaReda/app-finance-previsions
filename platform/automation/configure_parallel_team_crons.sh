@@ -25,8 +25,8 @@ APPLY=0
 ENABLE_AFTER_CREATE=0
 THINKING_LEVEL="${PARALLEL_CRON_THINKING:-${LM_USED_ROLE_THINKING:-${MODEL_CONFIG_ROLE_THINKING:-${MODEL_CONFIG_PARALLEL_ROLE_THINKING}}}}"
 TIMEOUT_SECONDS="${PARALLEL_CRON_TIMEOUT_SECONDS:-900}"
-MAP_FILE="${PARALLEL_ROLE_MAP_FILE:-docs/orchestrator-ops/parallel-role-cron-map.json}"
-TOPOLOGY_FILE="${PARALLEL_ROLE_TOPOLOGY_FILE:-docs/orchestrator-ops/parallel-role-topology.json}"
+MAP_FILE="${PARALLEL_ROLE_MAP_FILE:-logs-codex-runs/orchestrator-state/parallel-role-cron-map.json}"
+TOPOLOGY_FILE="${PARALLEL_ROLE_TOPOLOGY_FILE:-logs-codex-runs/orchestrator-state/parallel-role-topology.json}"
 ENABLE_STALE_SWEEP="${PARALLEL_ENABLE_STALE_SWEEP:-1}"
 STALE_SWEEP_JOB_NAME="${PARALLEL_STALE_SWEEP_JOB_NAME:-stale-sweep-autoheal-7m}"
 STALE_SWEEP_EVERY="${PARALLEL_STALE_SWEEP_EVERY:-7m}"
@@ -76,8 +76,8 @@ Usage: configure_parallel_team_crons.sh [options]
 Options:
   --apply           Apply cron add/edit changes (default: dry-run)
   --enable          Enable jobs after create/edit (requires --apply)
-  --map-file <p>    Output role map path (default: docs/orchestrator-ops/parallel-role-cron-map.json)
-  --topology-file <p>  Input topology JSON (default: docs/orchestrator-ops/parallel-role-topology.json)
+  --map-file <p>    Output role map path (default: logs-codex-runs/orchestrator-state/parallel-role-cron-map.json)
+  --topology-file <p>  Input topology JSON (default: logs-codex-runs/orchestrator-state/parallel-role-topology.json)
   --disable-stale-sweep  Do not create/update dedicated stale sweep cron
   --stale-sweep-every <dur>  Schedule for stale sweep job (default: 7m)
   --stale-sweep-timeout <sec> Timeout for stale sweep job (default: 420)

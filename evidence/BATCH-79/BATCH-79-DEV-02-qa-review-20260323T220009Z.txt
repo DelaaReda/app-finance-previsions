@@ -1,0 +1,37 @@
+QA review artifact for BATCH-79-DEV-02
+Timestamp: 2026-03-23T22:00:09Z
+Worker: qa_review_worker
+
+Scope checked
+- apps/web/src/domains/forecasts/pages/personal-finance-start.html
+- apps/web/src/domains/forecasts/pages/personal-finance-start.test.js
+- apps/web/src/domains/forecasts/components/widgets/copilot-panel.html
+- apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js
+- apps/web/src/domains/forecasts/contracts/apiConnector.js
+- apps/web/src/domains/forecasts/contracts/apiConnector.test.js
+
+Findings
+- No failing targeted checks
+- No bounded local defect found that required a code change
+
+Commands run
+1. node apps/web/src/domains/forecasts/pages/personal-finance-start.test.js
+   Result: PASS
+   Summary: 2 tests passed, 0 failed
+
+2. node apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js
+   Result: PASS
+   Summary: 7 tests passed, 0 failed
+
+3. node apps/web/src/domains/forecasts/contracts/apiConnector.test.js
+   Result: PASS
+   Summary: 57 tests passed, 0 failed
+
+Behavior verified
+- Dedicated page injects and activates the shared copilot widget inline scripts
+- Dedicated page rewires starter fetches to /api/personal-finance/start
+- Ask/open action targets are rewritten from /copilot/* to /personal-finance/*
+- Shared connector preserves personal-finance namespace handling and starter fallbacks
+
+Overall result
+- QA review PASS for the delivered slice based on targeted frontend page/widget/connector verification

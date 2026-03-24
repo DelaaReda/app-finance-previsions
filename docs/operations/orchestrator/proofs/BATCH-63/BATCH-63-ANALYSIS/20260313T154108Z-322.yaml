@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-63-BATCH-63-ANALYSIS-20260313T154108Z-322"
+stream_id: "BATCH-63"
+task_id: "BATCH-63-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-13T15:41:08Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_runtime_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-13T15:41:08Z"
+      ended_at_utc: "2026-03-13T15:41:08Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(analysis_closure_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "batch63-analysis-close-1773416439"
+  review_ref: "docs/architecture/ARCHITECTURE_MAP.md"
+  note: "canonical planner proof fields persisted on the true BATCH-63-ANALYSIS node with an id-anchored patch before closure replay"

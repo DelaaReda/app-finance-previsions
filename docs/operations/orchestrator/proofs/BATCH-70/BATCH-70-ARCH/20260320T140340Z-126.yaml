@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-70-BATCH-70-ARCH-20260320T140340Z-126"
+stream_id: "BATCH-70"
+task_id: "BATCH-70-ARCH"
+role: "planner"
+produced_at_utc: "2026-03-20T14:03:40Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_arch_runtime_no_code_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T14:03:40Z"
+      ended_at_utc: "2026-03-20T14:03:40Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_arch_no_code_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/.tmp/role-runner/planner/BATCH-70-ARCH-proof.txt"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "launch_dev_subagent_BATCH-70-DEV-01_P1774015212_2840"
+  review_ref: "runner:BATCH-70-ARCH"
+  note: "source=runner | root_cause=planner_arch_task_missing_delivery_proof_and_architecture_refs | fix_applied=published_architecture_proof_with_plan_ref_and_audit_then_completed_runtime_task | verify=before=arch_in_progress_without_artifact; after=arch_done_with_runtime_proof; test=depends_on_BATCH-70-ANALYSIS_done | architecture_check=architecture_plan_ref=docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md; imports_ok=apps/api/src/domains+apps/web/src+apps/api/runtime+docs/ops/AGENTS_READY.md; path_target=theme_preserved_backend_first | vision_alignment=batch=BATCH-70; target=personal_finance_copilot_day_brief_and_analysis; impact=arch_gate_closed_for_dev_delivery"

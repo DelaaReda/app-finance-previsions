@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-WORKSTREAM = ROOT / "scripts" / "parallel_workstream.py"
+WORKSTREAM = ROOT / "platform" / "automation" / "compat" / "projections" / "parallel_workstream.py"
 
 
 class QueueSyncTests(unittest.TestCase):
@@ -344,6 +344,82 @@ class QueueSyncTests(unittest.TestCase):
             queue_after = json.loads(queue_path.read_text(encoding="utf-8"))
             self.assertIn(queue_after["items"][0]["state"], {"READY", "READY_DEV", "READY_PLANNER", "IN_PROGRESS"})
             self.assertEqual(queue_after["items"][1]["state"], "CLOSED")
+
+    def test_reconcile_state_normalizes_stale_active_cycle_for_closed_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            board_path = Path(td) / "parallel-workstreams.json"
+            queue_path = Path(td) / "priority-queue.json"
+
+            active_cycle = {
+                "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
+                "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
+                "dispatch_namespace": "BATCH",
+                "active_batch_ids": ["BATCH-24"],
+                "recent_completed_batch_ids": ["BATCH-23"],
+            }
+            board = {
+                "version": 1,
+                "updated_at": "2026-03-20T00:00:00Z",
+                "active_cycle": dict(active_cycle),
+                "sprint": {"id": "S-TEST", "goal": "reconcile stale active cycle"},
+                "roles": {},
+                "streams": [{"id": "BATCH-24", "state": "DONE"}],
+                "tasks": [
+                    {
+                        "id": "BATCH-24-DEV-01",
+                        "stream_id": "BATCH-24",
+                        "role": "dev",
+                        "priority": "P1",
+                        "state": "DONE",
+                        "depends_on": [],
+                        "created_at": "2026-03-20T00:00:00Z",
+                        "updated_at": "2026-03-20T00:00:00Z",
+                    }
+                ],
+                "handoffs": [],
+                "events": [],
+            }
+            queue = {
+                "updated_at": "2026-03-20T00:00:00Z",
+                "active_cycle": dict(active_cycle),
+                "items": [
+                    {"id": "BATCH-24", "title": "Batch 24", "state": "CLOSED", "depends_on": []},
+                ],
+            }
+            board_path.write_text(json.dumps(board, ensure_ascii=True) + "\n", encoding="utf-8")
+            queue_path.write_text(json.dumps(queue, ensure_ascii=True) + "\n", encoding="utf-8")
+
+            cp = subprocess.run(
+                [
+                    sys.executable,
+                    str(WORKSTREAM),
+                    "--board",
+                    str(board_path),
+                    "reconcile-state",
+                    "--queue",
+                    str(queue_path),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+            self.assertIn("RECONCILE_OK", cp.stdout)
+
+            board_after = json.loads(board_path.read_text(encoding="utf-8"))
+            queue_after = json.loads(queue_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(board_after["active_cycle"]["active_batch_ids"], [])
+            self.assertEqual(queue_after["active_cycle"]["active_batch_ids"], [])
+            self.assertEqual(
+                board_after["active_cycle"]["recent_completed_batch_ids"][:2],
+                ["BATCH-24", "BATCH-23"],
+            )
+            self.assertEqual(
+                queue_after["active_cycle"]["recent_completed_batch_ids"][:2],
+                ["BATCH-24", "BATCH-23"],
+            )
 
     def test_sync_priority_refreshes_queue_next_action_from_stream_truth(self) -> None:
         with tempfile.TemporaryDirectory() as td:

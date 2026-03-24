@@ -13,9 +13,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUTPUT = PROJECT_ROOT / "docs/operations/ops/LARGE_MODULE_REUSE_INDEX.md"
-LEGACY_BACKEND = "copilot-app/backend"
+CANONICAL_PROJECT_ROOT = Path("/home/venom/analyse-financiere")
+PROJECT_ROOT = CANONICAL_PROJECT_ROOT if CANONICAL_PROJECT_ROOT.exists() else Path(__file__).resolve().parents[2]
+DEFAULT_OUTPUT = PROJECT_ROOT / "docs/ops/LARGE_MODULE_REUSE_INDEX.md"
 TARGET_BACKEND = "apps/api/src"
 DEFAULT_SCAN_ROOTS = [
     TARGET_BACKEND,
@@ -26,7 +26,6 @@ DEFAULT_SCAN_ROOTS = [
     f"{TARGET_BACKEND}/jobs",
     f"{TARGET_BACKEND}/models",
     f"{TARGET_BACKEND}/storage",
-    LEGACY_BACKEND,
 ]
 EXCLUDE_PARTS = {".venv", "__pycache__", "legacy-archive", "tests"}
 MAX_SYMBOLS = 8
@@ -234,7 +233,7 @@ def render_markdown(
         "",
         "Regenerate with:",
         "```bash",
-        "python3 scripts/generate_large_module_reuse_index.py",
+        "python3 platform/automation/generate_large_module_reuse_index.py",
         "```",
         "",
         "Scan roots:",

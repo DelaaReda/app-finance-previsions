@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-25-BATCH-25-DEV-03-20260313T131741Z-544"
+stream_id: "BATCH-25"
+task_id: "BATCH-25-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-13T13:17:41Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope autonomous morning brief pipeline [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_autonomous_morning_brief_pipeline_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-13T13:17:41Z"
+      ended_at_utc: "2026-03-13T13:17:41Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest repo/apps/api/src/domains/forecasts/tests/test_brief_route_contract.py -q"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-25/BATCH-25-DEV-03/20260313T133000Z-200.yaml"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-25-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-25-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=The normalizer in `apps/api/src/domains/forecasts/api/brief.py` unconditionally set `degraded` from a passed-in contract flag, which was `None` for normal snapshot reads, so stored snapshots with `degraded: true` were ma | fix_applied=Updated `_normalize_brief_payload` to keep `payload['degraded']` and `payload['degraded_reason']` when provided in the snapshot, and only synthesize a reason when explicit degradation flags are present without a reason. | verify=before=Degraded brief snapshots could be normalized into a nominal response (`degraded=false`, `degraded_reason=None`), hiding ; after=Degraded snapshots retain `degraded=true` and their `degraded_reason` through `get_da | architecture_check=layer=api-route; imports_ok=True; path_target=apps/api/src/domains/forecasts/api/brief.py | vision_alignment=batch=BATCH-25; target=Autonomous Morning Brief Pipeline — DEV-03 degraded-mode and contract cleanup; impact=Keeps explicit degraded behavior user-visible on the existing brief route without adding schema changes or extr"

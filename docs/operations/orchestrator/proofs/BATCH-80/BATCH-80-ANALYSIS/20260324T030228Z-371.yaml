@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-80-BATCH-80-ANALYSIS-20260324T030228Z-371"
+stream_id: "BATCH-80"
+task_id: "BATCH-80-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T03:02:28Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_complete_no_code_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T03:02:28Z"
+      ended_at_utc: "2026-03-24T03:02:28Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch80-analysis-20260324t030023z"
+  review_ref: "runner:BATCH-80-ANALYSIS"
+  note: "source=runner | root_cause=guardian reported missing architecture plan reference and architecture audit on active planner analysis | fix_applied=analysis closure is now anchored to canonical runtime context and to apps/api plus apps/web integration surfaces | verify=before=guardian red on missing architecture refs; after=completion proof includes architecture refs and audit targets; test=parallel_workstream context shows planner owns BATCH-80-ANALYSIS with ready=0 and in_progress=1 | architecture_check=architecture_plan_ref=docs/product/PRODUCT_VISION.md,docs/ops/ACTIVE_DOCS_INDEX.md;architecture_audit=apps/api/src/domains,apps/web/src;dependency_policy=analysis_closes_before_gov_review | vision_alignment=batch=BATCH-80; target=personal finance copilot daily brief and analysis opening flow; impact=analysis closure unlocks downstream governance review"

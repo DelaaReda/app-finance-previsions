@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-70-BATCH-70-ANALYSIS-20260320T180220Z-250"
+stream_id: "BATCH-70"
+task_id: "BATCH-70-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-20T18:02:20Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T18:02:20Z"
+      ended_at_utc: "2026-03-20T18:02:20Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_runtime_close)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "planner-b70-analysis-close-20260320t180016z"
+  review_ref: "/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md"
+  note: "analysis close with architecture_plan_ref=docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md architecture_audit=apps/api,apps/web,apps/api/runtime,docs/ops/AGENTS_READY.md dependency regrouping stays intra-stream for batch 70"

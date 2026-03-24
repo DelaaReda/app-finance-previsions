@@ -1,0 +1,30 @@
+{
+  "task_id": "BATCH-66-ADMIN-01",
+  "stream": "BATCH-66",
+  "role": "admin",
+  "generated_at_utc": "2026-03-19T19:35:27Z",
+  "status": "blocked",
+  "summary": "Runtime validation for the BATCH-66 personal finance copilot slice found the stack up and the new start flow live, but the ask flow is still degraded because the live answer path falls back instead of using an LLM.",
+  "root_cause": "The runtime stack is healthy, `/api/personal-finance/start` returns the expected brief-of-day plus ask/open actions, and monitor status is fresh. The remaining blocker is user-visible response quality on `/api/personal-finance/ask`: the live payload reports `model=fallback`, `quality_status=insufficient_sources`, and an `LLM indisponible` answer, so the copilot can open and brief but not yet deliver the intended ask experience.",
+  "fix_applied": "No code or config change applied in this admin tick. Captured runtime truth and blocker evidence only.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-66/BATCH-66-ADMIN-01/20260319T193527Z-admin-runtime-proof.json",
+  "verify": [
+    "PASS `bash scripts/runtime_host_check.sh` -> `runtime_is_vm=1` in `/home/venom/analyse-financiere`.",
+    "PASS `./finance-copilot.sh status` -> backend `8050`, frontend `5173`, and monitor `7779` all reported running.",
+    "PASS `curl -fsS http://127.0.0.1:7779/api/status?lite=1` -> monitor health `OK`, runtime freshness `25s`, active batch `BATCH-66` only.",
+    "PASS `curl -fsS \"http://127.0.0.1:8050/api/personal-finance/start?tickers=NVDA&tickers=MSFT\"` -> brief-of-day payload returned with ask/open actions and `scope_tickers=[\"MSFT\",\"NVDA\"]`.",
+    "BLOCKER `curl -fsS -X POST http://127.0.0.1:8050/api/personal-finance/ask ...` -> HTTP 200 but payload returned `model:\"fallback\"`, `quality_status:\"insufficient_sources\"`, and `answer:\"LLM indisponible...\"`.",
+    "PASS `PYTHONPATH=apps/api/src python3 -m pytest apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py -q` -> 8 passed."
+  ],
+  "files_touched": [
+    "docs/operations/orchestrator/proofs/BATCH-66/BATCH-66-ADMIN-01/20260319T193527Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "PYTHONPATH=apps/api/src python3 -m pytest apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py -q"
+  ],
+  "commit_sha": "SKIP(no code/config change)",
+  "architecture_check": "PASS(runtime/admin scope only): no queue/workboard mutation, no topology change, no runtime script patch. Validation stayed on app runtime, monitor truth, and the BATCH-66 delivery path.",
+  "vision_alignment": "The delivered slice already satisfies the 'starts with a brief of the day' part in live runtime. The remaining gap is the second half of the vision: a useful ask experience. Current fallback answers are not merge-quality for a personal finance copilot.",
+  "recommended_next": "Planner should route the next bounded fix to dev on the live ask provider path for BATCH-66, then rerun ADMIN-01 validation once `/api/personal-finance/ask` returns a non-fallback model with acceptable answer quality.",
+  "blocking_issue": "Live ask path degraded: `/api/personal-finance/ask` returns fallback output instead of an LLM-backed memo."
+}

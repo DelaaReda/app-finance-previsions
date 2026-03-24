@@ -7,6 +7,7 @@ cd "$ROOT"
 
 STATE_DIR="${VM_RESUME_GUARD_STATE_DIR:-$HOME/.openclaw/state/vm_resume_guard}"
 mkdir -p "$STATE_DIR"
+ROLE_STATE_DIR="${VM_RESUME_GUARD_ROLE_STATE_DIR:-$HOME/.openclaw/cron/role-state}"
 
 LAST_EPOCH_FILE="$STATE_DIR/last_epoch.txt"
 GAP_SECONDS="${VM_RESUME_GUARD_GAP_SECONDS:-420}"  # 7 minutes
@@ -48,12 +49,35 @@ ensure_tmux_session() {
     return 0
   fi
   if tmux has-session -t "$session" 2>/dev/null; then
-    return 0
+    tmux kill-session -t "$session" >/dev/null 2>&1 || true
   fi
-  tmux new-session -d -s "$session" -c "$ROOT" >/dev/null 2>&1 || true
-  tmux set-option -t "$session" history-limit 200000 >/dev/null 2>&1 || true
-  tmux send-keys -t "$session:0.0" "cd $ROOT" C-m >/dev/null 2>&1 || true
-  tmux send-keys -t "$session:0.0" "echo '[RESUME_GUARD] recreated tmux session $session'" C-m >/dev/null 2>&1 || true
+  return 0
+}
+
+recycle_role_agent_sessions() {
+  local recycled=0
+  command -v tmux >/dev/null 2>&1 || { echo 0; return 0; }
+  while IFS= read -r session; do
+    [[ -n "$session" ]] || continue
+    case "$session" in
+      codex_*_cron|qwen_*_cron)
+        tmux kill-session -t "$session" >/dev/null 2>&1 || true
+        recycled=$((recycled + 1))
+        ;;
+    esac
+  done < <(tmux list-sessions -F '#{session_name}' 2>/dev/null || true)
+  echo "$recycled"
+}
+
+clear_role_exec_session_state() {
+  local cleared=0
+  [[ -d "$ROLE_STATE_DIR" ]] || { echo 0; return 0; }
+  while IFS= read -r path; do
+    [[ -n "$path" ]] || continue
+    rm -f "$path" >/dev/null 2>&1 || true
+    cleared=$((cleared + 1))
+  done < <(find "$ROLE_STATE_DIR" -maxdepth 1 -type f \( -name '*.codex_exec_session_id' -o -name '*.codex_exec_session_meta' \) 2>/dev/null || true)
+  echo "$cleared"
 }
 
 planner_orchestrator_active() {
@@ -77,11 +101,11 @@ planner_orchestrator_active() {
 }
 
 resume_guard_sessions() {
-  local topology_file="${FC_ROLE_TOPOLOGY_FILE:-$ROOT/docs/operations/orchestrator/parallel-role-topology-active.json}"
+  local topology_file="${FC_ROLE_TOPOLOGY_FILE:-$ROOT/logs-codex-runs/orchestrator-state/parallel-role-topology-active.json}"
   local -a sessions=("adminapp_codex_sync" "admin-agents-sync-cron" "clawsentinel")
   local -a topology_sessions=()
   if [[ ! -f "$topology_file" ]]; then
-    topology_file="$ROOT/docs/orchestrator-ops/parallel-role-topology-active.json"
+    topology_file="$ROOT/logs-codex-runs/orchestrator-state/parallel-role-topology-active.json"
   fi
   if [[ -f "$topology_file" ]] && command -v jq >/dev/null 2>&1; then
     mapfile -t topology_sessions < <(jq -r '.roles[]? | select((.enabled // true) != false) | .session_name // empty' "$topology_file" 2>/dev/null)
@@ -114,6 +138,8 @@ svc2="$(systemctl --user is-active openclaw-gateway.service 2>/dev/null || true)
 # 2) Stale sweep apply (safe)
 stale_out="$(bash scripts/stale_cron_tick.sh 2>/dev/null | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-260 || true)"
 [[ -n "$stale_out" ]] || stale_out="stale_tick_no_output"
+recycled_role_sessions="$(recycle_role_agent_sessions)"
+cleared_role_exec_state="$(clear_role_exec_session_state)"
 
 # 3) Ensure infra sessions plus active role sessions from current topology/config
 while IFS= read -r s; do
@@ -182,8 +208,8 @@ fi
 
 # 6) Journal to admin chat (one line)
 if [[ -f "$ADMIN_CHAT_FILE" ]]; then
-  printf -- "- [%s] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=%s gateway=%s kick=%s triage=%s\n" \
-    "$ts_local" "$gap" "${svc2:-unknown}" "$kick_status" "$triage_top" >> "$ADMIN_CHAT_FILE"
+  printf -- "- [%s] [vm-resume-guard] TYPE: INFO MSG: resume_detected gap_s=%s gateway=%s kick=%s recycle=role_sessions:%s,exec_state:%s triage=%s\n" \
+    "$ts_local" "$gap" "${svc2:-unknown}" "$kick_status" "$recycled_role_sessions" "$cleared_role_exec_state" "$triage_top" >> "$ADMIN_CHAT_FILE"
 fi
 
-echo "VM_RESUME_GUARD status=RESUME_DETECTED ts=\"$ts_local\" gap_s=${gap} gateway=${svc2:-unknown} config_lock=${config_lock:-unknown} stale=\"$stale_out\" kick=\"$kick_status\" triage=\"$triage_top\""
+echo "VM_RESUME_GUARD status=RESUME_DETECTED ts=\"$ts_local\" gap_s=${gap} gateway=${svc2:-unknown} config_lock=${config_lock:-unknown} stale=\"$stale_out\" recycled_role_sessions=${recycled_role_sessions} cleared_exec_state=${cleared_role_exec_state} kick=\"$kick_status\" triage=\"$triage_top\""

@@ -11,7 +11,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
-WORKSTREAM = ROOT / "scripts" / "parallel_workstream.py"
+WORKSTREAM = ROOT / "platform" / "automation" / "compat" / "projections" / "parallel_workstream.py"
 GOOD_CHANGE_PLAN = (
     "1 definir scope endpoint forecast ui; "
     "2 verifier dependencies et impact upstream downstream; "

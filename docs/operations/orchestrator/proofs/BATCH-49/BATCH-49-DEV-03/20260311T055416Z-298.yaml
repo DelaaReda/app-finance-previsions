@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-49-BATCH-49-DEV-03-20260311T055416Z-298"
+stream_id: "BATCH-49"
+task_id: "BATCH-49-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T05:54:16Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope multi-layer forecast fusion + attribution [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_multi-layer_forecast_fusion_+_attribution_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T05:54:16Z"
+      ended_at_utc: "2026-03-11T05:54:16Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest apps/api/src/domains/forecasts/tests/test_recommendations_route_edge_contract.py -q; pytest apps/api/src/domains/forecasts/tests/test_forecast_fusion.py -q"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=0772182dd4584ad94c39f996ee868d9bf34e8b60; proof=route contract test now asserts `forecast_fusion.contribution_normalization`, `stability`, `attribution.market_regime`, and ranked normalized layer fields on `/api/r"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-49-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-49-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=BATCH-49 already had service-level fusion tests, but the edge-route contract lacked a focused assertion that `forecast_fusion` attribution payloads are preserved end-to-end at the recommendations API boundary. | fix_applied=Added `test_daily_recommendations_preserves_forecast_fusion_attribution_contract` in `apps/api/src/domains/forecasts/tests/test_recommendations_route_edge_contract.py` using the existing route test pattern and no new hel | verify=before=no route-level assertion proved `forecast_fusion` attribution survived the edge wrapper; after=`test_daily_recommendations_preserves_forecast_fusion_attribution_contract` covers that API contract explicitly; test= | architecture_check=layer=forecasts API edge contract; imports_ok=yes (reused existing `recommendations_route` stub pattern, no new helper/import path); path_target=apps/api/src/domains/forecasts/tests/test_recommendations_route_edge_contra | vision_alignment=batch=BATCH-49; target=E49.1/E49.3 minimal verifiable slice at the recommendations API boundary; impact=planner can merge a concrete proof that multi-layer fusion attribution is preserved in the shipped edge payload, not"

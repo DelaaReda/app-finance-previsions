@@ -8,17 +8,17 @@
 
 ## ✅ Actions Effectuées
 
-### 1. Restoration ADMIN_TEAM_CHAT.md
+### 1. Restoration ADMIN_ARCHIVE_TEAM_CHAT.md
 
 **Problème:** Fichier déplacé pendant migration  
 **Solution:**
-- Localisation: `docs/operations/ops/ADMIN_TEAM_CHAT.md`
+- Localisation: `docs/operations/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`
 - Symlink créé: `docs/ops/ops` → `docs/operations/ops/`
 - Rapports inspecteur fusionnés
 
 **Verification:**
 ```bash
-ls -la docs/ops/ops/ADMIN_TEAM_CHAT.md
+ls -la docs/ops/ops/ADMIN_ARCHIVE_TEAM_CHAT.md
 # ✅ Accessible via les deux chemins
 ```
 
@@ -127,7 +127,7 @@ cat apps/api/runtime/data/rag/news.jsonl 2>/dev/null || echo "Fichier inexistant
 
 | Composant | Status | Notes |
 |-----------|--------|-------|
-| ADMIN_TEAM_CHAT.md | ✅ Restoré | Symlink créé |
+| ADMIN_ARCHIVE_TEAM_CHAT.md | ✅ Restoré | Symlink créé |
 | MIGRATION_SUMMARY.md | ✅ Créé | Documentation complète |
 | README.md | ✅ Mis à jour | Nouvelle architecture |
 | Symlinks | ✅ Créés | Compatibilité assurée |

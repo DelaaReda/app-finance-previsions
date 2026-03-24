@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-75-BATCH-75-ANALYSIS-20260323T153659Z-528"
+stream_id: "BATCH-75"
+task_id: "BATCH-75-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T15:36:59Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner analysis closure only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T15:36:59Z"
+      ended_at_utc: "2026-03-23T15:36:59Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner analysis closure only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/product/PRODUCT_VISION.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-75-analysis-complete-20260323t153700z"
+  review_ref: "runner:BATCH-75-ANALYSIS"
+  note: "source=runner | root_cause=analysis planner laissee IN_PROGRESS sans cloture alors que depends_on=none et que la cible produit est deja canonique | fix_applied=cloture planner alignee sur ACTIVE_DOCS_INDEX, PLANE_BACKLOG_INTEGRATION_SPEC et PRODUCT_VISION pour liberer l architecture downstream | verify=before=BATCH-75-ANALYSIS IN_PROGRESS avec BATCH-75-ARCH WAITING_DEP; after=preuve canonique attachee et cloture demandee; test=context planner 2026-03-23 plus revue docs canoniques | architecture_check=ACTIVE_DOCS_INDEX=ok; PLANE_BACKLOG_INTEGRATION_SPEC=ok; PRODUCT_VISION=ok; ARCHITECTURE_MAP=referenced_by_guardian | vision_alignment=batch=BATCH-75; target=brief plus ask pour copilot finance personnel; impact=analyse closee pour debloquer architecture et delivery"

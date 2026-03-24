@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-72-BATCH-72-ANALYSIS-20260322T230153Z-624"
+stream_id: "BATCH-72"
+task_id: "BATCH-72-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-22T23:01:53Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-22T23:01:53Z"
+      ended_at_utc: "2026-03-22T23:01:53Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_context_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b72-analysis-close-20260322T230024Z"
+  review_ref: "runner:BATCH-72-ANALYSIS"
+  note: "source=runner | root_cause=Le stream restait fige sur ANALYSIS sans reference architecture explicite vers les surfaces API et web | fix_applied=Analyse consolidee sur les sources canoniques avec architecture_plan_ref docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md et architecture_audit apps/api/src,apps/web/src | verify=before=ANALYSIS ouverte sans preuve architecture reliee; after=ANALYSIS cloturee avec references architecture et gate de livraison explicites; test=parallel_workstream_context role planner confirme une seule tache ANALYSIS en cours sans blocage amont | architecture_check=ACTIVE_DOCS_INDEX aligned; PLANE_BACKLOG_INTEGRATION_SPEC aligned; PRODUCT_VISION aligned; apps/api/src and apps/web/src referenced | vision_alignment=batch=BATCH-72; target=personal_finance_copilot; impact=stream pret pour orchestration delivery sur API et web"

@@ -16,7 +16,9 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from orchestrator_paths import resolve_orchestrator_read_path
-from parallel_workstream import append_event, board_lock, load_board, now_iso, recompute_states, reconcile_state, save_board
+from compat.projections.parallel_workstream import append_event, board_lock, load_board, now_iso, recompute_states, reconcile_state, save_board
+from runtime.planner.planner_board_runtime import CAPABILITY_ROLES
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
 
 RUNTIME_BLOCKERS = {
     "API_UNREACHABLE",
@@ -97,6 +99,73 @@ def _preferred_ready_state_for_role(role: str) -> str:
     return "READY_DEV" if _canonical_role(role) == "dev" else "READY"
 
 
+def _board_active_batch_ids(board: dict) -> set[str]:
+    active_cycle = board.get("active_cycle")
+    if not isinstance(active_cycle, dict):
+        return set()
+    raw_ids = active_cycle.get("active_batch_ids")
+    if not isinstance(raw_ids, list):
+        return set()
+    cycle_ids = {str(item).strip().upper() for item in raw_ids if str(item).strip()}
+    if not cycle_ids:
+        return set()
+
+    closed_states = {"DONE", "CLOSED", "CANCELLED", "ARCHIVED"}
+    open_ids: set[str] = set()
+    saw_runtime_rows = False
+
+    for stream in board.get("streams", []):
+        if not isinstance(stream, dict):
+            continue
+        saw_runtime_rows = True
+        state = str(stream.get("state", "")).strip().upper()
+        if state in closed_states:
+            continue
+        stream_id = str(stream.get("stream_id") or stream.get("batch_id") or stream.get("id") or "").strip().upper()
+        if stream_id:
+            open_ids.add(stream_id)
+
+    for task in board.get("tasks", []):
+        if not isinstance(task, dict):
+            continue
+        saw_runtime_rows = True
+        state = str(task.get("state", "")).strip().upper()
+        if state in closed_states:
+            continue
+        stream_id = str(task.get("stream_id") or task.get("batch_id") or "").strip().upper()
+        if stream_id:
+            open_ids.add(stream_id)
+
+    if saw_runtime_rows:
+        return cycle_ids & open_ids
+    return cycle_ids
+
+
+def _task_stream_id(task: dict | None) -> str:
+    if not isinstance(task, dict):
+        return ""
+    for key in ("stream_id", "batch_id"):
+        token = str(task.get(key, "")).strip().upper()
+        if token:
+            return token
+    task_id_value = str(task.get("id", "")).strip().upper()
+    if task_id_value.startswith("BATCH-"):
+        parts = task_id_value.split("-")
+        if len(parts) >= 2:
+            return "-".join(parts[:2])
+    return ""
+
+
+def _task_in_active_cycle(task: dict | None, board: dict | None) -> bool:
+    if not isinstance(board, dict):
+        return True
+    active_batch_ids = _board_active_batch_ids(board)
+    if not active_batch_ids:
+        return True
+    stream_id = _task_stream_id(task)
+    return bool(stream_id) and stream_id in active_batch_ids
+
+
 def _preferred_ready_state_for_stream(board: dict, stream_id: str, fallback_role: str = "") -> str:
     task_roles = []
     for task in board.get("tasks", []):
@@ -151,24 +220,36 @@ def _runtime_probes_ok() -> bool:
         return False
 
 
-def _active_planner_subagent_owner_tasks(root: Path) -> set[str]:
-    registry_path = resolve_orchestrator_read_path(root, "planner-subagents-registry.json")
-    raw = _load_json(registry_path, [])
-    rows: list[dict] = []
-    if isinstance(raw, list):
-        rows = [item for item in raw if isinstance(item, dict)]
-    elif isinstance(raw, dict):
-        items = raw.get("items")
-        if isinstance(items, list):
-            rows = [item for item in items if isinstance(item, dict)]
-    owners: set[str] = set()
-    for item in rows:
-        status = str(item.get("status", "")).strip().lower()
-        owner_task_id = str(item.get("owner_task_id", "")).strip()
-        if status in ACTIVE_IN_PROGRESS_STATES or status in {"spawned", "running"}:
-            if owner_task_id:
+def _active_planner_subagent_owner_tasks(root: Path, board: dict | None = None) -> set[str]:
+    runtime_truth = build_runtime_truth_snapshot(root, state_limit=64, event_limit=64)
+    if bool(runtime_truth.get("event_store_primary", False)):
+        owners: set[str] = set()
+        task_lookup: dict[str, dict] = {}
+        if isinstance(board, dict):
+            for task in board.get("tasks", []):
+                if not isinstance(task, dict):
+                    continue
+                task_id_value = str(task.get("id", "")).strip()
+                if task_id_value:
+                    task_lookup[task_id_value] = task
+        active_statuses = {"running", "pending", "review", "in_progress", "blocked", "ready_to_merge", "retryable"}
+        for item in (runtime_truth.get("latest_states") if isinstance(runtime_truth.get("latest_states"), list) else []):
+            if not isinstance(item, dict):
+                continue
+            status = str(item.get("status", "")).strip().lower()
+            owner_role = _canonical_role(str(item.get("owner_role", "")).strip())
+            target_role = _canonical_role(str(item.get("target_role", "")).strip())
+            owner_task_id = str(item.get("task_id", "")).strip()
+            owner_task = task_lookup.get(owner_task_id)
+            owner_task_role = _canonical_role(str(owner_task.get("role") or owner_task.get("assignee") or "").strip()) if isinstance(owner_task, dict) else ""
+            if owner_role == "planner" and target_role in CAPABILITY_ROLES and status in active_statuses and owner_task_id:
+                if isinstance(owner_task, dict) and not _task_in_active_cycle(owner_task, board):
+                    continue
+                if owner_task_role and owner_task_role != target_role:
+                    continue
                 owners.add(owner_task_id)
-    return owners
+        return owners
+    return set()
 
 
 def _task_has_delivery_evidence(task: dict) -> bool:
@@ -321,13 +402,13 @@ def run_reconciler(config: ReconcileConfig, probe_runtime_ok: Callable[[], bool]
         "dependency_starvation_detected": 0,
         "completed_state_repaired": 0,
     }
-    active_subagent_owner_tasks = _active_planner_subagent_owner_tasks(config.root)
     capability_stall_seconds = max(60, int(os.environ.get("FC_RECONCILE_CAPABILITY_STALL_SECONDS", "300")))
 
     with board_lock(config.board_path):
         board = load_board(config.board_path)
         if not isinstance(board, dict):
             board = {"tasks": [], "streams": [], "events": []}
+        active_subagent_owner_tasks = _active_planner_subagent_owner_tasks(config.root, board)
 
         # 1) parked + in_progress contradictions
         for task in board.get("tasks", []):
@@ -549,10 +630,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Pre-tick runtime truth reconciler")
     parser.add_argument("--role", default="system")
     parser.add_argument("--root", default=str(Path.cwd()))
-    parser.add_argument("--queue", default="docs/operations/orchestrator/priority-queue.json")
-    parser.add_argument("--board", default="docs/operations/orchestrator/parallel-workstreams.json")
+    parser.add_argument("--queue", default="logs-codex-runs/orchestrator-state/priority-queue.json")
+    parser.add_argument("--board", default="logs-codex-runs/orchestrator-state/parallel-workstreams.json")
     parser.add_argument("--state-dir", default=str(Path.home() / ".openclaw" / "cron" / "role-state"))
-    parser.add_argument("--report", default="docs/operations/orchestrator/state-reconcile-report.json")
+    parser.add_argument("--report", default="logs-codex-runs/orchestrator-state/state-reconcile-report.json")
     parser.add_argument("--lock-dir", default="/tmp/fc-agent-locks")
     parser.add_argument("--stale-lock-seconds", type=int, default=int(os.environ.get("FC_RECONCILE_STALE_LOCK_SECONDS", "1800")))
     parser.add_argument("--stale-in-progress-seconds", type=int, default=int(os.environ.get("FC_RECONCILE_STALE_IN_PROGRESS_SECONDS", "14400")))

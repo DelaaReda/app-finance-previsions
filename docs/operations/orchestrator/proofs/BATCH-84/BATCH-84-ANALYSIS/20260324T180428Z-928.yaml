@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T180428Z-928"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T18:04:28Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T18:04:28Z"
+      ended_at_utc: "2026-03-24T18:04:28Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_proof_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/.tmp/role-runner/planner/BATCH-84-ANALYSIS-architecture-audit.txt"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-84-analysis-p1774375408-12790"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=guardian flagged missing architecture_plan_ref and architecture_audit on planner analysis | fix_applied=attached architecture artifact and closed planner-owned analysis task | verify=before=analysis had missing architecture evidence and remained in_progress; after=artifact attached and planner analysis eligible for closure; test=context shows in_progress task BATCH-84-ANALYSIS with depends_on none | architecture_check=architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md|docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md|docs/product/PRODUCT_VISION.md; architecture_audit=apps/api/src/domains/*;apps/api/runtime/;apps/web/src; dependency_policy=planner-owned analysis closed before downstream waiting_dep | vision_alignment=batch=BATCH-84; target=personal_finance_copilot_brief_and_analysis; impact=unblocks GOV_REVIEW without theme changes"

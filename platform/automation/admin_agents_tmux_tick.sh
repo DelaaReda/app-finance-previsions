@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKDIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd -P)"
+WORKSPACE_HELPER="${SCRIPT_DIR}/lib/workspace_paths.sh"
+if [[ ! -f "$WORKSPACE_HELPER" ]]; then
+  echo "Missing workspace helper: $WORKSPACE_HELPER" >&2
+  exit 2
+fi
+# shellcheck source=/dev/null
+source "$WORKSPACE_HELPER"
+WORKDIR="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
 SESSION_PREFIX="${ADMIN_AGENTS_SESSION_PREFIX:-admin-agents-sync-}"
 FALLBACK_SESSION="${ADMIN_AGENTS_FALLBACK_SESSION:-admin-agents-sync-cron}"
 ROLE_NAME="admin-agents"
@@ -15,9 +23,9 @@ ROLE_TRACE_DIR="${ADMIN_AGENTS_ROLE_TRACE_DIR:-logs-codex-runs/role-runner}"
 ROLE_MEMORY_DIR="${ADMIN_AGENTS_ROLE_MEMORY_DIR:-$WORKDIR/memory/agents}"
 ADMIN_MEMORY_FILE="${ROLE_MEMORY_DIR}/admin-agents.md"
 ADMIN_MEMORY_LOCK_FILE="${STATE_DIR}/admin-agents.memory.lock"
-PRIORITY_QUEUE_FILE="${ADMIN_AGENTS_PRIORITY_QUEUE_FILE:-docs/orchestrator-ops/priority-queue.json}"
-EXEC_LATEST_FILE="${ADMIN_AGENTS_EXEC_LATEST_FILE:-docs/orchestrator-ops/executors-monitoring-latest.json}"
-ROLE_TOPOLOGY_FILE="${ADMIN_AGENTS_ROLE_TOPOLOGY_FILE:-docs/orchestrator-ops/parallel-role-topology.json}"
+PRIORITY_QUEUE_FILE="${ADMIN_AGENTS_PRIORITY_QUEUE_FILE:-logs-codex-runs/orchestrator-state/priority-queue.json}"
+EXEC_LATEST_FILE="${ADMIN_AGENTS_EXEC_LATEST_FILE:-logs-codex-runs/orchestrator-state/executors-monitoring-latest.json}"
+ROLE_TOPOLOGY_FILE="${ADMIN_AGENTS_ROLE_TOPOLOGY_FILE:-logs-codex-runs/orchestrator-state/parallel-role-topology.json}"
 ACTION_OWNER="${ADMIN_AGENTS_ACTION_OWNER:-adminapp-codex}"
 ACTION_SCOPE_DEFAULT="${ADMIN_AGENTS_ACTION_SCOPE_DEFAULT:-runtime_stability}"
 VERIFY_WAIT_SECONDS="${ADMIN_AGENTS_VERIFY_WAIT_SECONDS:-8}"

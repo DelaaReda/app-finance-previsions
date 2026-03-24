@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T182447Z-931"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T18:24:47Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_closure)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T18:24:47Z"
+      ended_at_utc: "2026-03-24T18:24:47Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_required)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - ".tmp/role-runner/planner/BATCH-84-ANALYSIS-architecture-audit.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-BATCH-84-ANALYSIS-20260324T182301Z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=Planner analysis stayed IN_PROGRESS without explicit architecture audit tied to canonical Plane/runtime docs and target app paths | fix_applied=Reused the existing planner artifact to bind BATCH-84 analysis to canonical planning/runtime references and anti-regression targets for apps/api and apps/web | verify=before=BATCH-84-ANALYSIS remained open while downstream GOV_REVIEW waited and guardian flagged missing architecture linkage; after=artifact links Plane backlog integration runtime truth and target paths while confirming BATCH-84-PLAN is DONE and ANALYSIS can close; test=parallel workstream context showed planner in_progress on BATCH-84-ANALYSIS and artifact records dependency closure | architecture_check=canonical_refs_locked; imports_ok=apps/api/src/domains/*,apps/web/src; path_target=docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md | vision_alignment=batch=BATCH-84; target=personal finance copilot brief plus ask flow; impact=planner analysis closed with architecture continuity for apps/api and apps/web"

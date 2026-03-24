@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-22-BATCH-22-DEV-01-20260312T112509Z-887"
+stream_id: "BATCH-22"
+task_id: "BATCH-22-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-12T11:25:09Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope rebalancing optimizer lite [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_rebalancing_optimizer_lite_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-12T11:25:09Z"
+      ended_at_utc: "2026-03-12T11:25:09Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest -q repo/apps/api/src/domains/judge/tests/test_judge_profile_loading.py repo/apps/api/src/domains/judge/tests/test | pre-commit python syntax check via commit hook"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "endpoint=GET /api/judge/options now returns `data.profiles[]`, including `rebalancing_optimizer_lite`; profile=apps/api/runtime/data/judge_profiles/rebalancing_optimizer_lite.yaml; commit=81a5fe8564525f489875f7aee55b71c2"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-22-DEV-01"
+  review_ref: "manual_repair:BATCH-22-DEV-01"
+  note: "source=manual_repair | root_cause=The Judge stack already supported reusable profiles, but there was no rebalance-oriented profile to target and no discoverable profile list in `/api/judge/options`, which made a lightweight rebalance flow hard to wire wi | fix_applied=Added `rebalancing_optimizer_lite` under `apps/api/runtime/data/judge_profiles` and extended `apps/api/src/domains/judge/application/judge_endpoint_service.py` so `get_judge_options_payload()` returns additive `data.prof | verify=before=Judge had only the existing runtime profiles and `/api/judge/options` did not advertise any profile choices, so there wa; after=`load_profile(\"rebalancing_optimizer_lite\")` resolves from the canonical runtime path | architecture_check=layer=domain application service + runtime config only; no new route or provider layer added; imports_ok=yes; reused existing Judge endpoint stack and added only local `Path`-based profile discovery with no new external  | vision_alignment=batch=BATCH-22; target=Rebalancing Optimizer Lite [DEV-01] via Judge stack reuse instead of a new endpoint surface; impact=Enables a rebalance-focused Judge profile that downstream `/api/judge` and `/api/judge/strategy-p"

@@ -6,6 +6,7 @@ import importlib.util
 import sys
 import json
 import tempfile
+from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -184,34 +185,119 @@ class FCDoctorTests(unittest.TestCase):
 
     def test_build_payload_treats_planner_dispatch_as_advisory(self) -> None:
         ok = fc_doctor.CheckResult(status="ok", detail={})
-        degraded = fc_doctor.CheckResult(status="degraded", detail={"status": "degraded"})
-        with patch.object(fc_doctor, "_runtime_state_detail", return_value={"lifecycle": "running"}):
-            with patch.object(fc_doctor, "check_workspace_root", return_value=ok):
-                with patch.object(fc_doctor, "check_scheduler_authority", return_value=ok):
-                    with patch.object(fc_doctor, "check_sessions", return_value=ok):
-                        with patch.object(fc_doctor, "check_locks", return_value=ok):
-                            with patch.object(fc_doctor, "check_queue_workboard", return_value=ok):
-                                with patch.object(fc_doctor, "check_providers", return_value=ok):
-                                    with patch.object(fc_doctor, "check_product_value", return_value=ok):
-                                        with patch.object(fc_doctor, "check_delivery_integrity", return_value=ok):
-                                            with patch.object(fc_doctor, "check_delivery_future_integrity", return_value=ok):
-                                                with patch.object(fc_doctor, "check_browser_proof_pipeline", return_value=ok):
-                                                    with patch.object(fc_doctor, "check_suspicious_completions", return_value=ok):
-                                                        with patch.object(fc_doctor, "check_qa_review_pipeline", return_value=ok):
-                                                            with patch.object(fc_doctor, "check_dev_execution_model", return_value=ok):
-                                                                with patch.object(fc_doctor, "check_dev_progress_integrity", return_value=ok):
-                                                                    with patch.object(fc_doctor, "check_dev_orphan_recovery", return_value=ok):
-                                                                        with patch.object(fc_doctor, "check_capability_result_integrity", return_value=ok):
-                                                                            with patch.object(fc_doctor, "check_planner_takeover_recovery", return_value=ok):
-                                                                                with patch.object(fc_doctor, "check_planner_dispatch", return_value=degraded):
-                                                                                    payload, code = fc_doctor.build_payload(
-                                                                                        root=ROOT,
-                                                                                        api_base="http://127.0.0.1:8050",
-                                                                                        monitor_base="http://127.0.0.1:7779",
-                                                                                    )
+        degraded = fc_doctor.CheckResult(status="ok", detail={"status": "ok", "advisory_state": "degraded"})
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(fc_doctor, "_runtime_state_detail", return_value={"lifecycle": "running"}))
+            stack.enter_context(patch.object(fc_doctor, "check_workspace_root", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_plane_planning", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_runtime_truth", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_openclaw_gateway", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_scheduler_authority", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_sessions", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_locks", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_queue_workboard", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_providers", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_product_value", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_delivery_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_delivery_future_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_browser_proof_pipeline", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_suspicious_completions", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_qa_review_pipeline", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_execution_model", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_progress_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_orphan_recovery", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_capability_stall_recovery", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_capability_result_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_planner_takeover_recovery", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_historical_delivery_debt", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_planner_dispatch", return_value=degraded))
+            payload, code = fc_doctor.build_payload(
+                root=ROOT,
+                api_base="http://127.0.0.1:8050",
+                monitor_base="http://127.0.0.1:7779",
+            )
         self.assertEqual(code, 0)
         self.assertEqual(payload["status"], "ok")
-        self.assertEqual(payload["checks"]["planner_dispatch"]["status"], "degraded")
+        self.assertEqual(payload["checks"]["planner_dispatch"]["status"], "ok")
+        self.assertEqual(payload["checks"]["planner_dispatch"]["advisory_state"], "degraded")
+
+    def test_check_plane_planning_requires_active_sync_signal(self) -> None:
+        with patch.object(
+            fc_doctor,
+            "build_plane_planning_snapshot",
+            return_value={
+                "status": "ok",
+                "sync": {
+                    "adapter_enabled": True,
+                    "cache": {
+                        "exists": False,
+                    },
+                },
+            },
+        ):
+            result = fc_doctor.check_plane_planning(ROOT)
+        self.assertEqual(result.status, "ok")
+
+        with patch.object(
+            fc_doctor,
+            "build_plane_planning_snapshot",
+            return_value={
+                "status": "ok",
+                "sync": {
+                    "adapter_enabled": False,
+                    "cache": {
+                        "exists": False,
+                    },
+                },
+            },
+        ):
+            result = fc_doctor.check_plane_planning(ROOT)
+        self.assertEqual(result.status, "degraded")
+
+    def test_check_plane_planning_unconfigured_but_guarded_is_advisory_ok(self) -> None:
+        with patch.object(
+            fc_doctor,
+            "build_plane_planning_snapshot",
+            return_value={
+                "status": "unknown",
+                "sync": {
+                    "adapter_enabled": False,
+                    "cache": {
+                        "exists": False,
+                    },
+                },
+                "docs_mode": {
+                    "repo_backlog_docs_authoritative": False,
+                    "repo_backlog_docs_mode": "reference_only",
+                    "new_backlog_creation_allowed_in_docs": False,
+                },
+                "runtime_independence": {
+                    "startup_blocks_on_plane": False,
+                    "degraded_when_unreachable": True,
+                },
+            },
+        ):
+            result = fc_doctor.check_plane_planning(ROOT)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.detail.get("advisory_state"), "unknown")
+
+    def test_check_openclaw_gateway_reachable_but_operator_degraded_is_advisory_ok(self) -> None:
+        with patch.object(fc_doctor, "_allow_live_openclaw_checks", return_value=True), \
+             patch.object(fc_doctor.subprocess, "run") as mock_run, \
+             patch.object(fc_doctor, "_systemd_unit_probe", side_effect=[
+                 {"ok": False, "output": "inactive"},
+                 {"ok": False, "output": "not-found"},
+             ]), \
+             patch.object(fc_doctor, "_run_openclaw_probe", side_effect=[
+                 {"ok": False, "cmd": ["openclaw", "doctor"]},
+                 {"ok": False, "cmd": ["openclaw", "status"]},
+                 {"ok": True, "cmd": ["openclaw", "health", "--json"]},
+                 {"ok": False, "cmd": ["openclaw", "models", "status", "--check"]},
+             ]):
+            mock_run.return_value = SimpleNamespace(returncode=0, stdout="/usr/bin/openclaw\n", stderr="")
+            result = fc_doctor.check_openclaw_gateway(ROOT)
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.detail.get("advisory_state"), "degraded")
 
     def test_scheduler_authority_dual_detected(self) -> None:
         def _fake_run(cmd, **kwargs):
@@ -375,9 +461,9 @@ class FCDoctorTests(unittest.TestCase):
                     mock_datetime.now.return_value = __import__("datetime").datetime(2026, 3, 8, 15, 40, tzinfo=__import__("datetime").timezone.utc)
                     mock_datetime.fromisoformat.side_effect = __import__("datetime").datetime.fromisoformat
                     result = fc_doctor.check_sessions(root)
-        self.assertEqual(result.status, "ok")
-        self.assertEqual(result.detail.get("missing_core"), [])
-        self.assertIn("planner", result.detail.get("found_core", {}))
+        self.assertEqual(result.status, "degraded")
+        self.assertEqual(result.detail.get("missing_core"), ["planner"])
+        self.assertEqual(result.detail.get("found_core", {}), {})
 
 
 if __name__ == "__main__":

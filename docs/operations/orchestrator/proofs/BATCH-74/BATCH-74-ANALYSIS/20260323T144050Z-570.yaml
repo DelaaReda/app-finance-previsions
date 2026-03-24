@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-74-BATCH-74-ANALYSIS-20260323T144050Z-570"
+stream_id: "BATCH-74"
+task_id: "BATCH-74-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T14:40:50Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_repo_patch_this_tick)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T14:40:50Z"
+      ended_at_utc: "2026-03-23T14:40:50Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_task_closure_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b74-analysis-complete-20260323t1439z"
+  review_ref: "runner:BATCH-74-ANALYSIS"
+  note: "source=runner | root_cause=analysis_in_progress_left_without_canonical_architecture_and_impact_paths | fix_applied=attached_canonical_refs_and_impacted_paths_for_planner_closure | verify=before=analysis_open_without_canonical_proof; after=analysis_closure_proof_records_canonical_paths; test=parallel_workstream_context_confirms_B74_analysis_in_progress | architecture_check=architecture_plan_ref=docs/architecture/ARCHITECTURE_MAP.md; impacted_paths=apps/api,apps/web,platform/automation | vision_alignment=batch=BATCH-74; target=personal_finance_copilot; impact=analysis_closure_unblocks_runtime_orchestration"

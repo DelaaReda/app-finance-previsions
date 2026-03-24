@@ -1,19 +1,25 @@
 {
-  "ts_utc": "2026-03-07T04:22:36Z",
+  "ts_utc": "2026-03-13T18:02:17Z",
   "guardian_version": "2026-03-03.v1",
   "role": "planner",
   "source": "primary_structured",
-  "score": 85,
-  "level": "green",
+  "score": 35,
+  "level": "red",
   "issues": [
-    "dependency_policy_not_enforced"
+    "missing_planner_artifact",
+    "dependency_policy_not_enforced",
+    "missing_architecture_plan_ref",
+    "missing_vision_alignment",
+    "missing_architecture_audit"
   ],
   "recommendations": [
+    "Ajouter architecture_plan_ref + architecture_audit relies aux chemins apps/api|apps/web.",
+    "Lier explicitement le batch cree au target de PRODUCT_VISION.",
     "Regrouper dependances dans le meme batch (taches intra-stream), puis relancer sanitize-dependencies + sync-priority."
   ],
   "streaks": {
     "ready_idle_streak": 0,
-    "low_score_streak": 0,
+    "low_score_streak": 13,
     "runway_no_batch_streak": 0,
     "handoff_same_task_streak": 0
   },
@@ -26,15 +32,15 @@
   },
   "summary": {
     "status": "BLOCKED",
-    "delta": "SYNC_PRIORITY_THEN_CLAIM_FAILED",
+    "delta": "PLANNER_ORCHESTRATOR_BRIDGE_FAILED",
     "verdict": "BLOCKED",
-    "blocker_id": "PLANNER_NO_READY_TASK_AFTER_SYNC",
-    "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772857327_28227",
+    "blocker_id": "PLANNER_ORCHESTRATOR_BRIDGE_FAILED",
+    "next_action_unique": "PLANNER_ORCHESTRATOR_BRIDGE_FAILED",
     "task_update": "blocked",
-    "planner_artifact": "docs/operations/orchestrator/parallel-workstreams.json",
+    "planner_artifact": "",
     "batch_created": "",
-    "architecture_plan_ref": "docs/architecture/ARCHITECTURE_MAP.md",
-    "vision_alignment": "batch=BATCH-11",
-    "architecture_audit": "apps/api/src/domains,apps/api/runtime,apps/web/src"
+    "architecture_plan_ref": "",
+    "vision_alignment": "",
+    "architecture_audit": ""
   }
 }

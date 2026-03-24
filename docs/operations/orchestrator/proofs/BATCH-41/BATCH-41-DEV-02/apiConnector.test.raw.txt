@@ -1,0 +1,178 @@
+TAP version 13
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] Loading live data...
+# [API] ✅ All live data loaded successfully
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] Error fetching /copilot/start: starter route unavailable
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] FinanceAPI connector loaded
+# [API] Loading live data...
+# [API] ✅ All live data loaded successfully
+# [API] FinanceAPI connector loaded
+# [API] Loading live data...
+# [API] ✅ All live data loaded successfully
+# Subtest: getStatus unwraps the canonical /status envelope
+ok 1 - getStatus unwraps the canonical /status envelope
+  ---
+  duration_ms: 4.466408
+  type: 'test'
+  ...
+# Subtest: getStatus falls back to /health when /status is unavailable
+ok 2 - getStatus falls back to /health when /status is unavailable
+  ---
+  duration_ms: 1.32973
+  type: 'test'
+  ...
+# Subtest: getStatus prefers same-origin api base when window.location.origin is available
+ok 3 - getStatus prefers same-origin api base when window.location.origin is available
+  ---
+  duration_ms: 1.889073
+  type: 'test'
+  ...
+# Subtest: getWalkForwardScoreboard unwraps scoreboard payloads and preserves query params
+ok 4 - getWalkForwardScoreboard unwraps scoreboard payloads and preserves query params
+  ---
+  duration_ms: 1.139061
+  type: 'test'
+  ...
+# Subtest: getCopilotContext normalizes brief-first entry points into ask/open starters
+ok 5 - getCopilotContext normalizes brief-first entry points into ask/open starters
+  ---
+  duration_ms: 1.875156
+  type: 'test'
+  ...
+# Subtest: getCopilotContext normalizes direct copilot_start open targets for the existing tabs
+ok 6 - getCopilotContext normalizes direct copilot_start open targets for the existing tabs
+  ---
+  duration_ms: 1.544151
+  type: 'test'
+  ...
+# Subtest: getCopilotContext normalizes copilot slashed targets to the copilot overlay
+ok 7 - getCopilotContext normalizes copilot slashed targets to the copilot overlay
+  ---
+  duration_ms: 1.009476
+  type: 'test'
+  ...
+# Subtest: getCopilotContext forwards scoped tickers to the backend starter endpoint
+ok 8 - getCopilotContext forwards scoped tickers to the backend starter endpoint
+  ---
+  duration_ms: 1.152269
+  type: 'test'
+  ...
+# Subtest: askCopilot preserves normalized memo metadata and context influence cues
+ok 9 - askCopilot preserves normalized memo metadata and context influence cues
+  ---
+  duration_ms: 1.97345
+  type: 'test'
+  ...
+# Subtest: askCopilot infers degraded memo state from quality metadata without explicit boolean flag
+ok 10 - askCopilot infers degraded memo state from quality metadata without explicit boolean flag
+  ---
+  duration_ms: 1.590402
+  type: 'test'
+  ...
+# Subtest: startAutoRefresh clears scoped copilot starter cache entries before reloading the brief
+ok 11 - startAutoRefresh clears scoped copilot starter cache entries before reloading the brief
+  ---
+  duration_ms: 4.695412
+  type: 'test'
+  ...
+# Subtest: getCopilotStart unwraps the dedicated starter contract and normalizes open targets
+ok 12 - getCopilotStart unwraps the dedicated starter contract and normalizes open targets
+  ---
+  duration_ms: 1.756072
+  type: 'test'
+  ...
+# Subtest: getCopilotStart infers degraded brief state from status metadata
+ok 13 - getCopilotStart infers degraded brief state from status metadata
+  ---
+  duration_ms: 1.546692
+  type: 'test'
+  ...
+# Subtest: getCopilotStart maps open_copilot without explicit target to the copilot landing
+ok 14 - getCopilotStart maps open_copilot without explicit target to the copilot landing
+  ---
+  duration_ms: 2.005159
+  type: 'test'
+  ...
+# Subtest: getCopilotStart falls back to copilot context when the starter route is unavailable
+ok 15 - getCopilotStart falls back to copilot context when the starter route is unavailable
+  ---
+  duration_ms: 2.080493
+  type: 'test'
+  ...
+# Subtest: getPortfolioRiskProfile resolves the default saved portfolio and unwraps the risk profile envelope
+ok 16 - getPortfolioRiskProfile resolves the default saved portfolio and unwraps the risk profile envelope
+  ---
+  duration_ms: 1.702779
+  type: 'test'
+  ...
+# Subtest: getPortfolioHealth maps portfolio state and risk profile into widget data
+ok 17 - getPortfolioHealth maps portfolio state and risk profile into widget data
+  ---
+  duration_ms: 2.157286
+  type: 'test'
+  ...
+# Subtest: transformPortfolioRiskProfileToHealth maps raw risk profile payloads for UI fallback
+ok 18 - transformPortfolioRiskProfileToHealth maps raw risk profile payloads for UI fallback
+  ---
+  duration_ms: 1.436441
+  type: 'test'
+  ...
+# Subtest: buildLiveFreshnessContract folds portfolio risk profile status into the shared freshness state
+ok 19 - buildLiveFreshnessContract folds portfolio risk profile status into the shared freshness state
+  ---
+  duration_ms: 1.568109
+  type: 'test'
+  ...
+# Subtest: getGlobalSignalMesh unwraps the free source mesh contract
+ok 20 - getGlobalSignalMesh unwraps the free source mesh contract
+  ---
+  duration_ms: 1.356606
+  type: 'test'
+  ...
+# Subtest: getLiveDashboardData preserves portfolio risk profile freshness and status for downstream UI mapping
+ok 21 - getLiveDashboardData preserves portfolio risk profile freshness and status for downstream UI mapping
+  ---
+  duration_ms: 1.992117
+  type: 'test'
+  ...
+# Subtest: initLiveData hydrates judgeDecisionJournal without relying on page globals
+ok 22 - initLiveData hydrates judgeDecisionJournal without relying on page globals
+  ---
+  duration_ms: 2.389957
+  type: 'test'
+  ...
+# Subtest: initLiveData clears stale walk-forward scoreboard state when the contract returns no rows
+ok 23 - initLiveData clears stale walk-forward scoreboard state when the contract returns no rows
+  ---
+  duration_ms: 2.161661
+  type: 'test'
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 111.705001

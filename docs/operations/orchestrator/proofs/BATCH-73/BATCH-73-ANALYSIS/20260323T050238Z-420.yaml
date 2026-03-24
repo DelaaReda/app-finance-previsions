@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-73-BATCH-73-ANALYSIS-20260323T050238Z-420"
+stream_id: "BATCH-73"
+task_id: "BATCH-73-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T05:02:38Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(cloture_runtime_sans_patch_code)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T05:02:38Z"
+      ended_at_utc: "2026-03-23T05:02:38Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(task_planner_analysis_no_code)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-analysis-close-1774242097"
+  review_ref: "runner:BATCH-73-ANALYSIS"
+  note: "source=runner | root_cause=analyse laissee ouverte alors que depends_on=none et que prices_stale bloque la priorite produit, pas la cloture planner | fix_applied=cloture planner de BATCH-73-ANALYSIS avec preuve explicite et liberation du flux vers ARCH | verify=before=ANALYSIS in_progress et ARCH waiting_dep; after=ANALYSIS cloturee par le runtime planner; test=context planner avant plus complete runtime accepte | architecture_check=depends_on none confirme et chemins interdits intacts | vision_alignment=batch=BATCH-73; target=copilot finance avec brief quotidien et ouverture analyse; impact=libere l architecture du lot"

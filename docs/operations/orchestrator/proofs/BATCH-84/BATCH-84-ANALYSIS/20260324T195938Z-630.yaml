@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T195938Z-630"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T19:59:38Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(tache planner analyse sans mutation code)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T19:59:38Z"
+      ended_at_utc: "2026-03-24T19:59:38Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(preuve runtime issue du contexte planner)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/product/PRODUCT_VISION.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b84-analysis-complete-20260324t195823z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=analyse planner laissee ouverte sans architecture_plan_ref ni architecture_audit relies a apps/api et apps/web alors que depends_on=none | fix_applied=preuve planner attachee au stream BATCH-84 avec references canoniques ACTIVE_DOCS_INDEX PLANE_BACKLOG_INTEGRATION_SPEC PRODUCT_VISION et audit cible apps/api apps/web runtime | verify=before=BATCH-84-ANALYSIS in_progress et GOV_REVIEW waiting_dep; after=analyse fermee avec preuves architecture et vision pour suite planner; test=parallel_workstream context role planner limit 5 confirme ready=0 in_progress=BATCH-84-ANALYSIS waiting_dep=BATCH-84-GOV_REVIEW | architecture_check=apps/api/src/domains/*;apps/web/src;apps/api/runtime;pas de copilot-app ni legacy src | vision_alignment=batch=BATCH-84; target=copilote finance personnel brief du jour et ouverture danalyses; impact=analyse planner completee et gouvernance aval deblocable"

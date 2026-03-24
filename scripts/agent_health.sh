@@ -53,7 +53,7 @@ show_health() {
   echo -e "${BOLD}BATCH STATE${NC}"
 python3 - <<'PY' 2>/dev/null || echo "  (error reading queue)"
 import json, re, sys
-with open("docs/orchestrator-ops/priority-queue.json") as f:
+with open("logs-codex-runs/orchestrator-state/priority-queue.json") as f:
     q = json.load(f)
 symbols = {"CLOSED":"✅","DONE":"✅","IN_PROGRESS":"🔄","READY":"📋","BLOCKED":"🚫","PLANNED":"💤"}
 items = q.get("items", [])

@@ -1,0 +1,122 @@
+proof_id: "PRF-BATCH-47-DEV-03-QA-20260311T060000Z-400"
+stream_id: "BATCH-47"
+task_id: "BATCH-47-DEV-03"
+task_title: "Sector-to-Company Impact Transmission [DEV-03]"
+role: "qa_review_worker"
+reviewed_at_utc: "2026-03-11T06:00:00Z"
+inputs:
+  prior_proof_ref: "docs/operations/orchestrator/proofs/BATCH-47/BATCH-47-DEV-03/20260311T052954Z-399.yaml"
+  commit_ref: "d061e755b21407644db3a6c44c15d806eb6951b1"
+  
+review_scope:
+  - "Validate policy-impact transmission confidence degradation logic"
+  - "Verify getPolicyTransmissionConfidence() helper implementation"
+  - "Confirm alert timeline integration preserves existing theme"
+  - "Run targeted tests for apiConnector.js and app.test.js"
+
+validation_results:
+  syntax_check:
+    command: "node --check apps/web/src/domains/forecasts/contracts/apiConnector.js"
+    result: "PASS"
+    evidence: "No syntax errors detected"
+    
+  unit_tests_api_connector:
+    command: "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js"
+    result: "PASS"
+    evidence: "37 tests passed, 0 failed"
+    key_test: "initLiveData degrades policy-impact confidence when transmission mapping is broad or indirect"
+    
+  unit_tests_app:
+    command: "node --test apps/web/src/domains/forecasts/pages/app.test.js"
+    result: "PASS"
+    evidence: "55 tests passed, 0 failed"
+    
+  architecture_check:
+    layer: "web forecasts connector"
+    imports_ok: "yes"
+    cross_domain_imports: "none added"
+    path_target: "apps/web/src/domains/forecasts/contracts/apiConnector.js"
+    theme_preservation: "existing frontend theme preserved, no UI styling refactored"
+
+fix_verification:
+  before_state: "policy-impact alerts always mirrored impact_score as confidence, even when transmission was multi-sector or indirect"
+  after_state: "direct transmission stays at 82 confidence while broad/indirect transmission degrades to 60"
+  
+  confidence_degradation_rules:
+    - condition: "no_company_mapping"
+      penalty: 24
+      example: "impact_score 0.82 -> confidence 58"
+    - condition: "multi_sector_transmission"
+      penalty: 12
+      example: "impact_score 0.82 with 2+ sectors -> confidence 70"
+    - condition: "indirect_company_mapping"
+      penalty: 10
+      example: "transmission_path=policy_watchlist_indirect -> confidence 72"
+    - condition: "combined_multi_sector_and_indirect"
+      penalty: 22
+      example: "impact_score 0.82 -> confidence 60 (high uncertainty)"
+      
+  test_evidence:
+    direct_transmission:
+      event_id: "policy-direct"
+      impact_score: 0.82
+      sectors: ["technology"]
+      companies: ["NVDA"]
+      transmission_path: "sector_policy_direct"
+      expected_confidence: 82
+      uncertainty_level: "low"
+      uncertainty_factors: []
+      
+    indirect_transmission:
+      event_id: "policy-indirect"
+      impact_score: 0.82
+      sectors: ["technology", "industrials"]
+      companies: ["CAT"]
+      transmission_path: "policy_watchlist_indirect"
+      expected_confidence: 60
+      uncertainty_level: "high"
+      uncertainty_factors: ["multi_sector_transmission", "indirect_company_mapping"]
+
+code_changes:
+  files_modified:
+    - path: "apps/web/src/domains/forecasts/contracts/apiConnector.js"
+      lines_added: 35
+      lines_removed: 1
+      key_additions:
+        - "getPolicyTransmissionConfidence(raw, sectors, companies) helper function"
+        - "transmission uncertainty factors: no_company_mapping, multi_sector_transmission, indirect_company_mapping"
+        - "confidence degradation penalties: 24, 12, 10 points respectively"
+        - "uncertainty level classification: low (<10), medium (10-21), high (>=22)"
+        
+    - path: "apps/web/src/domains/forecasts/contracts/apiConnector.test.js"
+      lines_added: 78
+      key_additions:
+        - "Test: initLiveData degrades policy-impact confidence when transmission mapping is broad or indirect"
+        - "Verifies direct transmission maintains 82 confidence with low uncertainty"
+        - "Verifies indirect transmission degrades to 60 confidence with high uncertainty"
+
+vision_alignment:
+  batch: "BATCH-47"
+  target: "sector-to-company impact transmission uncertainty handling"
+  impact: "the live policy-impact surface now communicates lower confidence when transmission evidence is broad or indirect without widening the connector's import surface or refactoring UI styling"
+  
+  integration_app_engineer_recommendations:
+    duplicate_helpers: "avoided - reused existing policy-impact normalization and alert timeline wiring"
+    patch_minimality: "35 lines added, 1 removed - focused on confidence degradation logic only"
+    test_coverage: "targeted tests added with before/after confidence verification"
+
+backend_regression_gate:
+  result: "PASS (pre-existing failures unrelated to this change)"
+  note: "Backend failures in copilot domain and edge contracts are pre-existing, confirmed by git diff showing no backend changes in this commit"
+
+review_verdict: "PASS"
+qa_confidence: "high"
+
+signoff:
+  reviewer_agent: "qa_review_worker"
+  owner_task_id: "BATCH-47-DEV-03"
+  reviewed_commit: "d061e755b21407644db3a6c44c15d806eb6951b1"
+
+meta:
+  idempotency_key: "QA-REVIEW-BATCH-47-DEV-03-20260311T060000Z"
+  review_ref: "planner_subagent_manager:BATCH-47-DEV-03"

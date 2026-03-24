@@ -15,6 +15,7 @@ This test verifies the minimal vertical slice:
 Product vision: "The copilot must start with a brief of the day"
 """
 import sys
+import time
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -442,6 +443,69 @@ class TestDEV03AskEndpointContract:
         follow_up = data.get("follow_up_context")
         assert follow_up is not None, "follow-up context should be present"
         assert follow_up.get("tickers") == ["AAPL"]
+
+    @pytest.mark.anyio
+    async def test_ask_endpoint_times_out_to_safe_fallback(self, monkeypatch):
+        """
+        DEV-03 QA: slow LLM calls must degrade to the existing safe fallback contract.
+        """
+        from domains.copilot.application import copilot_service
+
+        class StubRAGStore:
+            def search(self, _scope, top_k=5):
+                return [
+                    {
+                        "id": "chunk-1",
+                        "text": "NVDA remains in focus after earnings.",
+                        "meta": {"type": "news", "ticker": "NVDA"},
+                    },
+                    {
+                        "id": "chunk-2",
+                        "text": "Momentum is positive but event risk remains elevated.",
+                        "meta": {"type": "forecast", "ticker": "NVDA"},
+                    },
+                ][:top_k]
+
+        async def stub_context_payload(context_service_cls=None, scope=None):
+            return {
+                "regime": "risk_on",
+                "confidence": 0.7,
+                "daily_brief": {
+                    "summary": "NVDA stays bid ahead of the next catalyst.",
+                    "market_sentiment": "BULLISH",
+                    "top_signals": [],
+                    "top_risks": [],
+                    "generated_at": "2026-03-23T11:00:00Z",
+                    "freshness": "2026-03-23T11:00:00Z",
+                    "source": ["test"],
+                },
+            }
+
+        def slow_ask_llm(**_kwargs):
+            time.sleep(0.2)
+            return {
+                "answer": "{\"answer\":\"Buy NVDA\",\"verdict\":\"buy\",\"horizon\":\"1w\",\"why\":[\"Momentum is strong\"]}",
+                "model": "slow-test-llm",
+                "citations": [],
+            }
+
+        async def stub_event_timing_payload(limit=3):
+            return {}
+
+        monkeypatch.setattr(copilot_service, "build_context_payload", stub_context_payload)
+        monkeypatch.setattr(copilot_service, "_load_event_timing_payload", stub_event_timing_payload)
+        monkeypatch.setenv("COPILOT_ASK_LLM_TIMEOUT_SECONDS", "0.01")
+
+        payload = await copilot_service.build_ask_payload(
+            question="Should I buy NVDA today?",
+            tickers=["NVDA"],
+            rag_store_cls=StubRAGStore,
+            ask_llm_fn=slow_ask_llm,
+        )
+
+        assert payload["verdict"] == "hold"
+        assert payload["quality_status"] == "error"
+        assert "timed out" in payload.get("error", "").lower()
 
 
 class TestDEV03PortfolioDriftAlerts:

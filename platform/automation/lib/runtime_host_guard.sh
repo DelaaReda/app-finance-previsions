@@ -36,7 +36,7 @@ fc_runtime_host_kind() {
         printf '%s\n' "vm_runtime"
         return 0
       fi
-      if [[ "${PWD:-}" == /home/venom/analyse-financiere* || "${PWD:-}" == /home/venom/shared/analyse-financiere* ]]; then
+      if [[ "${PWD:-}" == /home/venom/analyse-financiere* ]]; then
         printf '%s\n' "vm_runtime"
         return 0
       fi

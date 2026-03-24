@@ -1,0 +1,52 @@
+{
+  "task_id": "BATCH-24-ADMIN-01",
+  "captured_at_utc": "2026-03-13T06:25:37Z",
+  "runtime_fix": {
+    "id": "monitor_task_progress_syntax_repair",
+    "symptom": "Local monitor on :7779 was down and the LAN proxy on :7780 returned empty responses.",
+    "root_cause": "apps/monitor/src/aggregators/task_progress.py contained stray injected lines that caused an IndentationError during monitor startup.",
+    "files": [
+      "apps/monitor/src/aggregators/task_progress.py",
+      "scripts/restart_api_if_stale.sh"
+    ]
+  },
+  "verification": {
+    "py_compile": "python3 -m py_compile apps/monitor/src/collectors/activity_events.py apps/monitor/src/aggregators/task_progress.py apps/monitor/server.py scripts/monitor_server.py",
+    "unit_tests": "python3 -m unittest apps.monitor.tests.test_task_progress -> OK (2 tests)",
+    "listeners": {
+      "monitor_local_7779": "LISTEN",
+      "monitor_lan_7780": "LISTEN"
+    },
+    "monitor_status_lite": {
+      "health": "DEGRADED",
+      "planner_status": "BLOCKED",
+      "planner_blocker": "PLANNER_ORCHESTRATOR_BRIDGE_FAILED",
+      "alerts_pipeline": {
+        "dedupe": true,
+        "priority_ordering": true,
+        "suppression_window_minutes": 15
+      }
+    },
+    "copilot_start_brief_of_day": {
+      "generated_at": "2026-03-13T06:25:37.914211Z",
+      "top_risks_count": 1,
+      "top_risk_fields_present": [
+        "priority",
+        "priority_score",
+        "horizon",
+        "alert_fingerprint",
+        "suppression_window_minutes",
+        "priority_rank",
+        "suppressed",
+        "suppression_reason",
+        "duplicate_count",
+        "urgent_bypass"
+      ]
+    }
+  },
+  "scope_assessment": {
+    "batch_24_runtime_status": "unblocked_for_monitor_and_api_proof_path",
+    "remaining_runtime_issue": "planner_orchestrator_bridge_failed",
+    "remaining_scope_note": "The planner blocker is a broader scheduler/control-plane issue, but the BATCH-24 monitor/API path is live again and brief risk metadata is present on /api/copilot/start."
+  }
+}

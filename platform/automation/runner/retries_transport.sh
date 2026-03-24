@@ -12,6 +12,10 @@ tmux_pane_current_command() {
   tmux display-message -p -t "$(tmux_target "$1")" "#{pane_current_command}" 2>/dev/null | tr '[:upper:]' '[:lower:]'
 }
 
+tmux_pane_current_path() {
+  tmux display-message -p -t "$(tmux_target "$1")" "#{pane_current_path}" 2>/dev/null
+}
+
 tmux_pane_pid() {
   tmux display-message -p -t "$(tmux_target "$1")" "#{pane_pid}" 2>/dev/null | tr -d '[:space:]'
 }
@@ -35,15 +39,53 @@ tmux_send_multiline() {
   rm -f "$tmp_path"
 }
 
+tmux_session_workdir_valid() {
+  local session="$1"
+  local pane_path=""
+  pane_path="$(tmux_pane_current_path "$session" || true)"
+  [[ -n "$pane_path" ]] || return 1
+  [[ "$pane_path" != *"(deleted)"* ]] || return 1
+  case "$pane_path" in
+    "$ROOT"|"$ROOT"/*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+tmux_capture_has_blocking_prompt() {
+  local capture="${1:-}"
+  [[ -n "$capture" ]] || return 1
+  grep -qiE \
+    '(update available|would you like to update|codex update|trust this project|allow all file|press enter to confirm or esc|switch to .*lower credit|approaching rate limits|continue setup|get started|welcome to codex)' \
+    <<<"$capture"
+}
+
+tmux_role_launch_command() {
+  local agent_cmd=""
+  local launch_cmd=""
+  agent_cmd="$(agent_launch_command)"
+  printf -v launch_cmd 'cd %q && unset NO_COLOR && if [ "${TERM:-dumb}" = "dumb" ]; then export TERM=xterm-256color; fi; export COLORTERM="${COLORTERM:-truecolor}"; export FORCE_COLOR="${FORCE_COLOR:-1}"; exec %s' "$ROOT" "$agent_cmd"
+  printf '%s\n' "$launch_cmd"
+}
+
 tmux_agent_ready() {
   local session="$1"
   local cmd=""
   local pane_pid=""
   local children=""
   local child_regex=""
+  local capture=""
+  if ! tmux_session_workdir_valid "$session"; then
+    return 1
+  fi
   cmd="$(tmux_pane_current_command "$session" || true)"
   if [[ -n "$cmd" ]]; then
     if [[ "$cmd" == *"${AGENT_BIN_NAME}"* ]]; then
+      capture="$(tmux_capture "$session" 120)"
+      if tmux_capture_has_blocking_prompt "$capture"; then
+        return 1
+      fi
       return 0
     fi
   fi
@@ -65,19 +107,24 @@ tmux_agent_ready() {
 start_role_session() {
   local session="$1"
   local launch_cmd=""
-  local agent_cmd=""
-  agent_cmd="$(agent_launch_command)"
+  local capture=""
   tmux start-server >/dev/null 2>&1 || true
+  launch_cmd="$(tmux_role_launch_command)"
   if ! tmux_has_session "$session"; then
-    printf -v launch_cmd 'cd %q && unset NO_COLOR && if [ "${TERM:-dumb}" = "dumb" ]; then export TERM=xterm-256color; fi; export COLORTERM="${COLORTERM:-truecolor}"; export FORCE_COLOR="${FORCE_COLOR:-1}"; exec %s' "$ROOT" "$agent_cmd"
     tmux new-session -d -s "$session" "bash -lc $(printf '%q' "$launch_cmd")"
     sleep 1
   fi
   tmux set-option -t "$session" history-limit 200000 >/dev/null 2>&1 || true
+  capture="$(tmux_capture "$session" 120)"
+  if ! tmux_session_workdir_valid "$session" || tmux_capture_has_blocking_prompt "$capture"; then
+    tmux kill-session -t "$session" >/dev/null 2>&1 || true
+    tmux new-session -d -s "$session" "bash -lc $(printf '%q' "$launch_cmd")"
+    sleep 1
+  fi
   if ! tmux_agent_ready "$session"; then
     tmux send-keys -t "$(tmux_target "$session")" C-c >/dev/null 2>&1 || true
     sleep 1
-    tmux_send_multiline "$session" "$agent_cmd"
+    tmux_send_multiline "$session" "$launch_cmd"
   fi
 }
 
@@ -98,4 +145,3 @@ ensure_role_session_ready() {
   done
   return 1
 }
-

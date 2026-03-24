@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-68-BATCH-68-DEV-01-20260320T010719Z-368"
+stream_id: "BATCH-68"
+task_id: "BATCH-68-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-20T01:07:19Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T01:07:19Z"
+      ended_at_utc: "2026-03-20T01:07:19Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`pytest apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py -q` PASS; `pytest apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py -q` PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Endpoint evidence: `/api/copilot/start?tickers=nvda` now returns `data.cache={hit:false,...}` on first call, `copilot_start_cache_hit` on repeated calls, and `/api/copilot/start?tickers=nvda&debug=true` bypasses the cach"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-68-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-68-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The starter route recomputed the brief/context payload on every request and did not follow the project’s Judge endpoint cache/debug pattern, leaving the first user-visible copilot entrypoint slower and less contract-alig | fix_applied=Reused `api.templates.judge_like_endpoint` helpers in `apps/api/src/domains/copilot/api/copilot.py` to add deterministic cache keys, in-memory response caching, single-flight protection, cache metadata on responses, and  | verify=before=`/api/copilot/start` recomputed on each identical request and exposed no route-cache metadata/debug bypass`; after=`/api/copilot/start` reuses cached starter payloads for identical ticker/namespace requests, adds  | architecture_check=layer=domain API route orchestration only; imports_ok=reused canonical Judge-like cache helpers from `api.templates.judge_like_endpoint` without adding new cross-layer service logic; path_target=`apps/api/src/domains/cop | vision_alignment=batch=BATCH-68; target=make the personal finance copilot starter faster and more reliable at the brief-of-day entrypoint; impact=user-visible improvement on the first open/start flow with minimal backend-only surface are"

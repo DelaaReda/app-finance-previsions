@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-76-BATCH-76-ANALYSIS-20260323T170849Z-606"
+stream_id: "BATCH-76"
+task_id: "BATCH-76-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T17:08:49Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_runtime_close_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T17:08:49Z"
+      ended_at_utc: "2026-03-23T17:08:49Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch76-analysis-close-20260323T170709Z"
+  review_ref: "runner:BATCH-76-ANALYSIS"
+  note: "source=runner | root_cause=analyse_planner_en_cours_sans_cloture_canonique | fix_applied=ancrage_aux_docs_canoniques_et_reprise_owner_planner | verify=before=planner_in_progress_sans_ready; after=analyse_cloturee_et_stream_deverrouillable; test=parallel_workstream_context_role_planner_2026-03-23T17:07Z | architecture_check=ACTIVE_DOCS_INDEX,PLANE_BACKLOG_INTEGRATION_SPEC,PRODUCT_VISION; refs=apps/api/src/domains,apps/web/src,apps/api/runtime | vision_alignment=batch=BATCH-76; target=finance_copilot_journalier; impact=analyse_planner_cloturee"

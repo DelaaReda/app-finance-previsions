@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-65-BATCH-65-ARCH-20260319T160726Z-835"
+stream_id: "BATCH-65"
+task_id: "BATCH-65-ARCH"
+role: "planner"
+produced_at_utc: "2026-03-19T16:07:26Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(runtime planner ARCH close only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-19T16:07:26Z"
+      ended_at_utc: "2026-03-19T16:07:26Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner metadata close only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch65-arch-complete-1773936357-r2"
+  review_ref: "runner:BATCH-65-ARCH"
+  note: "source=runner | root_cause=preuve delivery planner incomplete sur la tache ARCH | fix_applied=ajout des champs de preuve requis et des references architecture | verify=before=task_open+delivery_proof_missing; after=preuve_completee_pour_close; test=ROLE_CONTEXT_in_progress_B65_ARCH_uniquement | architecture_check=architecture_plan_ref=docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md+architecture_audit=apps/api/src/domains/*,apps/web/src | vision_alignment=batch=BATCH-65; target=finance_copilot_architecture_continuity; impact=fermeture_du_gate_ARCH_pour_reprise_orchestration"

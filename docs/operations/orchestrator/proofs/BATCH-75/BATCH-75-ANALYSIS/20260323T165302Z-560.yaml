@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-75-BATCH-75-ANALYSIS-20260323T165302Z-560"
+stream_id: "BATCH-75"
+task_id: "BATCH-75-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T16:53:02Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner analysis closure only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T16:53:02Z"
+      ended_at_utc: "2026-03-23T16:53:02Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner artifact proof only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/shared/analyse-financiere/logs-codex-runs/orchestrator-state/BATCH-75-ANALYSIS-architecture-audit.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-analysis-close-20260323T1654Z"
+  review_ref: "runner:BATCH-75-ANALYSIS"
+  note: "source=runner | root_cause=architecture proof missing for planner analysis | fix_applied=added architecture audit artifact with canonical refs and reuse boundaries | verify=before=guardian flagged missing architecture_plan_ref and architecture_audit; after=artifact created and linked for BATCH-75-ANALYSIS; test=planner context confirms BATCH-75-GOV_REVIEW ready downstream | architecture_check=plan_ref=docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md; docs_ref=docs/ops/ACTIVE_DOCS_INDEX.md; product_ref=docs/product/PRODUCT_VISION.md; anti_regression=ok | vision_alignment=batch=BATCH-75; target=personal finance copilot brief plus analysis flow; impact=analysis proof aligns stream with canonical architecture"

@@ -1,0 +1,5 @@
+...                                                                      [100%]
+3 passed, 13 deselected in 1.86s
+Sentry is attempting to send 3 pending events
+Waiting up to 2 seconds
+Press Ctrl-C to quit

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-64-BATCH-64-ANALYSIS-20260314T040033Z-535"
+stream_id: "BATCH-64"
+task_id: "BATCH-64-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-14T04:00:33Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(orchestration_state_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-14T04:00:33Z"
+      ended_at_utc: "2026-03-14T04:00:33Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(orchestration_state_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "b64-analysis-complete-proof-1773460815"
+  review_ref: "runner:BATCH-64-ANALYSIS"
+  note: "source=runner | root_cause=BATCH-64-ANALYSIS remained planner-owned in_progress while GOV_REVIEW was already ready_planner | fix_applied=planner complete executed with explicit delivery proof after runtime verification | verify=before=context showed in_progress_tasks=BATCH-64-ANALYSIS and ready_tasks=BATCH-64-GOV_REVIEW; after=complete requested for analysis closure; test=context rc=0 plus complete | architecture_check=apps/api|apps/web | vision_alignment=batch=BATCH-64 target=personal finance copilot brief and ask flow impact=handoff planner stream to final gov review"

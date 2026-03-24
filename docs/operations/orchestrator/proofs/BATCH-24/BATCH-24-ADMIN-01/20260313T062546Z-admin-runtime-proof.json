@@ -1,0 +1,37 @@
+{
+  "task_id": "BATCH-24-ADMIN-01",
+  "captured_at_utc": "2026-03-13T06:25:46Z",
+  "status": "runtime_fixed_with_residual_data_blocker",
+  "summary": "The monitor runtime was stale after the BATCH-24 dev chain: `apps/monitor/server.py` already exposed `alerts_overview`, but the live `:7779` process was still serving an older contract from a deleted cwd. I repaired the runtime by fixing two monitor syntax regressions that blocked restart, then relaunched the monitor so the live status surface now exposes the alert overview contract again.",
+  "root_cause": {
+    "runtime_drift": "The monitor process on port 7779 was launched from `/home/venom/shared/analyse-financiere (deleted)`, so live `/api/status?lite=1` omitted `alerts_overview` even though the current code includes it.",
+    "restart_blockers": [
+      "apps/monitor/src/aggregators/task_progress.py had indentation-corrupted lines in `_artifact_output()` and `build_active_tasks()`.",
+      "Earlier restart attempts also surfaced indentation-corrupted imports in the monitor aggregation path, preventing a clean monitor relaunch until the syntax errors were removed."
+    ]
+  },
+  "fix_applied": {
+    "code": [
+      "Removed the indentation-corrupted lines from `apps/monitor/src/aggregators/task_progress.py` and restored the task-loop + artifact extraction flow.",
+      "Hardened `platform/automation/parallel_workstream.py` to prefer canonical runtime-state board reads over docs projections, with a focused regression test in `platform/automation/tests/test_orchestrator_paths.py`."
+    ],
+    "runtime": [
+      "Restarted `scripts/monitor_server.py` from the canonical workspace after syntax verification passed."
+    ]
+  },
+  "verify": {
+    "py_compile": "PASS `python3 -m py_compile apps/monitor/src/aggregators/task_progress.py apps/monitor/src/collectors/activity_events.py apps/monitor/server.py scripts/monitor_server.py`",
+    "orchestrator_paths_tests": "PASS `python3 -m pytest platform/automation/tests/test_orchestrator_paths.py -q` (7 passed)",
+    "monitor_listener": "PASS `ss -ltnp | rg :7779` => python3 pid=422134 listening on 0.0.0.0:7779",
+    "monitor_status_contract": "PASS live `http://127.0.0.1:7779/api/status?lite=1` => `alerts_overview` present again with `status=empty`, `pipeline.dedupe=true`, `pipeline.priority_ordering=true`, `suppression_window_minutes=15`",
+    "alerts_route_live": "PASS live `http://127.0.0.1:8050/api/alerts?include_suppressed=true&limit=5&debug=true` => fresh payload, `count=0`, `suppressed_count=0`, `alerting_metadata.urgent_bypass_enabled=true`, `pipeline.dedupe=true`",
+    "monitor_contract_smoke": "PASS `bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 --timeout 16` => `health=DEGRADED` but contract intact; current issue count reduced to non-critical runtime findings only",
+    "planner_runtime_note": "Mixed `bash scripts/fc_status_brief.sh` after the monitor restart: BATCH-24 is already closed, but planner currently reports an unrelated `PLANNER_ORCHESTRATOR_BRIDGE_FAILED` on a later BATCH-50 fallback tick (`COMPLETE_ERROR: invalid_state=PLANNED task=BATCH-50-ADMIN-01`)."
+  },
+  "residual_blocker": {
+    "id": "LIVE_ALERT_DATA_EMPTY",
+    "detail": "The refreshed alert pipeline is healthy, but the current live snapshot is empty (`warnings=[\"no_news_rows\"]`, `count=0`, `suppressed_count=0`). That means this tick cannot provide a concrete live duplicate-suppression example or an urgent-alert latency trace <=60s, only contract-level proof that the path is wired and fresh."
+  },
+  "recommended_next": "Planner should keep BATCH-24 closed from the runtime/control-plane side. If product closure still requires a concrete live urgent/suppression example, open a separate bounded follow-up to replay a canonical alert snapshot or rerun ADMIN-01 when fresh alert-producing input exists.",
+  "blocking_issue": "live alert snapshot is empty (`no_news_rows`), so concrete live dedupe/urgent examples are unavailable in this tick"
+}

@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-23-BATCH-23-DEV-03-20260313T022616Z-477"
+stream_id: "BATCH-23"
+task_id: "BATCH-23-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-13T02:26:16Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope tax fees and slippage awareness [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_tax_fees_and_slippage_awareness_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-13T02:26:16Z"
+      ended_at_utc: "2026-03-13T02:26:16Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "FAIL"
+      evidence: "PASS node --test apps/web/src/domains/forecasts/pages/app.test.js (91 tests); FAIL bash platform/policies/backend_regression_gate.sh --no-live due unrelated existing failures in domains/copilot/tests/test_copilot_domain_"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=38e1671d; ui=dashboard trade ideas now surface nested cost awareness, short/long-term tax context, and gross-vs-net edge erosion warnings on live recommendation cards"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-23-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-23-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=The trade-ideas path was not reusing the nested `cost_awareness` contract already emitted by recommendation payloads, so users saw generic fee/slippage/tax fallback copy and lost the user-visible tax bucket, tax-rate ass | fix_applied=Updated `apps/web/src/domains/forecasts/pages/app.js` to reuse existing trade-idea sanitization/build paths, hydrate cost fields from nested `cost_awareness`, preserve tax bucket and tax-rate assumptions, and render thos | verify=before=trade ideas dropped nested `cost_awareness` fields from live recommendations and rendered generic tax/fee/slippage fallback text without tax bucket/rate context or reliable gross-vs-net edge visibility; after=trad | architecture_check=layer=frontend forecasts page reuse path only; imports_ok=yes existing trade-idea sanitization/build/render flow reused with no new helper module or cross-domain shortcut; path_target=apps/web/src/domains/forecasts/pages | vision_alignment=batch=BATCH-23; target=tax-fees-slippage awareness on live decision cards beyond the rebalance widget; impact=users now see decision-level tax bucket/rate assumptions and net-edge erosion directly in dashboard trade idea"

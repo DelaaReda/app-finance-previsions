@@ -1,0 +1,37 @@
+{
+  "task_id": "BATCH-43-ADMIN-01",
+  "title": "Law and Policy Change Impact Engine [ADMIN-01]",
+  "captured_at_utc": "20260311T071451Z",
+  "status": "UNBLOCKED",
+  "runtime_truth": {
+    "runtime_host_check": {
+      "runtime_host_kind": "vm_runtime",
+      "runtime_is_vm": 1,
+      "os": "Linux",
+      "hostname": "venom-Apple-Virtualization-Generic-Platform",
+      "pwd": "/home/venom/analyse-financiere",
+      "expected_workspace": "/home/venom/analyse-financiere"
+    },
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=4 workboard_ready=0 admin_timeouts_recent=0 issues_records=8",
+    "policy_impact_route_test": "PASS 3 tests",
+    "policy_impact_payload_probe": {
+      "engine_id": "policy_change_impact_v1",
+      "status": null,
+      "impacts": 0,
+      "source_count": 3,
+      "summary": ""
+    }
+  },
+  "observations": [
+    "Runtime and monitor surfaces required for this task are healthy now.",
+    "Policy impact engine entrypoint resolves and returns the expected engine_id.",
+    "The direct payload probe returned no impacts and an empty summary; this is not a runtime outage by itself."
+  ],
+  "non_runtime_regression": {
+    "detected": true,
+    "owner": "dev",
+    "evidence": "apps/monitor/tests/test_status_planner_dev_policy.py::MonitorStatusPlannerDevPolicyTests::test_status_autoheals_admin_runtime_stale_blocker",
+    "failure": "Expected admin status PASS but observed IDLE in mocked stale-blocker autoheal policy.",
+    "scope_note": "This is monitor status policy code behavior, not a live runtime/infra failure for BATCH-43-ADMIN-01."
+  }
+}

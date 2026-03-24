@@ -33,5 +33,5 @@
 
 ## Traces d’exécution et preuves
 
-- Trace quotidienne des incidents/ops : [docs/ops/ADMIN_TEAM_CHAT.md](/home/venom/analyse-financiere/docs/ops/ADMIN_TEAM_CHAT.md)
+- Trace quotidienne des incidents/ops : [docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md](/home/venom/analyse-financiere/docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md)
 - Registre d’intentions actives : [docs/orchestrator-ops/intent-registry.json](/home/venom/analyse-financiere/docs/orchestrator-ops/intent-registry.json)

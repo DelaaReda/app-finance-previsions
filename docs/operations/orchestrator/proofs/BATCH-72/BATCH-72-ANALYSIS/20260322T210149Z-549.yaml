@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-72-BATCH-72-ANALYSIS-20260322T210149Z-549"
+stream_id: "BATCH-72"
+task_id: "BATCH-72-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-22T21:01:49Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_completion)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-22T21:01:49Z"
+      ended_at_utc: "2026-03-22T21:01:49Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "BATCH-72-ANALYSIS_COMPLETE_P1774213218_2520"
+  review_ref: "runner:BATCH-72-ANALYSIS"
+  note: "source=runner | root_cause=la tache planner BATCH-72-ANALYSIS restait ouverte alors que BATCH-72-PLAN et BATCH-72-ARCH etaient deja closes dans le cycle canonique | fix_applied=cloture planner avec preuve canonique complete et alignement architecture apps/api apps/web apps/api/runtime | verify=before=BATCH-72-ANALYSIS:IN_PROGRESS et BATCH-72-PLAN:DONE; after=BATCH-72-ANALYSIS:DONE demandee sur le workboard canonique; test=parallel_workstream context role planner limit5 confirme BATCH-72-ANALYSIS unique in_progress | architecture_check=architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md | vision_alignment=batch=BATCH-72; target=personal_finance_copilot_brief_plus_ask_vers_memo_explicable; impact=fermer l etape planner et relancer la livraison aval"

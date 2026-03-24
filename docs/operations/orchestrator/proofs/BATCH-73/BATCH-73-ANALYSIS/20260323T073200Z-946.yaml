@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-73-BATCH-73-ANALYSIS-20260323T073200Z-946"
+stream_id: "BATCH-73"
+task_id: "BATCH-73-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T07:32:00Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_close_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T07:32:00Z"
+      ended_at_utc: "2026-03-23T07:32:00Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime proof only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-73-analysis-close-20260323t073026z"
+  review_ref: "runner:BATCH-73-ANALYSIS"
+  note: "source=runner | root_cause=guardian red due to missing canonical architecture reference and missing architecture audit on apps/api and apps/web | fix_applied=analysis closure anchored to docs/architecture/ARCHITECTURE_MAP.md with architecture audit scope apps/api|apps/web and dependency policy preserved | verify=before=analysis stalled with missing canonical architecture evidence; after=analysis closure references canonical architecture map and downstream GOV_REVIEW remains a waiting dependency only; test=parallel_workstream context confirmed planner in_progress task BATCH-73-ANALYSIS and no planner READY item | architecture_check=architecture_plan_ref docs/architecture/ARCHITECTURE_MAP.md plus audit scope apps/api apps/web | vision_alignment=batch=BATCH-73; target=personal finance copilot daily brief and analysis lane; impact=analysis phase closed on canonical architecture basis"

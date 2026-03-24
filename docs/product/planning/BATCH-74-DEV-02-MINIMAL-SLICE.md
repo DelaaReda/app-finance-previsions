@@ -78,7 +78,7 @@ Provides:
 
 ### Integration Tests
 - `apps/web/src/domains/forecasts/components/widgets/copilot-integration.test.js`
-- 8 tests covering end-to-end slice verification
+- 8 tests covering payload-shape assumptions, widget rendering helpers, and wiring hooks against a mocked copilot start payload
 - All tests passing ✅
 
 ## User Value
@@ -153,7 +153,7 @@ node apps/web/src/domains/forecasts/components/widgets/copilot-integration.test.
 - [x] Frontend widget displays signals and risks
 - [x] Frontend widget renders ask/open buttons
 - [x] Freshness timestamp is visible
-- [x] All tests pass (backend + frontend + integration)
+- [x] All targeted tests pass (backend route/service + frontend widget + mocked UI contract harness)
 - [x] No new dependencies added
 - [x] Reuses existing widget patterns
 - [x] Documentation complete

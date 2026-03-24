@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-78-BATCH-78-GOV_REVIEW-20260323T211535Z-410"
+stream_id: "BATCH-78"
+task_id: "BATCH-78-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-03-23T21:15:35Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_gov_review_no_runtime_mutation)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T21:15:35Z"
+      ended_at_utc: "2026-03-23T21:15:35Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_governance_review)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-78-gov-review-p1774300456-3928"
+  review_ref: "runner:BATCH-78-GOV_REVIEW"
+  note: "source=runner | root_cause=runway planner courte avec GOV_REVIEW encore ouvert | fix_applied=cloture GOV_REVIEW avec preuve architecture_plan_ref et architecture_audit relies a apps/api et apps/web | verify=before=GOV_REVIEW in_progress et runway courte; after=GOV_REVIEW pret a fermer avec preuve runtime; test=parallel_workstream context planner confirme 1 in_progress 0 ready | architecture_check=architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md;architecture_audit=apps/api|apps/web referenced;anti_regression=ok;depends_on_status=inferred_done_from_runtime_open_set | vision_alignment=batch=BATCH-78; target=deverrouiller orchestration planner; impact=fermeture revue gouvernance et preparation du prochain batch"

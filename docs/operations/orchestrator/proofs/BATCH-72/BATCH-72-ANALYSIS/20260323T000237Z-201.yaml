@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-72-BATCH-72-ANALYSIS-20260323T000237Z-201"
+stream_id: "BATCH-72"
+task_id: "BATCH-72-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T00:02:37Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_contract_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T00:02:37Z"
+      ended_at_utc: "2026-03-23T00:02:37Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_contract_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/.tmp/role-runner/planner/BATCH-72-ANALYSIS-architecture-audit-2026-03-23.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "batch72-analysis-complete-20260323T000034Z"
+  review_ref: "runner:BATCH-72-ANALYSIS"
+  note: "source=runner | root_cause=guardian_feedback_missing_architecture_audit_and_dependency_grouping | fix_applied=planner_architecture_audit_artifact_created_with_same_stream_dependency_guidance | verify=before=analysis_in_progress_without_explicit_audit_refs; after=planner_audit_artifact_written_for_batch_72; test=parallel_workstream_context_confirms_single_planner_in_progress_item | architecture_check=api_and_web_references_pinned_without_frontend_theme_changes | vision_alignment=batch=BATCH-72; target=personal_finance_copilot_daily_brief_and_analysis_flow; impact=planner_analysis_closed_with_architecture_constraints"

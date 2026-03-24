@@ -7,7 +7,7 @@ FC_MONITOR_ACTIVITY_FEED_ENABLED=1 \
 FC_MONITOR_ACTIVITY_WINDOW_HOURS=6 \
 FC_MONITOR_ACTIVITY_MAX_EVENTS=300 \
 FC_MONITOR_DEP_GRAPH_ENABLED=1 \
-bash scripts/monitor_stack_guard.sh
+./finance-copilot.sh start
 cat logs-codex-runs/monitor-lan-url.txt
 ```
 
@@ -48,9 +48,11 @@ Then verify sources:
 ## Rollback
 ```bash
 cd /home/venom/analyse-financiere
-FC_MONITOR_ACTIVITY_FEED_ENABLED=0 bash scripts/monitor_stack_guard.sh
+FC_MONITOR_ACTIVITY_FEED_ENABLED=0 ./finance-copilot.sh restart
 ```
 This disables the new feed while keeping legacy status/runtime APIs.
+
+`scripts/monitor_stack_guard.sh` remains a monitor/LAN proxy guard, not the canonical launcher for the full product stack.
 
 ## Evidence paths
 - `docs/operations/orchestrator/events.jsonl`

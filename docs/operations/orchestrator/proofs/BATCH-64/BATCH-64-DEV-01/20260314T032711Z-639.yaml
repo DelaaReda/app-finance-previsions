@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-64-BATCH-64-DEV-01-20260314T032711Z-639"
+stream_id: "BATCH-64"
+task_id: "BATCH-64-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-14T03:27:11Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-14T03:27:11Z"
+      ended_at_utc: "2026-03-14T03:27:11Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`pytest -q apps/api/src/domains/copilot/tests/test_copilot_domain_router.py apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py`"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "API artifact: `/api/personal-finance/context?tickers=nvda&tickers=msft` now preserves the brief/context contract while returning starter targets `/personal-finance/ask` and `/personal-finance` inside `data.copilot_start`"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-64-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-64-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=`/api/personal-finance/context` reused the generic copilot context response without rewriting the nested `copilot_start` ask/open targets, so consumers of that alias could receive starter actions that still pointed at `/ | fix_applied=Updated `apps/api/src/domains/copilot/api/copilot.py` so `copilot_context` accepts an optional namespace and rewrites nested `copilot_start` targets in both normal and fallback paths. Wired `personal_finance_context` to  | verify=before=`/api/personal-finance/context` returned embedded `copilot_start` actions still targeting `/copilot` routes`; after=`/api/personal-finance/context` rewrites nested ask/open starter targets to `/personal-finance/as | architecture_check=layer=API router alias only; imports_ok=yes, reused existing `domains.copilot.application.copilot_service` + existing namespace rewrite helper without adding cross-layer imports; path_target=`apps/api/src/domains/copilot | vision_alignment=batch=BATCH-64; target=personal finance copilot brief-first flow with ask/open entry points; impact=the personal-finance context alias now ships actionable starter targets that stay inside the intended personal-finance e"

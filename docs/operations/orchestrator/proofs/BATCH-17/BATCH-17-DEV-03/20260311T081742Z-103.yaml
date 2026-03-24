@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-17-BATCH-17-DEV-03-20260311T081742Z-103"
+stream_id: "BATCH-17"
+task_id: "BATCH-17-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T08:17:42Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope regime detection + allocation drift alerts [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_regime_detection_+_allocation_drift_alerts_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T08:17:42Z"
+      ended_at_utc: "2026-03-11T08:17:42Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PYTHONPATH=apps/api/src pytest -q apps/api/src/domains/copilot/tests/test_copilot_domain_router.py apps/api/src/domains/copilot/tests/test_copilot_service.py -k 'regime_detection or allocation_drift or copilot_start_rout"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=ab4a201562a0bb5b47aac83e460f0335e1c7f5a3; endpoint artifact=`/api/copilot/start` now returns `regime_detection` and `allocation_drift_alerts` when present in context payload, matching the BATCH-17 regime/drift ale"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-17-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-17-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=The frontend already consumes regime and allocation-drift alert payloads from copilot start data, but `apps/api/src/domains/copilot/api/copilot.py` stripped those fields when reshaping the start response. The same route  | fix_applied=Updated `_build_start_response()` and `copilot_start()` in `apps/api/src/domains/copilot/api/copilot.py` to carry through `regime_detection` and `allocation_drift_alerts` from the existing copilot context payload, while  | verify=before=`/api/copilot/start` dropped `regime_detection` and `allocation_drift_alerts`, and its fallback branch referenced undefined `fallback`; after=`/api/copilot/start` preserves regime/drift alert payloads on success a | architecture_check=layer=api route contract only; imports_ok=yes (reused existing `domains.copilot.application.copilot_service` helpers, added no duplicate helper module); path_target=apps/api/src/domains/copilot/api/copilot.py | vision_alignment=batch=BATCH-17; target=regime detection + allocation drift alerts; impact=the canonical copilot start payload now exposes the regime/drift alert slice already produced by backend context so dashboard/copilot consumers ca"

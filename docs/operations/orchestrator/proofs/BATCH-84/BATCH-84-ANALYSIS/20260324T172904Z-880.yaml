@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T172904Z-880"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T17:29:04Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_close_no_runtime_exec)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T17:29:04Z"
+      ended_at_utc: "2026-03-24T17:29:04Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_runtime_context_used)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-84-analysis-p1774373235-21209"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=planner_orchestrator_admin_route_mismatch_sans_architecture_audit_associe | fix_applied=analyse_planner_cloturee_avec_references_apps_api_apps_web_et_preuve_runtime | verify=before=analysis_in_progress,after=analysis_completed,test=parallel_workstream_context_rc0 | architecture_check=apps/api/src/domains,apps/web/src,apps/api/runtime | vision_alignment=batch=BATCH-84,target=personal_finance_copilot,impact=analyse_planner_validee"

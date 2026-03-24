@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-23-BATCH-23-DEV-01-20260312T162144Z-758"
+stream_id: "BATCH-23"
+task_id: "BATCH-23-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-12T16:21:44Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope tax fees and slippage awareness [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_tax_fees_and_slippage_awareness_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-12T16:21:44Z"
+      ended_at_utc: "2026-03-12T16:21:44Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest apps/api/src/domains/judge/tests/test_strategy_playbooks.py apps/api/src/domains/judge/tests/test_judge_rebalancing_playbook_contract.py; node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js a"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=a37d5e8e3b7b356d29312eabe3683ab988402a9a; endpoint=/api/judge/strategy-playbooks profile=rebalancing_optimizer_lite; ui=rebalance proposal card cost drag + net edge"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-23-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-23-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The rebalancing flow already exposed turnover and risk delta, but it did not translate those into net-impact guidance. Users could see a proposed rebalance without any estimate of tax drag, execution fees, or slippage, s | fix_applied=Added cost-awareness estimation in apps/api/src/domains/judge/application/judge_endpoint_service.py using the existing Judge playbook path, with configurable fee/slippage/tax assumptions and stable contract fields under  | verify=before=rebalancing playbooks only exposed turnover/risk_delta and the UI card showed no tax/fee/slippage estimate; after=playbooks expose cost_awareness {fee_bps, slippage_bps, tax_bucket, estimated_tax_drag_bps, total_c | architecture_check=layer=business logic kept in judge_endpoint_service and existing UI consumer, route stack reused unchanged; imports_ok=yes reused existing Judge endpoint/service/frontend wiring with no new cross-domain shortcuts; path_t | vision_alignment=batch=BATCH-23; target=tax-fees-slippage awareness on the live rebalancing recommendation path; impact=users now see estimated friction and net edge before acting on optimizer guidance, which directly improves decision q"

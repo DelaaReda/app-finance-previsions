@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-22-BATCH-22-DEV-03-20260312T115145Z-878"
+stream_id: "BATCH-22"
+task_id: "BATCH-22-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-12T11:51:45Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope rebalancing optimizer lite [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_rebalancing_optimizer_lite_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-12T11:51:45Z"
+      ended_at_utc: "2026-03-12T11:51:45Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest -q apps/api/src/domains/judge/tests/test_judge_rebalancing_playbook_contract.py -> PASS (1 passed) | node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js -> PASS (44 passed) | node --test apps"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Degraded empty envelopes from /api/judge/strategy-playbooks?profile=rebalancing_optimizer_lite&portfolio_id=... now survive the shared forecasts connector with status=degraded, error, and warnings intact, and the saved-p"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-22-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-22-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=The shared getStrategyPlaybooks() helper unwrapped /api/judge/strategy-playbooks into data/source/freshness only, so degraded empty-playbook responses lost status/error/warnings, and there was no isolated test locking th | fix_applied=Updated apps/web/src/domains/forecasts/contracts/apiConnector.js so getStrategyPlaybooks() preserves status, error, and warnings; added a dedicated Judge contract test for degraded empty rebalance playbooks; added foreca | verify=before=the shared forecasts strategy-playbook connector dropped status/error/warnings from degraded empty rebalance responses and only null-path fallback behavior was locked; after=connector callers receive degraded meta | architecture_check=layer=existing apps/web forecasts connector plus isolated apps/api Judge contract test only; imports_ok=yes; path_target=apps/web/src/domains/forecasts/contracts/apiConnector.js, apps/web/src/domains/forecasts/contracts/ | vision_alignment=batch=BATCH-22; target=Rebalancing Optimizer Lite [DEV-03]; impact=Locks the saved-portfolio degraded empty-playbook path without adding routes or duplicate helpers, while preserving Judge contract metadata through the e"

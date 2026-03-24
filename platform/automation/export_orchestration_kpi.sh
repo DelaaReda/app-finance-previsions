@@ -5,9 +5,9 @@ SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
 ROOT="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd -P)"
 cd "$ROOT"
 
-BOARD_FILE="${KPI_BOARD_FILE:-docs/orchestrator-ops/parallel-workstreams.json}"
-QUEUE_FILE="${KPI_QUEUE_FILE:-docs/orchestrator-ops/priority-queue.json}"
-OUT_FILE="${KPI_OUT_FILE:-docs/orchestrator-ops/kpi-history.jsonl}"
+BOARD_FILE="${KPI_BOARD_FILE:-logs-codex-runs/orchestrator-state/parallel-workstreams.json}"
+QUEUE_FILE="${KPI_QUEUE_FILE:-logs-codex-runs/orchestrator-state/priority-queue.json}"
+OUT_FILE="${KPI_OUT_FILE:-logs-codex-runs/orchestrator-state/kpi-history.jsonl}"
 ACK_SLA_SECONDS="${KPI_ACK_SLA_SECONDS:-900}"
 CLOSE_SLA_SECONDS="${KPI_CLOSE_SLA_SECONDS:-3600}"
 DRY_RUN=0
@@ -167,4 +167,3 @@ fi
 mkdir -p "$(dirname "$OUT_FILE")"
 printf '%s\n' "$kpi_line" >> "$OUT_FILE"
 echo "KPI_EXPORT status=PASS dry_run=0 out=$OUT_FILE"
-

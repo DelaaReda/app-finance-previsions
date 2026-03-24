@@ -277,7 +277,7 @@ import json
 from pathlib import Path
 try:
     import json as _j
-    lines = [l for l in Path('docs/operations/orchestrator/kpi-history.jsonl').read_text().splitlines() if l.strip()]
+    lines = [l for l in Path('logs-codex-runs/orchestrator-state/kpi-history.jsonl').read_text().splitlines() if l.strip()]
     last = {}
     for line in reversed(lines):
         try:

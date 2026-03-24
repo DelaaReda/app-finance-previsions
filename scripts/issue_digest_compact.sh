@@ -11,9 +11,9 @@ fi
 source "$WORKSPACE_HELPER"
 
 ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
-ORCH_DIR="${ROOT}/docs/operations/orchestrator"
-if [[ ! -d "$ORCH_DIR" ]] && [[ -d "${ROOT}/docs/orchestrator-ops" ]]; then
-  ORCH_DIR="${ROOT}/docs/orchestrator-ops"
+ORCH_DIR="${ROOT}/logs-codex-runs/orchestrator-state"
+if [[ ! -d "$ORCH_DIR" ]]; then
+  ORCH_DIR="${ROOT}/docs/operations/orchestrator"
 fi
 
 WINDOW_MIN="${1:-60}"

@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-38-BATCH-38-DEV-02-20260311T034639Z-141"
+stream_id: "BATCH-38"
+task_id: "BATCH-38-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T03:46:39Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope walk-forward forecast scoreboard [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_walk-forward_forecast_scoreboard_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T03:46:39Z"
+      ended_at_utc: "2026-03-11T03:46:39Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=b607b9a ; widget=forecast-scenarios uses live `/api/forecasts/scoreboard` data via `forecastScoreboard` payload ; tests=apps/web/src/domains/forecasts/contracts/apiConnector.test.js + apps/web/src/domains/forecast"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-38-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-38-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=BATCH-38-DEV-02 had no frontend wiring for the new walk-forward scoreboard contract from DEV-01, so the existing forecasts UI could not consume or display scoreboard quality signals. | fix_applied=Added `getWalkForwardScoreboard(...)` plus dashboard event/global wiring in `apps/web/src/domains/forecasts/contracts/apiConnector.js`; stored `forecastScoreboard` in live app state and reused the existing forecast scena | verify=before=forecast scenarios widget only reflected live forecast rows and had no walk-forward scoreboard contract in connector/app state; after=connector exposes scoreboard fetch, dashboard state carries `forecastScoreboard | architecture_check=layer=apps/web/src/domains/forecasts + existing widget wiring; imports_ok=yes (reused existing connector/app/widget flow, no new domain/component boundary); path_target=apps/web/src/domains/forecasts/contracts/apiConnect | vision_alignment=batch=BATCH-38; target=Walk-Forward Forecast Scoreboard [DEV-02]; impact=smallest frontend slice now exposes backend walk-forward quality metrics inside the existing forecasts experience for immediate user-facing verific"

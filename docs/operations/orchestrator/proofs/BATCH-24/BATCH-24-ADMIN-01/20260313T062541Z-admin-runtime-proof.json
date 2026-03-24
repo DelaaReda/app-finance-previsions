@@ -1,0 +1,55 @@
+{
+  "task_id": "BATCH-24-ADMIN-01",
+  "captured_at_utc": "2026-03-13T06:25:41Z",
+  "runtime_issue": {
+    "id": "monitor_stack_recovery_plus_planner_preflight_patch",
+    "symptom": "BATCH-24 runtime proof was blocked because the monitor stack was down and the planner preflight had crashed on stale workstream helper imports after the board corruption fix.",
+    "root_cause": "The active monitor process on 7779 was absent while the LAN proxy on 7780 was still bound, and `platform/automation/parallel_workstream.py` had not imported the canonical orchestrator path helpers needed by the new runtime/docs lock normalization path."
+  },
+  "fix": {
+    "files": [
+      "platform/automation/orchestrator_paths.py",
+      "platform/automation/parallel_workstream.py",
+      "platform/automation/tests/test_orchestrator_paths.py"
+    ],
+    "summary": "Added atomic runtime/docs JSON writes, canonical mutable-path normalization, shared lock alignment, and restored the monitor stack once the active monitor modules compiled cleanly again."
+  },
+  "verification": {
+    "host_check": "runtime_is_vm=1",
+    "tests": [
+      "python3 -m pytest -q platform/automation/tests/test_orchestrator_paths.py -> 8 passed",
+      "python3 -m pytest -q platform/automation/tests/test_parallel_workstream_queue_sync.py -> 13 passed",
+      "python3 -m unittest apps.monitor.tests.test_task_progress -> OK",
+      "python3 -m py_compile platform/automation/orchestrator_paths.py platform/automation/parallel_workstream.py apps/monitor/src/collectors/activity_events.py apps/monitor/src/aggregators/task_progress.py apps/monitor/server.py -> OK"
+    ],
+    "runtime": {
+      "listeners": {
+        "8050": "LISTEN",
+        "7779": "LISTEN",
+        "7780": "LISTEN"
+      },
+      "monitor_status_lite": {
+        "url": "http://127.0.0.1:7779/api/status?lite=1",
+        "health": "DEGRADED",
+        "reason": "planner contract still reflects the last bridge failure, but monitor access is restored"
+      },
+      "runtime_diagnostics_lite": {
+        "url": "http://127.0.0.1:7779/api/runtime-diagnostics?lite=1",
+        "planner_blocker": "PLANNER_ORCHESTRATOR_BRIDGE_FAILED",
+        "next": "owner=planner; action=repair planner capability bridge now"
+      },
+      "alerts_route": {
+        "url": "http://127.0.0.1:8050/api/alerts?limit=5&include_suppressed=true",
+        "ok": true,
+        "dedupe_metadata_present": true,
+        "suppression_window_minutes": 15,
+        "urgent_bypass_enabled": true
+      }
+    }
+  },
+  "unblock": {
+    "status": "partial_unblock",
+    "detail": "Monitor/API truth is back on the canonical path and the workstream persistence patch is validated. The remaining blocker is planner status staleness until the next planner tick reruns the repaired preflight path."
+  },
+  "recommended_next": "Planner should rerun its next tick or equivalent bridge pass to clear `PLANNER_ORCHESTRATOR_BRIDGE_FAILED` now that `parallel_workstream.py sync-priority` succeeds again."
+}

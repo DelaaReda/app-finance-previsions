@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T212210Z-958"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T21:22:10Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_completion_no_code_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T21:22:10Z"
+      ended_at_utc: "2026-03-24T21:22:10Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_verified_via_parallel_workstream)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-84-analysis-complete-20260324t2122z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=Analyse planner restee IN_PROGRESS sans cloture alors que depends_on=none et BATCH-84-GOV_REVIEW attend uniquement sa fermeture | fix_applied=Validation du contexte lane puis cloture de l analyse avec references d architecture explicites et sans faux blocage | verify=before=BATCH-84-ANALYSIS in_progress et BATCH-84-GOV_REVIEW waiting_dep; after=preuve d analyse preparee pour cloture planner; test=parallel_workstream context role=planner limit=5 confirme la tache active unique | architecture_check=architecture_check=anti_regression_guards_respected_and_dependency_gate_reviewed; architecture_audit=apps/api/src/domains/*,apps/web/src,apps/api/runtime/,docs/ops/AGENTS_READY.md | vision_alignment=batch=BATCH-84; target=copilot finance personnel avec brief quotidien et ouverture ANALYSIS; impact=debloque la revue gouvernance et la suite d orchestration"

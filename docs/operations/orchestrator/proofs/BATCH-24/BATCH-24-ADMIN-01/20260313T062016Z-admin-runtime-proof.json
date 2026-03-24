@@ -1,0 +1,23 @@
+{
+  "task_id": "BATCH-24-ADMIN-01",
+  "captured_at_utc": "2026-03-13T06:20:16Z",
+  "runtime_issue": {
+    "id": "planner_board_lock_projection_drift",
+    "symptom": "Planner bridge intermittently blocked on BOARD_READ_ERROR while reading docs/operations/orchestrator/parallel-workstreams.json.",
+    "root_cause": "board_lock hashed the raw target path, so callers using the runtime workboard path and callers using the projected docs path acquired different lock files for the same logical board."
+  },
+  "fix": {
+    "file": "platform/automation/parallel_workstream.py",
+    "summary": "Canonicalize projected orchestrator paths before deriving the shared lock path so runtime and docs readers/writers serialize on one lock."
+  },
+  "verification": {
+    "tests": "python3 -m unittest discover -s platform/automation/tests -p 'test_orchestrator_paths.py' -> OK (8 tests)",
+    "monitor_status_lite": "http://192.168.64.9:7780/api/status?lite=1 -> health=OK",
+    "runtime_diagnostics_lite": "http://192.168.64.9:7780/api/runtime-diagnostics?lite=1 -> planner blocker=NONE, admin dispatch status=ok",
+    "fc_status_brief": "health=OK, planner=IN_PROGRESS/PLANNER_DISPATCH_ACTIVE, mismatch_count=0"
+  },
+  "unblock": {
+    "status": "explicit_unblock",
+    "detail": "Runtime truth is healthy again; BATCH-24 remains constrained only by its expected WAITING_DEP downstream batch."
+  }
+}

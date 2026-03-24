@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 import os
 import re
@@ -25,6 +27,13 @@ except Exception:  # pragma: no cover
     except Exception:  # pragma: no cover
         coerce_confidence = None  # type: ignore
         ensure_decision_contract = None  # type: ignore
+
+# BATCH-84-DEV-03: Live market data for brief enhancement
+try:
+    from platform.legacy.core.market_data import get_price_history, get_fundamentals
+except Exception:  # pragma: no cover
+    get_price_history = None  # type: ignore
+    get_fundamentals = None  # type: ignore
 
 
 def utc_now_iso() -> str:
@@ -1068,7 +1077,184 @@ def _default_ask_llm(
     }
 
 
+async def _invoke_ask_llm_with_timeout(
+    ask_llm_fn: Any,
+    *,
+    question: str,
+    context_chunks: List[Dict[str, Any]],
+    max_tokens: int,
+) -> Dict[str, Any]:
+    timeout_seconds = max(
+        0.01,
+        float(os.getenv("COPILOT_ASK_LLM_TIMEOUT_SECONDS", "8") or "8"),
+    )
+    kwargs = {
+        "question": question,
+        "context_chunks": context_chunks,
+        "max_tokens": max_tokens,
+    }
+
+    try:
+        if inspect.iscoroutinefunction(ask_llm_fn):
+            return await asyncio.wait_for(ask_llm_fn(**kwargs), timeout=timeout_seconds)
+
+        if inspect.isfunction(ask_llm_fn) or inspect.ismethod(ask_llm_fn) or callable(ask_llm_fn):
+            return await asyncio.wait_for(
+                asyncio.to_thread(ask_llm_fn, **kwargs),
+                timeout=timeout_seconds,
+            )
+
+        result = ask_llm_fn(**kwargs)
+        if inspect.isawaitable(result):
+            return await asyncio.wait_for(result, timeout=timeout_seconds)
+        return result
+    except asyncio.TimeoutError as exc:
+        raise TimeoutError(
+            f"copilot ask llm timed out after {timeout_seconds:.2f}s"
+        ) from exc
+
+
+# ==================== BATCH-84-DEV-03: Live Market Data Enhancement ====================
+
+def _fetch_live_market_indicators() -> Dict[str, Any]:
+    """
+    Fetch live market indicators for brief enhancement.
+    
+    Returns dict with:
+    - vix: Current VIX level (fear gauge)
+    - spy_change: S&P 500 daily change %
+    - qqq_change: NASDAQ 100 daily change %
+    - market_status: 'open'/'closed' based on timestamp
+    - fetched_at: ISO timestamp
+    
+    BATCH-84-DEV-03: Enhances brief with live data instead of snapshot-only.
+    """
+    generated_at = utc_now_iso()
+    fallback = {
+        "vix": None,
+        "spy_change": None,
+        "qqq_change": None,
+        "market_status": "unknown",
+        "fetched_at": generated_at,
+        "source": "live_market_data",
+        "degraded": True,
+        "degraded_reason": "Live data fetch failed - using cached brief only",
+    }
+    
+    if get_price_history is None:
+        return fallback
+    
+    try:
+        # Fetch VIX (volatility index)
+        vix_value = None
+        try:
+            vix_df = get_price_history("^VIX", interval="1d")
+            if vix_df is not None and not vix_df.empty and "Close" in vix_df.columns:
+                vix_value = float(vix_df["Close"].iloc[-1])
+        except Exception:
+            pass
+        
+        # Fetch SPY (S&P 500 ETF) daily change
+        spy_change = None
+        try:
+            spy_df = get_price_history("SPY", interval="1d")
+            if spy_df is not None and not spy_df.empty and "Close" in spy_df.columns:
+                closes = spy_df["Close"].dropna()
+                if len(closes) >= 2:
+                    spy_change = ((closes.iloc[-1] - closes.iloc[-2]) / closes.iloc[-2]) * 100
+        except Exception:
+            pass
+        
+        # Fetch QQQ (NASDAQ 100 ETF) daily change
+        qqq_change = None
+        try:
+            qqq_df = get_price_history("QQQ", interval="1d")
+            if qqq_df is not None and not qqq_df.empty and "Close" in qqq_df.columns:
+                closes = qqq_df["Close"].dropna()
+                if len(closes) >= 2:
+                    qqq_change = ((closes.iloc[-1] - closes.iloc[-2]) / closes.iloc[-2]) * 100
+        except Exception:
+            pass
+        
+        # Determine market status (simplified - assumes weekday 9:30-16:00 ET)
+        market_status = "unknown"
+        try:
+            now = datetime.now(timezone.utc)
+            # Rough NY timezone check (UTC-5 or UTC-4)
+            et_hour = (now.hour - 5) % 24  # Approximate ET hour
+            if now.weekday() < 5 and 9 <= et_hour < 16:
+                market_status = "open"
+            else:
+                market_status = "closed"
+        except Exception:
+            pass
+        
+        # Build result - only include successfully fetched values
+        result = {
+            "vix": vix_value,
+            "spy_change": round(spy_change, 2) if spy_change is not None else None,
+            "qqq_change": round(qqq_change, 2) if qqq_change is not None else None,
+            "market_status": market_status,
+            "fetched_at": generated_at,
+            "source": "live_market_data",
+        }
+        
+        # Mark as degraded if we couldn't fetch anything
+        if all(v is None for v in [vix_value, spy_change, qqq_change]):
+            result["degraded"] = True
+            result["degraded_reason"] = "Live data partially unavailable"
+        else:
+            result["degraded"] = False
+            
+        return result
+        
+    except Exception as e:
+        fallback["error"] = str(e)
+        return fallback
+
+
+def _enhance_brief_with_live_data(brief: Dict[str, Any], live_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Enhance brief payload with live market indicators.
+    
+    BATCH-84-DEV-03: Adds live market context to snapshot-based brief.
+    """
+    if not isinstance(brief, dict):
+        return brief
+    
+    enhanced = dict(brief)
+    
+    # Add live market indicators
+    if isinstance(live_data, dict) and live_data:
+        enhanced["live_market_data"] = live_data
+        
+        # Enhance summary with live context if available
+        current_summary = brief.get("summary", "")
+        vix = live_data.get("vix")
+        spy_change = live_data.get("spy_change")
+        
+        if vix is not None or spy_change is not None:
+            live_context_parts = []
+            if vix is not None:
+                vix_level = "elevé" if vix > 20 else "bas" if vix < 15 else "normal"
+                live_context_parts.append(f"VIX={vix:.1f} ({vix_level})")
+            if spy_change is not None:
+                spy_direction = "haussier" if spy_change > 0.5 else "baissier" if spy_change < -0.5 else "stable"
+                live_context_parts.append(f"S&P 500 {spy_direction} ({spy_change:+.2f}%)")
+            
+            if live_context_parts and current_summary:
+                # Prepend live context to summary
+                enhanced["summary"] = f"[Live: {', '.join(live_context_parts)}] {current_summary}"
+    
+    return enhanced
+
+
 def _load_daily_brief_payload() -> Dict[str, Any]:
+    """
+    Load daily brief from snapshot and enhance with live market data.
+    
+    BATCH-84-DEV-03: Adds live VIX, SPY, QQQ data to snapshot-based brief.
+    """
     generated_at = utc_now_iso()
     fallback_payload = {
         "summary": "No daily brief available yet.",
@@ -1121,6 +1307,20 @@ def _load_daily_brief_payload() -> Dict[str, Any]:
         "brief_daily_snapshot",
     )
     normalized["event_timing"] = _normalize_brief_event_timing(normalized)
+    
+    # BATCH-84-DEV-03: Enhance with live market data
+    try:
+        live_data = _fetch_live_market_indicators()
+        if live_data and not live_data.get("degraded", True):
+            normalized = _enhance_brief_with_live_data(normalized, live_data)
+            # Add live data source to brief sources
+            existing_sources = normalized.get("source", [])
+            if "live_market_data" not in existing_sources:
+                normalized["source"] = existing_sources + ["live_market_data"]
+    except Exception:
+        # Silently continue with snapshot-only brief if live data fails
+        pass
+    
     return normalized
 
 
@@ -1694,7 +1894,8 @@ async def build_ask_payload(
         else:
             question_for_llm = question
 
-        llm_response = ask_llm_fn(
+        llm_response = await _invoke_ask_llm_with_timeout(
+            ask_llm_fn,
             question=question_for_llm,
             context_chunks=context_chunks,
             max_tokens=1000,
@@ -1800,9 +2001,11 @@ async def build_ask_payload(
         return _finalize_ask_payload(response_payload)
     except Exception as exc:
         return _finalize_ask_payload({
+            "question": question,
             "answer": f"Désolé, une erreur s'est produite lors du traitement: {exc}",
             "action": "hold",
             "verdict": "hold",
+            "horizon": "1w",
             "why": ["Erreur interne copilot, recommandation conservatrice appliquée."],
             "risk": {"level": "high", "caveat": "Erreur interne copilot."},
             "risk_level": "high",

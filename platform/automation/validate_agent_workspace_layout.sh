@@ -63,7 +63,7 @@ required_dirs=(
   "docs/operations"
   "docs/ops"
   "docs/planning"
-  "docs/orchestrator-ops"
+  "docs/operations/orchestrator"
   "apps/api/src"
   "apps/web/src"
 )

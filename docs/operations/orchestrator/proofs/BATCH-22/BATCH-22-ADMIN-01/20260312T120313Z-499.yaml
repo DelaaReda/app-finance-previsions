@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-22-BATCH-22-ADMIN-01-20260312T120313Z-499"
+stream_id: "BATCH-22"
+task_id: "BATCH-22-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-12T12:03:13Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+preconditions:
+  change_plan:
+    - "scope rebalancing optimizer lite [admin-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_rebalancing_optimizer_lite_[admin-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-12T12:03:13Z"
+      ended_at_utc: "2026-03-12T12:03:13Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`bash scripts/runtime_host_check.sh`; live OpenAPI probe on `http://127.0.0.1:8050/openapi.json`; live `curl` probes for `/api/judge/rebalancing-optimizer-lite` and `/api/judge/strategy-playbooks`; `python3 -m pytest app"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-22/BATCH-22-ADMIN-01/20260312T120145Z-admin-runtime-proof.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-22-ADMIN-01"
+  review_ref: "planner_subagent_manager:BATCH-22-ADMIN-01"
+  note: "source=planner_subagent_manager | root_cause=Port 8050 was owned by stale backend pid 3263392 started on 2026-03-11 from `/home/venom/shared/analyse-financiere/apps/api/src/platform/run_api.py`. That outdated process exposed `/api/judge/options` and `/api/judge/str | fix_applied=Stopped the stale backend listener and relaunched the API from the canonical VM workspace with `python3 -m uvicorn api.main:create_app --factory --host 127.0.0.1 --port 8050`. No repo code or config was changed; only run | verify=PASS runtime_host_check: `runtime_is_vm=1`; PASS live OpenAPI after fix: `/api/judge/rebalancing-optimizer-lite` present; PASS live route: `GET /api/judge/rebalancing-optimizer-lite?limit=1&ticker=SPY&portfolio_id=pf-reb | architecture_check=PASS(runtime-only scope). Reused existing backend entrypoint and monitor surfaces, did not modify queue/workboard/contracts, and did not broaden into planner or dev implementation work. | vision_alignment=PASS(BATCH-22 ADMIN-01). This gives planner explicit live evidence that the Rebalancing Optimizer Lite route delivered by the dev chain is actually served on :8050 and remains observable through monitor/runtime diagnosti"

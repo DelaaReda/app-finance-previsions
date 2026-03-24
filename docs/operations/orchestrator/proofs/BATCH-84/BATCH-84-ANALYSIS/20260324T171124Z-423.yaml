@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T171124Z-423"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T17:11:24Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T17:11:24Z"
+      ended_at_utc: "2026-03-24T17:11:24Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_runtime_coordination_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/legacy/planner-subagents-results/planner_admin_626aa9ef3d.raw.txt"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "batch84-analysis-close-20260324t1712z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=planner admin dispatch route returned invalid_subagent_result start_banner_only | fix_applied=planner launched admin runtime subagent and captured concrete failure artifact for next repair tick | verify=before=analysis had no concrete admin runtime failure proof; after=dispatch produced planner_admin_626aa9ef3d with invalid_subagent_result start_banner_only and raw artifact; test=parallel_workstream context showed BATCH-84-ANALYSIS in_progress and subagent run returned rc 65 | architecture_check=ACTIVE_DOCS_INDEX respected apps/api apps/web references preserved and frontend theme untouched | vision_alignment=batch=BATCH-84 target=finance copilot orchestration impact=planner now holds actionable runtime defect evidence"

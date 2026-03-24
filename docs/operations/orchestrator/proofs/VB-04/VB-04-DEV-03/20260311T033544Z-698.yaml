@@ -1,0 +1,53 @@
+proof_id: "PRF-VB-04-VB-04-DEV-03-20260311T033544Z-698"
+stream_id: "VB-04"
+task_id: "VB-04-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T03:35:44Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope minimal frontend wiring [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_minimal_frontend_wiring_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T03:35:44Z"
+      ended_at_utc: "2026-03-11T03:35:44Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "FAIL"
+      evidence: "PASS node --test apps/web/src/domains/forecasts/pages/app.test.js; FAIL bash scripts/backend_regression_gate.sh --no-live"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=41181c1a2e4ec80df2c5a3227ee0097784926e29; files=apps/web/src/domains/forecasts/pages/app.js,apps/web/src/domains/forecasts/pages/app.test.js"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_VB-04-DEV-03"
+  review_ref: "planner_subagent_manager:VB-04-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=The ask/deep-dive rendering path in `apps/web/src/domains/forecasts/pages/app.js` still collapsed normalized memo metadata into a single footer line, so the minimal frontend wiring batch was missing explicit source/fresh | fix_applied=Updated `buildCopilotChatResponseHtml()` to reuse existing `source-badge` styling for explicit `Freshness`, `Sources`, and `Degraded` badges, and hardened source label handling so string or object sources both render saf | verify=before=copilot ask/deep-dive responses only exposed memo metadata in a single footer line and did not render explicit freshness/source/degraded badges on the existing response surface; after=`buildCopilotChatResponseHtml | architecture_check=layer=frontend copilot ask/deep-dive rendering only; imports_ok=yes (reused existing `source-badge` surface and existing page renderer, no new module/helper introduced outside current page test harness); path_target=apps | vision_alignment=batch=VB-04; target=minimal frontend wiring on the current copilot live shell; impact=users now see backend freshness/source/degraded truth directly in the existing memo response without a redesign or widened scope."

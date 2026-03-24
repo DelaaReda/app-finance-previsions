@@ -1,14 +1,14 @@
 {
-  "updated_at_utc": "2026-03-07T04:22:36Z",
+  "updated_at_utc": "2026-03-24T22:08:01Z",
   "roles": {
     "dev": {
-      "ts_utc": "2026-03-07T04:08:02Z",
+      "ts_utc": "2026-03-24T22:08:01Z",
       "role": "dev",
       "source": "health_snapshot",
-      "status": "BLOCKED",
-      "delta": "CONTRACT_GUARD_BLOCK",
-      "verdict": "BLOCKED",
-      "blocker_id": "DEV_ARCH_CHECK_FORMAT_INVALID",
+      "status": "PASS",
+      "delta": "NO_DELTA",
+      "verdict": "PASS",
+      "blocker_id": "NONE",
       "next_action_unique": "FIX_DEV_20260306T121640Z",
       "next": "owner=dev; action=corriger le contrat puis relancer",
       "task_update": "blocked",
@@ -34,26 +34,33 @@
       "workboard_version": ""
     },
     "planner": {
-      "ts_utc": "2026-03-07T04:22:36Z",
+      "ts_utc": "2026-03-24T22:08:01Z",
       "role": "planner",
-      "source": "primary_structured",
-      "status": "BLOCKED",
-      "delta": "SYNC_PRIORITY_THEN_CLAIM_FAILED",
-      "verdict": "BLOCKED",
-      "blocker_id": "PLANNER_NO_READY_TASK_AFTER_SYNC",
-      "next_action_unique": "CLAIM_BATCH_11_ARCH_P1772857327_28227",
-      "next": "owner=planner; action=relancer claim --role planner sur BATCH-11-ARCH apres reconciliation du workboard",
+      "source": "health_snapshot",
+      "status": "IN_PROGRESS",
+      "delta": "PLANNER_DISPATCH_ACTIVE",
+      "verdict": "GO_WITH_CAUTION",
+      "blocker_id": "NONE",
+      "next_action_unique": "PLANNER_ORCHESTRATOR_BRIDGE_FAILED",
+      "next": "owner=planner; action=repair planner capability bridge now",
+      "action_summary": "inspect_bridge_stdout_and_stderr",
       "task_update": "blocked",
       "exec_report": "none",
-      "issues": "planner_no_ready_task_after_sync,planner_orchestrator_dev_dispatch_failed",
-      "issue_count": 2,
-      "issue_severity": "medium",
-      "issue_codes": [
-        "planner_no_ready_task_after_sync",
-        "planner_orchestrator_dev_dispatch_failed"
+      "run_note": "none",
+      "root_cause": "planner_orchestrator_bridge_failed",
+      "fix_applied": "inspect_bridge_stdout_and_stderr",
+      "verify": "source=primary_structured",
+      "issues": "none",
+      "issue_count": 0,
+      "issue_severity": "none",
+      "issue_codes": [],
+      "issue_reporting_ok": false,
+      "issue_reporting_errors": [
+        "blocked_without_issue_report",
+        "issue_count",
+        "issue_severity",
+        "issues"
       ],
-      "issue_reporting_ok": true,
-      "issue_reporting_errors": [],
       "suggestions": "none",
       "stream_id": "none",
       "task_id": "none",
@@ -63,17 +70,17 @@
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "queue_1772857321_f38108b1968a",
-      "workboard_version": "workboard_1772857323_5cca710a3ad8"
+      "queue_version": "",
+      "workboard_version": ""
     },
     "admin": {
-      "ts_utc": "2026-03-07T04:08:02Z",
+      "ts_utc": "2026-03-24T22:08:01Z",
       "role": "admin",
       "source": "health_snapshot",
-      "status": "IN_PROGRESS",
-      "delta": "TAKEOVER_DEV_DEBLOQUER_CONTRACT_GUARD_ET_CLAIM_READY",
-      "verdict": "TAKEOVER_DEV_NOW",
-      "blocker_id": "DEV_ARCH_CHECK_FORMAT_INVALID",
+      "status": "PASS",
+      "delta": "NO_DELTA",
+      "verdict": "BLOCKER_RUNTIME_INFERENCE_CONFIRME",
+      "blocker_id": "NONE",
       "next_action_unique": "TAKEOVER_CLAIM_BATCH_27_DEV_01_P1772799402_22370",
       "next": "owner=admin; action=takeover claim BATCH-27-DEV-01 via parallel_workstream role=dev",
       "task_update": "analysis_only",
@@ -123,7 +130,7 @@
       "skill_request": "none",
       "tools_used": "",
       "channels_read": "docs/operations/orchestrator/priority-queue.json,docs/operations/orchestrator/parallel-workstreams.json,logs-codex-runs/role-runner/planner.events.log,logs-codex-runs/role-runner/d",
-      "impact_assessment": "capacit\u00e9 planner active",
+      "impact_assessment": "capacité planner active",
       "impact_action": "aviser planner de confirmer claim BATCH11_ARCH puis de basculer claim BATCH-27-DEV-01",
       "queue_version": "queue_1772835433_514fdb133eec",
       "workboard_version": "workboard_1772835503_f8bb2c1be057"
@@ -131,12 +138,14 @@
   },
   "summary": {
     "roles_total": 4,
-    "fresh_roles_total": 1,
-    "stale_context_open": 3,
+    "fresh_roles_total": 2,
+    "stale_context_open": 2,
     "issues_open": 1,
     "issue_reports_open": 1,
-    "issue_reporting_missing_count": 0,
-    "issue_reporting_missing_roles": [],
+    "issue_reporting_missing_count": 1,
+    "issue_reporting_missing_roles": [
+      "planner"
+    ],
     "critical_count": 0,
     "critical_issue_roles": [],
     "process_issues_open": 0,
@@ -155,64 +164,149 @@
       "dev"
     ],
     "blocker_roles": [
-      "dev"
+      "planner"
     ],
     "tool_skill_request_roles": [],
     "stale_context_roles": [
       "admin",
-      "planner",
       "scrum_master"
     ],
     "context_versions": {
-      "queue_version": "queue_1772857356_b3f3c54bd2d3",
-      "workboard_version": "workboard_1772857356_c515e38e4989"
+      "queue_version": "queue_1773424805_a62cef05e4e7",
+      "workboard_version": "workboard_1773424900_884e6aaf148b"
     }
   },
-  "updated_at": "2026-03-07T04:08:02Z",
+  "updated_at": "2026-03-24T22:08:01Z",
   "health_snapshot": {
-    "ts_utc": "2026-03-03T11:03:54Z",
+    "ts_utc": "2026-03-24T22:08:01Z",
+    "health": "DEGRADED",
+    "execution_mode": "planner_experimental",
+    "scheduled_roles": [
+      "planner"
+    ],
+    "capability_roles": [],
     "workboard": {
-      "done": 40,
-      "ready": 4,
-      "in_progress": 0,
-      "total": 48
+      "total": 547,
+      "done": 544,
+      "ready": 0,
+      "in_progress": 2
+    },
+    "velocity": {
+      "done_24h": 41,
+      "done_7d": 158,
+      "proofs": 104
     },
     "queue": {
-      "ready": 1,
-      "closed": 9,
-      "total": 11
+      "total": 82,
+      "ready": 0,
+      "closed": 81
     },
     "agents": {
       "planner": {
-        "verdict": "GO",
-        "blocker": "NONE"
+        "verdict": "GO_WITH_CAUTION",
+        "status": "IN_PROGRESS",
+        "blocker": "NONE",
+        "delta": "PLANNER_DISPATCH_ACTIVE"
       },
       "dev": {
-        "verdict": "GO",
-        "blocker": "NONE"
+        "verdict": "PASS",
+        "status": "PASS",
+        "blocker": "NONE",
+        "delta": "NO_DELTA"
       },
       "admin": {
-        "verdict": "PASS",
-        "blocker": "NONE"
+        "verdict": "BLOCKER_RUNTIME_INFERENCE_CONFIRME",
+        "status": "PASS",
+        "blocker": "NONE",
+        "delta": "NO_DELTA"
       }
     },
     "blocked_agents": [],
-    "rate_limits_active": [],
-    "tick_age_minutes": {
-      "planner": 319,
-      "dev": 313,
-      "admin": 307
+    "rate_limited_agents": [],
+    "stale_agents": [],
+    "rate_limits": [],
+    "tick_age_min": {
+      "planner": 5,
+      "dev": 26101,
+      "admin": 26087
     },
-    "done_24h": 120,
-    "done_total": 40,
-    "health": "OK"
+    "critical_widget_health": {
+      "ts_utc": "2026-03-24T22:08:01Z",
+      "state": "error",
+      "monitor_base_url": "http://127.0.0.1:7779",
+      "api_base_url": "http://127.0.0.1:8050",
+      "widgets": {
+        "hero": {
+          "state": "error",
+          "monitor_health": "OK",
+          "recommendations_status": "unknown"
+        },
+        "news": {
+          "state": "ok",
+          "freshness": "fresh",
+          "updated_at": "2026-03-24T22:00:19.008115"
+        },
+        "forecasts": {
+          "state": "error",
+          "status": "ok",
+          "freshness": "fresh",
+          "updated_at": "2026-03-24T04:28:23.266979Z"
+        },
+        "judge": {
+          "state": "error",
+          "monitor_health": "OK",
+          "recommendations_status": "unknown"
+        },
+        "deep-dive": {
+          "state": "error",
+          "monitor_health": "OK",
+          "recommendations_status": "unknown",
+          "forecasts_status": "ok"
+        }
+      }
+    }
   },
   "health": "DEGRADED",
   "velocity": {
-    "done_24h": 55,
-    "done_7d": 119,
-    "proofs": 49
+    "done_24h": 41,
+    "done_7d": 158,
+    "proofs": 104
   },
   "_cleanup_ts": "2026-03-04T11:59:09.835863+00:00",
-  "_cleanup_note": "Removed 12 phantom roles (not in active topology): ['frontend_engineer', 'infra_engineer', 'backend_engineer', 'integrator', 'analyst', 'architect', 'data_analyst', 'tester', 'qa', 'scrum_master', 'clawsentinel', 'po']"
+  "_cleanup_note": "Removed 12 phantom roles (not in active topology): ['frontend_engineer', 'infra_engineer', 'backend_engineer', 'integrator', 'analyst', 'architect', 'data_analyst', 'tester', 'qa', 'scrum_master', 'clawsentinel', 'po']",
+  "critical_widget_health": {
+    "ts_utc": "2026-03-24T22:08:01Z",
+    "state": "error",
+    "monitor_base_url": "http://127.0.0.1:7779",
+    "api_base_url": "http://127.0.0.1:8050",
+    "widgets": {
+      "hero": {
+        "state": "error",
+        "monitor_health": "OK",
+        "recommendations_status": "unknown"
+      },
+      "news": {
+        "state": "ok",
+        "freshness": "fresh",
+        "updated_at": "2026-03-24T22:00:19.008115"
+      },
+      "forecasts": {
+        "state": "error",
+        "status": "ok",
+        "freshness": "fresh",
+        "updated_at": "2026-03-24T04:28:23.266979Z"
+      },
+      "judge": {
+        "state": "error",
+        "monitor_health": "OK",
+        "recommendations_status": "unknown"
+      },
+      "deep-dive": {
+        "state": "error",
+        "monitor_health": "OK",
+        "recommendations_status": "unknown",
+        "forecasts_status": "ok"
+      }
+    }
+  }
 }

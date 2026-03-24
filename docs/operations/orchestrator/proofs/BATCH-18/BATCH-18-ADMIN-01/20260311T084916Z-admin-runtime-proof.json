@@ -1,0 +1,44 @@
+{
+  "task_id": "BATCH-18-ADMIN-01",
+  "batch_id": "BATCH-18",
+  "title": "Event Driven Copilot [ADMIN-01]",
+  "captured_at": "2026-03-11T08:49:16Z",
+  "status": "UNBLOCKED",
+  "summary": "Runtime truth and observability are healthy for the Event Driven Copilot lane after BATCH-18-DEV-03. No runtime repair was required.",
+  "root_cause": "none",
+  "fix_applied": "none",
+  "checks": {
+    "runtime_host_check": {
+      "status": "PASS",
+      "detail": "runtime_is_vm=1 hostname=venom-Apple-Virtualization-Generic-Platform pwd=/home/venom/analyse-financiere"
+    },
+    "fc_status_brief": {
+      "status": "PASS",
+      "detail": "health=OK mode=planner_experimental ready=0 in_progress=1 waiting_dep=7 mismatch_count=0 planner_quality=100"
+    },
+    "monitor_contract_smoke": {
+      "status": "PASS",
+      "detail": "health=OK roles=1 agents=4 queue_states=3 workboard_ready=0 admin_timeouts_recent=0"
+    },
+    "monitor_status_lite": {
+      "status": "PASS",
+      "detail": "health=OK execution_mode=planner_experimental BATCH-18 state=IN_PROGRESS tasks_total=4 closed=3 in_progress=1"
+    },
+    "runtime_diagnostics_lite": {
+      "status": "PASS",
+      "detail": "health=OK doctor_status=degraded admin=IN_PROGRESS/CAPABILITY_ACTIVE owner_task=BATCH-18-ADMIN-01 planner=IN_PROGRESS/PLANNER_DISPATCH_ACTIVE"
+    },
+    "fc_doctor": {
+      "status": "GO_WITH_CAUTION",
+      "detail": "top-level status=degraded, but runtime sessions/locks/queue_workboard/providers/product_value all report ok; degradation is from shared delivery_integrity/browser-proof debt and stale widgets outside BATCH-18 runtime scope"
+    }
+  },
+  "scope_interpretation": {
+    "task_scoped_blocker": "none",
+    "non_blocking_observability_debt": [
+      "fc_doctor delivery_integrity future_status=degraded due browser_proof_missing_task_ids=[VB-04-ADMIN-01]",
+      "health_snapshot critical_widget_health state=stale on news and deep-dive widgets"
+    ]
+  },
+  "planner_merge_signal": "BATCH-18-ADMIN-01 is runtime-unblocked and can be merged/closed from the admin side."
+}

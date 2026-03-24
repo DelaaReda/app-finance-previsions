@@ -1,0 +1,35 @@
+{
+  "ts_utc": "20260314T034146Z",
+  "result": "OK",
+  "launcher_action": "refresh_existing_stack",
+  "endpoint_failures": 0,
+  "doctor_status": "degraded",
+  "doctor_runtime_status": "ok",
+  "doctor_non_runtime_degraded_checks": [
+    "openclaw_gateway"
+  ],
+  "proof_log": "/home/venom/shared/analyse-financiere/docs/operations/orchestrator/proofs/runtime-gate/runtime-e2e-20260314T034146Z.log",
+  "preflight": {
+    "frontend_status": "200",
+    "backend_status": "200",
+    "monitor_status": "200",
+    "listeners": {
+      "5173": "up",
+      "8050": "up",
+      "7779": "up"
+    }
+  },
+  "quiet_period": {
+    "seconds": 30,
+    "result": "PASS",
+    "reason": "ok",
+    "frontend_status": "200",
+    "monitor_status": "200",
+    "backend_status": "200",
+    "listeners": {
+      "5173": "up",
+      "7779": "up",
+      "8050": "up"
+    }
+  }
+}

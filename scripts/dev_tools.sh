@@ -167,7 +167,7 @@ frontend_status() {
 }
 
 board_status() {
-  python3 scripts/parallel_workstream.py status | python3 -c "
+  python3 platform/automation/compat/projections/parallel_workstream.py status | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 s = d['summary']
@@ -184,19 +184,19 @@ for role, info in d['by_role'].items():
 
 board_role() {
   local role="${1:-planner}"
-  python3 scripts/parallel_workstream.py context --role "$role"
+  python3 platform/automation/compat/projections/parallel_workstream.py context --role "$role"
 }
 
 claim_task() {
   local role="${1:-}"
   if [[ -z "$role" ]]; then echo "Usage: $0 claim ROLE"; exit 1; fi
-  python3 scripts/parallel_workstream.py claim --role "$role"
+  python3 platform/automation/runtime/planner/planner_runtime_actions.py claim --role "$role"
 }
 
 complete_task() {
   local task="${1:-}"
   if [[ -z "$task" ]]; then echo "Usage: $0 complete TASK_ID"; exit 1; fi
-  python3 scripts/parallel_workstream.py complete --task "$task" --role "${2:-}" --artifact "${3:-}" --notes "${4:-}"
+  python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --task "$task" --role "${2:-}" --artifact "${3:-}" --notes "${4:-}"
 }
 
 agent_status() {

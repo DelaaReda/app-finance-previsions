@@ -16,15 +16,13 @@ LOCK_FILE="${FC_ROLE_RECOVERY_LOCK_FILE:-/tmp/fc-codex-role-recovery.lock}"
 LOCK_META_FILE="${FC_ROLE_RECOVERY_LOCK_META_FILE:-${LOCK_FILE}.meta}"
 LOCK_STALE_SECONDS="${FC_ROLE_RECOVERY_LOCK_STALE_SECONDS:-1800}"
 MAX_RUNTIME_SECONDS="${FC_ROLE_RECOVERY_MAX_SECONDS:-480}"
+VERIFY_ATTEMPTS="${FC_ROLE_RECOVERY_VERIFY_ATTEMPTS:-5}"
+VERIFY_SLEEP_SECONDS="${FC_ROLE_RECOVERY_VERIFY_SLEEP_SECONDS:-2}"
 LOG_DIR="${FC_ROLE_RECOVERY_LOG_DIR:-$ROOT/logs-codex-runs}"
 LOG_FILE="${FC_ROLE_RECOVERY_LOG_FILE:-$LOG_DIR/role-recovery.log}"
-TOPOLOGY_FILE="${FC_ROLE_TOPOLOGY_FILE:-$ROOT/docs/operations/orchestrator/parallel-role-topology-active.json}"
+TOPOLOGY_FILE="${FC_ROLE_TOPOLOGY_FILE:-$ROOT/logs-codex-runs/orchestrator-state/parallel-role-topology-active.json}"
 ROLES=()
 RUN_STARTED_EPOCH="$(date +%s)"
-
-if [[ ! -f "$TOPOLOGY_FILE" ]]; then
-  TOPOLOGY_FILE="$ROOT/docs/orchestrator-ops/parallel-role-topology-active.json"
-fi
 
 load_roles_from_topology() {
   local topology_roles=()
@@ -77,7 +75,6 @@ cleanup_stale_runtime_locks() {
 
 if ! mkdir -p "$LOG_DIR" 2>/dev/null; then
   for fallback in \
-    "/home/venom/shared/analyse-financiere/logs-codex-runs" \
     "/home/venom/analyse-financiere/logs-codex-runs" \
     "${HOME}/.cache/fc/logs-codex-runs"
   do
@@ -177,9 +174,69 @@ pane_current_command() {
   tmux display-message -p -t "$target" "#{pane_current_command}" 2>/dev/null | tr '[:upper:]' '[:lower:]'
 }
 
+pane_current_path() {
+  local target="$1"
+  tmux display-message -p -t "$target" "#{pane_current_path}" 2>/dev/null
+}
+
 pane_pid() {
   local target="$1"
   tmux display-message -p -t "$target" "#{pane_pid}" 2>/dev/null | tr -d '[:space:]'
+}
+
+session_tail() {
+  local target="$1"
+  tmux capture-pane -p -t "$target" -S -20 2>/dev/null || true
+}
+
+session_has_interactive_codex_prompt() {
+  local target="$1"
+  local tail=""
+  tail="$(session_tail "$target")"
+  [[ "$tail" == *"Update now (runs \`npm install -g @openai/codex\`)"* ]] && return 0
+  [[ "$tail" == *"Press enter to continue"* ]] && return 0
+  [[ "$tail" == *"Trust this project"* ]] && return 0
+  [[ "$tail" == *"Allow all file"* ]] && return 0
+  [[ "$tail" == *"Switch to "* && "$tail" == *"lower credit"* ]] && return 0
+  return 1
+}
+
+session_path_invalid() {
+  local target="$1"
+  local path=""
+  path="$(pane_current_path "$target" || true)"
+  [[ -z "$path" ]] && return 0
+  [[ "$path" == *"(deleted)"* ]] && return 0
+  case "$path" in
+    "$ROOT"|"$ROOT"/*)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+dismiss_interactive_codex_prompt() {
+  return 1
+}
+
+preseed_codex_version_dismissal() {
+  local version_file="${HOME}/.codex/version.json"
+  [[ -f "$version_file" ]] || return 0
+  python3 - "$version_file" <<'PY' >/dev/null 2>&1 || true
+import json, pathlib, sys
+path = pathlib.Path(sys.argv[1])
+try:
+    payload = json.loads(path.read_text())
+except Exception:
+    raise SystemExit(0)
+latest = payload.get("latest_version")
+if not latest:
+    raise SystemExit(0)
+if payload.get("dismissed_version") == latest:
+    raise SystemExit(0)
+payload["dismissed_version"] = latest
+path.write_text(json.dumps(payload, separators=(",", ":")) + "\n")
+PY
 }
 
 session_ready() {
@@ -188,19 +245,27 @@ session_ready() {
   local cmd=""
   local pid=""
   local children=""
+  local tail=""
 
   if ! tmux has-session -t "$session" 2>/dev/null; then
     return 1
   fi
+  if session_path_invalid "$target"; then
+    return 1
+  fi
+  if session_has_interactive_codex_prompt "$target"; then
+    return 1
+  fi
 
   cmd="$(pane_current_command "$target" || true)"
-  # Codex/Qwen can run as transient child processes. An idle shell pane is still a
-  # healthy role session and should not be force-restarted.
+  tail="$(session_tail "$target")"
   if [[ "$cmd" == *"codex"* || "$cmd" == *"qwen"* || "$cmd" == "node" ]]; then
     return 0
   fi
   if [[ "$cmd" == "bash" || "$cmd" == "sh" || "$cmd" == "zsh" || "$cmd" == "fish" ]]; then
-    return 0
+    if [[ "$tail" == *"[READY] Session active"* || "$tail" == *"OpenAI Codex"* || "$tail" == *"/model to change"* || "$tail" == *"Update now (runs "* ]]; then
+      return 1
+    fi
   fi
 
   pid="$(pane_pid "$target" || true)"
@@ -222,15 +287,27 @@ start_or_restart_session() {
   if tmux has-session -t "$session" 2>/dev/null; then
     tmux kill-session -t "$session" >/dev/null 2>&1 || true
   fi
-  printf -v launch_cmd 'cd %q && unset NO_COLOR && if [ "${TERM:-dumb}" = "dumb" ]; then export TERM=xterm-256color; fi; export COLORTERM="${COLORTERM:-truecolor}"; export FORCE_COLOR="${FORCE_COLOR:-1}"; exec codex --no-alt-screen' "$ROOT"
-  tmux new-session -d -s "$session" "bash -lc $(printf '%q' "$launch_cmd")"
+  preseed_codex_version_dismissal
+  printf -v launch_cmd 'cd %q && unset NO_COLOR && if [ "${TERM:-dumb}" = "dumb" ]; then export TERM=xterm-256color; fi; export COLORTERM="${COLORTERM:-truecolor}"; export FORCE_COLOR="${FORCE_COLOR:-1}"; exec codex --cd %q --no-alt-screen' "$ROOT" "$ROOT"
+  # Do not let the recovery flock FD leak into tmux. If tmux inherits FD 9,
+  # it keeps /tmp/fc-codex-role-recovery.lock open after the script exits and
+  # every later recovery run sees a false "already running" state.
+  exec 9>&-
+  tmux new-session -d -s "$session" -c "$ROOT" "bash -lc $(printf '%q' "$launch_cmd")"
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || true
   tmux set-option -t "$session" history-limit 200000 >/dev/null 2>&1 || true
   sleep 2
+  dismiss_interactive_codex_prompt "$target" || true
+  sleep 1
   if ! session_ready "$session"; then
     tmux send-keys -t "$target" C-c >/dev/null 2>&1 || true
     tmux send-keys -t "$target" "cd $ROOT" C-m >/dev/null 2>&1 || true
-    tmux send-keys -t "$target" "codex --no-alt-screen" C-m >/dev/null 2>&1 || true
+    preseed_codex_version_dismissal
+    tmux send-keys -t "$target" "codex --cd $ROOT --no-alt-screen" C-m >/dev/null 2>&1 || true
     sleep 2
+    dismiss_interactive_codex_prompt "$target" || true
+    sleep 1
   fi
 }
 
@@ -326,20 +403,32 @@ for role in "${down_roles[@]}"; do
   start_or_restart_session "$session"
 done
 
-verify_down=()
-for role in "${ROLES[@]}"; do
+verify_down=("${ROLES[@]}")
+attempt=1
+while [[ "$attempt" -le "$VERIFY_ATTEMPTS" ]]; do
   role_recovery_runtime_guard
-  session="$(role_session_name "$role")"
-  if [[ -z "$session" ]]; then
-    continue
+  verify_down_next=()
+  for role in "${verify_down[@]}"; do
+    session="$(role_session_name "$role")"
+    if [[ -z "$session" ]]; then
+      continue
+    fi
+    if ! session_ready "$session"; then
+      verify_down_next+=("$role")
+    fi
+  done
+  verify_down=("${verify_down_next[@]}")
+  if [[ ${#verify_down[@]} -eq 0 ]]; then
+    break
   fi
-  if ! session_ready "$session"; then
-    verify_down+=("$role")
+  if [[ "$attempt" -lt "$VERIFY_ATTEMPTS" ]]; then
+    sleep "$VERIFY_SLEEP_SECONDS"
   fi
+  attempt=$((attempt + 1))
 done
 
 if [[ ${#verify_down[@]} -gt 0 ]]; then
-  printf '%s [ERROR] recovery failed; roles still DOWN: %s\n' "$(ts)" "$(IFS=,; echo "${verify_down[*]}")" >> "$LOG_FILE"
+  printf '%s [ERROR] recovery failed after %s attempt(s); roles still DOWN: %s\n' "$(ts)" "$VERIFY_ATTEMPTS" "$(IFS=,; echo "${verify_down[*]}")" >> "$LOG_FILE"
   exec 9>&- 2>/dev/null || true
   exit 1
 fi

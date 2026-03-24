@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T090404Z-436"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T09:04:04Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_no_shell_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T09:04:04Z"
+      ended_at_utc: "2026-03-24T09:04:04Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_no_code_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch84-analysis-p1774342846-15163"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=analysis_task_missing_canonical_architecture_anchor | fix_applied=anchored_to_ACTIVE_DOCS_INDEX_ARCHITECTURE_MAP_PRODUCT_VISION_and_confirmed_waiting_dep_is_not_blocker | verify=before=in_progress_without_canonical_architecture_anchor; after=canonical_alignment_recorded_and_ready_for_gov_review; test=parallel_workstream_context_depends_on_none_waiting_dep_only | architecture_check=plane_first_runtime_truth_apps_api_src_domains_apps_web_src_docs_architecture_map | vision_alignment=batch=BATCH-84,target=brief_du_jour_plus_investment_memo_explicable,impact=planner_analysis_closed_for_governance_review"

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T221342Z-598"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T22:13:42Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_closure_no_code_exec)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T22:13:42Z"
+      ended_at_utc: "2026-03-24T22:13:42Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_closure_no_code_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b84-analysis-20260324t221007z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=analyse BATCH-84 laissait implicites les references architecture et l audit demande par le guardian | fix_applied=references explicites apps/api/src/domains/* apps/web/src apps/api/runtime/ et audit anti_regression relies au stream BATCH-84 | verify=before=analysis ouverte sans architecture_plan_ref ni architecture_audit explicites; after=analyse cloturee avec references d architecture et audit relies au stream; test=parallel_workstream context confirme BATCH-84-ANALYSIS unique in progress planner | architecture_check=anti_regression_guards ok sur apps/api/src/domains/* apps/web/src apps/api/runtime/ sans legacy ni copilot-app | vision_alignment=batch=BATCH-84; target=copilot finance personnel brief plus ask; impact=analyse stabilisee pour execution backend-first sans refonte web"

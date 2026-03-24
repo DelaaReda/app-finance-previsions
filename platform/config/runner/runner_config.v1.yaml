@@ -77,7 +77,7 @@
       "retry_max": 2,
       "allow_runtime_explorer": 0,
       "default_helper_mode": "worker_first",
-      "backend": "openclaw",
+      "backend": "auto",
       "managed_roles": ["dev", "admin", "scrum_master"]
     },
     "dynamic_workers": {

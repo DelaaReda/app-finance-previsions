@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-78-BATCH-78-ANALYSIS-20260323T202953Z-280"
+stream_id: "BATCH-78"
+task_id: "BATCH-78-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T20:29:53Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_file_change_no_runtime_exec_needed)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T20:29:53Z"
+      ended_at_utc: "2026-03-23T20:29:53Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-complete-batch-78-analysis-20260323t202808z"
+  review_ref: "runner:BATCH-78-ANALYSIS"
+  note: "source=runner | root_cause=analyse planner laissee ouverte sans reference architecture explicite ni sortie exploitable pour la suite | fix_applied=preuve de cloture renseignee avec references canoniques et garde d integration apps_api_apps_web | verify=before=analyse BATCH-78 encore in_progress et aucune ready planner; after=preuve de cloture preparee pour debloquer la suite du stream; test=parallel_workstream context role planner confirme un seul in_progress actif | architecture_check=architecture_check=apps/api et apps/web references;architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md|docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md|docs/product/PRODUCT_VISION.md;architecture_audit=apps/api/src/domains/*|apps/web/src|apps/api/runtime;implementation_tracks=analyse_planner_only;integration_reuse=apps/api/src/domains/*|apps/web/src;acceptance_gate=guardian_feedback_addressed | vision_alignment=batch=BATCH-78; target=copilot finance personnel avec brief du jour et ouverture analyse; impact=sortie planner exploitable pour reprendre la livraison"

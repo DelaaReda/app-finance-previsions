@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-69-BATCH-69-ARCH-20260320T100332Z-248"
+stream_id: "BATCH-69"
+task_id: "BATCH-69-ARCH"
+role: "planner"
+produced_at_utc: "2026-03-20T10:03:32Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(tache_architecture_planner_sans_patch_code)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T10:03:32Z"
+      ended_at_utc: "2026-03-20T10:03:32Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(verification_runtime_et_dependances_uniquement)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "b69-arch-complete-P1774000826-18132"
+  review_ref: "runner:BATCH-69-ARCH"
+  note: "source=runner | root_cause=ARCH etait restee ouverte alors que BATCH-69-ANALYSIS est DONE et que le next_action runtime exige sa cloture | fix_applied=planner complete a ferme l etape ARCH avec reference canonique docs/architecture/ARCHITECTURE_MAP.md et audit apps/api apps/web runtime | verify=before=ARCH_in_progress_ANALYSIS_done; after=complete_cli_emitted; test=context planner in_progress=BATCH-69-ARCH et next_action completer BATCH-69-ARCH | architecture_check=architecture_plan_ref=docs/architecture/ARCHITECTURE_MAP.md; imports_ok=api=apps/api/src/domains/*,web=apps/web/src,runtime=apps/api/runtime/; path_target=anti_regression=copilot-app/*,backend/src/backend/src/*,legacy src.* interdits | vision_alignment=batch=BATCH-69; target=personal_finance_copilot_brief_plus_analysis; impact=libere les pistes dev et GOV_REVIEW"

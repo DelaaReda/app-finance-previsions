@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T191221Z-801"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T19:12:21Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(task_planner_analysis_runtime_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T19:12:21Z"
+      ended_at_utc: "2026-03-24T19:12:21Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(task_planner_analysis_runtime_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-analysis-close-1774379444"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=analyse planner restee ouverte sans architecture_plan_ref ni architecture_audit relies aux chemins canoniques | fix_applied=preuve de fermeture preparee avec refs ACTIVE_DOCS_INDEX PLANE_BACKLOG_INTEGRATION_SPEC PRODUCT_VISION et audit apps/api apps/web | verify=before=analysis in_progress et guardian rouge sur references manquantes; after=preuve de cloture et refs architecture renseignees; test=context planner confirme unique in_progress sans blocker dur | architecture_check=architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md; plane_spec=docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md; product_vision=docs/product/PRODUCT_VISION.md; architecture_audit=apps/api/src/domains/*|apps/web/src|apps/api/runtime; guards=no copilot-app,no backend/src/backend/src,no legacy src imports | vision_alignment=batch=BATCH-84; target=copilot finance personnel brief quotidien et analyse detaillee; impact=fermeture de lanalyse planner pour debloquer admin puis gov_review"

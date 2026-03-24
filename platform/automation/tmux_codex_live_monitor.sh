@@ -80,7 +80,7 @@ PY
 }
 
 default_roles() {
-  local topology_file="${TMUX_LIVE_TOPOLOGY_FILE:-$ROOT/docs/orchestrator-ops/parallel-role-topology.json}"
+  local topology_file="${TMUX_LIVE_TOPOLOGY_FILE:-$ROOT/logs-codex-runs/orchestrator-state/parallel-role-topology.json}"
   local topo_roles=""
 
   if [[ -f "$topology_file" ]] && command -v jq >/dev/null 2>&1; then

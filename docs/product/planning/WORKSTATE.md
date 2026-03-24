@@ -36,7 +36,7 @@ _Mis à jour: 2026-03-04 par architect (audit complet — désync queue/workstre
 ### Check anti-désync (obligatoire avant dispatch)
 ```bash
 # Vérifier cohérence queue vs workstreams:
-python3 platform/automation/parallel_workstream.py status --role planner --limit 5
+python3 platform/automation/compat/projections/parallel_workstream.py status --role planner --limit 5
 ```
 
 ---
@@ -80,7 +80,7 @@ Note: La convention est **GOV_REVIEW** (underscore), pas GOV-REVIEW.
 ### Comment fermer un batch
 ```bash
 # 1. Vérifier toutes les tâches sont DONE
-python3 platform/automation/parallel_workstream.py done --task BATCH-N-GOV_REVIEW --role planner
+python3 platform/automation/compat/projections/parallel_workstream.py done --task BATCH-N-GOV_REVIEW --role planner
 
 # 2. auto_batch_close.sh détecte automatiquement à la prochaine exécution cron (2,22,42 min)
 #    OU forcer manuellement:
@@ -90,7 +90,7 @@ python3 scripts/auto_batch_close.sh
 ### Si le planner est bloqué
 - **Cause 1:** Workboard sans slot planner → chercher batch READY dans `parallel-workstreams.json`
 - **Cause 2:** Contract guard BLOCKED → vérifier `~/.openclaw/cron/role-state/planner.last_contract`
-- **Cause 3:** Rôle bloqué → écrire dans `docs/ops/ADMIN_TEAM_CHAT.md` avec tag `[BLOCKER]`
+- **Cause 3:** Rôle bloqué → écrire dans `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md` avec tag `[BLOCKER]`
 - **Outil diagnostic:** `bash scripts/fc_health_check.sh`
 
 ### Ne jamais faire

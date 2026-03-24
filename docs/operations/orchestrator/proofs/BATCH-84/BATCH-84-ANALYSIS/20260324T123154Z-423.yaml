@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T123154Z-423"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T12:31:54Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_repo_patch_for_analysis)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T12:31:54Z"
+      ended_at_utc: "2026-03-24T12:31:54Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_closure)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-84-analysis-close-20260324T123024Z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=guardian red sur architecture_ref non canonique et architecture_audit manquant pour BATCH-84-ANALYSIS | fix_applied=reference canonique fixee sur docs/architecture/ARCHITECTURE_MAP.md avec reuse apps/api et apps/web comme pistes d integration | verify=before=guardian red missing_architecture_audit+architecture_ref_not_canonical; after=analysis alignee sur docs/architecture/ARCHITECTURE_MAP.md et chemins apps/api|apps/web; test=parallel_workstream context role planner montre ANALYSIS unique in_progress sans READY concurrent | architecture_check=canonical_ref=docs/architecture/ARCHITECTURE_MAP.md; implementation_tracks=apps/api,apps/web; anti_regression_guards=ok | vision_alignment=batch=BATCH-84; target=finance copilot apps/api apps/web; impact=analyse referentielle completee pour debloquer orchestration"

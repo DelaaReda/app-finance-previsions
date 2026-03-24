@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T102658Z-321"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T10:26:58Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T10:26:58Z"
+      ended_at_utc: "2026-03-24T10:26:58Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_proof_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_CLOSE_BATCH-84-ANALYSIS_P1774347877_1823"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=analyse_planner_restait_ouverte_malgre_PLAN_done_et_preuves_runtime_presentes | fix_applied=cloture_canonique_de_BATCH-84-ANALYSIS_avec_refs_architecture_et_continuite_3days | verify=before=BATCH-84-ANALYSIS:IN_PROGRESS; after=BATCH-84-ANALYSIS:DONE_REQUESTED; test=parallel_workstream_context_role_planner_limit5 | architecture_check=architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md | vision_alignment=batch=BATCH-84; target=personal_finance_copilot_brief_and_analysis_open; impact=fermeture_ANALYSIS_pour_permettre_la_reprise_admin_et_la_gov_review"

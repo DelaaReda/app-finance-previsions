@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-44-BATCH-44-DEV-01-20260311T041849Z-743"
+stream_id: "BATCH-44"
+task_id: "BATCH-44-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-11T04:18:49Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope insider behavior intelligence layer [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_insider_behavior_intelligence_layer_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T04:18:49Z"
+      ended_at_utc: "2026-03-11T04:18:49Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest apps/api/src/domains/forecasts/tests/test_global_signal_mesh_route.py -q"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Endpoint artifact: `GET /api/forecasts/insider-behavior?tickers=NVDA,TSLA&limit=5` now returns `engine_id=insider_behavior_intelligence_v1` with `signals[]`, `uncertainty`, `provenance`, and `guardrails.deterministic_lan"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-44-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-44-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=BATCH-44-DEV-01 had no concrete insider-behavior delivery slice yet: the repo already had ownership/Form 4 reuse sources, but no stable never-empty endpoint exposing insider provenance, uncertainty, and conservative inte | fix_applied=Added an insider behavior payload builder in `apps/api/src/domains/forecasts/application/global_signal_mesh_service.py`, added the `/api/forecasts/insider-behavior` route with never-empty fallback in `apps/api/src/domain | verify=before=no insider behavior endpoint or payload existed for BATCH-44; after=/api/forecasts/insider-behavior returns stable insider signals with provenance, uncertainty, cache/debug metadata, and conservative guardrails; t | architecture_check=layer=forecasts domain service + route orchestrator reuse of existing ownership/Judge-style stack; imports_ok=yes (route imports service builder only, no new cross-layer coupling); path_target=apps/api/src/domains/foreca | vision_alignment=batch=BATCH-44; target=Insider Behavior Intelligence Layer [DEV-01] minimal verifiable backend slice; impact=delivery now has a concrete endpoint exposing insider provenance + uncertainty without deterministic insider-on"

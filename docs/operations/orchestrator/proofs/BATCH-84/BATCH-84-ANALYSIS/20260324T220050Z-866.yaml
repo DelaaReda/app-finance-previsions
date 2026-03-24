@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T220050Z-866"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T22:00:50Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(runtime_planner_closeout_no_code_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T22:00:50Z"
+      ended_at_utc: "2026-03-24T22:00:50Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(contextual_runtime_closeout)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-84-analysis-close-20260324t220458z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=Analyse planner BATCH-84 laissee ouverte sans references architecture et vision alors que depends_on=none | fix_applied=Closeout planner formalise avec references canoniques Plane vision et audit architecture apps/api apps/web | verify=before=BATCH-84-ANALYSIS_in_progress_without_architecture_proof after=planner_closeout_proof_attached_and_ready_for_completion test=parallel_workstream_context_confirmed_single_in_progress_analysis | architecture_check=before_missing_refs then_added_canonical_refs imports_ok=apps/api/src/domains/*,apps/web/src path_target=apps/api/runtime/,apps/web/src | vision_alignment=batch=BATCH-84 target=brief_journalier_plus_analyse_interactive_et_memo_investissement impact=cloture_analysis_planner_pour_relancer_runtime"

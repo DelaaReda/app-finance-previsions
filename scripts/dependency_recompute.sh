@@ -13,15 +13,9 @@ else
 fi
 cd "$ROOT"
 
-ORCH_DIR="${ROOT}/docs/operations/orchestrator"
+ORCH_DIR="${ROOT}/logs-codex-runs/orchestrator-state"
 QUEUE_FILE="${ORCH_DIR}/priority-queue.json"
 WORKBOARD_FILE="${ORCH_DIR}/parallel-workstreams.json"
-if [[ ! -f "$QUEUE_FILE" && -f "${ROOT}/docs/orchestrator-ops/priority-queue.json" ]]; then
-  QUEUE_FILE="${ROOT}/docs/orchestrator-ops/priority-queue.json"
-fi
-if [[ ! -f "$WORKBOARD_FILE" && -f "${ROOT}/docs/orchestrator-ops/parallel-workstreams.json" ]]; then
-  WORKBOARD_FILE="${ROOT}/docs/orchestrator-ops/parallel-workstreams.json"
-fi
 
 STALE_SWEEP_ENABLED="${FC_DEP_RECOMPUTE_STALE_SWEEP_ENABLED:-1}"
 STALE_SWEEP_THRESHOLD_SECONDS="${FC_DEP_RECOMPUTE_STALE_SWEEP_THRESHOLD_SECONDS:-3600}"
@@ -39,12 +33,8 @@ import re
 from pathlib import Path
 
 root = Path(".").resolve()
-pq_path = root / "docs" / "operations" / "orchestrator" / "priority-queue.json"
-wb_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
-if not pq_path.exists():
-  pq_path = root / "docs" / "orchestrator-ops" / "priority-queue.json"
-if not wb_path.exists():
-  wb_path = root / "docs" / "orchestrator-ops" / "parallel-workstreams.json"
+pq_path = root / "logs-codex-runs" / "orchestrator-state" / "priority-queue.json"
+wb_path = root / "logs-codex-runs" / "orchestrator-state" / "parallel-workstreams.json"
 
 def jload(path: Path):
   if not path.exists():
@@ -90,7 +80,7 @@ BEFORE_SNAPSHOT="$(snapshot_state_json)"
 rebuild_trigger="0"
 stale_trigger="0"
 
-python3 platform/automation/parallel_workstream.py sync-priority --queue "$QUEUE_FILE" >/tmp/fc-dependency-recompute.out 2>&1 || {
+python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --queue "$QUEUE_FILE" >/tmp/fc-dependency-recompute.out 2>&1 || {
   cat /tmp/fc-dependency-recompute.out >&2
   rm -f /tmp/fc-dependency-recompute.out
   exit 1
@@ -104,9 +94,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 root = Path(".").resolve()
-wb_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
-if not wb_path.exists():
-    wb_path = root / "docs" / "orchestrator-ops" / "parallel-workstreams.json"
+wb_path = root / "logs-codex-runs" / "orchestrator-state" / "parallel-workstreams.json"
 
 if not wb_path.exists():
     raise SystemExit(0)
@@ -174,7 +162,13 @@ if changed:
     board["updated_at"] = now_text
     wb_path.write_text(json.dumps(board, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     subprocess.run(
-        ["python3", "platform/automation/parallel_workstream.py", "sync-priority", "--queue", str((root / "docs" / "operations" / "orchestrator" / "priority-queue.json") if (root / "docs" / "operations" / "orchestrator" / "priority-queue.json").exists() else (root / "docs" / "orchestrator-ops" / "priority-queue.json"))],
+        [
+            "python3",
+            "platform/automation/runtime/planner/planner_runtime_actions.py",
+            "sync-priority",
+            "--queue",
+            str(root / "logs-codex-runs" / "orchestrator-state" / "priority-queue.json"),
+        ],
         check=False,
         capture_output=True,
         text=True,
@@ -191,12 +185,8 @@ import re
 from pathlib import Path
 
 root = Path(".").resolve()
-pq_path = root / "docs" / "operations" / "orchestrator" / "priority-queue.json"
-wb_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
-if not pq_path.exists():
-  pq_path = root / "docs" / "orchestrator-ops" / "priority-queue.json"
-if not wb_path.exists():
-  wb_path = root / "docs" / "orchestrator-ops" / "parallel-workstreams.json"
+pq_path = root / "logs-codex-runs" / "orchestrator-state" / "priority-queue.json"
+wb_path = root / "logs-codex-runs" / "orchestrator-state" / "parallel-workstreams.json"
 
 pq = json.loads(pq_path.read_text(encoding="utf-8", errors="ignore"))
 wb = json.loads(wb_path.read_text(encoding="utf-8", errors="ignore"))
@@ -239,7 +229,7 @@ else
     fi
     cat /tmp/fc-dependency-rebuild.out
     rm -f /tmp/fc-dependency-rebuild.out
-    if ! python3 platform/automation/parallel_workstream.py sync-priority --queue "$QUEUE_FILE" >/tmp/fc-dependency-recompute.out 2>&1; then
+    if ! python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --queue "$QUEUE_FILE" >/tmp/fc-dependency-recompute.out 2>&1; then
       cat /tmp/fc-dependency-recompute.out >&2
       rm -f /tmp/fc-dependency-recompute.out
       exit 1

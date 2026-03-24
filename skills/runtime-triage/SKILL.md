@@ -22,7 +22,7 @@ Use this skill when the issue could be in:
    - `openclaw agent --agent planner --json --thinking low --timeout 60 --message 'Reply exactly with OK'`
 4. If planner capability dispatch is broken, inspect:
    - `platform/automation/planner_subagent_manager.py`
-   - `platform/automation/worker_manager.py`
+   - `platform/automation/compat/legacy_workers/worker_manager.py`
    - latest planner subagent registry/events
 5. Read only the smallest relevant logs:
    - gateway log

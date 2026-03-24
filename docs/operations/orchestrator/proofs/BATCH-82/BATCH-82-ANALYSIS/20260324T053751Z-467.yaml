@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-82-BATCH-82-ANALYSIS-20260324T053751Z-467"
+stream_id: "BATCH-82"
+task_id: "BATCH-82-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T05:37:51Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_code_change_planner_analysis)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T05:37:51Z"
+      ended_at_utc: "2026-03-24T05:37:51Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_planner_analysis)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-complete-BATCH-82-ANALYSIS-1774330540"
+  review_ref: "runner:BATCH-82-ANALYSIS"
+  note: "source=runner | root_cause=runway planner courte car BATCH-82-ANALYSIS restait ouverte avec depends_on=none | fix_applied=cloture explicite de l analyse planner pour liberer ARCH et GOV_REVIEW | verify=before=BATCH-82-ANALYSIS IN_PROGRESS et BATCH-82-ARCH WAITING_DEP; after=demande de cloture runtime emise pour debloquer le stream; test=parallel_workstream context role=planner total=189 ready=0 in_progress=1 | architecture_check=planner_only_orchestration=ok;depends_on_none=ok;frontend_theme_unchanged=ok;anti_regression_paths_respected=ok | vision_alignment=batch=BATCH-82; target=copilot finance personnel avec brief du jour et ouverture d analyses; impact=deverrouille l etape architecture planner"

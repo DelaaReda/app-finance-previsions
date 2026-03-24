@@ -2,11 +2,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
-VM_SHARED_ROOT="/home/venom/shared/analyse-financiere"
-ROOT="${FINANCE_COPILOT_ROOT:-$DEFAULT_ROOT}"
-if [[ -z "${FINANCE_COPILOT_ROOT:-}" && -d "$VM_SHARED_ROOT" ]]; then
-  ROOT="$VM_SHARED_ROOT"
+SOURCE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+WORKSPACE_HELPER="${SCRIPT_DIR}/lib/workspace_paths.sh"
+if [[ -n "${FINANCE_COPILOT_ROOT:-}" ]]; then
+  ROOT="${FINANCE_COPILOT_ROOT}"
+elif [[ -f "$WORKSPACE_HELPER" ]]; then
+  # shellcheck source=/dev/null
+  source "$WORKSPACE_HELPER"
+  ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+else
+  ROOT="$SOURCE_ROOT"
 fi
 STATE_DIR="${DG_MONITOR_STATE_DIR:-$HOME/.openclaw/state/dg_monitor}"
 CHAT_FILE="${DG_MONITOR_CHAT_FILE:-docs/ops/ADMIN_TEAM_CHAT.md}"
@@ -54,9 +59,9 @@ ts_local="$(TZ=America/New_York date '+%Y-%m-%d %H:%M %Z')"
 # Priority queue (what is READY/BLOCKED right now)
 queue_ready=""
 queue_blocked=""
-if [[ -f docs/orchestrator-ops/priority-queue.json ]]; then
-  queue_ready="$(jq -r '[.items[]? | select((.state//"")=="READY") | (.id//"")] | map(select(length>0)) | join(",")' docs/orchestrator-ops/priority-queue.json 2>/dev/null || true)"
-  queue_blocked="$(jq -r '[.items[]? | select((.state//"")=="BLOCKED") | (.id//"")] | map(select(length>0)) | join(",")' docs/orchestrator-ops/priority-queue.json 2>/dev/null || true)"
+if [[ -f logs-codex-runs/orchestrator-state/priority-queue.json ]]; then
+  queue_ready="$(jq -r '[.items[]? | select((.state//"")=="READY") | (.id//"")] | map(select(length>0)) | join(",")' logs-codex-runs/orchestrator-state/priority-queue.json 2>/dev/null || true)"
+  queue_blocked="$(jq -r '[.items[]? | select((.state//"")=="BLOCKED") | (.id//"")] | map(select(length>0)) | join(",")' logs-codex-runs/orchestrator-state/priority-queue.json 2>/dev/null || true)"
 fi
 [[ -n "$queue_ready" ]] || queue_ready="none"
 [[ -n "$queue_blocked" ]] || queue_blocked="none"
@@ -93,8 +98,8 @@ fi
 
 # Parallel workstreams board (high-level state)
 ws_summary="unknown"
-if [[ -f docs/orchestrator-ops/parallel-workstreams.json ]]; then
-  ws_summary="$(jq -r '[.tasks[]?.state] | group_by(.) | map("\(.[0]):\(length)") | join(" ")' docs/orchestrator-ops/parallel-workstreams.json 2>/dev/null || echo unknown)"
+if [[ -f logs-codex-runs/orchestrator-state/parallel-workstreams.json ]]; then
+  ws_summary="$(jq -r '[.tasks[]?.state] | group_by(.) | map("\(.[0]):\(length)") | join(" ")' logs-codex-runs/orchestrator-state/parallel-workstreams.json 2>/dev/null || echo unknown)"
   [[ -n "$ws_summary" ]] || ws_summary="unknown"
 fi
 
@@ -107,8 +112,12 @@ fi
 
 # Watchdog tail (operational risk notes)
 watch_tail=""
-if [[ -f docs/orchestrator-ops/agent-watchdog.md ]]; then
-  watch_tail="$(tail -n 1 docs/orchestrator-ops/agent-watchdog.md | tr -d '\r' | sed 's/[[:space:]]*$//')"
+watch_file="logs-codex-runs/orchestrator-state/agent-watchdog.md"
+if [[ ! -f "$watch_file" && -f docs/operations/orchestrator/agent-watchdog.md ]]; then
+  watch_file="docs/operations/orchestrator/agent-watchdog.md"
+fi
+if [[ -f "$watch_file" ]]; then
+  watch_tail="$(tail -n 1 "$watch_file" | tr -d '\r' | sed 's/[[:space:]]*$//')"
 fi
 [[ -n "$watch_tail" ]] || watch_tail="(no_watchdog_tail)"
 

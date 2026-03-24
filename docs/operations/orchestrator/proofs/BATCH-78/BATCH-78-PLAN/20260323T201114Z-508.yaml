@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-78-BATCH-78-PLAN-20260323T201114Z-508"
+stream_id: "BATCH-78"
+task_id: "BATCH-78-PLAN"
+role: "planner"
+produced_at_utc: "2026-03-23T20:11:14Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(plan_only_runtime_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T20:11:14Z"
+      ended_at_utc: "2026-03-23T20:11:14Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(plan_task_no_code_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b78-plan-close-20260323t200946z"
+  review_ref: "runner:BATCH-78-PLAN"
+  note: "source=runner | root_cause=preuve planner insuffisante car architecture_plan_ref et architecture_audit etaient absents | fix_applied=plan referme sur ACTIVE_DOCS_INDEX PLANE_BACKLOG_INTEGRATION_SPEC PRODUCT_VISION et audit apps/api apps/web | verify=before=plan_in_progress_sans_ref_architecture; after=cloture_plan_prete_pour_ANALYSIS_ARCH_GOV_REVIEW; test=parallel_workstream_context_confirme_BATCH-78-PLAN_depends_on_none | architecture_check=architecture_plan_ref=docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md;architecture_audit=apps/api/src/domains/*,apps/web/src;anti_regression=apps/api runtime apps/web sans legacy src | vision_alignment=batch=BATCH-78; target=copilote_financier_personnel_avec_brief_du_jour_et_analyses; impact=plan ferme avec references architecture et stream coherent"

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-73-BATCH-73-ANALYSIS-20260323T083302Z-735"
+stream_id: "BATCH-73"
+task_id: "BATCH-73-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T08:33:02Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_no_code)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T08:33:02Z"
+      ended_at_utc: "2026-03-23T08:33:02Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_no_code)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-complete-batch-73-analysis-20260323t083014z"
+  review_ref: "runner:BATCH-73-ANALYSIS"
+  note: "source=runner | root_cause=La tache BATCH-73-ANALYSIS restait ouverte sans preuve d architecture rattachee aux chemins canoniques ni lien explicite avec la vision produit | fix_applied=La cloture planner rattache l analyse aux references canoniques ACTIVE_DOCS_INDEX PLANE_BACKLOG_INTEGRATION_SPEC PRODUCT_VISION et formalise un audit backend first sans refonte theme | verify=before=BATCH-73-ANALYSIS in_progress sans preuve architecture explicite; after=preuves canoniques et audit apps api web relies a la cloture planner; test=parallel_workstream context planner confirme ANALYSIS en cours et GOV_REVIEW en attente dependance | architecture_check=paths=apps/api/src/domains/*,apps/api/runtime/,apps/web/src; guards=no_copilot_app,no_legacy_src,no_theme_refactor | vision_alignment=batch=BATCH-73; target=brief ask memo explicable sans casser le theme frontend; impact=analyse planner fermee avec cap backend first et etat stale explicite"

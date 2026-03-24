@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-65-BATCH-65-DEV-02-20260319T161705Z-424"
+stream_id: "BATCH-65"
+task_id: "BATCH-65-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-19T16:17:05Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-19T16:17:05Z"
+      ended_at_utc: "2026-03-19T16:17:05Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`node --test apps/web/src/domains/forecasts/pages/app.test.js --test-name-pattern='deriveCopilotStartFocusItems|renderHeroCopilotBrief hydrates the landing brief and wires ask/open actions'`"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit cba9bcb3b5daae0577060f84917de7c56ea8fb82; user-visible artifact is the hero brief suggestion row in [app.js](/home/venom/analyse-financiere/apps/web/src/domains/forecasts/pages/app.js) now showing 'Ask about NVDA'"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-65-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-65-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The hero starter derived scope/theme suggestion chips that executed copilot prompts, but labeled them as 'Open ...', which mismatched the actual UX and weakened the brief + ask entry flow from the personal finance copilo | fix_applied=Updated [app.js](/home/venom/analyse-financiere/apps/web/src/domains/forecasts/pages/app.js) so derived focus chips use ask-oriented copy and deep-dive prompt text, and dedupe against both existing open and ask labels. U | verify=before=hero brief focus chips said 'Open <ticker/theme>' even though clicking them only launched a copilot prompt; after=chips say 'Ask about <ticker/theme>' and the generated deep-dive prompt text matches that ask flow; | architecture_check=layer=web forecasts hero starter rendering only; imports_ok=yes, stayed inside existing `apps/web/src/domains/forecasts/pages` module and reused shared starter helpers with no new component path; path_target=apps/web/src | vision_alignment=batch=BATCH-65; target=personal finance copilot starts from the brief and immediately offers a clear ask/open path; impact=removes misleading CTA copy so the first-click deep-dive entry is clearer and easier to trust"

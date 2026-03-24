@@ -542,6 +542,33 @@ def _runtime_no_code_evidence(task: dict[str, Any], has_tests: bool) -> bool:
     return False
 
 
+def _repo_change_evidence(task: dict[str, Any], manifest_text: str, artifact: str) -> bool:
+    role = str(task.get("role", "")).strip().lower()
+    if role == "admin":
+        return False
+    evidence_blob = "\n".join(
+        [
+            str(artifact or ""),
+            str(task.get("artifact", "") or ""),
+            str(task.get("files_touched", "") or ""),
+            str(task.get("summary", "") or ""),
+            str(task.get("verify", "") or ""),
+            str(manifest_text or ""),
+        ]
+    ).lower()
+    repo_change_markers = (
+        "apps/",
+        "platform/",
+        "scripts/",
+        "tests/",
+        "runtime/",
+        "package.json",
+        "pyproject.toml",
+        "requirements.txt",
+    )
+    return any(marker in evidence_blob for marker in repo_change_markers)
+
+
 def _build_delivery_event_record(
     root: Path,
     event: dict[str, Any],
@@ -570,7 +597,10 @@ def _build_delivery_event_record(
     qa_required = role == "dev"
     qa_complete = _qa_completed(task)
     runtime_no_code = _runtime_no_code_evidence(task, has_tests)
-    suspicious = not has_manifest or not has_tests or (not has_commit and not runtime_no_code)
+    repo_change_evidence = _repo_change_evidence(task, manifest_text, artifact)
+    commit_required = role == "dev"
+    missing_commit_evidence = commit_required and not has_commit and not runtime_no_code and not repo_change_evidence
+    suspicious = not has_manifest or not has_tests or missing_commit_evidence
     return {
         "task_id": task_id,
         "at": _iso(at_dt or _now()),

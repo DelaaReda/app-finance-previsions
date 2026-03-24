@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-75-BATCH-75-ANALYSIS-20260323T160816Z-837"
+stream_id: "BATCH-75"
+task_id: "BATCH-75-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T16:08:16Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_code_change_planner_analysis_complete)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T16:08:16Z"
+      ended_at_utc: "2026-03-23T16:08:16Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_runtime_projection_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-75-analysis-complete-20260323t1608z"
+  review_ref: "runner:BATCH-75-ANALYSIS"
+  note: "source=runner | root_cause=analysis_owned_by_planner_left_open_after_dependency_sanitize_even_with_blocked_by_none | fix_applied=completed_planner_analysis_with_explicit_delivery_proof_and_preserved_next_gate | verify=before=planner_context_showed_in_progress_BATCH_75_ANALYSIS_and_no_ready_items; after=planner_analysis_marked_complete_to_unlock_following_gate; test=parallel_workstream_context_role_planner_limit_5_returned_in_progress_tasks_BATCH_75_ANALYSIS | architecture_check=architecture_check=anti_regression_refs_preserved_apps_api_apps_web; architecture_plan_ref=/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md; architecture_audit=apps/api|apps/web_dependency_grouping_reviewed_no_copilot_app_regression | vision_alignment=batch=BATCH-75; target=personal_finance_copilot_brief_and_analysis_flow; impact=unlock_governance_review_then_role_dispatch"

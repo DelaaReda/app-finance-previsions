@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-62-BATCH-62-ADMIN-01-20260313T150735Z-261"
+stream_id: "BATCH-62"
+task_id: "BATCH-62-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-03-13T15:07:35Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [admin-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[admin-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-13T15:07:35Z"
+      ended_at_utc: "2026-03-13T15:07:35Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "Runtime endpoint probes + health checks (no automated test suite run)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-62/BATCH-62-ADMIN-01/20260313T150634Z-admin-runtime-evidence.yaml"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-62-ADMIN-01"
+  review_ref: "planner_subagent_manager:BATCH-62-ADMIN-01"
+  note: "source=planner_subagent_manager | root_cause=The running API process was stale/canonical-path mismatched and exposed an outdated route set, causing `/api/personal-finance/*` to return 404 while `/api/copilot/*` still worked. | fix_applied=Executed runtime remediation only: ran lock/lock-gating audit, killed stale shared/runtime state/process, restarted backend via canonical workspace (`/home/venom/shared/analyse-financiere/apps/api/src`) with `python3 -m  | verify=`fc_status_brief` and `fc_health_check` pass for monitor/api/cron after restart; endpoint checks now return 200 for `/api/personal-finance/start`, `/api/personal-finance/context`, `/api/personal-finance/ask`; openapi now | architecture_check=No architecture/code changes; control-plane/runtime surface corrected without touching DEV stream ownership. Change is bounded to admin-runtime truth recovery and preserves DEV-03 compatibility. | vision_alignment=Unblocked user-visible product path: personal finance copilot day-brief/context/ask can now be executed end-to-end from runtime, which is the minimum viable restoration for this task."

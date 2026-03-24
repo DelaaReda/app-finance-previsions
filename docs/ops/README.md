@@ -1,57 +1,33 @@
 ---
-status: canonical
-last_verified: 2026-03-07
-canonical_replaces:
-  - /home/venom/analyse-financiere/docs/operations/README.md
+status: reference
+last_verified: 2026-03-13
+superseded_by: ACTIVE_DOCS_INDEX.md
 ---
 
-# Ops Documentation Map
+# Ops documentation
 
-Use this index before reading operational documentation.
+This subtree documents the canonical operating model and the remaining migration gap.
 
-## Start here
-- Current architecture entrypoints: [CURRENT_ARCHITECTURE_ENTRYPOINTS.md](/home/venom/analyse-financiere/docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md)
-- Planner target architecture: [PLANNER_ORCHESTRATOR_TARGET_SPEC.md](/home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md)
-- Runtime/monitor behavior: [MONITOR_ARCHITECTURE_SPEC.md](/home/venom/analyse-financiere/docs/ops/MONITOR_ARCHITECTURE_SPEC.md)
-- Reliability and gates: [ORCHESTRATION_RELIABILITY_SPEC.md](/home/venom/analyse-financiere/docs/ops/ORCHESTRATION_RELIABILITY_SPEC.md)
-- Cron/runtime profiles: [CRON_PROFILES_SPEC.md](/home/venom/analyse-financiere/docs/ops/CRON_PROFILES_SPEC.md)
-- Development cutover gate: [DEV_ACTIVATION_PREFLIGHT.md](/home/venom/analyse-financiere/docs/ops/DEV_ACTIVATION_PREFLIGHT.md)
-- Product/data proof path: [FORECAST_PIPELINE_PROOF_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/FORECAST_PIPELINE_PROOF_RUNBOOK.md)
-- Delivery monitoring and triage: [DELIVERY_CONTROL_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/DELIVERY_CONTROL_RUNBOOK.md)
+Canonical entrypoint:
+- [ACTIVE_DOCS_INDEX.md](./ACTIVE_DOCS_INDEX.md)
 
-## Canonical docs
-- [CURRENT_ARCHITECTURE_ENTRYPOINTS.md](/home/venom/analyse-financiere/docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md)
-- [PLANNER_ORCHESTRATOR_TARGET_SPEC.md](/home/venom/analyse-financiere/docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md)
-- [MONITOR_ARCHITECTURE_SPEC.md](/home/venom/analyse-financiere/docs/ops/MONITOR_ARCHITECTURE_SPEC.md)
-- [ORCHESTRATION_RELIABILITY_SPEC.md](/home/venom/analyse-financiere/docs/ops/ORCHESTRATION_RELIABILITY_SPEC.md)
-- [CRON_PROFILES_SPEC.md](/home/venom/analyse-financiere/docs/ops/CRON_PROFILES_SPEC.md)
-- [DEV_ACTIVATION_PREFLIGHT.md](/home/venom/analyse-financiere/docs/ops/DEV_ACTIVATION_PREFLIGHT.md)
-- [FORECAST_PIPELINE_PROOF_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/FORECAST_PIPELINE_PROOF_RUNBOOK.md)
-- [DELIVERY_CONTROL_RUNBOOK.md](/home/venom/analyse-financiere/docs/ops/DELIVERY_CONTROL_RUNBOOK.md)
+This README is a convenience redirect only. It is not a second canonical entrypoint.
 
-## Reference docs
-- [AGENT_WORKSPACE_INDEX.md](/home/venom/analyse-financiere/docs/ops/AGENT_WORKSPACE_INDEX.md)
-- [SYMLINKS_CATALOG.md](/home/venom/analyse-financiere/docs/ops/SYMLINKS_CATALOG.md)
-- [FC_DOCTOR_SPEC.md](/home/venom/analyse-financiere/docs/ops/FC_DOCTOR_SPEC.md)
-- [DOCTOR_JSON_SPEC.md](/home/venom/analyse-financiere/docs/ops/DOCTOR_JSON_SPEC.md)
-- [API_ENDPOINTS.md](/home/venom/analyse-financiere/docs/ops/API_ENDPOINTS.md)
-- Local git hygiene helper for runtime-generated files: `scripts/runtime_git_hygiene.sh`
+## Current state
+- The documentation canon is aligned.
+- The durable runtime already exists around LangGraph, SQLite, event state, and model plane.
+- Plane is already the canonical backlog front-door in doctrine.
+- The migration is not finished yet: several compatibility bridges and legacy registries are still central in active code paths.
 
-## Historical / compatibility docs
-These can still be useful, but they must not be treated as current architectural truth.
+## Target split
+- Plane OSS = backlog front-door
+- official Plane MCP + Plane webhooks = backlog interface and sync intake
+- LangGraph + SQLite = runtime truth
+- OpenClaw + systemd = operator plane
+- codex exec = primary agent execution
+- qwen cli = fallback for agents only
+- g4f = app only
 
-- `PO_SCRUM_MASTER_*`
-- `SCRUM_MASTER_WORKLOG.md`
-- `TEAM_CHAT.md`
-- `ADMIN_LOG.md`
-- `NOUVEAUX_AGENTS_ONBOARDING.md`
-- `REMPISE_ORDRE_POST_MIGRATION.md`
-- `DEV_AGENT_*` docs unless explicitly reconciled with planner-owned capability mode
-- dated files under `docs/ops/2026-03/`
-
-## Rule for agents
-If ops documents conflict:
-1. `CURRENT_ARCHITECTURE_ENTRYPOINTS.md` wins for discovery.
-2. `PLANNER_ORCHESTRATOR_TARGET_SPEC.md` wins for architecture.
-3. `MONITOR_ARCHITECTURE_SPEC.md` and `ORCHESTRATION_RELIABILITY_SPEC.md` win for runtime behavior.
-4. Historical and compatibility docs are background only.
+## Reference and history
+- [reference/README.md](./reference/README.md)
+- [archive/README.md](./archive/README.md)

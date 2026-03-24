@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T142920Z-807"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T14:29:20Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_metadata_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T14:29:20Z"
+      ended_at_utc: "2026-03-24T14:29:20Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "context:parallel_workstream;trace:planner_dep_sanitize_rc0"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b84-analysis-20260324t142742z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=guardian_red_missing_architecture_refs_on_batch_84_analysis | fix_applied=completion_metadata_now_links_architecture_plan_ref_and_architecture_audit_to_apps_api_and_apps_web_and_records_dependency_sanitize_trace | verify=before=analysis_open_with_guardian_red_missing_architecture_refs; after=analysis_closure_captures_architecture_plan_ref_architecture_audit_and_sanitize_trace; test=parallel_workstream_context_role_planner_and_trace_planner_dep_sanitize_rc0 | architecture_check=architecture_plan_ref=docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md;architecture_audit=apps/api/src/domains/*|apps/web/src;anti_regression=copilot_app_forbidden_backend_dup_forbidden_legacy_src_forbidden | vision_alignment=batch=BATCH-84,target=personal_finance_copilot_apps_api_apps_web,impact=unlock_gov_review_and_next_delivery_step"

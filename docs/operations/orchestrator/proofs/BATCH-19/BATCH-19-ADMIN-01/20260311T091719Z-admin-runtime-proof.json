@@ -1,0 +1,41 @@
+{
+  "task_id": "BATCH-19-ADMIN-01",
+  "stream_id": "BATCH-19",
+  "role": "admin",
+  "produced_at_utc": "2026-03-11T09:17:19Z",
+  "status": "unblocked",
+  "summary": "Explainability Graph + Source Traceability runtime validation completed. The live Judge endpoint on :8050 is serving the new explainability graph and source-traceability contract, and monitor observability on :7779 is healthy again after a process-level restart.",
+  "root_cause": "The monitor surface was unstable during validation: `fc_status_brief.sh` and direct calls to `/api/status?lite=1` and `/api/runtime-diagnostics?lite=1` alternated between connection resets, refusals, and timeouts because no stable monitor listener remained on port 7779.",
+  "fix_applied": "Applied a reversible runtime-only repair: restarted the canonical monitor server process directly with `setsid python3 apps/monitor/server.py` after wrapper-based attempts proved non-persistent. No code or config files were changed.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-19/BATCH-19-ADMIN-01/20260311T091719Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "judge_runtime": "PASS GET /api/judge?limit=1&ticker=AAPL => source includes judge_explainability_graph_v1 and data.explainability.stats.broken_source_count=0",
+    "judge_traceability_contract": "PASS data.explainability.source_traceability[0].supporting_sources[].link_status present on live payload",
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=3 workboard_ready=0",
+    "fc_status_brief": "PASS Santé: OK · mode=planner_experimental · freshness=fresh/37s",
+    "runtime_diagnostics_lite": "PASS health=OK data_freshness_s=58 planner=IN_PROGRESS admin=IDLE",
+    "judge_metadata_tests": "PASS pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -k 'weighted_source_traceability or invalid_source_links' => 2 passed",
+    "web_traceability_tests": "PASS node --test apps/web/src/domains/forecasts/pages/app.test.js --test-name-pattern='explainability graph|source traceability' => 69 passed",
+    "health_snapshot": "PASS/ACCEPTABLE health=DEGRADED critical_widgets=unknown; no batch-scoped blocker remained after monitor recovery"
+  },
+  "files_touched": [
+    "docs/operations/orchestrator/proofs/BATCH-19/BATCH-19-ADMIN-01/20260311T091719Z-admin-runtime-proof.json",
+    "memory/2026-03-11.md"
+  ],
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "curl -sS --max-time 15 'http://127.0.0.1:8050/api/judge?limit=1&ticker=AAPL'",
+    "python3 -m pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -k 'weighted_source_traceability or invalid_source_links' -q",
+    "node --test apps/web/src/domains/forecasts/pages/app.test.js --test-name-pattern='explainability graph|source traceability'",
+    "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 --timeout 20",
+    "bash scripts/fc_status_brief.sh",
+    "curl -sS --max-time 20 http://127.0.0.1:7779/api/runtime-diagnostics?lite=1",
+    "bash scripts/health_snapshot.sh"
+  ],
+  "commit_sha": "SKIP(no_code_or_config_change)",
+  "architecture_check": "PASS(batch-scoped runtime repair only): existing Judge API, web traceability rendering, and monitor observability surfaces were reused without schema or config changes.",
+  "vision_alignment": "PASS(BATCH-19): acceptance evidence now covers weighted sources, freshness markers, link-status traceability, zero broken-source count on the live sample payload, and restored monitor visibility after the dev chain.",
+  "recommended_next": "Planner can merge BATCH-19-ADMIN-01. If desired, follow separately on monitor wrapper persistence because the durable repair here used the canonical monitor server directly rather than relying on the wrapper path.",
+  "blocking_issue": "none"
+}

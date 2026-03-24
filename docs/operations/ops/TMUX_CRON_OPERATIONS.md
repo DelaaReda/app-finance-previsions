@@ -22,7 +22,7 @@ Named admin triad (for signed updates):
   - `main -> admins -> equipe de livraison`
   - `equipe de livraison -> admins -> main`
 - If a request bypasses admins, stop and reroute through admin docs:
-  - `docs/ops/ADMIN_TEAM_CHAT.md`
+  - `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`
   - `docs/ops/ADMIN_TEAM_ITERATIONS.md`
 
 ## Runtime profile (active baseline: 2026-02-28)

@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-19-BATCH-19-DEV-03-20260311T090830Z-688"
+stream_id: "BATCH-19"
+task_id: "BATCH-19-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T09:08:30Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope explainability graph + source traceability [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_explainability_graph_+_source_traceability_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T09:08:30Z"
+      ended_at_utc: "2026-03-11T09:08:30Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS `pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -k \"weighted_source_traceability or invalid_source_links\"` (2 passed, 6 deselected); PASS `pytest apps/api/src/domains/judge/tests/test_judge_"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=ae6391b03b01932433c24ee052f0cd496124bbeb; payload artifact=`explainability.source_traceability[].supporting_sources[].{url,link_status}` + `explainability.stats.broken_source_count`"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-19-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-19-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=The explainability graph exposed source weights and freshness but did not preserve link validity metadata, so source traceability could not distinguish usable links from malformed ones or quantify broken links. | fix_applied=Patched `apps/api/src/domains/judge/application/judge_endpoint_service.py` to normalize source URLs, classify them as `ok|missing|invalid`, propagate that metadata into `source_traceability.supporting_sources`, and incre | verify=before=judge explainability sources exposed weight/freshness only and could not report malformed trace links; after=judge payload preserves source URL status and counts invalid links in explainability stats; test=`pytest | architecture_check=layer=apps/api judge application/service + judge contract tests; imports_ok=yes (stdlib `urllib.parse.urlparse` only, no new cross-domain dependency); path_target=apps/api/src/domains/judge/application/judge_endpoint_ser | vision_alignment=batch=BATCH-19; target=Explainability Graph + Source Traceability [DEV-03]; impact=judge recommendations now expose machine-checkable source link status and invalid-link counts needed for traceability UX/gating"

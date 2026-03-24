@@ -2,13 +2,18 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
-VM_SHARED_ROOT="/home/venom/shared/analyse-financiere"
-ROOT="${FINANCE_COPILOT_ROOT:-$DEFAULT_ROOT}"
-if [[ -z "${FINANCE_COPILOT_ROOT:-}" && -d "$VM_SHARED_ROOT" ]]; then
-  ROOT="$VM_SHARED_ROOT"
+SOURCE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+WORKSPACE_HELPER="${SCRIPT_DIR}/lib/workspace_paths.sh"
+if [[ -n "${FINANCE_COPILOT_ROOT:-}" ]]; then
+  ROOT="${FINANCE_COPILOT_ROOT}"
+elif [[ -f "$WORKSPACE_HELPER" ]]; then
+  # shellcheck source=/dev/null
+  source "$WORKSPACE_HELPER"
+  ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+else
+  ROOT="$SOURCE_ROOT"
 fi
-EXEC_LATEST_FILE="docs/orchestrator-ops/executors-monitoring-latest.json"
+EXEC_LATEST_FILE="logs-codex-runs/orchestrator-state/executors-monitoring-latest.json"
 TOOL_REQUESTS_FILE="docs/ops/AGENT_TOOL_REQUESTS.md"
 
 GATES_DIR_CANONICAL="${ROOT}/evidence/gates/openclaw-gates"
@@ -25,9 +30,9 @@ ts_local="$(TZ=America/New_York date '+%Y-%m-%d %H:%M %Z')"
 # Queue
 queue_ready="none"
 queue_blocked="none"
-if [[ -f docs/orchestrator-ops/priority-queue.json ]]; then
-  queue_ready="$(jq -r '[.items[]? | select((.state//"")=="READY") | (.id//"")] | map(select(length>0)) | join(",")' docs/orchestrator-ops/priority-queue.json 2>/dev/null || true)"
-  queue_blocked="$(jq -r '[.items[]? | select((.state//"")=="BLOCKED") | (.id//"")] | map(select(length>0)) | join(",")' docs/orchestrator-ops/priority-queue.json 2>/dev/null || true)"
+if [[ -f logs-codex-runs/orchestrator-state/priority-queue.json ]]; then
+  queue_ready="$(jq -r '[.items[]? | select((.state//"")=="READY") | (.id//"")] | map(select(length>0)) | join(",")' logs-codex-runs/orchestrator-state/priority-queue.json 2>/dev/null || true)"
+  queue_blocked="$(jq -r '[.items[]? | select((.state//"")=="BLOCKED") | (.id//"")] | map(select(length>0)) | join(",")' logs-codex-runs/orchestrator-state/priority-queue.json 2>/dev/null || true)"
 fi
 [[ -n "$queue_ready" ]] || queue_ready="none"
 [[ -n "$queue_blocked" ]] || queue_blocked="none"
@@ -97,8 +102,8 @@ fi
 
 # Workstreams (counts)
 ws="unknown"
-if [[ -f docs/orchestrator-ops/parallel-workstreams.json ]]; then
-  ws="$(jq -r '[.tasks[]?.state] | group_by(.) | map("\(.[0]):\(length)") | join(" ")' docs/orchestrator-ops/parallel-workstreams.json 2>/dev/null || echo unknown)"
+if [[ -f logs-codex-runs/orchestrator-state/parallel-workstreams.json ]]; then
+  ws="$(jq -r '[.tasks[]?.state] | group_by(.) | map("\(.[0]):\(length)") | join(" ")' logs-codex-runs/orchestrator-state/parallel-workstreams.json 2>/dev/null || echo unknown)"
   [[ -n "$ws" ]] || ws="unknown"
 fi
 
@@ -106,8 +111,8 @@ fi
 queue_ready_primary="$(printf '%s' "$queue_ready" | cut -d',' -f1)"
 dispatch_needed=0
 dispatch_ready_tasks="none"
-if [[ "$queue_ready_primary" != "none" && -f docs/orchestrator-ops/parallel-workstreams.json ]]; then
-  dispatch_ready_tasks="$(jq -r --arg pref "${queue_ready_primary}-" '[.tasks[]? | select(.state=="READY") | select((.id//"")|startswith($pref)) | select((.assignee//"")=="") | .id] | if length==0 then "none" else join(",") end' docs/orchestrator-ops/parallel-workstreams.json 2>/dev/null || echo none)"
+if [[ "$queue_ready_primary" != "none" && -f logs-codex-runs/orchestrator-state/parallel-workstreams.json ]]; then
+  dispatch_ready_tasks="$(jq -r --arg pref "${queue_ready_primary}-" '[.tasks[]? | select(.state=="READY") | select((.id//"")|startswith($pref)) | select((.assignee//"")=="") | .id] | if length==0 then "none" else join(",") end' logs-codex-runs/orchestrator-state/parallel-workstreams.json 2>/dev/null || echo none)"
   if [[ "$dispatch_ready_tasks" != "none" ]]; then
     dispatch_needed=1
   fi
@@ -152,5 +157,5 @@ REQUEST latest=${latest_request}
 WORKSTREAMS ${ws}
 DISPATCH needed=${dispatch_needed} ready_unassigned=${dispatch_ready_tasks}
 TOP issue=${issue} owner=${owner} next=${action}
-FILES priority-queue=docs/orchestrator-ops/priority-queue.json role-state=~/.openclaw/cron/role-state gates=${GATES_DIR} parallel=docs/orchestrator-ops/parallel-workstreams.json exec-latest=${EXEC_LATEST_FILE} tool-requests=${TOOL_REQUESTS_FILE}
+FILES priority-queue=logs-codex-runs/orchestrator-state/priority-queue.json role-state=~/.openclaw/cron/role-state gates=${GATES_DIR} parallel=logs-codex-runs/orchestrator-state/parallel-workstreams.json exec-latest=${EXEC_LATEST_FILE} tool-requests=${TOOL_REQUESTS_FILE}
 EOF

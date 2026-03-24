@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-69-BATCH-69-DEV-01-20260320T100742Z-489"
+stream_id: "BATCH-69"
+task_id: "BATCH-69-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-20T10:07:42Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T10:07:42Z"
+      ended_at_utc: "2026-03-20T10:07:42Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`pytest apps/api/src/domains/copilot/tests/test_copilot_domain_router.py -k personal_finance_context_alias_reuses_copilot_context_payload -q` ; `pytest apps/api/src/domains/copilot/tests/test_copilot_domain_router.py app"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "endpoint=/api/personal-finance/context; contract_change=top-level `data.entry_points[*].target` now rewrites to `/personal-finance/ask` and `/personal-finance` (before nested-only rewrite, after top-level+nested rewrite)"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-69-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-69-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=`/api/personal-finance/context` only rewrote targets inside `copilot_start`; the sibling `entry_points` array still pointed at `/copilot/ask` and `/copilot`, leaving the alias payload internally inconsistent. | fix_applied=Added `_rewrite_namespace_entry_points(...)` in `apps/api/src/domains/copilot/api/copilot.py` and applied it in both success and fallback branches of `copilot_context`. Updated the personal-finance alias route test to as | verify=before=`/api/personal-finance/context` kept `entry_points` targets as `/copilot/ask` and `/copilot`; after=alias response rewrites them to `/personal-finance/ask` and `/personal-finance` while `/api/copilot/context` rema | architecture_check=layer=API route alias normalization only; imports_ok=yes (reused existing copilot route helpers, no new cross-layer imports); path_target=apps/api/src/domains/copilot/api/copilot.py | vision_alignment=batch=BATCH-69; target=personal finance copilot starts with brief then lets user ask/open; impact=alias context payload is now directly consumable by the frontend without leaking canonical `/copilot/*` routes in personal"

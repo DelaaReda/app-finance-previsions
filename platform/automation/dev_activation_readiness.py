@@ -42,7 +42,7 @@ def _probe_json(url: str, *, timeout_s: float) -> tuple[dict[str, Any], str]:
 def _validate_bridge(root: Path, *, timeout_s: int) -> tuple[dict[str, Any], str]:
     cmd = [
         sys.executable,
-        str(root / "platform" / "automation" / "openclaw_control_plane.py"),
+        str(root / "platform" / "automation" / "operator" / "openclaw" / "openclaw_control_plane.py"),
         "--validate-bridge",
         "--validate-agent",
         "planner",

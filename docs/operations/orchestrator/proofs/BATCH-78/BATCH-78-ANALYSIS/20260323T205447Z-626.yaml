@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-78-BATCH-78-ANALYSIS-20260323T205447Z-626"
+stream_id: "BATCH-78"
+task_id: "BATCH-78-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T20:54:47Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "planner_runtime_actions.py complete --role planner --task BATCH-78-ANALYSIS"
+      rc: "0"
+      started_at_utc: "2026-03-23T20:54:47Z"
+      ended_at_utc: "2026-03-23T20:54:47Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_planner_no_code_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "close_BATCH-78-ANALYSIS_P1774299144_30297"
+  review_ref: "runner:BATCH-78-ANALYSIS"
+  note: "source=runner | root_cause=preuve planner BATCH-78-ANALYSIS encore incomplete sur un item READY_PLANNER | fix_applied=cloture runtime avec references canoniques et sortie exploitable pour la suite | verify=before=BATCH-78-ANALYSIS:READY_PLANNER; after=BATCH-78-ANALYSIS:DONE; test=parallel_workstream_context_rc0_et_complete_rc0 | architecture_check=layer=planner_runtime; imports_ok=yes; path_target=docs/ops/ACTIVE_DOCS_INDEX.md | vision_alignment=batch=BATCH-78; target=personal_finance_copilot_brief_ask_open; impact=unblock_planner_closure_and_keep_dev03_running"

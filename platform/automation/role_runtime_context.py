@@ -11,6 +11,33 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from orchestrator_paths import resolve_orchestrator_read_path
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+
+PLANNER_GROUP = {
+    "planner",
+    "vision_architect_tasks_planner",
+    "vision-architect-tasks-planner",
+    "analyst",
+    "architect",
+    "po",
+    "scrum_master",
+    "product_owner",
+    "owner",
+    "po_engineer",
+}
+DEV_GROUP = {
+    "dev",
+    "backend_engineer",
+    "frontend_engineer",
+    "data_analyst",
+    "infra_engineer",
+    "integrator",
+    "tester",
+    "qa",
+}
+ADMIN_GROUP = {"admin", "clawsentinel", "infra"}
+
 
 def compact_text(text: str, limit: int) -> str:
     normalized = re.sub(r"\s+", " ", str(text or "")).strip()
@@ -101,7 +128,7 @@ def run_parallel_workstream(script_path: Path, role: str, subcmd: str, limit: in
     if not script_path.exists():
         return "none"
     cmd = [sys.executable, str(script_path), subcmd, "--role", role, "--limit", str(limit)]
-    # CRITICAL: parallel_workstream.py uses a relative DEFAULT_BOARD path.
+    # CRITICAL: compat/projections/parallel_workstream.py uses a relative DEFAULT_BOARD path.
     # If cwd is not set to workspace root, subprocess cannot resolve board files.
     run_cwd = str(cwd) if cwd is not None else None
     try:
@@ -113,8 +140,130 @@ def run_parallel_workstream(script_path: Path, role: str, subcmd: str, limit: in
     return compact_text(cp.stdout, max_chars)
 
 
+def _load_json_dict(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _canonical_role(value: str) -> str:
+    token = str(value or "").strip().replace("-", "_").lower()
+    if not token:
+        return ""
+    if token in PLANNER_GROUP:
+        return "planner"
+    if token in DEV_GROUP:
+        return "dev"
+    if token in ADMIN_GROUP:
+        return "admin"
+    return token
+
+
+def _runtime_workboard_payload(queue_path: Path) -> dict:
+    return _load_json_dict(queue_path.parent / "parallel-workstreams.json")
+
+
+def _role_task_matches(task: dict, role: str) -> bool:
+    role_token = _canonical_role(role)
+    if not role_token:
+        return False
+    task_role = _canonical_role(task.get("role", ""))
+    task_assignee = _canonical_role(task.get("assignee", ""))
+    return role_token in {task_role, task_assignee}
+
+
+def runtime_parallel_hint(queue_path: Path, role: str, max_chars: int = 240) -> str:
+    board = _runtime_workboard_payload(queue_path)
+    tasks = board.get("tasks", []) if isinstance(board.get("tasks"), list) else []
+    if not tasks:
+        return "runtime_projection=none"
+
+    ready = 0
+    in_progress = 0
+    blocked = 0
+    role_open = 0
+    role_ready = 0
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        state = str(task.get("state", "")).strip().upper()
+        if state in {"READY", "READY_PLANNER", "READY_DEV"}:
+            ready += 1
+        elif state in {"IN_PROGRESS", "REVIEW"}:
+            in_progress += 1
+        elif state == "BLOCKED":
+            blocked += 1
+        if _role_task_matches(task, role):
+            if state not in {"DONE", "PASS", "CLOSED"}:
+                role_open += 1
+            if state in {"READY", "READY_PLANNER", "READY_DEV"}:
+                role_ready += 1
+
+    return compact_text(
+        f"runtime_projection=parallel-workstreams ready={ready} in_progress={in_progress} blocked={blocked} "
+        f"role_open={role_open} role_ready={role_ready}",
+        max_chars,
+    )
+
+
+def runtime_workboard_context(queue_path: Path, role: str, max_chars: int = 300) -> str:
+    board = _runtime_workboard_payload(queue_path)
+    tasks = board.get("tasks", []) if isinstance(board.get("tasks"), list) else []
+    if not tasks:
+        return "none"
+
+    matches: list[str] = []
+    for task in tasks:
+        if not isinstance(task, dict) or not _role_task_matches(task, role):
+            continue
+        state = str(task.get("state", "")).strip().upper()
+        if state in {"DONE", "PASS", "CLOSED"}:
+            continue
+        task_id = str(task.get("id", "")).strip() or "task?"
+        title = str(task.get("title", "")).strip() or "untitled"
+        depends_on_raw = task.get("depends_on")
+        blocked_by_raw = task.get("blocked_by")
+        depends_on = (
+            ",".join(str(item).strip() for item in depends_on_raw if str(item).strip())
+            if isinstance(depends_on_raw, list)
+            else str(depends_on_raw or "").strip()
+        )
+        blocked_by = (
+            ",".join(str(item).strip() for item in blocked_by_raw if str(item).strip())
+            if isinstance(blocked_by_raw, list)
+            else str(blocked_by_raw or "").strip()
+        )
+        depends_on = depends_on or "none"
+        blocked_by = blocked_by or "none"
+        matches.append(f"{task_id}:{state}:depends_on={depends_on}:blocked_by={blocked_by}:{title}")
+        if len(matches) >= 3:
+            break
+    return compact_text(" ; ".join(matches), max_chars) if matches else "none"
+
+
+def publication_channels_hint(
+    queue_path: Path,
+    team_chat_file: Path,
+    directive_bus_file: Path,
+    max_chars: int = 360,
+) -> str:
+    board_path = queue_path.parent / "parallel-workstreams.json"
+    parts = [
+        f"runtime_queue={queue_path}",
+        f"runtime_workboard={board_path}",
+        f"team_chat={team_chat_file}",
+        f"directives={directive_bus_file}",
+        "docs_projection=compat_only",
+    ]
+    return compact_text(" ; ".join(parts), max_chars)
+
+
 def dynamic_worker_context(root: Path, role: str, max_chars: int = 240) -> str:
-    script_path = root / "platform" / "automation" / "worker_manager.py"
+    script_path = root / "platform" / "automation" / "compat" / "legacy_workers" / "worker_manager.py"
     if not script_path.exists():
         return "none"
     cmd = [sys.executable, str(script_path), "--root", str(root), "prompt-context", "--role", role]
@@ -287,16 +436,11 @@ def reconcile_summary(report_path: Path) -> dict[str, str]:
 
 
 def resolve_orchestrator_queue_path(root: Path) -> tuple[Path, str]:
-    canonical = root / "docs/operations/orchestrator/priority-queue.json"
-    legacy = root / "docs/orchestrator-ops/priority-queue.json"
-    canonical_only = str(os.environ.get("TMUX_ROLE_ORCH_CANONICAL_ONLY", "1")).strip() == "1"
-    if canonical.exists():
-        return canonical, "canonical"
-    if legacy.exists():
-        return legacy, "legacy_fallback"
-    if canonical_only:
-        return canonical, "canonical"
-    return canonical, "canonical"
+    canonical = root / "logs-codex-runs/orchestrator-state/priority-queue.json"
+    resolved = resolve_orchestrator_read_path(root, "priority-queue.json")
+    if resolved == canonical:
+        return resolved, "canonical"
+    return resolved, "projection_fallback"
 
 
 def dev_ready_snapshot(workboard_path: Path, role: str, limit: int = 8) -> tuple[str, str, str, str]:
@@ -311,50 +455,14 @@ def dev_ready_snapshot(workboard_path: Path, role: str, limit: int = 8) -> tuple
     if not isinstance(board, dict):
         return "0", "none", "none", "0"
 
-    planner_group = {
-        "planner",
-        "vision_architect_tasks_planner",
-        "vision-architect-tasks-planner",
-        "analyst",
-        "architect",
-        "po",
-        "scrum_master",
-        "product_owner",
-        "owner",
-        "po_engineer",
-    }
-    dev_group = {
-        "dev",
-        "backend_engineer",
-        "frontend_engineer",
-        "data_analyst",
-        "infra_engineer",
-        "integrator",
-        "tester",
-        "qa",
-    }
-    admin_group = {"admin", "clawsentinel", "infra"}
-
-    def canonical_role(value: str) -> str:
-        token = str(value or "").strip().replace("-", "_").lower()
-        if not token:
-            return ""
-        if token in planner_group:
-            return "planner"
-        if token in dev_group:
-            return "dev"
-        if token in admin_group:
-            return "admin"
-        return token
-
     ready_states = {"READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS", "REVIEW"}
     task_ids: list[str] = []
     ready_dev_count = 0
     for task in board.get("tasks", []):
         if not isinstance(task, dict):
             continue
-        task_role = canonical_role(task.get("role", ""))
-        task_assignee = canonical_role(task.get("assignee", ""))
+        task_role = _canonical_role(task.get("role", ""))
+        task_assignee = _canonical_role(task.get("assignee", ""))
         if "dev" not in {task_role, task_assignee}:
             continue
         state_upper = str(task.get("state", "")).strip().upper()
@@ -514,34 +622,35 @@ def main() -> int:
     workboard_role_has_work = sys.argv[12] or "0"
     workboard_role_has_ready = sys.argv[13] or "0"
     workboard_role_has_in_progress = sys.argv[14] or "0"
+    agent_message_bus_file = Path(sys.argv[15]) if len(sys.argv) == 17 else Path()
     if len(sys.argv) == 17:
-        agent_message_bus_file = Path(sys.argv[15])
         try:
             agent_message_limit = int(sys.argv[16] or "3")
         except Exception:
             agent_message_limit = 3
     else:
-        agent_message_bus_file = root / "docs/ops/AGENT_MESSAGE_BUS.jsonl"
         agent_message_limit = 3
 
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     queue_path, orchestrator_source = resolve_orchestrator_queue_path(root)
+    runtime_truth = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24)
+    event_store_primary = bool(runtime_truth.get("event_store_primary", False))
+    if (not event_store_primary) and len(sys.argv) != 17:
+        agent_message_bus_file = resolve_orchestrator_read_path(root, "agent-message-bus.jsonl")
     queue_data = queue_summary(queue_path)
     workboard_path = queue_path.parent / "parallel-workstreams.json"
     reconcile_data = reconcile_summary(queue_path.parent / "state-reconcile-report.json")
-    workstate_primary = root / "docs/product/planning/WORKSTATE.md"
-    workstate_fallback = root / "docs/planning/WORKSTATE.md"
-    workstate_target = workstate_primary if workstate_primary.exists() else workstate_fallback
-    workstate_hint = compact_file_tail(workstate_target, 8, 160)
+    workstate_hint = "secondary_compat_only"
 
-    parallel_script = root / "platform/automation/parallel_workstream.py"
-    if not parallel_script.exists():
-        parallel_script = root / "scripts/parallel_workstream.py"
-    parallel_hint = run_parallel_workstream(parallel_script, role, "status", 3, 240, cwd=root)
-    workboard_context = run_parallel_workstream(parallel_script, role, "context", 3, 300, cwd=root)
-    publication_channels = run_parallel_workstream(parallel_script, role, "channels", 4, 360, cwd=root)
-    worker_summary = dynamic_worker_context(root, role)
-    planner_subagent_summary = planner_subagent_context(root, role)
+    parallel_hint = runtime_parallel_hint(queue_path, role, 240)
+    workboard_context = runtime_workboard_context(queue_path, role, 300)
+    publication_channels = publication_channels_hint(queue_path, team_chat_file, directive_bus_file, 360)
+    if event_store_primary:
+        worker_summary = "none"
+        planner_subagent_summary = "none"
+    else:
+        worker_summary = dynamic_worker_context(root, role)
+        planner_subagent_summary = planner_subagent_context(root, role)
     product_priority_summary = product_priority_context(root)
 
     agent_memory = compact_file_tail(role_memory_dir / f"{role}.md", 8, 180)
@@ -550,18 +659,22 @@ def main() -> int:
     team_chat_tail = compact_file_tail(team_chat_file, 4, 140)
     team_iteration_tail = compact_file_tail(team_iter_file, 2, 100)
     directives = directives_tail(directive_bus_file, role, now_iso)
-    agent_messages_tail_text, agent_message_ids = agent_messages_tail(
-        agent_message_bus_file,
-        role,
-        now_iso,
-        max(1, agent_message_limit),
-    )
+    if event_store_primary:
+        agent_messages_tail_text, agent_message_ids = ("secondary_compat_only", "secondary_compat_only")
+    else:
+        agent_messages_tail_text, agent_message_ids = agent_messages_tail(
+            agent_message_bus_file,
+            role,
+            now_iso,
+            max(1, agent_message_limit),
+        )
     trace_tail = compact_file_tail(trace_file, 3, 140)
     dev_ready_count, dev_ready_task_ids, dev_ready_reason, dev_ready_dev_count = dev_ready_snapshot(workboard_path, role)
     dev_has_ready_task = "1" if role == "dev" and str(workboard_role_has_ready) == "1" else "0"
     dev_wait_allowed = (
         "1"
         if role == "dev"
+        and dev_has_ready_task != "1"
         and str(dev_ready_count) == "0"
         and str(workboard_role_has_in_progress) != "1"
         else "0"

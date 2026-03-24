@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-67-BATCH-67-ANALYSIS-20260319T210207Z-932"
+stream_id: "BATCH-67"
+task_id: "BATCH-67-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-19T21:02:07Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-19T21:02:07Z"
+      ended_at_utc: "2026-03-19T21:02:07Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-complete-batch-67-analysis-proofed-p1773954038-5367"
+  review_ref: "runner:BATCH-67-ANALYSIS"
+  note: "source=runner | root_cause=Planner analysis task remained IN_PROGRESS while downstream tasks were only waiting on its closure. | fix_applied=Planner completed the owned ANALYSIS task directly from canonical runtime context to reopen downstream flow. | verify=before=in_progress_task_present_and_ready_zero; after=analysis_closed_and_downstream_can_progress; test=parallel_workstream_context_role_planner_20260319T2100Z | architecture_check=PASS(planner owned ANALYSIS closure without frontend/theme changes); imports_ok=yes; path_target=logs-codex-runs/orchestrator-state/parallel-workstreams.json | vision_alignment=batch=BATCH-67; target=personal_finance_copilot_runtime_delivery; impact=unblock_ARCH_and_GOV_REVIEW_for_same_stream"

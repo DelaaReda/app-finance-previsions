@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-17-BATCH-17-DEV-01-20260311T080414Z-974"
+stream_id: "BATCH-17"
+task_id: "BATCH-17-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-11T08:04:14Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope regime detection + allocation drift alerts [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_regime_detection_+_allocation_drift_alerts_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T08:04:14Z"
+      ended_at_utc: "2026-03-11T08:04:14Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest apps/api/src/domains/copilot/tests/test_copilot_service.py -q"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=3b65b86111f1e89c25f53020b876919c56d06d22 ; payload slice=`build_context_payload(...)->{regime_detection,allocation_drift_alerts}` on `/api/copilot/context` and `/api/copilot/start` via existing service reuse"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-17-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-17-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The existing copilot context flow exposed regime and playbook data, but it did not surface a dedicated regime-detection block or any allocation-drift alert derived from saved portfolio weights and existing playbook guard | fix_applied=Extended `apps/api/src/domains/copilot/application/copilot_service.py` to build `regime_detection` from the current context payload and `allocation_drift_alerts` from saved portfolio weights plus playbook guardrails (con | verify=before=`build_context_payload` returned regime/playbook context only, with no explicit `regime_detection` block and no allocation drift alerts ; after=`build_context_payload` now emits `regime_detection={label,confidence | architecture_check=layer=application-service enrichment on existing copilot context flow ; imports_ok=yes (reused existing playbook/context stack, no new route/provider dependency) ; path_target=apps/api/src/domains/copilot/application/cop | vision_alignment=batch=BATCH-17 ; target=Regime Detection + Allocation Drift Alerts [DEV-01] minimal backend slice ; impact=copilot context now exposes a concrete regime label/confidence block and clear threshold-based drift alerts witho"

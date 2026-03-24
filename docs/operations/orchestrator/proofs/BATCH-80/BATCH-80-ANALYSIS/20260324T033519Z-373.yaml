@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-80-BATCH-80-ANALYSIS-20260324T033519Z-373"
+stream_id: "BATCH-80"
+task_id: "BATCH-80-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T03:35:19Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner analysis closure only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T03:35:19Z"
+      ended_at_utc: "2026-03-24T03:35:19Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner analysis proof only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-80-analysis-close-20260324t033420z"
+  review_ref: "runner:BATCH-80-ANALYSIS"
+  note: "source=runner | root_cause=analyse planner laissee ouverte sans reference architecture exploitable pour BATCH-80 | fix_applied=cloture avec preuve de cadrage reliee aux chemins apps/api et apps/web | verify=before=BATCH-80-ANALYSIS etait IN_PROGRESS et GOV_REVIEW attendait sa cloture; after=la cloture planner formalise architecture_plan_ref et architecture_audit pour debloquer la suite; test=python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=anti_regression_guards=ok; refs=apps/api/src/domains/*,apps/web/src,apps/api/runtime; legacy_paths=absent | vision_alignment=batch=BATCH-80; target=copilot finance personnel avec brief quotidien et ouverture d analyse; impact=debloque la revue planner aval"

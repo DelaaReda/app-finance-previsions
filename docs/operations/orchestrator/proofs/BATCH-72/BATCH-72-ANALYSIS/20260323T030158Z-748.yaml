@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-72-BATCH-72-ANALYSIS-20260323T030158Z-748"
+stream_id: "BATCH-72"
+task_id: "BATCH-72-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T03:01:58Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_completion_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T03:01:58Z"
+      ended_at_utc: "2026-03-23T03:01:58Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b72-analysis-complete-20260323T030115Z"
+  review_ref: "runner:BATCH-72-ANALYSIS"
+  note: "source=runner | root_cause=guardian_red_missing_architecture_plan_ref_and_architecture_audit | fix_applied=analysis_closed_with_explicit_canonical_refs_docs_ops_ACTIVE_DOCS_INDEX_md_docs_ops_PLANE_BACKLOG_INTEGRATION_SPEC_md_docs_product_PRODUCT_VISION_md_and_code_roots_apps_api_src_domains_apps_web_src | verify=before=guardian_red_missing_refs; after=analysis_has_canonical_plan_and_audit_refs; test=parallel_workstream_context_confirms_BATCH-72-ANALYSIS_in_progress_only | architecture_check=architecture_plan_ref=/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md;architecture_audit=/home/venom/analyse-financiere/apps/api/src/domains|/home/venom/analyse-financiere/apps/web/src;active_docs_index=/home/venom/analyse-financiere/docs/ops/ACTIVE_DOCS_INDEX.md;product_vision=/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md | vision_alignment=batch=BATCH-72; target=personal_finance_copilot_day_brief_and_analysis_entry; impact=planner_analysis_gate_closed_for_runtime_dispatch"

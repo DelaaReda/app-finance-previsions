@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-71-BATCH-71-PLAN-20260320T215910Z-970"
+stream_id: "BATCH-71"
+task_id: "BATCH-71-PLAN"
+role: "planner"
+produced_at_utc: "2026-03-20T21:59:10Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 platform/automation/runtime/planner/planner_runtime_actions.py reconcile-state --board logs-codex-runs/orchestrator-state/parallel-workstreams.json --queue logs-codex-runs/orchestrator-state/priority-queue.json"
+      rc: "0"
+      started_at_utc: "2026-03-20T21:59:10Z"
+      ended_at_utc: "2026-03-20T21:59:10Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PYTHONPATH=platform/automation python3 -m pytest -q platform/automation/tests/test_parallel_workstream_queue_sync.py:PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-71/BATCH-71-PLAN/20260320T220500Z-planner-cycle-unblock.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "admin-batch71-plan-proof-20260320"
+  review_ref: "runner:BATCH-71-PLAN"
+  note: "source=runner | root_cause=active_cycle stale on BATCH-24 masked the real live planner stream | fix_applied=reconcile_state now persists active_cycle normalization and planner prompt now requires full proof fields | verify=before=active_cycle_BATCH24_stale; after=active_cycle_BATCH71_live; test=pytest_parallel_workstream_queue_sync_and_live_reconcile | architecture_check=layer=planner_runtime; imports_ok=yes; path_target=platform/automation/compat/projections/parallel_workstream.py | vision_alignment=batch=BATCH-71; target=personal_finance_copilot_brief_and_open; impact=planner_cycle_unblocked"

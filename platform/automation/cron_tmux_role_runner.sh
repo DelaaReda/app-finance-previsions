@@ -38,13 +38,11 @@ if declare -F runner_config_default_loader >/dev/null 2>&1; then
 else
   RUNNER_CONFIG_LOADER="${RUNNER_CONFIG_LOADER:-$ROOT/platform/automation/runner_config.py}"
 fi
-ORCHESTRATOR_DIR_CANONICAL="${ROOT}/docs/operations/orchestrator"
-ORCHESTRATOR_DIR_LEGACY="${ROOT}/docs/orchestrator-ops"
+ORCHESTRATOR_DIR_CANONICAL="${ROOT}/logs-codex-runs/orchestrator-state"
+ORCHESTRATOR_DIR_COMPAT="${ROOT}/docs/operations/orchestrator"
 TMUX_ROLE_ORCH_CANONICAL_ONLY="${TMUX_ROLE_ORCH_CANONICAL_ONLY:-1}"
 ORCHESTRATOR_DIR_DEFAULT="$ORCHESTRATOR_DIR_CANONICAL"
-if [[ ! -d "$ORCHESTRATOR_DIR_DEFAULT" ]] && [[ -d "$ORCHESTRATOR_DIR_LEGACY" ]]; then
-  ORCHESTRATOR_DIR_DEFAULT="$ORCHESTRATOR_DIR_LEGACY"
-fi
+mkdir -p "$ORCHESTRATOR_DIR_DEFAULT"
 ORCHESTRATOR_SOURCE="canonical"
 ORCH_DUAL_WRITE_FORBIDDEN=0
 MODEL_CONFIG_FILE="${ROOT}/platform/config/lm_used_model_config.sh"
@@ -181,7 +179,7 @@ ROLE_MEMORY_DIR="${TMUX_ROLE_MEMORY_DIR:-$ROOT/memory/agents}"
 TEAM_CHAT_FILE="${TMUX_ROLE_TEAM_CHAT_FILE:-$ROOT/docs/ops/ADMIN_TEAM_CHAT.md}"
 TEAM_ITER_FILE="${TMUX_ROLE_TEAM_ITER_FILE:-$ROOT/docs/ops/ADMIN_TEAM_ITERATIONS.md}"
 DIRECTIVE_BUS_FILE="${TMUX_ROLE_DIRECTIVE_BUS_FILE:-$ROOT/docs/ops/DIRECTIVE_BUS.jsonl}"
-AGENT_MESSAGE_BUS_FILE="${AGENT_MESSAGE_BUS_FILE:-$ROOT/docs/ops/AGENT_MESSAGE_BUS.jsonl}"
+AGENT_MESSAGE_BUS_FILE="${AGENT_MESSAGE_BUS_FILE:-$ORCHESTRATOR_DIR_CANONICAL/legacy/agent-message-bus.jsonl}"
 RUNTIME_AGENT_MESSAGES_TAIL="${RUNTIME_AGENT_MESSAGES_TAIL:-none}"
 RUNTIME_AGENT_MESSAGE_IDS="${RUNTIME_AGENT_MESSAGE_IDS:-none}"
 RUNTIME_DEV_READY_COUNT="${RUNTIME_DEV_READY_COUNT:-0}"
@@ -191,36 +189,38 @@ RUNTIME_DEV_READY_REASON="${RUNTIME_DEV_READY_REASON:-none}"
 RUNTIME_ORCHESTRATOR_SOURCE="${RUNTIME_ORCHESTRATOR_SOURCE:-canonical}"
 CANONICAL_QUEUE_FILE="${ORCHESTRATOR_DIR_CANONICAL}/priority-queue.json"
 CANONICAL_WORKBOARD_FILE="${ORCHESTRATOR_DIR_CANONICAL}/parallel-workstreams.json"
-LEGACY_QUEUE_FILE="${ORCHESTRATOR_DIR_LEGACY}/priority-queue.json"
-LEGACY_WORKBOARD_FILE="${ORCHESTRATOR_DIR_LEGACY}/parallel-workstreams.json"
+COMPAT_QUEUE_FILE="${ORCHESTRATOR_DIR_COMPAT}/priority-queue.json"
+COMPAT_WORKBOARD_FILE="${ORCHESTRATOR_DIR_COMPAT}/parallel-workstreams.json"
 QUEUE_FILE="${TMUX_ROLE_QUEUE_FILE:-$CANONICAL_QUEUE_FILE}"
 WORKBOARD_FILE="${TMUX_ROLE_WORKBOARD_FILE:-$CANONICAL_WORKBOARD_FILE}"
 if [[ -z "${TMUX_ROLE_QUEUE_FILE:-}" ]]; then
   if [[ -f "$CANONICAL_QUEUE_FILE" ]]; then
     QUEUE_FILE="$CANONICAL_QUEUE_FILE"
-  elif [[ -f "$LEGACY_QUEUE_FILE" ]]; then
-    QUEUE_FILE="$LEGACY_QUEUE_FILE"
-    ORCHESTRATOR_SOURCE="legacy_fallback"
+  elif [[ -f "$COMPAT_QUEUE_FILE" ]]; then
+    QUEUE_FILE="$COMPAT_QUEUE_FILE"
+    ORCHESTRATOR_SOURCE="compat_fallback"
   fi
 fi
 if [[ -z "${TMUX_ROLE_WORKBOARD_FILE:-}" ]]; then
   if [[ -f "$CANONICAL_WORKBOARD_FILE" ]]; then
     WORKBOARD_FILE="$CANONICAL_WORKBOARD_FILE"
-  elif [[ -f "$LEGACY_WORKBOARD_FILE" ]]; then
-    WORKBOARD_FILE="$LEGACY_WORKBOARD_FILE"
-    ORCHESTRATOR_SOURCE="legacy_fallback"
+  elif [[ -f "$COMPAT_WORKBOARD_FILE" ]]; then
+    WORKBOARD_FILE="$COMPAT_WORKBOARD_FILE"
+    ORCHESTRATOR_SOURCE="compat_fallback"
   fi
 fi
-if [[ "$QUEUE_FILE" == "$LEGACY_QUEUE_FILE" || "$WORKBOARD_FILE" == "$LEGACY_WORKBOARD_FILE" ]]; then
-  ORCHESTRATOR_SOURCE="legacy_fallback"
+if [[ "$QUEUE_FILE" == "$COMPAT_QUEUE_FILE" || "$WORKBOARD_FILE" == "$COMPAT_WORKBOARD_FILE" ]]; then
+  ORCHESTRATOR_SOURCE="compat_fallback"
 fi
-if [[ "$TMUX_ROLE_ORCH_CANONICAL_ONLY" == "1" && -f "$CANONICAL_QUEUE_FILE" && -f "$LEGACY_QUEUE_FILE" ]]; then
+if [[ "$TMUX_ROLE_ORCH_CANONICAL_ONLY" == "1" && -f "$CANONICAL_QUEUE_FILE" && -f "$COMPAT_QUEUE_FILE" ]]; then
   canonical_real="$(readlink -f "$CANONICAL_QUEUE_FILE" 2>/dev/null || printf '%s' "$CANONICAL_QUEUE_FILE")"
-  legacy_real="$(readlink -f "$LEGACY_QUEUE_FILE" 2>/dev/null || printf '%s' "$LEGACY_QUEUE_FILE")"
-  if [[ "$canonical_real" != "$legacy_real" ]]; then
+  compat_real="$(readlink -f "$COMPAT_QUEUE_FILE" 2>/dev/null || printf '%s' "$COMPAT_QUEUE_FILE")"
+  if [[ "$canonical_real" != "$compat_real" ]]; then
     ORCH_DUAL_WRITE_FORBIDDEN=1
-    echo "ORCH_DUAL_WRITE_FORBIDDEN: canonical=${CANONICAL_QUEUE_FILE} legacy=${LEGACY_QUEUE_FILE}" >&2
-    exit 2
+    ORCHESTRATOR_SOURCE="canonical"
+    QUEUE_FILE="$CANONICAL_QUEUE_FILE"
+    WORKBOARD_FILE="$CANONICAL_WORKBOARD_FILE"
+    echo "ORCH_DUAL_WRITE_FORBIDDEN: canonical=${CANONICAL_QUEUE_FILE} compat=${COMPAT_QUEUE_FILE} action=canonical_only_continue" >&2
   fi
 fi
 RUNTIME_ORCHESTRATOR_SOURCE="$ORCHESTRATOR_SOURCE"
@@ -356,7 +356,7 @@ AGENT_MESSAGE_BUS_SCRIPT="$(resolve_helper_script "platform/automation/agent_mes
 DELIVERY_VALUE_GATE_SCRIPT="$(resolve_helper_script "platform/automation/delivery_value_gate.py" "scripts/delivery_value_gate.py")"
 SCRUM_POLICY_SCRIPT="$(resolve_helper_script "platform/automation/scrum_policy.py" "scripts/scrum_policy.py")"
 PLANNER_SUBAGENT_MANAGER_SCRIPT="$(resolve_helper_script "platform/automation/planner_subagent_manager.py" "scripts/planner_subagent_manager.py")"
-PLANNER_ORCHESTRATOR_BRIDGE_SCRIPT="$(resolve_helper_script "platform/automation/planner_orchestrator_bridge.py" "scripts/planner_orchestrator_bridge.py")"
+PLANNER_RUNTIME_ACTIONS_SCRIPT="$(resolve_helper_script "platform/automation/runtime/planner/planner_runtime_actions.py" "platform/automation/runtime/planner/planner_runtime_actions.py")"
 PLANNER_GUARDIAN_ENABLED="${TMUX_ROLE_PLANNER_GUARDIAN_ENABLED:-1}"
 PLANNER_GUARDIAN_INCLUDE_IN_PROMPT="${TMUX_ROLE_PLANNER_GUARDIAN_INCLUDE_IN_PROMPT:-1}"
 PLANNER_GUARDIAN_LATEST_FILE="${TMUX_ROLE_PLANNER_GUARDIAN_LATEST_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-guardian-latest.json}"
@@ -391,6 +391,8 @@ DEV_AUTONOMY_ENFORCE_COOLDOWN_SECONDS="${TMUX_ROLE_DEV_AUTONOMY_ENFORCE_COOLDOWN
 DEV_AUTONOMY_MAX_ENFORCED_PER_HOUR="${TMUX_ROLE_DEV_AUTONOMY_MAX_ENFORCED_PER_HOUR:-4}"
 DEV_AUTONOMY_ENFORCE_GUARD="${TMUX_ROLE_DEV_AUTONOMY_ENFORCE_GUARD:-1}"
 CODEX_SESSION_FILE="${STATE_DIR}/${ROLE}.codex_exec_session_id"
+CODEX_SESSION_META_FILE="${STATE_DIR}/${ROLE}.codex_exec_session_meta"
+CODEX_SESSION_MAX_AGE_SECONDS="${TMUX_ROLE_CODEX_SESSION_MAX_AGE_SECONDS:-1800}"
 LAST_CONTRACT_FILE="${STATE_DIR}/${ROLE}.last_contract"
 TRACE_FILE="${TRACE_DIR}/${ROLE}.live.log"
 TRACE_EVENTS_FILE="${TMUX_ROLE_TRACE_EVENTS_FILE:-${TRACE_DIR}/${ROLE}.events.log}"
@@ -529,6 +531,8 @@ fi
 if ! [[ "$RATE_LIMIT_QWEN_FALLBACK" =~ ^[01]$ ]]; then
   RATE_LIMIT_QWEN_FALLBACK=1
 fi
+RATE_LIMIT_SECONDARY_MODEL="${TMUX_ROLE_RATE_LIMIT_SECONDARY_MODEL:-${TMUX_ROLE_RATE_LIMIT_FALLBACK_MODEL:-${LM_FALLBACK_SECONDARY_MODEL:-gpt-5.3-codex-spark}}}"
+RATE_LIMIT_SECONDARY_THINKING="${TMUX_ROLE_RATE_LIMIT_SECONDARY_THINKING:-${LM_FALLBACK_SECONDARY_THINKING:-high}}"
 if ! [[ "$CODEX_EXEC_FALLBACK" =~ ^[01]$ ]]; then
   CODEX_EXEC_FALLBACK=1
 fi
@@ -538,11 +542,29 @@ fi
 if ! [[ "$CODEX_NO_ALT_SCREEN" =~ ^[01]$ ]]; then
   CODEX_NO_ALT_SCREEN=1
 fi
+if [[ "$ROLE" == "planner" ]]; then
+  # Planner must default to a fresh Codex thread. Resuming an old tmux-backed
+  # Codex session can revive stale prompts/workdirs and stall automatic
+  # delivery recovery. Resume is blocked unless explicitly re-enabled with
+  # FC_PLANNER_ALLOW_CODEX_EXEC_RESUME=1.
+  if [[ "${FC_PLANNER_ALLOW_CODEX_EXEC_RESUME:-0}" == "1" ]]; then
+    CODEX_EXEC_RESUME="${FC_PLANNER_CODEX_EXEC_RESUME:-1}"
+  else
+    CODEX_EXEC_RESUME=0
+  fi
+fi
 if ! [[ "$CODEX_EXEC_RESUME" =~ ^[01]$ ]]; then
-  CODEX_EXEC_RESUME=1
+  if [[ "$ROLE" == "planner" && "${FC_PLANNER_ALLOW_CODEX_EXEC_RESUME:-0}" != "1" ]]; then
+    CODEX_EXEC_RESUME=0
+  else
+    CODEX_EXEC_RESUME=1
+  fi
 fi
 if ! [[ "$CODEX_EXEC_REQUIRE_FRESH_TICK" =~ ^[01]$ ]]; then
   CODEX_EXEC_REQUIRE_FRESH_TICK=1
+fi
+if ! [[ "$CODEX_SESSION_MAX_AGE_SECONDS" =~ ^[0-9]+$ ]] || [[ "$CODEX_SESSION_MAX_AGE_SECONDS" -lt 60 ]]; then
+  CODEX_SESSION_MAX_AGE_SECONDS=1800
 fi
 if ! [[ "$CODEX_SEARCH_ENABLED" =~ ^[01]$ ]]; then
   CODEX_SEARCH_ENABLED=1
@@ -671,9 +693,8 @@ normalize_reasoning_effort() {
   local effort="${1:-}"
   effort="$(printf '%s' "$effort" | tr '[:upper:]' '[:lower:]' | tr -d '\r' | sed 's/^ *//; s/ *$//')"
   case "$effort" in
-    xhigh)
-      # Codex exec accepts up to "high"; map legacy xhigh safely.
-      printf 'high\n'
+    xhigh|extra|extra_high|veryhigh|max|maximum)
+      printf 'xhigh\n'
       ;;
     high|medium|low|minimal)
       printf '%s\n' "$effort"
@@ -1434,9 +1455,9 @@ planner_preflight_sync_if_needed() {
     return 0
   fi
 
-  local sanitize_cmd="python3 platform/automation/parallel_workstream.py sanitize-dependencies --queue docs/operations/orchestrator/priority-queue.json --all-batches"
-  local sync_cmd="python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json"
-  local autobatch_cmd="python3 platform/automation/parallel_workstream.py planner-autobatch --queue docs/operations/orchestrator/priority-queue.json --reason idle_no_ready --cooldown-s ${TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S}"
+  local sanitize_cmd="python3 platform/automation/runtime/planner/planner_runtime_actions.py sanitize-dependencies --queue ${CANONICAL_QUEUE_FILE} --all-batches"
+  local sync_cmd="python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --queue ${CANONICAL_QUEUE_FILE}"
+  local autobatch_cmd="python3 platform/automation/runtime/planner/planner_runtime_actions.py planner-autobatch --queue ${CANONICAL_QUEUE_FILE} --reason idle_no_ready --cooldown-s ${TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S}"
   local output=""
   local rc=0
   local compact=""
@@ -1538,8 +1559,8 @@ scrum_preflight_orchestration_if_needed() {
     return 0
   fi
 
-  local sync_cmd="python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json"
-  local reconcile_cmd="python3 platform/automation/parallel_workstream.py reconcile-state --queue docs/operations/orchestrator/priority-queue.json"
+  local sync_cmd="python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --queue ${CANONICAL_QUEUE_FILE}"
+  local reconcile_cmd="python3 platform/automation/runtime/planner/planner_runtime_actions.py reconcile-state --queue ${CANONICAL_QUEUE_FILE}"
   local output=""
   local rc=0
   local compact=""
@@ -1858,8 +1879,8 @@ PY
     return 0
   fi
 
-  local sync_cmd="python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json"
-  local sla_cmd="python3 platform/automation/parallel_workstream.py enforce-sla --apply"
+  local sync_cmd="python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --queue ${CANONICAL_QUEUE_FILE}"
+  local sla_cmd="python3 platform/automation/runtime/planner/planner_runtime_actions.py enforce-sla --board ${CANONICAL_WORKBOARD_FILE} --queue ${CANONICAL_QUEUE_FILE} --apply"
   local sync_out=""
   local sla_out=""
   local compact=""
@@ -2015,6 +2036,28 @@ fallback_to_qwen_on_rate_limit() {
   if [[ "$AGENT_BIN_NAME" != "codex" ]]; then
     return 1
   fi
+
+  local fallback_model="${TMUX_ROLE_RATE_LIMIT_SECONDARY_MODEL:-$RATE_LIMIT_SECONDARY_MODEL}"
+  local current_model="$(normalize_model "${CODEX_EXEC_MODEL}")"
+  local fallback_thinking="${TMUX_ROLE_RATE_LIMIT_SECONDARY_THINKING:-$RATE_LIMIT_SECONDARY_THINKING}"
+  fallback_model="${fallback_model#openai-codex/}"
+  fallback_model="$(normalize_model "$fallback_model")"
+  if [[ -n "$fallback_model" && "$fallback_model" != "qwen" && "$fallback_model" != "$current_model" ]]; then
+    local fallback_cache_key
+    local fallback_cache_file
+    fallback_cache_key="$(printf '%s' "$fallback_model" | tr '[:upper:]/.-' '[:lower:]___' | sed 's/[^a-z0-9_]/_/g')"
+    fallback_cache_file="${STATE_DIR}/codex.${fallback_cache_key}.rate_limit_gate_cache"
+    trace_event "rate_limit_secondary_fallback source=${source} model=${fallback_model} from=${current_model} reason=$(sanitize_rate_limit_reason "$reason")"
+    exec env \
+      TMUX_ROLE_RATE_LIMIT_SECONDARY_MODEL="" \
+      TMUX_ROLE_RATE_LIMIT_SECONDARY_THINKING="" \
+      TMUX_ROLE_CODEX_MODEL="${fallback_model}" \
+      TMUX_ROLE_CODEX_THINKING="${fallback_thinking}" \
+      TMUX_ROLE_RATE_LIMIT_CACHE_FILE="${fallback_cache_file}" \
+      TMUX_ROLE_RATE_LIMIT_GATE_REASON="$(sanitize_rate_limit_reason "$reason")" \
+      bash "${SCRIPT_PATH}" "${ROLE_INPUT}"
+  fi
+
   local qwen_bin="${TMUX_ROLE_QWEN_BIN:-${LM_USED_QWEN_BIN:-qwen}}"
   if [[ "$qwen_bin" == */* ]]; then
     if [[ ! -x "$qwen_bin" ]]; then
@@ -2629,8 +2672,64 @@ write_codex_session_id() {
   fi
 }
 
+write_codex_session_meta() {
+  local fingerprint="$1"
+  if [[ -n "$fingerprint" ]]; then
+    printf 'updated_at=%s\nfingerprint=%s\n' "$(date +%s)" "$fingerprint" > "$CODEX_SESSION_META_FILE"
+  fi
+}
+
+build_codex_session_fingerprint() {
+  local prompt_text="${1:-}"
+  python3 - "$ROOT" "$ROLE" "$CODEX_EXEC_MODEL" "${EXECUTION_MODE:-unknown}" "${RUNTIME_ORCHESTRATOR_SOURCE:-canonical}" "$prompt_text" <<'PY'
+import hashlib
+import os
+import sys
+
+root = str(sys.argv[1] or "")
+role = str(sys.argv[2] or "")
+model = str(sys.argv[3] or "")
+execution_mode = str(sys.argv[4] or "")
+orchestrator_source = str(sys.argv[5] or "")
+prompt_text = str(sys.argv[6] or "")
+system_prompt = str(os.environ.get("SYSTEM_PROMPT", "") or "")
+
+payload = "\n".join(
+    [
+        f"root={root}",
+        f"role={role}",
+        f"model={model}",
+        f"execution_mode={execution_mode}",
+        f"orchestrator_source={orchestrator_source}",
+        system_prompt,
+        prompt_text,
+    ]
+)
+print(hashlib.sha1(payload.encode("utf-8", errors="ignore")).hexdigest())
+PY
+}
+
+codex_session_meta_allows_resume() {
+  local fingerprint="${1:-}"
+  if [[ -z "$fingerprint" || ! -f "$CODEX_SESSION_META_FILE" ]]; then
+    return 1
+  fi
+  local updated_at=""
+  local stored_fingerprint=""
+  updated_at="$(sed -n 's/^updated_at=//p' "$CODEX_SESSION_META_FILE" | head -n 1)"
+  stored_fingerprint="$(sed -n 's/^fingerprint=//p' "$CODEX_SESSION_META_FILE" | head -n 1)"
+  [[ "$updated_at" =~ ^[0-9]+$ ]] || return 1
+  [[ -n "$stored_fingerprint" ]] || return 1
+  local now_epoch age_seconds
+  now_epoch="$(date +%s)"
+  age_seconds=$(( now_epoch - updated_at ))
+  [[ "$age_seconds" -le "$CODEX_SESSION_MAX_AGE_SECONDS" ]] || return 1
+  [[ "$stored_fingerprint" == "$fingerprint" ]]
+}
+
 clear_codex_session_id() {
   rm -f "$CODEX_SESSION_FILE"
+  rm -f "$CODEX_SESSION_META_FILE"
 }
 
 apply_no_delta_gate() {
@@ -3065,7 +3164,7 @@ apply_delivery_value_gate_safe() {
   rm -f "$tmp"
 }
 
-apply_planner_orchestrator_bridge_safe() {
+apply_planner_runtime_actions_safe() {
   local source="${1:-unknown}"
   local tmp=""
   local bridge_rc=0
@@ -3082,8 +3181,8 @@ apply_planner_orchestrator_bridge_safe() {
     rm -f "$tmp"
     return 0
   fi
-  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$PLANNER_ORCHESTRATOR_BRIDGE_SCRIPT" ]]; then
-    trace_event "planner_orchestrator_bridge_unavailable source=${source}; fallback=raw_payload"
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$PLANNER_RUNTIME_ACTIONS_SCRIPT" ]]; then
+    trace_event "planner_runtime_actions_unavailable source=${source}; fallback=raw_payload"
     cat "$tmp"
     rm -f "$tmp"
     return 0
@@ -3092,7 +3191,7 @@ apply_planner_orchestrator_bridge_safe() {
   set +e
   bridge_stdout="$(mktemp)"
   bridge_stderr="$(mktemp)"
-  python3 "$PLANNER_ORCHESTRATOR_BRIDGE_SCRIPT" \
+  python3 "$PLANNER_RUNTIME_ACTIONS_SCRIPT" \
     --root "$ROOT" \
     --role "$ROLE" \
     --source "$source" \
@@ -3126,7 +3225,7 @@ PY
 )"
   fi
   if [[ "$bridge_rc" -ne 0 ]]; then
-    trace_event "planner_orchestrator_bridge_failed source=${source} rc=${bridge_rc}; error=${bridge_error:-none}${bridge_trace:+; ${bridge_trace}}"
+    trace_event "planner_runtime_actions_failed source=${source} rc=${bridge_rc}; error=${bridge_error:-none}${bridge_trace:+; ${bridge_trace}}"
     python3 - "$tmp" "$source" "$bridge_rc" "$bridge_error" <<'PY'
 from pathlib import Path
 import sys
@@ -3154,20 +3253,20 @@ for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
     if key in payload and not payload[key]:
         payload[key] = value.strip()
 payload["STATUS"] = "BLOCKED"
-payload["DELTA"] = "PLANNER_ORCHESTRATOR_BRIDGE_FAILED"
+payload["DELTA"] = "PLANNER_RUNTIME_ACTIONS_FAILED"
 payload["EVIDENCE"] = (
-    f"task_update=blocked; root_cause=planner_orchestrator_bridge_failed; "
-    f"fix_applied=inspect_bridge_stdout_and_stderr; verify=source={source}; rc={rc}; error={error}"
+    f"task_update=blocked; root_cause=planner_runtime_actions_failed; "
+    f"fix_applied=inspect_runtime_actions_stdout_and_stderr; verify=source={source}; rc={rc}; error={error}"
 )
-payload["RISKS"] = "planner capability dispatch unavailable until bridge failure is resolved"
-payload["NEXT"] = "owner=planner; action=repair planner capability bridge now"
+payload["RISKS"] = "planner capability dispatch unavailable until runtime actions failure is resolved"
+payload["NEXT"] = "owner=planner; action=repair planner runtime actions now"
 payload["VERDICT"] = "BLOCKED"
-payload["BLOCKER_ID"] = "PLANNER_ORCHESTRATOR_BRIDGE_FAILED"
-payload["NEXT_ACTION_UNIQUE"] = "PLANNER_ORCHESTRATOR_BRIDGE_FAILED"
+payload["BLOCKER_ID"] = "PLANNER_RUNTIME_ACTIONS_FAILED"
+payload["NEXT_ACTION_UNIQUE"] = "PLANNER_RUNTIME_ACTIONS_FAILED"
 path.write_text("\n".join(f"{k}: {payload.get(k, '').strip()}" for k in keys) + "\n", encoding="utf-8")
 PY
   elif [[ -n "$bridge_trace" ]]; then
-    trace_event "planner_orchestrator_bridge_result source=${source}; ${bridge_trace}"
+    trace_event "planner_runtime_actions_result source=${source}; ${bridge_trace}"
   fi
   rm -f "$bridge_stdout" "$bridge_stderr"
   cat "$tmp"
@@ -4415,21 +4514,18 @@ Objectif: débloquer la livraison réelle avec une action concrète unique par t
 Budget strict:
 - maximum 3 commandes shell par tick, maximum 20s chacune
 - commandes autorisées:
-  - python3 platform/automation/parallel_workstream.py context --role planner --limit 5
-  - python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json
-  - python3 platform/automation/parallel_workstream.py planner-autobatch --queue docs/operations/orchestrator/priority-queue.json --reason <reason> --cooldown-s <seconds>
-  - python3 platform/automation/parallel_workstream.py claim --role planner
-  - python3 platform/automation/parallel_workstream.py complete --role planner --task <task_id> --artifact "<path>" --note "<note>" --exec-cmd "SKIP(reason)" --tests-run "SKIP(reason)" --review-ref "<ref>" --review-verdict <GO_WITH_CAUTION|PASS|BLOCKED> --change-plan "<steps>" --architecture-checks "<checks>" --idempotency-key <key>
+  - python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5
+  - python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --queue logs-codex-runs/orchestrator-state/priority-queue.json
+  - python3 platform/automation/runtime/planner/planner_runtime_actions.py planner-autobatch --queue logs-codex-runs/orchestrator-state/priority-queue.json --reason <reason> --cooldown-s <seconds>
+  - python3 platform/automation/runtime/planner/planner_runtime_actions.py claim --role planner
+  - python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role planner --task <task_id> --artifact "<path>" --note "<note>" --exec-cmd "SKIP(reason)" --tests-run "SKIP(reason)" --review-ref "<ref>" --review-verdict <GO_WITH_CAUTION|PASS|BLOCKED> --change-plan "<steps>" --architecture-checks "<checks>" --idempotency-key <key>
   - python3 platform/automation/planner_subagent_manager.py plan --role planner --target-role <dev|admin|scrum_master> --owner-task-id <task_id> --task-kind <delivery|implementation|verification|targeted_fix|runtime|reconcile|takeover|repair|flow|coordination|unblock|starvation>
   - python3 platform/automation/planner_subagent_manager.py run --role planner --target-role <dev|admin|scrum_master> --owner-task-id <task_id> --task-kind <...> --message "<brief>"
   - python3 platform/automation/planner_subagent_manager.py collect --role planner --subagent-id <subagent_id> --mark-merged
   - python3 platform/automation/planner_subagent_manager.py cleanup
-  - python3 platform/automation/worker_manager.py plan --role planner --worker-type <repo_scan_worker|patch_proposal_worker|qa_review_worker> --owner-task-id <task_id> --task-kind <investigation|repo_scan|heavy|qa_review|targeted_test|browser_validation|delivery_review>
-  - python3 platform/automation/worker_manager.py run --role planner --worker-type <repo_scan_worker|patch_proposal_worker|qa_review_worker> --owner-task-id <task_id> --task-kind <investigation|repo_scan|heavy|qa_review|targeted_test|browser_validation|delivery_review> --message "<brief>"
-  - python3 platform/automation/worker_manager.py collect --role planner --worker-id <worker_id> --mark-merged
 - interdit: scans globaux, boucles shell, cat massive logs, exécution "exploratoire"
-Lis uniquement les sources canoniques: docs/product/PRODUCT_VISION.md, docs/product/planning/BACKEND_FIRST_PRODUCT_BACKLOG.md, docs/ops/PLANNER_ORCHESTRATOR_TARGET_SPEC.md, docs/ops/CURRENT_ARCHITECTURE_ENTRYPOINTS.md, docs/operations/orchestrator/parallel-workstreams.json.
-Source de vérité runtime: parallel-workstreams.json. priority-queue.json reste utilisé uniquement pour sync-priority et planner-autobatch; n'utilise jamais son next_action comme vérité finale si le workboard dit autre chose.
+Lis d'abord les sources canoniques: docs/ops/ACTIVE_DOCS_INDEX.md, docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md et docs/product/PRODUCT_VISION.md.
+Source de vérité planning: Plane via planning sync. Source de vérité runtime: SQLite/planner graph; priority-queue.json et parallel-workstreams.json sous logs-codex-runs/orchestrator-state restent uniquement des projections compatibles de travail.
 Tu es le chef d'équipe autonome du projet. Si la livraison bloque à cause d'une config, d'un prompt, d'un script runtime, d'une spec, d'un contrat, d'un guard, d'un backend, d'un bridge ou d'un bug backend/produit, tu dois corriger le problème directement quand c'est le plus court chemin.
 Préserve le thème frontend existant: ne refonds pas apps/web, ne touche pas aux design tokens ni à la structure visuelle sauf micro-ajustement strictement nécessaire. En revanche tu peux modifier orchestration/runtime/config/specs/docs/backend/API/tests et le code hors thème frontend pour débloquer la livraison.
 Quand planner_orchestrator_enabled=1, tu es la seule lane schedulée: dev/admin/scrum_master n'attendent plus leur propre cron, ils doivent être lancés comme subagents planner-owned.
@@ -4440,6 +4536,9 @@ Décision tick (ordre strict):
    EXCEPTION CRITIQUE: si la tâche IN_PROGRESS est de type GOV_REVIEW, PLAN, ANALYSIS, ou ARCH (task_id contient ces codes),
    elle t'appartient — tu dois la compléter toi-même (task_update=complete) après avoir vérifié que tous les depends_on sont DONE.
    NE PAS utiliser task_update=handoff sur ces tâches. Handoff = passer à un autre rôle. GOV_REVIEW = vérification finale planner.
+   Règle anti-faux-blocage: si workboard_context montre que la tâche planner IN_PROGRESS a depends_on=none,
+   alors des tâches aval du même stream en WAITING_DEP qui dépendent de cette tâche ne sont pas des blockers.
+   Dans ce cas, termine la tâche planner courante; n'utilise pas BLOCKED juste parce que les étapes suivantes attendent sa clôture.
 3) si queue_has_ready=1 et workboard_role_has_work=0 et workboard_role_has_in_progress=0 -> exécuter sync-priority (une fois), puis réévaluer.
 4) si une tâche planner est READY et qu'elle nécessite une exécution de delivery/runtime/flow -> claim puis lancer le subagent cible approprié:
    - dev pour patch/test/verify
@@ -4458,6 +4557,11 @@ Création batch (si step 4/5):
 - Pas de sous-tâches récursives ni stream à 4 segments.
 
 EVIDENCE: task_update, run_note (>=5 mots), planner_artifact, root_cause, fix_applied, reuse_check, verify, vision_alignment, batch_created, acceptance_gate, stream_id+task_id si claim/complete/handoff, handoff_to si handoff.
+Pour toute clôture planner de type PLAN / ANALYSIS / ARCH / GOV_REVIEW:
+- `root_cause`, `fix_applied`, `architecture_check`, `vision_alignment` sont obligatoires et non vides.
+- `verify` doit contenir explicitement `before=...`, `after=...`, `test=...`.
+- si ces champs manquent, `planner_runtime_actions.py complete --role planner ...` échouera avec `planner_delivery_proof_missing`.
+- ne tente pas une clôture partielle: prépare d'abord la preuve complète puis exécute `complete`.
 Formats obligatoires (claim/complete/handoff):
 - reuse_check=<module/path> OU NONE(raison_courte)
 - verify=before=<etat>; after=<etat>; test=<preuve>
@@ -4477,9 +4581,9 @@ Règle produit: seul planner crée les batches top-level; admin coordonne et dé
 Autonomie autorisée: tu peux adapter tes propres consignes admin si elles causent des blocages récurrents.
 Pré-analyse obligatoire avant décision:
 - bash scripts/fc_health_check.sh
-- python3 platform/automation/parallel_workstream.py context --role admin --limit 5
+- python3 platform/automation/compat/projections/parallel_workstream.py context --role admin --limit 5
 - bash scripts/dev_parent_monitor.sh
-Lis docs/operations/orchestrator/priority-queue.json, docs/operations/orchestrator/parallel-workstreams.json, docs/operations/orchestrator/executors-monitoring-latest.json et logs-codex-runs/fc-ticks/*.tick.log.
+Lis d'abord runtime truth SQLite/dispatch snapshots, puis logs-codex-runs/orchestrator-state/priority-queue.json et parallel-workstreams.json comme projections compatibles, et logs-codex-runs/fc-ticks/*.tick.log.
 Budget strict:
 - maximum 3 commandes shell par tick, max 20s chacune
 - pas de scans globaux sur tout le repo
@@ -4503,10 +4607,10 @@ Décision tick (ordre strict):
 8) Quand `ADMIN_TSHAPE_ACTIVE=1` (full takeover):
    - tu peux agir temporairement sur la lane cible `${ADMIN_TSHAPE_TARGET_ROLE}`.
    - commandes takeover autorisées:
-     - `python3 platform/automation/parallel_workstream.py claim --role <planner|dev>`
-     - `python3 platform/automation/parallel_workstream.py complete --role <planner|dev> --task <task_id> --summary "<preuve>"`
-     - `python3 platform/automation/parallel_workstream.py handoff-ack --role <planner|dev> --handoff <handoff_id>`
-     - `python3 platform/automation/parallel_workstream.py handoff-close --handoff <handoff_id>`
+     - `python3 platform/automation/runtime/planner/planner_runtime_actions.py claim --role <planner|dev>`
+     - `python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role <planner|dev> --task <task_id> --summary "<preuve>"`
+     - `python3 platform/automation/runtime/planner/planner_runtime_actions.py handoff-ack --role <planner|dev> --handoff <handoff_id>`
+     - `python3 platform/automation/runtime/planner/planner_runtime_actions.py handoff-close --role <planner|dev> --handoff <handoff_id>`
    - si takeover actif et sortie passive (`none_no_ready|none_no_signal`), action takeover obligatoire dans NEXT.
 Commandes shell via platform/policies/exec_safe.sh.
 EVIDENCE: task_update, lock_check=ok, run_note (>=5 mots), admin_artifact, root_cause, fix_applied, verify.
@@ -4526,7 +4630,7 @@ PROMPT
     analyst)
       cat <<'PROMPT'
 ROLE=analyst.
-Read docs/operations/orchestrator/priority-queue.json, docs/planning/WORKSTATE.md, and docs/planning/stories.md.
+Read docs/ops/ACTIVE_DOCS_INDEX.md and docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md first, then treat logs-codex-runs/orchestrator-state/priority-queue.json and parallel-workstreams.json as compatible runtime projections only.
 Do not modify files.
 Focus: clarifier hypotheses/metier, dependances inter-equipes, et criteres d'acceptance reutilisables par backend/frontend/qa.
 Obligatoire: EVIDENCE doit contenir analyst_artifact=<brief_ou_decision> et task_id=<id_stream_ou_task>.
@@ -4539,7 +4643,7 @@ PROMPT
       if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
       cat <<'PROMPT'
 ROLE=backend_engineer.
-Lis docs/operations/orchestrator/priority-queue.json et apps/api/src/domains/.
+Lis logs-codex-runs/orchestrator-state/priority-queue.json et apps/api/src/domains/.
 Exécute: claim tâche READY → patch minimal dans apps/api/src/domains/ → test ciblé → complete.
 Commandes via platform/policies/exec_safe.sh. Apps: FastAPI (apps/api), domaines dans apps/api/src/domains/.
 
@@ -4549,7 +4653,7 @@ PROMPT
       else
       cat <<'PROMPT'
 ROLE=backend_engineer (mode read-only).
-Lis docs/operations/orchestrator/priority-queue.json et apps/api/src/domains/.
+Lis logs-codex-runs/orchestrator-state/priority-queue.json et apps/api/src/domains/.
 Analyse la tâche backend READY et prépare le plan de patch minimal.
 EVIDENCE: task_update=analysis_only, lock_check=ok, run_note (3+ mots), backend_artifact=<plan_ou_fichier_cible>, task_id.
 Retourne 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
@@ -4560,7 +4664,7 @@ PROMPT
       if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
       cat <<'PROMPT'
 ROLE=frontend_engineer.
-Lis docs/operations/orchestrator/priority-queue.json et apps/web/src/domains/.
+Lis logs-codex-runs/orchestrator-state/priority-queue.json et apps/web/src/domains/.
 Exécute: claim tâche READY → composant/page dans apps/web/src/ → test visuel → complete.
 Commandes via platform/policies/exec_safe.sh. Framework: React/Vite (finance-app ou apps/web).
 
@@ -4570,7 +4674,7 @@ PROMPT
       else
       cat <<'PROMPT'
 ROLE=frontend_engineer (mode read-only).
-Lis docs/operations/orchestrator/priority-queue.json et apps/web/src/domains/.
+Lis logs-codex-runs/orchestrator-state/priority-queue.json et apps/web/src/domains/.
 Analyse la tâche UI READY et prépare le plan de composants à modifier.
 EVIDENCE: task_update=analysis_only, lock_check=ok, run_note (3+ mots), frontend_artifact=<plan_ou_composant_cible>, task_id.
 Retourne 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
@@ -4581,7 +4685,7 @@ PROMPT
       if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
       cat <<'PROMPT'
 ROLE=integrator.
-Read docs/operations/orchestrator/priority-queue.json, docs/planning/tasks.md, and docs/operations/orchestrator/parallel-workstreams.json.
+Read docs/ops/ACTIVE_DOCS_INDEX.md and docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md first, then treat logs-codex-runs/orchestrator-state/priority-queue.json and parallel-workstreams.json as compatible runtime projections only.
 Execution mode=delivery: integrer les sorties backend/frontend/infra et verifier les interfaces.
 Commandes shell via platform/policies/exec_safe.sh.
 Obligatoire: EVIDENCE doit contenir integrator_artifact=<preuve_integration>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
@@ -4592,7 +4696,7 @@ PROMPT
       else
       cat <<'PROMPT'
 ROLE=integrator.
-Read docs/operations/orchestrator/priority-queue.json, docs/planning/tasks.md, and docs/operations/orchestrator/parallel-workstreams.json.
+Read docs/ops/ACTIVE_DOCS_INDEX.md and docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md first, then treat logs-codex-runs/orchestrator-state/priority-queue.json and parallel-workstreams.json as compatible runtime projections only.
 Mode analyse (read-only): Do not modify files.
 Obligatoire: EVIDENCE doit contenir integrator_artifact=<plan_integration>, task_id=<task>.
 Return at most 10 lines with keys:
@@ -4605,7 +4709,7 @@ PROMPT
       if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
       cat <<'PROMPT'
 ROLE=data_analyst.
-Lis docs/operations/orchestrator/priority-queue.json et apps/api/src/domains/market_data/.
+Lis logs-codex-runs/orchestrator-state/priority-queue.json et apps/api/src/domains/market_data/.
 Exécute: claim tâche data READY → vérifier pipeline prix/forecasts → produire résultat exploitable → complete.
 Commandes via platform/policies/exec_safe.sh. Sources prix: Yahoo Finance (yfinance), stooq.
 
@@ -4615,7 +4719,7 @@ PROMPT
       else
       cat <<'PROMPT'
 ROLE=data_analyst (mode read-only).
-Lis docs/operations/orchestrator/priority-queue.json et apps/api/src/domains/market_data/.
+Lis logs-codex-runs/orchestrator-state/priority-queue.json et apps/api/src/domains/market_data/.
 Analyse la disponibilité et qualité des données pour la tâche READY.
 EVIDENCE: task_update=analysis_only, lock_check=ok, run_note (3+ mots), data_artifact=<analyse_ou_metric>, task_id.
 Retourne 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
@@ -4626,7 +4730,7 @@ PROMPT
       if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
       cat <<'PROMPT'
 ROLE=infra_engineer.
-Read docs/operations/orchestrator/priority-queue.json, docs/ops, and scripts.
+Read docs/ops/ACTIVE_DOCS_INDEX.md, logs-codex-runs/orchestrator-state/priority-queue.json, and scripts.
 Execution mode=delivery: appliquer une amelioration infra/CI/observabilite qui accelere la livraison.
 Commandes shell via platform/policies/exec_safe.sh.
 Obligatoire: EVIDENCE doit contenir infra_artifact=<fichier_ou_check_infra>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
@@ -4637,7 +4741,7 @@ PROMPT
       else
       cat <<'PROMPT'
 ROLE=infra_engineer.
-Read docs/operations/orchestrator/priority-queue.json, docs/ops, and scripts.
+Read docs/ops/ACTIVE_DOCS_INDEX.md, logs-codex-runs/orchestrator-state/priority-queue.json, and scripts.
 Mode analyse (read-only): Do not modify files.
 Obligatoire: EVIDENCE doit contenir infra_artifact=<plan_infra>, task_id=<task>.
 Return at most 10 lines with keys:
@@ -4651,9 +4755,9 @@ PROMPT
       cat <<'PROMPT'
 ROLE=dev.
 Pré-analyse obligatoire:
-- python3 platform/automation/parallel_workstream.py context --role dev --limit 5
-- python3 platform/automation/parallel_workstream.py status --role dev --compact
-- lis docs/product/planning/WORKSTATE.md, docs/product/planning/tasks.md, docs/operations/orchestrator/priority-queue.json
+- python3 platform/automation/compat/projections/parallel_workstream.py context --role dev --limit 5
+- python3 platform/automation/compat/projections/parallel_workstream.py status --role dev --compact
+- lis docs/ops/ACTIVE_DOCS_INDEX.md, docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md, logs-codex-runs/orchestrator-state/priority-queue.json
 - lis docs/ops/API_ENDPOINT_BEST_PRACTICES.md et docs/ops/REUSE_MODULES_CATALOG.md avant patch
 - lis docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md avant patch
 - vérifier architecture target avant code: docs/architecture/ARCHITECTURE_MAP.md + docs/ops/ORCHESTRATION_COORDINATION_SPEC.yaml
@@ -4697,12 +4801,12 @@ PROMPT
       else
       cat <<'PROMPT'
 ROLE=dev.
-Read docs/product/planning/tasks.md, docs/product/planning/stories.md, and docs/operations/orchestrator/priority-queue.json.
+Read docs/ops/ACTIVE_DOCS_INDEX.md and docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md first. Planning truth stays in Plane via planning sync; logs-codex-runs/orchestrator-state/priority-queue.json is a compatible runtime projection.
 Mode analyse (read-only): Do not modify files.
 Attente autorisée uniquement si workboard_role_has_ready=0 et workboard_role_has_in_progress=0 (dev_has_ready_task=0) -> task_update=none_no_ready.
 Si workboard_role_has_ready=1 ou workboard_role_has_in_progress=1: interdit task_update=none_no_ready|none_no_signal; NEXT doit forcer claim_or_progress_now.
 Obligatoire: EVIDENCE doit contenir dev_artifact=<fichier_cible_ou_patch_plan>, channels_read, impact_assessment, impact_action.
-Exemple valide read-only: task_update=none_no_signal; lock_check=ok; run_note=analyse runtime context et prochaine action concrete; dev_artifact=docs/product/planning/tasks.md; channels_read=runtime_context,workboard_tasks; impact_assessment=low; impact_action=monitor_updates; issues=none; issue_count=0; issue_severity=none
+Exemple valide read-only: task_update=none_no_signal; lock_check=ok; run_note=analyse runtime context et prochaine action concrete; dev_artifact=logs-codex-runs/orchestrator-state/priority-queue.json; channels_read=runtime_context,workboard_tasks; impact_assessment=low; impact_action=monitor_updates; issues=none; issue_count=0; issue_severity=none
 Return at most 10 lines with keys:
 STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 If nothing changed, set DELTA: NO_DELTA.
@@ -4713,7 +4817,7 @@ PROMPT
       if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
       cat <<'PROMPT'
 ROLE=tester.
-Read tests, docs/planning/tasks.md, and docs/operations/orchestrator/priority-queue.json.
+Read tests and docs/ops/ACTIVE_DOCS_INDEX.md first. Treat logs-codex-runs/orchestrator-state/priority-queue.json as a compatible runtime projection, not backlog truth.
 Execution mode=delivery: exécute réellement les tests minimaux liés à l'item READY.
 Commandes shell via platform/policies/exec_safe.sh.
 Obligatoire: EVIDENCE doit contenir tester_artifact=<suite_test_ou_commande>, stream_id=<stream>, task_id=<task>, cmd=<commande_executee_ou_SKIP(raison)>, tests_run=<suite:PASS|FAIL|SKIP(raison)>.
@@ -4724,7 +4828,7 @@ PROMPT
       else
       cat <<'PROMPT'
 ROLE=tester.
-Read tests, docs/planning/tasks.md, and docs/operations/orchestrator/priority-queue.json.
+Read tests and docs/ops/ACTIVE_DOCS_INDEX.md first. Treat logs-codex-runs/orchestrator-state/priority-queue.json as a compatible runtime projection, not backlog truth.
 Mode analyse (read-only): Do not modify files.
 Obligatoire: EVIDENCE doit contenir tester_artifact=<suite_test_ou_commande>.
 Return at most 10 lines with keys:
@@ -4737,9 +4841,9 @@ PROMPT
       if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
       cat <<'PROMPT'
 ROLE=qa.
-Read evidence/gates/openclaw-gates, docs/operations/orchestrator/priority-queue.json, docs/operations/orchestrator/parallel-workstreams.json, and docs/operations/orchestrator/parallel-workstreams.json.
+Read evidence/gates/openclaw-gates, logs-codex-runs/orchestrator-state/priority-queue.json, and logs-codex-runs/orchestrator-state/parallel-workstreams.json.
 Read docs/DEV_TOOLS_GUIDE.md for browser/openclaw validation commands.
-Read workboard lane context first: python3 platform/automation/parallel_workstream.py context --role qa --limit 5.
+Read workboard lane context first: python3 platform/automation/compat/projections/parallel_workstream.py context --role qa --limit 5.
 Execution mode=delivery: QA global gate (intégration/régression/qualité finale) avec checks globaux cross-role.
 Si aucune tâche QA n'est READY/IN_PROGRESS: utiliser task_update=none_no_ready et expliciter les deps restantes (ex: depends_on) dans RISKS/NEXT.
 Commandes shell via platform/policies/exec_safe.sh.
@@ -4753,8 +4857,8 @@ PROMPT
       else
       cat <<'PROMPT'
 ROLE=qa.
-Read evidence/gates/openclaw-gates, docs/operations/orchestrator/priority-queue.json, docs/operations/orchestrator/parallel-workstreams.json, and docs/operations/orchestrator/parallel-workstreams.json.
-Read workboard lane context first: python3 platform/automation/parallel_workstream.py context --role qa --limit 5.
+Read evidence/gates/openclaw-gates, logs-codex-runs/orchestrator-state/priority-queue.json, and logs-codex-runs/orchestrator-state/parallel-workstreams.json.
+Read workboard lane context first: python3 platform/automation/compat/projections/parallel_workstream.py context --role qa --limit 5.
 Mode analyse (read-only): Do not modify files.
 Validate gate coherence and blockers.
 Obligatoire: EVIDENCE doit contenir qa_artifact=<gate_ou_preuve_validation>.
@@ -4767,7 +4871,7 @@ PROMPT
     architect)
       cat <<'PROMPT'
 ROLE=architect.
-Read docs/planning/epics.md, docs/planning/stories.md, docs/planning/tasks.md, docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/operations/orchestrator/priority-queue.json.
+Read docs/ops/ACTIVE_DOCS_INDEX.md, docs/ops/API_ENDPOINT_BEST_PRACTICES.md, and docs/ops/REUSE_MODULES_CATALOG.md first, then use logs-codex-runs/orchestrator-state/priority-queue.json and parallel-workstreams.json as compatible runtime projections.
 Read docs/product/planning/ARCHITECTURE_FORECAST_FREE_DATA_BLUEPRINT.md and docs/product/planning/FREE_DATA_SOURCE_KEY_MATRIX.md.
 Do not modify files.
 Mission détaillée:
@@ -4786,7 +4890,7 @@ PROMPT
     po)
       cat <<'PROMPT'
 ROLE=po.
-Read docs/planning/mvp-plan.md, docs/planning/epics.md, and docs/operations/orchestrator/priority-queue.json.
+Read docs/ops/ACTIVE_DOCS_INDEX.md and docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md first. Plane via planning sync is backlog truth; logs-codex-runs/orchestrator-state/priority-queue.json is a compatible runtime projection.
 Do not modify files.
 Verify backlog priority and scope alignment, then propose one PO decision.
 Mode read-only strict: task_update autorises=analysis_only|blocked|none_no_ready|none_no_signal.
@@ -4810,15 +4914,15 @@ Mission:
 En mode planner-only (`execution_mode=planner_experimental`), considérer `planner.last_contract`, `planner_subagent_summary` et le runtime_context comme source de vérité.
 Ne pas traiter un vieux `dev.last_contract` ou de vieux logs `dev/admin` standalone comme un blocker actif si aucune capability planner correspondante n'est active sur ce tick.
 Sources minimales:
-- docs/operations/orchestrator/priority-queue.json
-- docs/operations/orchestrator/parallel-workstreams.json
+- logs-codex-runs/orchestrator-state/priority-queue.json
+- logs-codex-runs/orchestrator-state/parallel-workstreams.json
 - logs-codex-runs/role-runner/{planner,dev,admin}.events.log
 - logs-codex-runs/fc-ticks/{planner,dev,admin}.tick.log
 - docs/ops/ADMIN_TEAM_CHAT.md
 
 Ecriture autorisée:
 - docs/ops/PO_SCRUM_MASTER_REPORTS.md
-- docs/ops/AGENT_MESSAGE_BUS.jsonl (via platform/automation/agent_message_bus.sh)
+- logs-codex-runs/orchestrator-state/legacy/agent-message-bus.jsonl (via platform/automation/agent_message_bus.sh)
 Interdit:
 - claim/complete/handoff sur workboard
 - modifications applicatives hors rapport/bus
@@ -4827,8 +4931,8 @@ Bus messages (si actionnable):
 - max 2 messages par tick
 - éviter repost si message similaire déjà actif (cooldown)
 - scripts utiles:
-  - python3 platform/automation/parallel_workstream.py sync-priority --queue docs/operations/orchestrator/priority-queue.json
-  - python3 platform/automation/parallel_workstream.py reconcile-state --queue docs/operations/orchestrator/priority-queue.json
+  - python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --queue logs-codex-runs/orchestrator-state/priority-queue.json
+  - python3 platform/automation/runtime/planner/planner_runtime_actions.py reconcile-state --queue logs-codex-runs/orchestrator-state/priority-queue.json
   - bash platform/automation/agent_message_bus.sh active --role <planner|dev|admin> --json
   - bash platform/automation/agent_message_bus.sh post --targets <planner|dev|admin> --msg "<instruction>" --priority high --sticky 1
 - mode contrat recommandé (auto-post par runner): EVIDENCE ajoute `message_to_dev=` / `message_to_planner=` / `message_to_admin=` (+ option `message_to_<role>_id`, `message_to_<role>_ttl_min`)
@@ -4844,7 +4948,7 @@ PROMPT
     clawsentinel)
       cat <<'PROMPT'
 ROLE=clawsentinel.
-Read docs/ops/ADMIN_TEAM_CHAT.md, docs/ops/ADMIN_TEAM_ITERATIONS.md, docs/operations/orchestrator/agent-watchdog.md, and docs/operations/orchestrator/priority-queue.json.
+Read docs/ops/ACTIVE_DOCS_INDEX.md, docs/ops/ADMIN_TEAM_CHAT.md, docs/ops/ADMIN_TEAM_ITERATIONS.md, logs-codex-runs/orchestrator-state/priority-queue.json, and logs-codex-runs/fc-ticks/*.tick.log.
 Do not modify files.
 As safety/quality owner, provide one concrete anti-drift or reliability action for the current READY flow.
 Obligatoire: EVIDENCE doit contenir sentinel_artifact=<controle_ou_action_antidrift>.
@@ -4936,10 +5040,10 @@ ADMIN_TSHAPE_CONTEXT:
 - takeover_enforce_sla_rc=${ADMIN_TSHAPE_ENFORCE_SLA_RC}
 - takeover_since_ts=${ADMIN_TSHAPE_SINCE_TS:-unknown}
 - takeover_actions_autorisees:
-  1) python3 platform/automation/parallel_workstream.py claim --role ${ADMIN_TSHAPE_TARGET_ROLE:-planner}
-  2) python3 platform/automation/parallel_workstream.py complete --role ${ADMIN_TSHAPE_TARGET_ROLE:-planner} --task <task_id> --artifact <path> --exec-cmd <cmd|SKIP(reason)> --tests-run <suite|SKIP(reason)>
-  3) python3 platform/automation/parallel_workstream.py handoff-ack --role ${ADMIN_TSHAPE_TARGET_ROLE:-planner} --handoff <handoff_id>
-  4) python3 platform/automation/parallel_workstream.py handoff-close --handoff <handoff_id>
+  1) python3 platform/automation/runtime/planner/planner_runtime_actions.py claim --role ${ADMIN_TSHAPE_TARGET_ROLE:-planner}
+  2) python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role ${ADMIN_TSHAPE_TARGET_ROLE:-planner} --task <task_id> --artifact <path> --exec-cmd <cmd|SKIP(reason)> --tests-run <suite|SKIP(reason)>
+  3) python3 platform/automation/runtime/planner/planner_runtime_actions.py handoff-ack --role ${ADMIN_TSHAPE_TARGET_ROLE:-planner} --handoff <handoff_id>
+  4) python3 platform/automation/runtime/planner/planner_runtime_actions.py handoff-close --role ${ADMIN_TSHAPE_TARGET_ROLE:-planner} --handoff <handoff_id>
 - en takeover, EVIDENCE doit inclure: takeover_mode=1; takeover_target_role; takeover_reason; takeover_actions; takeover_exit_condition=resolved; admin_artifact=<preuve>.
 EOF
 )"
@@ -4972,7 +5076,7 @@ CONTRAT_SORTIE_STRICT:
 
 REGLES_RUNTIME:
 - Avant toute décision: exécute le contexte de lane (parallel_workstream.py context --role <role> --limit 5) et lis WORKSTATE courant.
-- Si divergence entre docs/planning/* et docs/product/planning/*: priorise docs/product/planning/*.
+- Ne traite jamais docs/planning/*, docs/product/planning/tasks.md, docs/product/planning/stories.md, ni docs/product/planning/epics.md comme vérité backlog; utilise ACTIVE_DOCS_INDEX, le sync Plane, et le runtime context SQLite/planner graph.
 - Base-toi sur RUNTIME_CONTEXT (queue/workboard/contracts/directives).
 - Si queue_has_ready=1: DELTA != NO_DELTA et NEXT_ACTION_UNIQUE cible un item READY.
 - Si queue_has_ready=0 et workboard_role_has_in_progress=1: reprendre/fermer IN_PROGRESS (pas analysis_only).
@@ -5006,7 +5110,7 @@ WORKDIR_ATTENDU=${ROOT}.
 EOF
 )"
 if [[ "$ROLE_ALLOW_FILE_EDITS_EFFECTIVE" -eq 1 ]]; then
-  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"MODE=delivery: execute des commandes reelles via platform/policies/exec_safe.sh, evite les plans fictifs, mets a jour claims/handoffs via python3 platform/automation/parallel_workstream.py, et fournis des preuves concretes."
+  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"MODE=delivery: execute des commandes reelles via platform/policies/exec_safe.sh, evite les plans fictifs, mets a jour claims/handoffs/SLA via python3 platform/automation/runtime/planner/planner_runtime_actions.py, et fournis des preuves concretes."
 else
   SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"MODE=analyse: n'edite pas de fichiers et ne declenche pas d'actions externes. Regle planner: si aucun slot planner READY/IN_PROGRESS, NEXT=create_or_claim_now (jamais WAIT/MUTED). Regle dev: task_update=none_no_ready uniquement si workboard_role_has_ready=0 et workboard_role_has_in_progress=0."
 fi
@@ -5027,25 +5131,25 @@ if [[ "$ROLE" == "admin" && "$ADMIN_TSHAPE_ACTIVE" == "1" ]]; then
   SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"T_SHAPE_LAST_RESORT_ACTIVE=1. FULL_TAKEOVER autorise uniquement jusqu'a resolution du blocker runtime."
   SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"CIBLE_TAKEOVER: role=${ADMIN_TSHAPE_TARGET_ROLE:-none}; blocker=${ADMIN_TSHAPE_REASON_BLOCKER:-NONE}; mode=${TMUX_ROLE_ADMIN_TSHAPE_SCOPE}."
   SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"COMMANDES_TAKEOVER_AUTORISEES:"
-  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"- python3 platform/automation/parallel_workstream.py claim --role ${ADMIN_TSHAPE_TARGET_ROLE:-dev}"
-  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"- python3 platform/automation/parallel_workstream.py complete --role ${ADMIN_TSHAPE_TARGET_ROLE:-dev} --task <task_id> --artifact <path> --exec-cmd <cmd|SKIP(reason)> --tests-run <suite|SKIP(reason)>"
-  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"- python3 platform/automation/parallel_workstream.py handoff-ack"
-  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"- python3 platform/automation/parallel_workstream.py handoff-close"
+  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"- python3 platform/automation/runtime/planner/planner_runtime_actions.py claim --role ${ADMIN_TSHAPE_TARGET_ROLE:-dev}"
+  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"- python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role ${ADMIN_TSHAPE_TARGET_ROLE:-dev} --task <task_id> --artifact <path> --exec-cmd <cmd|SKIP(reason)> --tests-run <suite|SKIP(reason)>"
+  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"- python3 platform/automation/runtime/planner/planner_runtime_actions.py handoff-ack"
+  SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"- python3 platform/automation/runtime/planner/planner_runtime_actions.py handoff-close"
   SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"EVIDENCE takeover obligatoire: takeover_mode=1; takeover_target_role=${ADMIN_TSHAPE_TARGET_ROLE:-none}; takeover_reason=${ADMIN_TSHAPE_REASON_BLOCKER:-NONE}; takeover_actions=<sync|claim|complete|handoff>; takeover_exit_condition=resolved; admin_artifact=<preuve>."
 fi
 
 ORCHESTRATION_SHARED_PROMPT="$(cat <<'PROMPT'
 PROTOCOLE_ORCHESTRATION_COMMUN:
-- Source taches: docs/product/planning/tasks.md (fallback docs/planning/tasks.md) — IDs valides: BATCH-NN ou BATCH-NN-ROLE (max 3 segments).
+- Source taches: Plane via planning sync, puis projections runtime sous logs-codex-runs/orchestrator-state — IDs valides: BATCH-NN ou BATCH-NN-ROLE (max 3 segments).
 - Limite: 60 taches actives max (guard dans parallel_workstream.py).
 - Blocker permission valide UNIQUEMENT avec cmd_err_excerpt du tick courant (pas d'historique).
-- MODE DELIVERY: claim via python3 platform/automation/parallel_workstream.py claim, root_cause concret, patch minimal, tests ciblés, git add -A && git commit -m "<message>", complete/handoff.
+- MODE DELIVERY: claim via python3 platform/automation/runtime/planner/planner_runtime_actions.py claim, root_cause concret, patch minimal, tests ciblés, git add -A && git commit -m "<message>", complete/handoff.
 - COMMIT OBLIGATOIRE: tout fichier modifié doit être commité AVANT d'appeler complete. Sans commit, la tâche n'est pas considérée livrée. Format: git add -A && git commit -m "feat(<scope>): <description> (BATCH-NN-ROLE)"
 - DELIVERY_VALUE_GATE: aucun complete sans root_cause, fix_applied, verify(before=/after=/test= ou proof=), artifact, tests_run, files_touched, architecture_check, vision_alignment, et commit_sha valide pour code/config/runtime.
 - PLANNER_ORCHESTRATOR: si planner_orchestrator_enabled=1, planner est la seule lane schedulée et doit lancer dev/admin/scrum_master via python3 platform/automation/planner_subagent_manager.py {plan,run,collect,cleanup}. Les subagents rendent des preuves; seul planner met a jour l'orchestration.
 - PLANNER_SUBAGENT_RULE: un subagent dev/admin/scrum_master ne claim/complete jamais le workboard directement. Resultat attendu = summary, artifact, verify, files_touched, tests_run, recommended_next, blocking_issue.
-- EXPLORER_POLICY: en runtime planner-only, ne pas lancer de commande shell brute nommee explorer/worker. Si une capacite read-only est necessaire, passer par les wrappers planner_subagent_manager.py ou worker_manager.py deja branches; sinon rester sur le capability dispatch direct.
-- DYNAMIC_WORKERS: seuls planner/dev/admin peuvent utiliser python3 platform/automation/worker_manager.py {plan,run,collect,cleanup}. Si aucun backend wrapper n'est branche, supprimer ce chemin et rester sur le capability dispatch reel.
+- EXPLORER_POLICY: en runtime planner-only, ne pas lancer de commande shell brute nommee explorer/worker. Si une capacite read-only est necessaire, passer par planner_subagent_manager.py; legacy_workers reste un chemin de compat explicite, jamais le chemin par defaut.
+- DYNAMIC_WORKERS: compat only. Ne pas lancer python3 platform/automation/compat/legacy_workers/worker_manager.py pour une nouvelle feature, une nouvelle orchestration, ou un nouveau diagnostic; l'utiliser uniquement pour collect/cleanup d'un worker legacy deja existant si ce chemin est deja actif.
 - WORKER_RULE: un worker ne claim/complete jamais une tache metier. Son resultat = evidence/test result/patch proposal/runtime diagnostic, puis le parent decide merge, handoff ou complete.
 - Interdit: "analyse seulement" si une tâche READY/IN_PROGRESS existe pour le rôle.
 - Si workboard_role_has_in_progress=1: reprendre/fermer IN_PROGRESS avant tout nouveau claim.
@@ -5641,9 +5745,11 @@ codex_exec_prompt_once() {
   local msg=""
   local used_resume=0
   local msg_file=""
+  local session_fingerprint=""
   local -a codex_cmd=()
 
   prompt_payload="$(build_dispatch_prompt "$prompt_text" "$tick" "$dispatch_scope")"
+  session_fingerprint="$(build_codex_session_fingerprint "$prompt_text")"
   prompt_bytes="${#prompt_payload}"
   IFS='|' read -r prompt_bytes timeout_budget retry_timeout_budget timeout_tier \
     <<< "$(resolve_dispatch_timeout_budgets "$prompt_bytes" "$timeout_budget" "$retry_timeout_budget")"
@@ -5659,6 +5765,10 @@ codex_exec_prompt_once() {
 
   if [[ "$CODEX_EXEC_RESUME" == "1" ]]; then
     allow_resume=1
+    if ! codex_session_meta_allows_resume "$session_fingerprint"; then
+      clear_codex_session_id
+      trace_event "codex_resume_guard_reset role=${ROLE} scope=${dispatch_scope} reason=session_meta_mismatch_or_expired"
+    fi
     session_id="$(read_codex_session_id)"
   else
     clear_codex_session_id
@@ -5697,6 +5807,7 @@ codex_exec_prompt_once() {
   fi
   if [[ "$allow_resume" -eq 1 && -n "$sid_new" ]]; then
     write_codex_session_id "$sid_new"
+    write_codex_session_meta "$session_fingerprint"
   fi
 
   if [[ -s "$msg_file" ]]; then
@@ -5718,6 +5829,7 @@ codex_exec_prompt_once() {
     sid_new="$(printf '%s\n' "$output" | extract_codex_exec_thread_id || true)"
     if [[ -n "$sid_new" ]]; then
       write_codex_session_id "$sid_new"
+      write_codex_session_meta "$session_fingerprint"
     fi
     if [[ -s "$msg_file" ]]; then
       msg="$(cat "$msg_file" 2>/dev/null || true)"
@@ -5974,7 +6086,7 @@ if [[ $RC_PRIMARY -eq 0 ]]; then
         STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "primary_structured")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "primary_structured")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_delivery_value_gate_safe "primary_structured")"
-        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_planner_orchestrator_bridge_safe "primary_structured")"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_planner_runtime_actions_safe "primary_structured")"
         STRUCTURED="$(normalize_advisory_contract_if_needed "$STRUCTURED")"
         record_agent_message_receipts "$STRUCTURED" "$PRIMARY_TICK"
         sanitize_tmux_logs
@@ -6042,7 +6154,7 @@ if [[ "$DO_RETRY" -eq 1 ]]; then
         STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "retry_structured")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "retry_structured")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_delivery_value_gate_safe "retry_structured")"
-        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_planner_orchestrator_bridge_safe "retry_structured")"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_planner_runtime_actions_safe "retry_structured")"
         STRUCTURED="$(normalize_advisory_contract_if_needed "$STRUCTURED")"
         record_agent_message_receipts "$STRUCTURED" "$RETRY_TICK"
         sanitize_tmux_logs
@@ -6093,7 +6205,7 @@ if [[ "$CODEX_EXEC_AVAILABLE" -eq 1 && "$PRIMARY_CHANNEL" == "tmux" ]]; then
         STRUCTURED="$(apply_no_delta_gate "$STRUCTURED" "codex_exec_fallback")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | enforce_role_delivery_contract "codex_exec_fallback")"
         STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_delivery_value_gate_safe "codex_exec_fallback")"
-        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_planner_orchestrator_bridge_safe "codex_exec_fallback")"
+        STRUCTURED="$(printf "%s\n" "$STRUCTURED" | apply_planner_runtime_actions_safe "codex_exec_fallback")"
         STRUCTURED="$(normalize_advisory_contract_if_needed "$STRUCTURED")"
         record_agent_message_receipts "$STRUCTURED" "$CODEX_TICK"
         sanitize_tmux_logs
@@ -6132,38 +6244,38 @@ FALLBACK_CONFORMANCE="WARN"
 FALLBACK_VIOLATIONS="signal_unparseable"
 case "$ROLE" in
   planner)
-    FALLBACK_SOURCE="docs/operations/orchestrator/priority-queue.json"
+    FALLBACK_SOURCE="logs-codex-runs/orchestrator-state/priority-queue.json"
     FALLBACK_NEXT="vérifier READY/BLOCKED puis prioriser une action unique"
     FALLBACK_ACTION="CONTINUE_PLANNER_FROM_PRIORITY_QUEUE"
     FALLBACK_ARCH_RULE="forecast_contract"
     FALLBACK_VISION_RULE="forecast_contract"
     ;;
   analyst)
-    FALLBACK_SOURCE="docs/planning/stories.md"
+    FALLBACK_SOURCE="logs-codex-runs/orchestrator-state/parallel-workstreams.json"
     FALLBACK_NEXT="maintenir un brief d'analyse actionnable pour les equipes parallelisees"
     FALLBACK_ACTION="CONTINUE_ANALYST_FROM_STORIES"
     FALLBACK_ARCH_RULE="reusability"
     ;;
   dev)
-    FALLBACK_SOURCE="docs/planning/tasks.md"
+    FALLBACK_SOURCE="logs-codex-runs/orchestrator-state/priority-queue.json"
     FALLBACK_NEXT="préparer l'action dev exécutable du prochain item READY"
     FALLBACK_ACTION="CONTINUE_DEV_FROM_TASKS"
     FALLBACK_ARCH_RULE="api_contract"
     ;;
   backend_engineer)
-    FALLBACK_SOURCE="docs/planning/tasks.md"
+    FALLBACK_SOURCE="logs-codex-runs/orchestrator-state/priority-queue.json"
     FALLBACK_NEXT="maintenir la prochaine action backend executable avec preuve attendue"
     FALLBACK_ACTION="CONTINUE_BACKEND_FROM_TASKS"
     FALLBACK_ARCH_RULE="api_contract"
     ;;
   frontend_engineer)
-    FALLBACK_SOURCE="docs/planning/tasks.md"
+    FALLBACK_SOURCE="logs-codex-runs/orchestrator-state/priority-queue.json"
     FALLBACK_NEXT="maintenir la prochaine action frontend executable avec preuve attendue"
     FALLBACK_ACTION="CONTINUE_FRONTEND_FROM_TASKS"
     FALLBACK_ARCH_RULE="forecast_contract"
     ;;
   integrator)
-    FALLBACK_SOURCE="docs/operations/orchestrator/parallel-workstreams.json"
+    FALLBACK_SOURCE="logs-codex-runs/orchestrator-state/parallel-workstreams.json"
     FALLBACK_NEXT="maintenir le plan d'integration inter-equipes et de handoff"
     FALLBACK_ACTION="CONTINUE_INTEGRATOR_FROM_SPRINT"
     FALLBACK_ARCH_RULE="schema_stability"
@@ -6199,21 +6311,21 @@ case "$ROLE" in
     FALLBACK_ARCH_RULE="reusability"
     ;;
   po)
-    FALLBACK_SOURCE="docs/planning/mvp-plan.md"
+    FALLBACK_SOURCE="docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md"
     FALLBACK_NEXT="reconfirmer les priorités backlog orientées valeur"
     FALLBACK_ACTION="CONTINUE_PO_FROM_MVP_PLAN"
     FALLBACK_ARCH_RULE="forecast_contract"
     ;;
   scrum_master)
-    FALLBACK_SOURCE="docs/operations/orchestrator/parallel-workstreams.json"
+    FALLBACK_SOURCE="logs-codex-runs/orchestrator-state/parallel-workstreams.json"
     FALLBACK_NEXT="maintenir cadence et reduction des blockers/en_cours"
     FALLBACK_ACTION="CONTINUE_SCRUM_MASTER_FROM_SPRINT_STATE"
     FALLBACK_ARCH_RULE="observability"
     ;;
   clawsentinel)
-    FALLBACK_SOURCE="docs/operations/orchestrator/agent-watchdog.md"
-    FALLBACK_NEXT="vérifier dérive cron et publier action anti-drift unique"
-    FALLBACK_ACTION="CONTINUE_CLAWSENTINEL_FROM_WATCHDOG"
+    FALLBACK_SOURCE="logs-codex-runs/orchestrator-state/priority-queue.json"
+    FALLBACK_NEXT="vérifier dérive cron/runtime et publier action anti-drift unique"
+    FALLBACK_ACTION="CONTINUE_CLAWSENTINEL_FROM_RUNTIME_CONTEXT"
     FALLBACK_ARCH_RULE="security"
     ;;
 esac
@@ -6265,7 +6377,7 @@ FALLBACK_OUTPUT="$(apply_reconcile_runtime_truth_safe "$FALLBACK_OUTPUT")"
 FALLBACK_OUTPUT="$(apply_no_delta_gate "$FALLBACK_OUTPUT" "fallback_checkpoint")"
 FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | enforce_role_delivery_contract "fallback_checkpoint")"
 FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | apply_delivery_value_gate_safe "fallback_checkpoint")"
-FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | apply_planner_orchestrator_bridge_safe "fallback_checkpoint")"
+FALLBACK_OUTPUT="$(printf "%s\n" "$FALLBACK_OUTPUT" | apply_planner_runtime_actions_safe "fallback_checkpoint")"
 FALLBACK_OUTPUT="$(normalize_advisory_contract_if_needed "$FALLBACK_OUTPUT")"
 record_agent_message_receipts "$FALLBACK_OUTPUT" "$FALLBACK_TICK"
 sanitize_tmux_logs

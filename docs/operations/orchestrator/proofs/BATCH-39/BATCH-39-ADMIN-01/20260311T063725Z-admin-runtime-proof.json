@@ -1,0 +1,38 @@
+{
+  "task_id": "BATCH-39-ADMIN-01",
+  "stream_id": "BATCH-39",
+  "role": "admin",
+  "produced_at_utc": "2026-03-11T06:37:25Z",
+  "status": "unblocked",
+  "summary": "BATCH-39 runtime truth is now healthy for batch scope. Forecast provenance/SLA payloads remain live on :8050, and the monitor surface on :7779 recovered after a controlled recycle of the monitor server process.",
+  "root_cause": "The monitor listener accepted TCP connections but stopped serving `/api/status?lite=1`, so batch-scoped observability probes timed out while the lightweight `/api/monitor/access` liveness endpoint still passed.",
+  "fix_applied": "Performed a reversible runtime repair only: recycled the live `scripts/monitor_server.py` process and let `bash scripts/monitor_stack_guard.sh` bring the monitor back cleanly. No repo code/config change was required.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-39/BATCH-39-ADMIN-01/20260311T063725Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "monitor_recovery": "PASS controlled recycle -> GET /api/status?lite=1 returns health=OK",
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=4 workboard_ready=0 admin_timeouts_recent=0 issues_records=9",
+    "health_snapshot": "PASS health=OK blocked=[] critical_widgets=ok",
+    "forecast_api_contract": "PASS GET /api/forecasts?limit=1 => top-level and row provenance.sla expose updated_at/freshness_age_seconds/freshness_status/target_max_age_seconds/within_target",
+    "forecast_detail_test": "PASS test_forecast_detail_lookup_supports_forecast_id_and_ticker",
+    "doctor_note": "fc_doctor remains globally degraded from planner capability-history noise (`invalid_subagent_result:missing_result_payload` on a prior BATCH-39 admin attempt), not from current monitor/API runtime truth"
+  },
+  "files_touched": [
+    "docs/operations/orchestrator/proofs/BATCH-39/BATCH-39-ADMIN-01/20260311T063725Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "platform/policies/exec_safe.sh --force-confirm --workdir /home/venom/analyse-financiere -- 'curl -sS --max-time 8 http://127.0.0.1:8050/api/health'",
+    "platform/policies/exec_safe.sh --force-confirm --workdir /home/venom/analyse-financiere -- 'curl -sS --max-time 8 http://127.0.0.1:7779/api/status?lite=1'",
+    "platform/policies/exec_safe.sh --force-confirm --workdir /home/venom/analyse-financiere -- 'curl -sS --max-time 8 http://127.0.0.1:8050/api/forecasts?limit=1'",
+    "PYTHONPATH=apps/api/src python3 -m pytest apps/api/src/domains/forecasts/tests/test_forecasts_template_parity.py::test_forecast_detail_lookup_supports_forecast_id_and_ticker -q",
+    "bash scripts/monitor_contract_smoke.sh",
+    "bash scripts/health_snapshot.sh",
+    "bash scripts/fc_doctor.sh --json"
+  ],
+  "commit_sha": "SKIP(no_code_or_config_change)",
+  "architecture_check": "PASS(batch-scoped runtime repair only): forecast domain/API contracts were not modified; monitor recovery stayed within the runtime control plane.",
+  "vision_alignment": "PASS(BATCH-39): provenance and SLA data remain live on forecast payloads, and the monitor surface can again prove that runtime truth without timing out.",
+  "recommended_next": "Planner can merge/complete BATCH-39-ADMIN-01. If desired, route a separate cleanup for planner capability-history noise so `fc_doctor` no longer reports the unrelated degraded summary.",
+  "blocking_issue": "none_for_batch_scope"
+}

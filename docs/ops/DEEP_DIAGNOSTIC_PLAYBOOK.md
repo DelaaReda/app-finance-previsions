@@ -50,8 +50,8 @@ Un seul signal ne suffit pas pour conclure.
 
 ## Commandes minimales recommandées
 - `bash scripts/agent_deep_troubleshoot.sh <role>`
-- `python3 platform/automation/parallel_workstream.py context --role <role> --limit 5`
-- `python3 platform/automation/parallel_workstream.py status --role <role> --compact`
+- `python3 platform/automation/compat/projections/parallel_workstream.py context --role <role> --limit 5`
+- `python3 platform/automation/compat/projections/parallel_workstream.py status --role <role> --compact`
 - `bash scripts/fc_health_check.sh`
 - `bash scripts/monitor_agents.sh`
 

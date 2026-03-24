@@ -80,7 +80,7 @@ python3 scripts/parallel_workstream.py complete --role <role> --task <task_id> -
 ## Regles d’integration
 1. `admin-agents` detecte le probleme et assigne un owner explicite.
 2. `adminapp-codex` n’auto-execute que si `action_owner=adminapp-codex`.
-3. Si `action_owner` est externe (`admin-agents` ou `clawsentinel`), `adminapp-codex` route le handoff dans `ADMIN_TEAM_CHAT.md` (dedupe par `action_id`) et ne force pas de faux `BLOCKED`.
+3. Si `action_owner` est externe (`admin-agents` ou `clawsentinel`), `adminapp-codex` route le handoff dans `ADMIN_ARCHIVE_TEAM_CHAT.md` (dedupe par `action_id`) et ne force pas de faux `BLOCKED`.
 4. Sans item `READY`, le mode normal est `monitoring` (pas d’escalade artificielle).
 5. Les admins ne livrent pas le code applicatif a la place de `dev/tester/qa`; ils garantissent la plomberie, le routage et la qualite du flux.
 6. Chaque role delivery doit lire les canaux de publication avant action (`python3 scripts/parallel_workstream.py channels --role <role> --limit 5`) et reporter `channels_read`, `impact_assessment`, `impact_action` dans son contrat.
@@ -88,7 +88,7 @@ python3 scripts/parallel_workstream.py complete --role <role> --task <task_id> -
 ## Protocole pre-annonce obligatoire (anti-chevauchement)
 1. Avant toute action delivery (`claim|edit|complete|handoff`), l’agent execute:
    - `bash scripts/preannounce_intent.sh preannounce --role <role> --scope <scope> --files <csv_paths> --eta-minutes <n>`
-2. Cette commande publie automatiquement l’`INTENT` dans `docs/ops/ADMIN_TEAM_CHAT.md`, logue la pre-annonce dans `memory/YYYY-MM-DD.md`, et enregistre l’intent actif dans `docs/orchestrator-ops/intent-registry.json`.
+2. Cette commande publie automatiquement l’`INTENT` dans `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`, logue la pre-annonce dans `memory/YYYY-MM-DD.md`, et enregistre l’intent actif dans `docs/orchestrator-ops/intent-registry.json`.
 3. Après pre-annonce seulement, l’agent exécute la commande `claim` du template correspondant à son rôle ci-dessus.
    - Conditions obligatoires:
      - `<plan_reasoned>` doit contenir au moins 5 étapes concrètes (non-duplicatives, >=2 mots chacune),
@@ -109,7 +109,7 @@ python3 scripts/parallel_workstream.py complete --role <role> --task <task_id> -
 ## Validation minimum par tick admin
 1. `admin-agents` doit publier: `action_id`, `action_owner`, `action_scope`, `next_action`.
 2. `adminapp-codex` doit publier dans `EVIDENCE`: owner/action/scope/resultat.
-3. Si owner externe: une ligne `TYPE: HANDOFF` doit apparaitre dans `docs/ops/ADMIN_TEAM_CHAT.md`.
+3. Si owner externe: une ligne `TYPE: HANDOFF` doit apparaitre dans `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`.
 
 ## Contrôle post-lancement (monitoring de santé)
 

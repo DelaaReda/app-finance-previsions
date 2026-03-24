@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-24-BATCH-24-DEV-03-20260313T060948Z-136"
+stream_id: "BATCH-24"
+task_id: "BATCH-24-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-13T06:09:48Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope alerting intelligence v2 [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_alerting_intelligence_v2_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-13T06:09:48Z"
+      ended_at_utc: "2026-03-13T06:09:48Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js; node --test apps/web/src/domains/forecasts/pages/app.test.js; scripts/backend_regression_gate.sh --no-live domains/copilot/tests/test_brief_of_da"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=39858ee3e41db41b9c1fc3d4f29a74e4044d0db8; evidence=BATCH-24/BATCH-24-DEV-02/DELIVERY.md; proof=docs/operations/orchestrator/proofs/BATCH-24/BATCH-24-DEV-01/DEV-02_HANDOFF.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-24-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-24-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=BATCH-24 still lacked narrow regression proof for the new additive alerting brief fields; the rich-risk contract existed on the path, but DEV-03 had no targeted tests proving normalization plus hero rendering, and the he | fix_applied=Added/committed targeted coverage for alerting brief risk surfacing in apps/web/src/domains/forecasts/contracts/apiConnector.test.js and apps/web/src/domains/forecasts/pages/app.test.js, plus the minimal hero rendering s | verify=before=rich alerting brief fields had no targeted regression proof on the frontend brief path and app hero tests lacked the helper needed for the new contract shape; after=connector and hero surfaces now have explicit re | architecture_check=layer=frontend-contract-and-existing-hero-surface on the current alerting/monitor path; imports_ok=yes (reused existing normalize/toArray/hero helpers, no new subsystem); path_target=apps/web/src/domains/forecasts/contra | vision_alignment=batch=BATCH-24; target=Alerting Intelligence V2 DEV-03 bounded contract cleanup and merge-proof; impact=urgent priority and duplicate-suppression metadata are now explicitly proven on the user-visible brief path, reducin"

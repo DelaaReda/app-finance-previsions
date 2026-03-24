@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-66-BATCH-66-DEV-03-20260319T174157Z-189"
+stream_id: "BATCH-66"
+task_id: "BATCH-66-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-19T17:41:57Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-19T17:41:57Z"
+      ended_at_utc: "2026-03-19T17:41:57Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS `node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js apps/web/src/domains/forecasts/pages/app.test.js`; SKIP(scripts/backend_regression_gate.sh: frontend-only slice, no backend/runtime paths ch"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=a822d9165e03363b3160b8d3c4e5e34133bb7b94; proof=frontend normalization diff + targeted regression tests covering `/personal-finance/start` and `/personal-finance/context` open actions"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-66-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-66-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=Frontend target normalization handled `/personal-finance` and `/personal-finance/ask`, but did not explicitly normalize `/personal-finance/start` or `/personal-finance/context` starter aliases. That left valid starter ac | fix_applied=Updated shared frontend copilot target normalizers in `apps/web/src/domains/forecasts/contracts/apiConnector.js` and `apps/web/src/domains/forecasts/pages/app.js` to map personal-finance starter/context aliases to `copil | verify=before=starter alias targets like `/personal-finance/start` stayed as raw targets and could surface as unsupported open actions in the UI; after=those aliases normalize to the existing copilot destination in both connect | architecture_check=layer=frontend copilot connector/page normalization; imports_ok=yes (existing modules only, no new helpers/facades); path_target=apps/web/src/domains/forecasts/** | vision_alignment=batch=BATCH-66; target=DEV-03 personal finance copilot start/ask/open flow; impact=restores a user-visible open path so starter alias actions consistently land in the live copilot overlay"

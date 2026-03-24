@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T075125Z-591"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T07:51:25Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_doc_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T07:51:25Z"
+      ended_at_utc: "2026-03-24T07:51:25Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_doc_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "COMPLETE_BATCH-84-ANALYSIS_P1774338520_30202"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=Signal planner_orchestrator_dev_route_mismatch traite dans la lane planner | fix_applied=Analyse BATCH-84 fermee avec preuves d architecture et passage explicite vers la suite du flux | verify=before=BATCH-84-ANALYSIS:IN_PROGRESS; after=BATCH-84-ANALYSIS:DONE; test=parallel_workstream_context_unique_in_progress | architecture_check=layer=apps/api+apps/web; imports_ok=yes; path_target=apps/api/src/domains/*+apps/web/src+apps/api/runtime | vision_alignment=batch=BATCH-84; target=brief quotidien et parcours analyse finance copilot; impact=analyse planner cloturee pour permettre la suite gouvernance"

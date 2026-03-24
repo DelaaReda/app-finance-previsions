@@ -31,10 +31,11 @@ LEGACY_DIR="$BACKEND_DIR/platform/legacy"
 FRONTEND_DIR="$PROJECT_DIR/../web/src/domains/forecasts/pages"
 FRONTEND_DIST="$FRONTEND_DIR"
 MONITOR_GUARD_SCRIPT="$WORKSPACE_ROOT/scripts/monitor_stack_guard.sh"
-MONITOR_WRAPPER_SCRIPT="$WORKSPACE_ROOT/scripts/monitor_server.py"
+MONITOR_SERVER_SCRIPT="$WORKSPACE_ROOT/apps/monitor/server.py"
 MONITOR_URL="${FC_MONITOR_LOCAL_URL:-http://localhost:7779}"
-BACKEND_START_TIMEOUT_SECONDS="${FC_BACKEND_START_TIMEOUT_SECONDS:-90}"
-MONITOR_START_TIMEOUT_SECONDS="${FC_MONITOR_START_TIMEOUT_SECONDS:-25}"
+BACKEND_START_TIMEOUT_SECONDS="${FC_BACKEND_START_TIMEOUT_SECONDS:-120}"
+MONITOR_START_TIMEOUT_SECONDS="${FC_MONITOR_START_TIMEOUT_SECONDS:-45}"
+RUNTIME_STACK_SETTLE_SECONDS="${FC_RUNTIME_STACK_SETTLE_SECONDS:-20}"
 MONITOR_REQUIRED="${FC_MONITOR_REQUIRED:-1}"
 SYSTEMD_BACKEND_UNIT="finance-backend.service"
 PYTHON_BIN=""
@@ -166,9 +167,43 @@ frontend_ready() {
     curl -fsS "http://localhost:5173/" >/dev/null 2>&1
 }
 
+monitor_access_ready() {
+    curl -fsS -m 5 "http://localhost:7779/api/monitor/access" >/dev/null 2>&1
+}
+
+monitor_contract_ready() {
+    monitor_access_ready \
+        && curl -fsS -m 5 "http://localhost:7779/api/status?lite=1" >/dev/null 2>&1
+}
+
 monitor_ready() {
-    curl -fsS "http://localhost:7779/api/status" >/dev/null 2>&1 \
-        && curl -fsS "http://localhost:7779/api/runtime-diagnostics" >/dev/null 2>&1
+    local attempts="${1:-3}"
+    local tried=0
+    while [ "$tried" -lt "$attempts" ]; do
+        if monitor_access_ready; then
+            return 0
+        fi
+        sleep 1
+        tried=$((tried + 1))
+    done
+    return 1
+}
+
+runtime_stack_ready() {
+    backend_ready && frontend_ready && monitor_contract_ready
+}
+
+wait_runtime_stack_ready() {
+    local timeout="${1:-20}"
+    local waited=0
+    while [ "$waited" -lt "$timeout" ]; do
+        if runtime_stack_ready; then
+            return 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    return 1
 }
 
 service_running() {
@@ -183,8 +218,9 @@ service_running() {
             frontend_ready && return 0
             ;;
         monitor)
-            # Monitor status should reflect API truth, not a stale pid file or a bound port.
-            monitor_ready && return 0
+            # Monitor status should reflect live API reachability, without requiring
+            # the heavier status contract on every `status` call.
+            monitor_ready 2 && return 0
             return 1
             ;;
     esac
@@ -213,7 +249,7 @@ stop_services() {
     pkill -f "vite.*5173" 2>/dev/null || true
 
     # Arrêter monitor (serveur API/dashboard)
-    pkill -f "scripts/monitor_server.py|apps/monitor/server.py|uvicorn.*7779" 2>/dev/null || true
+    pkill -f "apps/monitor/server.py|uvicorn.*7779" 2>/dev/null || true
     
     # Nettoyer les PIDs
     rm -f /tmp/finance_copilot_*.pid
@@ -532,7 +568,7 @@ wait_monitor_ready() {
     local timeout="${1:-25}"
     local waited=0
     while [ "$waited" -lt "$timeout" ]; do
-        if monitor_ready; then
+        if monitor_contract_ready; then
             return 0
         fi
         sleep 1
@@ -549,29 +585,33 @@ start_monitor() {
     fi
 
     if [ -x "$MONITOR_GUARD_SCRIPT" ]; then
-        if bash "$MONITOR_GUARD_SCRIPT"; then
-            if wait_monitor_ready "$monitor_timeout"; then
-                log_success "✅ Monitor opérationnel"
-                log_success "   URL: $MONITOR_URL"
-                return 0
-            fi
-            log_warning "Monitor guard exécuté mais endpoints monitor indisponibles"
-        else
-            log_warning "monitor_stack_guard.sh a échoué, tentative wrapper direct"
+        if ! bash "$MONITOR_GUARD_SCRIPT"; then
+            log_warning "monitor_stack_guard.sh a retourné non-zero; vérification des endpoints monitor avant fallback direct"
         fi
+        if wait_monitor_ready "$monitor_timeout"; then
+            log_success "✅ Monitor opérationnel"
+            log_success "   URL: $MONITOR_URL"
+            return 0
+        fi
+        log_warning "Monitor guard exécuté mais endpoints monitor indisponibles"
     fi
 
-    if [ -f "$MONITOR_WRAPPER_SCRIPT" ]; then
+    if [ -f "$MONITOR_SERVER_SCRIPT" ]; then
+        local monitor_python="$WORKSPACE_ROOT/apps/monitor/.venv/bin/python"
+        if [ ! -x "$monitor_python" ]; then
+            monitor_python="python3"
+        fi
         if is_port_in_use 7779 && ! monitor_ready; then
             log_warning "Port 7779 occupé sans endpoints monitor valides, nettoyage du process stale..."
-            pkill -f "scripts/monitor_server.py|apps/monitor/server.py|uvicorn.*7779" 2>/dev/null || true
+            pkill -f "apps/monitor/server.py|uvicorn.*7779" 2>/dev/null || true
             sleep 1
         fi
-        nohup python3 "$MONITOR_WRAPPER_SCRIPT" > /tmp/monitor.log 2>&1 &
+        mkdir -p "$WORKSPACE_ROOT/logs-codex-runs"
+        nohup env FC_MONITOR_ROOT="$WORKSPACE_ROOT" "$monitor_python" "$MONITOR_SERVER_SCRIPT" >> "$WORKSPACE_ROOT/logs-codex-runs/monitor-server.log" 2>&1 &
         MONITOR_PID=$!
         echo "$MONITOR_PID" > /tmp/finance_copilot_monitor.pid
         if wait_monitor_ready "$monitor_timeout"; then
-            log_success "✅ Monitor opérationnel (wrapper)"
+            log_success "✅ Monitor opérationnel (direct)"
             log_success "   URL: $MONITOR_URL"
             return 0
         fi
@@ -612,6 +652,62 @@ status() {
     echo ""
 }
 
+brief() {
+    ensure_python_bin
+
+    local output
+    if ! output="$(FC_COPILOT_SOURCE_ONLY=1 PYTHONPATH="$BACKEND_DIR${PYTHONPATH:+:$PYTHONPATH}" "$PYTHON_BIN" - <<'PY'
+from domains.copilot.application import copilot_service
+
+brief = copilot_service._load_daily_brief_payload()
+
+summary = str(brief.get("summary") or "No daily brief available yet.").strip()
+sentiment = str(brief.get("market_sentiment") or brief.get("sentiment") or "UNKNOWN").strip() or "UNKNOWN"
+freshness = str(brief.get("freshness") or brief.get("generated_at") or "").strip()
+
+print("BRIEF DU JOUR")
+print(f"Sentiment: {sentiment}")
+if freshness:
+    print(f"Freshness: {freshness}")
+print("")
+print(summary)
+
+macro = brief.get("macro_signals") if isinstance(brief.get("macro_signals"), list) else []
+if macro:
+    labels = [copilot_service._brief_signal_label(item, "macro") for item in macro[:4]]
+    labels = [item for item in labels if item]
+    if labels:
+        print("")
+        print("Macro: " + " | ".join(labels))
+
+sector_rotation = brief.get("sector_rotation") if isinstance(brief.get("sector_rotation"), dict) else {}
+top = copilot_service._brief_list_values(sector_rotation.get("top"))[:3]
+bottom = copilot_service._brief_list_values(sector_rotation.get("bottom"))[:3]
+if top or bottom:
+    print("")
+    if top:
+        print("Secteurs forts: " + ", ".join(top))
+    if bottom:
+        print("Secteurs faibles: " + ", ".join(bottom))
+
+top_signals = copilot_service._brief_list_values(brief.get("top_signals"))[:3]
+if top_signals:
+    print("")
+    print("Signaux: " + " | ".join(top_signals))
+
+top_risks = copilot_service._brief_list_values(brief.get("top_risks"))[:3]
+if top_risks:
+    print("")
+    print("Risques: " + " | ".join(top_risks))
+PY
+)"; then
+        log_error "Impossible de générer le brief du jour."
+        return 1
+    fi
+
+    printf '%s\n' "$output"
+}
+
 # Commande start (avec auto-restart si déjà en cours)
 start() {
     log "Démarrage de Finance Copilot..."
@@ -635,6 +731,16 @@ start() {
     start_frontend
     start_monitor
 
+    local settle_timeout="$RUNTIME_STACK_SETTLE_SECONDS"
+    if ! [[ "$settle_timeout" =~ ^[0-9]+$ ]] || [ "$settle_timeout" -lt 5 ]; then
+        settle_timeout=20
+    fi
+    log "Vérification finale de la stabilité runtime (timeout=${settle_timeout}s)..."
+    if ! wait_runtime_stack_ready "$settle_timeout"; then
+        log_error "La stack runtime n'est pas stable après démarrage"
+        return 1
+    fi
+
     # Les jobs lourds restent hors chemin critique pour rendre la stack
     # disponible rapidement après un restart runtime.
     launch_post_start_refresh
@@ -654,7 +760,7 @@ start() {
     echo "📝 Logs:"
     echo "   Backend  : $SCRIPT_DIR/api.log"
     echo "   Frontend : /tmp/frontend.log"
-    echo "   Monitor  : /tmp/monitor.log (fallback wrapper)"
+    echo "   Monitor  : $WORKSPACE_ROOT/logs-codex-runs/monitor-server.log"
     echo ""
 }
 
@@ -666,6 +772,7 @@ Finance Copilot - Script optimisé (ARM64/VM)
 Usage: $0 [commande]
 
 Commandes:
+  brief    Affiche le brief du jour en CLI
   start    Démarre (ou redémarre) les services
   stop     Arrête tous les services
   restart  Redémarre tous les services
@@ -687,6 +794,9 @@ EOF
 # Main
 main() {
     case "${1:-help}" in
+        brief)
+            brief
+            ;;
         start)
             start
             ;;

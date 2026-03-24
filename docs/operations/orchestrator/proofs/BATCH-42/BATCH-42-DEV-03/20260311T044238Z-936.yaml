@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-42-BATCH-42-DEV-03-20260311T044238Z-936"
+stream_id: "BATCH-42"
+task_id: "BATCH-42-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T04:42:38Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope geopolitical risk graph + conflict escalation [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_geopolitical_risk_graph_+_conflict_escalation_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T04:42:38Z"
+      ended_at_utc: "2026-03-11T04:42:38Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS node apps/web/src/domains/forecasts/contracts/apiConnector.test.js; SKIP scripts/backend_regression_gate.sh (frontend-only slice, no backend files changed)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=450030620a3d265181e9804d9140de3d611ee74f; payload=live dashboard marketDrivers now includes a derived `Geopolitical` factor sourced from `geopoliticalRiskGraph` when escalation data is present; scope=existing fore"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_ORPHAN_MERGE_BATCH-42-DEV-03"
+  review_ref: "watchdog_recovery:BATCH-42-DEV-03"
+  note: "source=watchdog_recovery | root_cause=The BATCH-42 stack already fetched and rendered geopolitical escalation separately, but the core forecast payload (`marketDrivers`) still omitted any geopolitical contribution, leaving the existing driver visualization b | fix_applied=Patched `apps/web/src/domains/forecasts/contracts/apiConnector.js` to normalize geopolitical escalation scores from the existing `/api/judge/geopolitical-risk-graph` payload and prepend a single `Geopolitical` market dri | verify=before=live dashboard fetched `geopoliticalRiskGraph` but `marketDrivers` remained limited to the base dashboard driver feed, so forecast driver bars had no geopolitical layer contribution; after=`initLiveData()` folds t | architecture_check=layer=frontend forecasts connector/live-hydration only; imports_ok=yes (reused existing geopolitical graph fetch + existing marketDrivers pipeline, no new module/helper outside current contract file); path_target=apps/we | vision_alignment=batch=BATCH-42; target=Geopolitical Risk Graph + Conflict Escalation [DEV-03]; impact=smallest vertical slice that makes geopolitical escalation contribute directly to the existing forecast driver payload and visualizati"

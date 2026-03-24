@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-64-BATCH-64-ARCH-20260314T032032Z-718"
+stream_id: "BATCH-64"
+task_id: "BATCH-64-ARCH"
+role: "planner"
+produced_at_utc: "2026-03-14T03:20:32Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_arch_closure_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-14T03:20:32Z"
+      ended_at_utc: "2026-03-14T03:20:32Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 -m pytest -q platform/automation/tests/test_planner_autonomy_tick.py platform/automation/tests/test_planner_subagent_manager.py"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "IK-1942144100b5"
+  review_ref: "runner:BATCH-64-ARCH"
+  note: "source=runner | root_cause=BATCH-64-ARCH remained planner-owned in progress after analysis closure because the architecture proof gate had not yet been closed on the canonical task node | fix_applied=planner closed the canonical ARCH node with explicit planner proof fields so the delivery chain can move from architecture to dev execution | verify=before=context showed BATCH-64-ARCH in progress and BATCH-64-DEV-01 waiting on architecture; after=architecture closure is accepted and the dev lane can become dispatchable; test=planner_runtime_actions complete cli planner proof path | architecture_check=runtime_truth_sqlite; imports_ok=model_plane_provider_policy; path_target=operator_openclaw_only | vision_alignment=batch=BATCH-64; target=personal_finance_copilot_brief_and_ask_flow; impact=resume automatic delivery from architecture to dev delivery"

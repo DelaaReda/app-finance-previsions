@@ -1,0 +1,71 @@
+{
+  "task_id": "BATCH-48-ADMIN-01",
+  "stream_id": "BATCH-48",
+  "title": "Event Impact Horizon Matrix [ADMIN-01]",
+  "captured_at_utc": "2026-03-11T07:25:21Z",
+  "status": "runtime_unblocked_with_observability_caveat",
+  "summary": "VM-only runtime is healthy for the BATCH-48 scope. The monitor lite status is OK, the BATCH-48 API route responds successfully, and queue/workboard integrity is clean. The only degraded signal is doctor while this admin capability is still active, so planner merge/collect is the remaining step rather than an infra repair.",
+  "root_cause": "No task-scoped runtime failure found after BATCH-48-DEV-03. The remaining degraded signal comes from observability timing/active-capability state: `/api/doctor?refresh=1` times out through the monitor passthrough at 20s, while direct `fc_doctor.sh --json` completes in about 7.6s and reports `planner_dispatch.status=waiting_on_agents` because `BATCH-48-ADMIN-01` itself is still running.",
+  "fix_applied": "SKIP(no_runtime_or_code_change_needed)",
+  "probes": {
+    "runtime_host_check": {
+      "runtime_is_vm": 1,
+      "hostname": "venom-Apple-Virtualization-Generic-Platform",
+      "workspace": "/home/venom/analyse-financiere"
+    },
+    "monitor_status_lite": {
+      "url": "http://127.0.0.1:7779/api/status?lite=1",
+      "health": "OK",
+      "execution_mode": "planner_experimental",
+      "queue_state_counts": {
+        "closed": 49,
+        "in_progress": 3,
+        "waiting_dep": 9,
+        "planned": 2
+      }
+    },
+    "doctor_monitor_passthrough": {
+      "url": "http://127.0.0.1:7779/api/doctor?refresh=1",
+      "status": "error",
+      "error": "doctor_exec_failed:Command '['python3', '/home/venom/analyse-financiere/platform/automation/fc_doctor.py', '--root', '/home/venom/analyse-financiere', '--json']' timed out after 20 seconds"
+    },
+    "doctor_direct_cli": {
+      "command": "bash scripts/fc_doctor.sh --json",
+      "status": "degraded",
+      "duration_ms": 7579,
+      "runtime_checks": {
+        "scheduler_authority": "ok",
+        "sessions": "ok",
+        "locks": "ok",
+        "queue_workboard": "ok",
+        "providers": "ok",
+        "product_value": "ok"
+      },
+      "degraded_check": "planner_dispatch",
+      "planner_dispatch_status": "waiting_on_agents",
+      "active_owner_task_id": "BATCH-48-ADMIN-01"
+    },
+    "judge_route_probe": {
+      "url": "http://127.0.0.1:8050/api/judge/event-impact-horizon-matrix?limit=3",
+      "ok": true,
+      "status": "ok",
+      "event_types_returned": 0,
+      "horizons": [
+        "1d",
+        "1w",
+        "1m"
+      ],
+      "route_contract_live": true
+    }
+  },
+  "planner_merge_signal": {
+    "batch_state": "IN_PROGRESS",
+    "task_state": "IN_PROGRESS",
+    "depends_on": [
+      "BATCH-48-DEV-03"
+    ],
+    "dependency_resolved": true,
+    "unblock": true,
+    "remaining_blocker": "collect_or_merge_this_admin_result_so_planner_dispatch_is_no_longer_waiting_on_agents"
+  }
+}

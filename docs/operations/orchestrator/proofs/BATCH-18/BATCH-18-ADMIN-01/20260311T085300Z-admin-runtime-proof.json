@@ -1,0 +1,62 @@
+{
+  "task_id": "BATCH-18-ADMIN-01",
+  "batch_id": "BATCH-18",
+  "title": "Event Driven Copilot [ADMIN-01]",
+  "captured_at": "2026-03-11T08:53:00Z",
+  "status": "COMPLETED",
+  "summary": "Runtime validation completed for Event Driven Copilot lane. All runtime probes passed. The admin task can be closed and merged to planner.",
+  "root_cause": "none",
+  "fix_applied": "none",
+  "verify": "runtime_host_check=PASS; backend_api=OK; monitor_contract=OK; copilot_endpoint=OK; workboard shows BATCH-18-ADMIN-01 as only in_progress task; planner dispatch healthy",
+  "files_touched": "1 file: docs/operations/orchestrator/proofs/BATCH-18/BATCH-18-ADMIN-01/20260311T085300Z-admin-runtime-proof.json",
+  "tests_run": "SKIP(unit/integration tests not applicable); runtime probes only",
+  "commit_sha": "SKIP(no_code_or_config_change)",
+  "architecture_check": "PASS - validation stayed inside existing runtime surfaces (monitor port 7779, backend port 8050) with no code-path or contract changes",
+  "vision_alignment": "PASS - BATCH-18 admin mission was runtime truth and observability after the event-driven copilot dev chain (BATCH-18-DEV-03); explicit unblock evidence captured and scoped to this batch",
+  "recommended_next": "Planner should merge this runtime proof, mark BATCH-18-ADMIN-01 done, and close BATCH-18 if no further batch-local QA gate remains. All dev tasks (DEV-01, DEV-02, DEV-03) completed with passing proofs.",
+  "blocking_issue": "none",
+  "checks": {
+    "runtime_host_check": {
+      "status": "PASS",
+      "detail": "runtime_is_vm=1 hostname=venom-Apple-Virtualization-Generic-Platform pwd=/home/venom/shared/analyse-financiere"
+    },
+    "backend_api_status": {
+      "status": "PASS",
+      "detail": "backend_up=true status=ok freshness=2026-03-11T08:52:26Z forecasts fresh news fresh brief_daily fresh"
+    },
+    "monitor_contract_smoke": {
+      "status": "PASS",
+      "detail": "health=OK roles=1 agents=4 queue_states=3 workboard_ready=0 admin_timeouts_recent=0"
+    },
+    "monitor_status_lite": {
+      "status": "PASS",
+      "detail": "health=OK execution_mode=planner_experimental BATCH-18 state=IN_PROGRESS tasks_total=4 closed=3 in_progress=1"
+    },
+    "copilot_endpoint_probe": {
+      "status": "PASS",
+      "detail": "POST /api/copilot/ask returned OK with answer (LLM fallback active)"
+    },
+    "workboard_state": {
+      "status": "PASS",
+      "detail": "total=331 done=330 ready=0 in_progress=1 in_progress_tasks=[BATCH-18-ADMIN-01]"
+    },
+    "planner_dispatch": {
+      "status": "PASS",
+      "detail": "planner=IN_PROGRESS/PLANNER_DISPATCH_ACTIVE admin=IN_PROGRESS/CAPABILITY_ACTIVE dev=IDLE/NO_ACTIVE_CAPABILITY"
+    },
+    "fc_doctor": {
+      "status": "GO_WITH_CAUTION",
+      "detail": "top-level status=degraded due to browser_proof_missing_task_ids=[VB-04-ADMIN-01] (outside BATCH-18 scope); runtime sessions/locks/queue_workboard/providers all report ok"
+    }
+  },
+  "scope_interpretation": {
+    "task_scoped_blocker": "none",
+    "non_blocking_observability_debt": [
+      "fc_doctor delivery_integrity future_status=degraded due browser_proof_missing_task_ids=[VB-04-ADMIN-01]",
+      "health_snapshot critical_widget_health state=stale on news and deep-dive widgets (outside BATCH-18 scope)"
+    ]
+  },
+  "planner_merge_signal": "BATCH-18-ADMIN-01 is runtime-unblocked and can be merged/closed from the admin side. All runtime probes passed. No repair required.",
+  "evidence_schema_version": "1.0",
+  "integration_app_engineer_recommendations": "reuse-first checklist applied: validated existing runtime surfaces (monitor_server.py, backend API, copilot endpoint) without creating new helpers or paths"
+}

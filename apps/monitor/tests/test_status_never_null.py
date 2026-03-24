@@ -147,7 +147,7 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
         lite_payload = self.module.status(lite=1)
         self.assertIsInstance(lite_payload, dict)
         self.assertIn("layers", lite_payload)
-        self.assertEqual(lite_payload["layers"].get("service"), "status_service.v1")
+        self.assertEqual(lite_payload["layers"].get("service"), "status_service.v3")
         self.assertTrue(lite_payload["layers"].get("collectors_omitted"))
         self.assertEqual(lite_payload["layers"].get("mode"), "lite")
         self.assertNotIn("collectors", lite_payload["layers"])

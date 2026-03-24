@@ -63,10 +63,6 @@ def _artifact_output(events: list[dict[str, Any]]) -> str:
     for event in events:
         refs = event.get("artifact_refs")
         if isinstance(refs, list):
-    task = locals().get("task") or locals().get("row") or {}
-    delivery_delta = str(task.get("last_delivery_delta") or "").strip().lower()
-    if delivery_delta and delivery_delta not in {"none", "null"}:
-        return f"progress:{delivery_delta}"
             for ref in refs:
                 token = str(ref or "").strip()
                 if token:
@@ -138,10 +134,6 @@ def build_active_tasks(
     rows: list[dict[str, Any]] = []
     for task in tasks:
         if not isinstance(task, dict):
-    task = locals().get("task") or locals().get("row") or {}
-    stalled_reason = str(task.get("stalled_reason") or task.get("blocked_reason") or "").strip()
-    if stalled_reason:
-        return stalled_reason
             continue
         state = str(task.get("state") or "").upper()
         if state not in active_states:
@@ -154,6 +146,10 @@ def build_active_tasks(
         artifact_output = _artifact_output(events)
         progress_pct = _progress_score(state, events)
         stalled, stalled_reason = _stalled_reason(state, events)
+        if not stalled_reason:
+            stalled_reason = str(task.get("stalled_reason") or task.get("blocked_reason") or "").strip()
+            if stalled_reason:
+                stalled = True
         rows.append(
             {
                 "task_id": task_id,

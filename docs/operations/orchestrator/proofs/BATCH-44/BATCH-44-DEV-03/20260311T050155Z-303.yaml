@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-44-BATCH-44-DEV-03-20260311T050155Z-303"
+stream_id: "BATCH-44"
+task_id: "BATCH-44-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T05:01:55Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope insider behavior intelligence layer [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_insider_behavior_intelligence_layer_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T05:01:55Z"
+      ended_at_utc: "2026-03-11T05:01:55Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/pages/app.test.js; bash scripts/backend_regression_gate.sh --no-live -- domains/forecasts/tests/test_global_signal_mesh_route.py"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=7d34dd92da59ec07325a11a8d7e333a2e1cfaea4; widget artifact=existing market-drivers insider panel now shows the non-deterministic guardrail banner, `Provenance: public_form4 ...`, and uncertainty-factor copy for eac"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-44-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-44-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=BATCH-44-DEV-02 wired insider-behavior data into the market-drivers widget, but the rendered UI still hid the most important acceptance signals for BATCH-44: conservative interpretation guardrails, filing provenance, and | fix_applied=Patched `apps/web/src/domains/forecasts/pages/app.js` to preserve insider warning/provenance fields during normalization and render them in the existing market-drivers insider panel. Added targeted assertions in `apps/we | verify=before=the insider panel only exposed ticker, confidence, summary, and 30d net trades, so the BATCH-44 acceptance guardrails/provenance were still hidden in UI; after=the same existing widget visibly renders the insider  | architecture_check=layer=web forecasts page rendering on the existing market-drivers widget; imports_ok=yes; path_target=apps/web/src/domains/forecasts/pages/app.js,apps/web/src/domains/forecasts/pages/app.test.js | vision_alignment=batch=BATCH-44; target=Insider Behavior Intelligence Layer [DEV-03] minimal visibility slice for guardrails/provenance; impact=the delivered insider layer now visibly communicates uncertainty and non-deterministic interp"

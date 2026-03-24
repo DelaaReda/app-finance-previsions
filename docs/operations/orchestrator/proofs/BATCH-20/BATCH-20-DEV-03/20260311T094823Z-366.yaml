@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-20-BATCH-20-DEV-03-20260311T094823Z-366"
+stream_id: "BATCH-20"
+task_id: "BATCH-20-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T09:48:23Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope personal policy guardrails [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_personal_policy_guardrails_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T09:48:23Z"
+      ended_at_utc: "2026-03-11T09:48:23Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 -m pytest apps/api/src/domains/forecasts/tests/test_policy_validator.py -q ; bash scripts/runtime_host_check.sh && scripts/backend_regression_gate.sh --no-live -- domains/forecasts/tests/test_policy_validator.py"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=eeb99f9ba02d17da49c7f2a363929555daea9ee6; contract=`validate_recommendation()` now preserves personal-policy revision timestamps in `policy_version` and `validated_at`; tests=`test_policy_version_reuses_explicit_p"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-20-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-20-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=`PolicyValidatorService.validate_recommendation()` always set `policy_version`/`validated_at` from `datetime.now(...)`, so policy outputs did not preserve the actual revision timestamp required by the BATCH-20 acceptance | fix_applied=Added `_resolve_policy_version()` in `apps/api/src/domains/forecasts/application/policy_validator_service.py` to reuse the first enabled policy's explicit `policy_version`, then fall back to `updated_at`, then only fall  | verify=before=`policy_version` always equaled validation-time now(), so policy revisions were not versioned from stored metadata; after=`policy_version`/`validated_at` reuse explicit `policy_version` or `updated_at` from enable | architecture_check=layer=forecasts application service + targeted unit tests; imports_ok=yes; path_target=apps/api/src/domains/forecasts/application/policy_validator_service.py and apps/api/src/domains/forecasts/tests/test_policy_validator | vision_alignment=batch=BATCH-20; target=Personal Policy Guardrails [DEV-03]; impact=locks the remaining policy-version acceptance slice so guardrail responses now carry real revision timestamps instead of transient validation-time values"

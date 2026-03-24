@@ -6,19 +6,37 @@ import fcntl
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from shutil import which as shutil_which
 from typing import Any
 import yaml
 
-from orchestrator_paths import canonical_docs_root, resolve_orchestrator_write_path, runtime_state_root
-from worker_manager import _ensure_agent as _ensure_openclaw_agent
-from worker_manager import _openclaw_env
-from worker_manager import shutil_which
+from orchestrator_paths import (
+    CANONICAL_VM_ROOT,
+    SHARED_VM_ROOT,
+    canonical_docs_root,
+    resolve_orchestrator_read_path,
+    resolve_orchestrator_write_path,
+    runtime_state_root,
+)
+from runtime.core.contracts import CapabilityResult, CapabilityTask, DeliveryProof
+from runtime.model_plane import active_rate_limit_reason as model_plane_active_rate_limit_reason
+from runtime.model_plane import looks_like_rate_limited as model_plane_looks_like_rate_limited
+from runtime.model_plane import resolve_effective_backend_details as model_plane_resolve_effective_backend_details
+from runtime.model_plane import run_qwen_cli_fallback as model_plane_run_qwen_cli_fallback
+from runtime.model_plane import run_secondary_then_qwen_fallback as model_plane_run_secondary_then_qwen_fallback
+from runtime.planner.planner_graph_runtime import PlannerGraphRuntime
+from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+from runtime.model_plane.model_plane import resolve_planner_backend_choice as model_plane_resolve_planner_backend_choice
+from runtime.model_plane.model_plane import validate_planner_dispatch_backend as model_plane_validate_planner_dispatch_backend
+from compat.legacy_workers.worker_manager import _openclaw_env
 
 
 ACTIVE_STATUSES = {"spawned", "running"}
@@ -54,34 +72,9 @@ CODEX_STARTUP_NOISE_MARKERS = (
     "worker quit with fatal",
     "reconnecting...",
 )
-RATE_LIMIT_MARKERS = (
-    "you've hit your usage limit for gpt-5.3-codex-spark",
-    "api-rate-limit-reached",
-    "api rate limit reached",
-    "insufficient_quota",
-    "usage limit",
-    "quota exceeded",
-    "quota exhausted",
-    "quota reached",
-    "rate limit exceeded",
-    "rate limit exhausted",
-    "rate limit reached",
-    "too many requests",
-    "status 429",
-    "http 429",
-    " 429",
-)
-QWEN_AUTH_MARKERS = (
-    "qwen oauth authentication",
-    "please visit this url to authorize",
-    "waiting for authorization",
-    "authorize?user_code=",
-    "scan the qr code below",
-    "no auth type is selected",
-    "please configure an auth type",
-)
-SECONDARY_CODEX_DEFAULT_MODEL = "gpt-5.4"
-SECONDARY_CODEX_DEFAULT_THINKING = "low"
+SECONDARY_CODEX_DEFAULT_MODEL = "gpt-5.3-codex-spark"
+SECONDARY_CODEX_DEFAULT_THINKING = "high"
+CANONICAL_RUNTIME_WORKSPACE = Path("/home/venom/analyse-financiere")
 ROLE_MODELS = {
     "dev": ("codex-full/gpt-5.4", "medium", "danger-full-access"),
     "admin": ("codex-full/gpt-5.4", "medium", "danger-full-access"),
@@ -152,27 +145,6 @@ RESULT_SCHEMA: dict[str, Any] = {
 }
 
 
-def _openclaw_cli_model(model: str) -> str:
-    token = str(model or "").strip()
-    if not token:
-        return "codex-cli/gpt-5.3-codex-spark"
-    if "/" in token:
-        return token
-    return f"codex-cli/{token}"
-
-
-def _openclaw_runtime_model(model: str, sandbox: str) -> str:
-    token = str(model or "").strip() or "gpt-5.3-codex-spark"
-    if "/" in token:
-        return token
-    sandbox_token = str(sandbox or "").strip().lower()
-    if sandbox_token in {"off", "danger-full-access"}:
-        return f"codex-full/{token}"
-    if sandbox_token == "workspace-write":
-        return f"codex-cli-write/{token}"
-    return f"codex-cli/{token}"
-
-
 def canonical_role(value: Any) -> str:
     token = str(value or "").strip().replace("-", "_").lower()
     if token in {"po_scrum_master", "scrum"}:
@@ -240,51 +212,6 @@ def _normalized_retryable_backend_issue(text: Any) -> str:
     return "invalid_subagent_result:structured_output_missing"
 
 
-def _apply_model_family(current_model: Any, replacement_model: Any) -> str:
-    current = str(current_model or "").strip()
-    replacement = str(replacement_model or "").strip()
-    if not replacement:
-        return ""
-    if "/" in current and "/" not in replacement:
-        prefix = current.split("/", 1)[0].strip()
-        if prefix:
-            return f"{prefix}/{replacement}"
-    return replacement
-
-
-def _secondary_codex_fallback(target_role: str, current_model: Any, current_thinking: Any) -> tuple[str, str]:
-    role = canonical_role(target_role)
-    if role == "planner":
-        return "", ""
-    enabled = str(
-        os.environ.get("FC_PLANNER_SECONDARY_CODEX_FALLBACK")
-        or os.environ.get("TMUX_ROLE_SECONDARY_CODEX_FALLBACK")
-        or "1"
-    ).strip().lower()
-    if enabled in {"0", "false", "no", "off", ""}:
-        return "", ""
-    role_token = role.upper().replace("-", "_")
-    model = str(
-        os.environ.get(f"LM_ROLE_{role_token}_FALLBACK_MODEL")
-        or os.environ.get("LM_USED_SECONDARY_FALLBACK_MODEL")
-        or os.environ.get("LM_FALLBACK_SECONDARY_MODEL")
-        or os.environ.get("LM_TIER_BUILD_SECONDARY_MODEL")
-        or SECONDARY_CODEX_DEFAULT_MODEL
-    ).strip()
-    effective_model = _apply_model_family(current_model, model)
-    current_model_token = str(current_model or "").strip()
-    if not effective_model or effective_model == current_model_token:
-        return "", ""
-    thinking = str(
-        os.environ.get(f"LM_ROLE_{role_token}_FALLBACK_THINKING")
-        or os.environ.get("LM_USED_SECONDARY_FALLBACK_THINKING")
-        or os.environ.get("LM_FALLBACK_SECONDARY_THINKING")
-        or os.environ.get("LM_TIER_BUILD_SECONDARY_THINKING")
-        or SECONDARY_CODEX_DEFAULT_THINKING
-    ).strip()
-    return effective_model, thinking or SECONDARY_CODEX_DEFAULT_THINKING
-
-
 def _semantic_result_gate(payload: dict[str, Any]) -> tuple[bool, str]:
     status = str(payload.get("status", "")).strip().lower()
     summary = str(payload.get("summary", "")).strip()
@@ -321,8 +248,7 @@ def _subprocess_timeout_value(timeout_seconds: int) -> int | None:
 
 
 def _looks_like_rate_limited(text: str) -> bool:
-    lowered = str(text or "").lower()
-    return any(marker in lowered for marker in RATE_LIMIT_MARKERS)
+    return model_plane_looks_like_rate_limited(text)
 
 
 INVALID_RESULT_PREFIX = "invalid_subagent_result:"
@@ -331,57 +257,14 @@ INVALID_RESULT_WINDOW_SECONDS = max(60, int(os.environ.get("FC_PLANNER_INVALID_R
 INVALID_RESULT_COOLDOWN_SECONDS = max(60, int(os.environ.get("FC_PLANNER_INVALID_RESULT_COOLDOWN_SECONDS", str(30 * 60)) or (30 * 60)))
 
 
-def _looks_like_qwen_auth_prompt(text: str) -> bool:
-    lowered = str(text or "").lower()
-    return any(marker in lowered for marker in QWEN_AUTH_MARKERS)
-
-
-def _planner_qwen_fallback_enabled() -> bool:
-    token = str(os.environ.get("FC_PLANNER_QWEN_FALLBACK", "1") or "1").strip().lower()
-    return token not in {"0", "false", "no", "off"}
-
-
-def _rate_limit_state_dir() -> Path:
-    raw = (
-        os.environ.get("FC_ROLE_STATE_DIR")
-        or os.environ.get("TMUX_ROLE_STATE_DIR")
-        or str(Path.home() / ".openclaw" / "cron" / "role-state")
-    )
-    return Path(str(raw).strip() or str(Path.home() / ".openclaw" / "cron" / "role-state")).expanduser()
-
-
 def _active_rate_limit_reason(prefixes: tuple[str, ...]) -> str:
-    state_dir = _rate_limit_state_dir()
-    if not state_dir.exists():
+    if os.environ.get("PYTEST_CURRENT_TEST") or "unittest" in sys.modules:
         return ""
-    now_epoch = int(_now().timestamp())
-    reasons: list[str] = []
-    seen: set[Path] = set()
-    for prefix in prefixes:
-        token = str(prefix or "").strip()
-        if not token:
-            continue
-        patterns = [f"{token}.rate_limit_gate_cache", f"{token}*.rate_limit_gate_cache"]
-        for pattern in patterns:
-            for path in sorted(state_dir.glob(pattern)):
-                if path in seen or not path.is_file():
-                    continue
-                seen.add(path)
-                try:
-                    payload = path.read_text(encoding="utf-8", errors="ignore").strip()
-                except Exception:
-                    continue
-                until_raw, _, reason_raw = payload.partition("|")
-                try:
-                    until_ts = int(str(until_raw or "").strip())
-                except Exception:
-                    continue
-                if until_ts <= now_epoch:
-                    continue
-                reason = _compact(reason_raw or path.name, 220)
-                if reason and reason not in reasons:
-                    reasons.append(reason)
-    return " | ".join(reasons[:3])
+    return _compact(model_plane_active_rate_limit_reason(prefixes, os.environ, int(_now().timestamp())), 220)
+
+
+def _allow_runtime_rate_limit_cache(config: PlannerSubagentConfig) -> bool:
+    return True
 
 
 def _invalid_result_route_path(config: PlannerSubagentConfig) -> Path:
@@ -532,194 +415,6 @@ def _clear_invalid_result_route(config: PlannerSubagentConfig, owner_task_id: st
     if key in routes:
         routes.pop(key, None)
         _save_invalid_result_routes(path, payload)
-
-
-def _qwen_bin() -> str:
-    candidate = str(
-        os.environ.get("FC_PLANNER_QWEN_BIN")
-        or os.environ.get("TMUX_ROLE_QWEN_BIN")
-        or os.environ.get("LM_USED_QWEN_BIN")
-        or "/home/venom/.npm-global/bin/qwen"
-    ).strip()
-    if candidate and Path(candidate).is_file() and os.access(candidate, os.X_OK):
-        return candidate
-    located = shutil_which(candidate) if candidate else ""
-    if located:
-        return located
-    return shutil_which("qwen")
-
-
-def _run_qwen_subagent(
-    config: PlannerSubagentConfig,
-    prompt: str,
-    timeout_seconds: int,
-    subagent_id: str,
-) -> tuple[int, str, str, str]:
-    qwen_bin = _qwen_bin()
-    if not qwen_bin:
-        return 5, "", "qwen_missing", f"qwen:{subagent_id}"
-    timeout_value = _subprocess_timeout_value(timeout_seconds)
-    model = str(os.environ.get("FC_PLANNER_QWEN_MODEL", "qwen")).strip() or "qwen"
-    cmd = [
-        qwen_bin,
-        "--output-format",
-        "text",
-        "--approval-mode",
-        "yolo",
-        "--sandbox",
-        "false",
-        "--include-directories",
-        str(config.root),
-        "-m",
-        model,
-        "-p",
-        prompt,
-    ]
-    try:
-        proc = subprocess.run(
-            cmd,
-            text=True,
-            capture_output=True,
-            check=False,
-            cwd=str(config.root),
-            timeout=timeout_value,
-        )
-        stdout_text = proc.stdout or ""
-        stderr_text = proc.stderr or ""
-        combined = "\n".join(part for part in (stdout_text, stderr_text) if str(part or "").strip())
-        if _looks_like_qwen_auth_prompt(combined):
-            return 5, "", _compact(combined or "qwen_auth_required", 220), f"qwen:{subagent_id}"
-        return proc.returncode, stdout_text, stderr_text, f"qwen:{subagent_id}"
-    except subprocess.TimeoutExpired as exc:
-        timeout_label = timeout_value if isinstance(timeout_value, int) else "unbounded"
-        return 124, str(exc.stdout or ""), str(exc.stderr or "") or f"qwen_timeout_after_{timeout_label}s", f"qwen:{subagent_id}"
-
-
-def _maybe_run_qwen_fallback(
-    config: PlannerSubagentConfig,
-    prompt: str,
-    timeout_seconds: int,
-    subagent_id: str,
-    reason: str,
-    source: str,
-) -> tuple[int, str, str, str] | None:
-    if not _planner_qwen_fallback_enabled():
-        return None
-    if _active_rate_limit_reason(("qwen",)):
-        return None
-    qwen_rc, qwen_stdout, qwen_stderr, qwen_ref = _run_qwen_subagent(
-        config,
-        prompt,
-        timeout_seconds,
-        subagent_id,
-    )
-    if _looks_like_qwen_auth_prompt("\n".join(part for part in (qwen_stdout, qwen_stderr) if str(part or "").strip())):
-        return None
-    if qwen_rc == 0 or str(qwen_stdout or "").strip():
-        note = _compact(f"qwen_fallback_from={source}; reason={reason}", 220)
-        stderr_combined = "\n".join(part for part in (qwen_stderr, note) if str(part or "").strip())
-        return qwen_rc, qwen_stdout, stderr_combined, qwen_ref
-    return None
-
-
-def _run_secondary_codex_fallback(
-    config: PlannerSubagentConfig,
-    plan: dict[str, Any],
-    prompt: str,
-    timeout_seconds: int,
-    subagent_id: str,
-    reason: str,
-    source: str,
-    invoke_codex_exec: Any,
-) -> tuple[int, str, str, str] | None:
-    model, thinking = _secondary_codex_fallback(
-        str(plan.get("target_role", "")),
-        plan.get("model", ""),
-        plan.get("thinking", ""),
-    )
-    if not model:
-        return None
-    rc, stdout, stderr = invoke_codex_exec(timeout_seconds, model, thinking)
-    note = _compact(f"secondary_codex_fallback_from={source}; reason={reason}; model={model}", 220)
-    stderr_combined = "\n".join(part for part in (stderr, note) if str(part or "").strip())
-    return rc, stdout, stderr_combined, f"codex_exec:{subagent_id}:{model}"
-
-
-def _maybe_run_secondary_then_qwen_fallback(
-    config: PlannerSubagentConfig,
-    plan: dict[str, Any],
-    prompt: str,
-    timeout_seconds: int,
-    subagent_id: str,
-    reason: str,
-    source: str,
-    invoke_codex_exec: Any,
-) -> tuple[int, str, str, str] | None:
-    fallback_reason = str(reason or "").strip() or source
-    secondary_fallback = _run_secondary_codex_fallback(
-        config,
-        plan,
-        prompt,
-        timeout_seconds,
-        subagent_id,
-        fallback_reason,
-        source,
-        invoke_codex_exec,
-    )
-    if secondary_fallback is not None:
-        secondary_combined = "\n".join(part for part in secondary_fallback[1:3] if str(part or "").strip())
-        if not _looks_like_rate_limited(secondary_combined) and "invalid_subagent_result:" not in secondary_combined:
-            return secondary_fallback
-        fallback_reason = secondary_combined or fallback_reason
-    qwen_fallback = _maybe_run_qwen_fallback(
-        config,
-        prompt,
-        timeout_seconds,
-        subagent_id,
-        fallback_reason,
-        source,
-    )
-    if qwen_fallback is not None:
-        return qwen_fallback
-    return None
-
-
-def _effective_backend_details(
-    plan: dict[str, Any],
-    effective_backend: str,
-    backend_ref: str,
-    backend_route_reason: str,
-) -> tuple[str, str, str]:
-    route_reason = str(backend_route_reason or "none").strip() or "none"
-    model = str(plan.get("model", "") or "").strip()
-    thinking = str(plan.get("thinking", "") or "").strip()
-    backend_ref_token = str(backend_ref or "").strip()
-    lowered_ref = backend_ref_token.lower()
-    lowered_backend = str(effective_backend or "").strip().lower()
-
-    if route_reason in {"", "none"} and lowered_ref.startswith("codex_exec:") and backend_ref_token.count(":") >= 2:
-        route_reason = "secondary_codex_fallback"
-    elif route_reason in {"", "none"} and (lowered_ref.startswith("qwen:") or lowered_backend == "qwen"):
-        route_reason = "qwen_fallback"
-
-    if lowered_backend == "openclaw":
-        model = _openclaw_cli_model(plan.get("model", ""))
-    elif lowered_ref.startswith("qwen:") or lowered_backend == "qwen":
-        model = str(os.environ.get("FC_PLANNER_QWEN_MODEL", "qwen") or "qwen").strip() or "qwen"
-        thinking = "fallback"
-    elif lowered_ref.startswith("codex_exec:"):
-        parts = backend_ref_token.split(":", 2)
-        if len(parts) == 3 and str(parts[2] or "").strip():
-            model = str(parts[2]).strip()
-        if route_reason == "secondary_codex_fallback":
-            _model, secondary_thinking = _secondary_codex_fallback(
-                str(plan.get("target_role", "")),
-                plan.get("model", ""),
-                plan.get("thinking", ""),
-            )
-            if secondary_thinking:
-                thinking = secondary_thinking
-    return route_reason, model, thinking
 
 
 def _result_schema_score(payload: dict[str, Any]) -> tuple[int, int, int, int]:
@@ -1173,6 +868,19 @@ class PlannerSubagentResult:
         }
 
 
+def _result_has_delivery_proof(result: PlannerSubagentResult, *, target_role: str) -> bool:
+    if str(result.artifact or "").strip().lower() in EMPTY_FIELD_TOKENS:
+        return False
+    if str(result.verify or "").strip().lower() in EMPTY_FIELD_TOKENS:
+        return False
+    role_token = canonical_role(target_role)
+    if role_token in {"dev", "admin"} and str(result.tests_run or "").strip().lower() in EMPTY_FIELD_TOKENS:
+        return False
+    if role_token == "dev" and str(result.commit_sha or "").strip().lower() in EMPTY_FIELD_TOKENS:
+        return False
+    return True
+
+
 @dataclass
 class PlannerSubagentRecord:
     subagent_id: str
@@ -1349,12 +1057,14 @@ def _load_config(root: Path) -> PlannerSubagentConfig:
         if not isinstance(cfg_roles, list):
             cfg_roles = list(DEFAULT_MANAGED_ROLES)
         managed_roles = {canonical_role(tok) for tok in cfg_roles if str(tok).strip()}
-    planner_state_dir = runtime_state_root(root)
+    planner_state_dir = resolve_orchestrator_write_path(root, "planner-subagents-registry.json").parent.resolve()
+    registry_path = planner_state_dir / "planner-subagents-registry.json"
+    events_path = planner_state_dir / "planner-subagents-events.jsonl"
     planner_state_dir.mkdir(parents=True, exist_ok=True)
     return PlannerSubagentConfig(
         root=root,
-        registry_path=resolve_orchestrator_write_path(root, "planner-subagents-registry.json"),
-        events_path=resolve_orchestrator_write_path(root, "planner-subagents-events.jsonl"),
+        registry_path=registry_path,
+        events_path=events_path,
         results_dir=planner_state_dir / "planner-subagents-results",
         enabled=enabled,
         cron_planner_only=cron_planner_only,
@@ -1370,23 +1080,13 @@ def _load_config(root: Path) -> PlannerSubagentConfig:
 
 
 def _resolve_backend(config: PlannerSubagentConfig, target_role: str, task_kind: str, backend_override: str = "") -> str:
-    token = str(backend_override or "").strip().lower()
-    if token and token != "auto":
-        return token
-    task_kind_token = str(task_kind or "").strip().lower()
-    if task_kind_token and config.backend_by_role.get(task_kind_token):
-        return config.backend_by_role[task_kind_token]
-    target_token = canonical_role(target_role)
-    if config.backend_by_role.get(target_token):
-        return config.backend_by_role[target_token]
-    token = str(config.backend or "codex_exec").strip().lower()
-    if token == "auto":
-        if target_token == "admin":
-            return "codex_exec"
-        if target_token == "dev":
-            return "openclaw"
-        return "codex_exec"
-    return token or "codex_exec"
+    return model_plane_resolve_planner_backend_choice(
+        target_role,
+        task_kind,
+        backend_override=backend_override,
+        config_backend=config.backend,
+        backend_by_role=config.backend_by_role,
+    )
 
 
 def _load_registry(path: Path) -> dict[str, Any]:
@@ -1425,7 +1125,8 @@ def _registry_lock(path: Path):
 
 
 def _record_result_paths(path: Path, subagent_id: str) -> tuple[Path, Path]:
-    results_dir = path.parent / "planner-subagents-results"
+    state_root = path.parent
+    results_dir = state_root / "planner-subagents-results"
     return results_dir / f"{subagent_id}.result.json", results_dir / f"{subagent_id}.raw.txt"
 
 
@@ -1549,7 +1250,18 @@ def _save_registry(path: Path, records: list[PlannerSubagentRecord]) -> None:
                     existing_by_id[token] = record
                     seen_ids.add(token)
                 merged_rows.append(record)
-        payload = {"updated_at": _iso(), "subagents": [record.as_dict() for record in merged_rows]}
+        payload = {
+            "updated_at": _iso(),
+            "legacy_compat_only": True,
+            "decision_capable": False,
+            "new_feature_target": False,
+            "storage_plane": "runtime_mutable",
+            "registry_secondary_only": True,
+            "events_secondary_only": True,
+            "provider_policy_plane": "model_plane",
+            "operator_plane": "openclaw",
+            "subagents": [record.as_dict() for record in merged_rows],
+        }
         _write_json(path, payload)
         mirror_path = _canonical_runtime_mirror_path(path)
         if mirror_path is not None:
@@ -1560,6 +1272,8 @@ def _emit_event(config: PlannerSubagentConfig, event: str, record: PlannerSubage
     payload = {
         "ts": _iso(),
         "event": event,
+        "legacy_compat_only": True,
+        "decision_capable": False,
         "subagent_id": record.subagent_id,
         "target_role": record.target_role,
         "owner_task_id": record.owner_task_id,
@@ -1597,7 +1311,7 @@ def _cleanup_failure_record(
             "status": "failed",
             "last_update_at": _iso(now),
             "summary": _compact(payload.get("summary") or f"Planner cleanup converted stalled subagent to failed: {reason}", 180),
-            "artifact": payload.get("artifact") or str(config.events_path.relative_to(config.root)),
+            "artifact": payload.get("artifact") or _runtime_relpath(config.events_path, config.root),
             "verify": payload.get("verify") or f"cleanup_reason={reason}",
             "blocking_issue": str(reason or "").strip() or "planner_subagent_cleanup",
             "recommended_next": payload.get("recommended_next") or "planner_repair_or_reroute",
@@ -1614,7 +1328,6 @@ def _active_count(config: PlannerSubagentConfig, records: list[PlannerSubagentRe
 def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagentRecord], now: datetime | None = None) -> tuple[list[PlannerSubagentRecord], list[str]]:
     now = now or _now()
     stale_active_seconds = max(300, int(os.environ.get("FC_PLANNER_SUBAGENT_STALE_ACTIVE_SECONDS", "600")))
-    active_openclaw_ids = _openclaw_agent_ids()
     kept: list[PlannerSubagentRecord] = []
     removed: list[str] = []
     for record in records:
@@ -1623,11 +1336,10 @@ def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagen
         if (
             record.status in ACTIVE_STATUSES
             and record.backend == "openclaw"
-            and record.subagent_id not in active_openclaw_ids
             and not result_path.exists()
             and not _subagent_launcher_alive(record.subagent_id)
         ):
-            reason = "openclaw_agent_missing"
+            reason = "legacy_openclaw_backend_unsupported"
             _emit_event(
                 config,
                 "planner_subagent_cleanup",
@@ -1658,8 +1370,6 @@ def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagen
             kept.append(record)
             continue
         _emit_event(config, "planner_subagent_cleanup", record, {"reason": "ttl_expired"})
-        if record.backend == "openclaw":
-            _openclaw_delete_agent(record.subagent_id)
         removed.append(record.subagent_id)
     return kept, removed
 
@@ -1807,6 +1517,7 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         "- Improve code, config, docs, prompts, proofs, or task artifacts directly when that is the shortest path to delivery.\n"
         "- Leave the task easier to merge, review, or hand off than you found it when that is cheap.\n"
         "- Do local work by default; use native sub-agents only for one bounded subtask when clearly faster.\n"
+        "- CODEX_NATIVE_ORCHESTRATION: Use native Codex multi-agent helpers when delegation is warranted; `explorer` is exception-only and the monitor agent is for observability context, not planning truth.\n"
         "- If blocked, return the exact next planner action.\n"
         "Output contract:\n"
         "- Return exactly one JSON object with keys: status, summary, root_cause, fix_applied, artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment, recommended_next, blocking_issue.\n"
@@ -1992,30 +1703,44 @@ def _run_codex_exec_subagent(
             return rc, stdout, stderr
 
     if cached_reason:
-        chained_fallback = _maybe_run_secondary_then_qwen_fallback(
-            config,
-            plan,
+        chained_fallback = model_plane_run_secondary_then_qwen_fallback(
+            str(plan.get("target_role", "")),
+            plan.get("model", ""),
+            plan.get("thinking", ""),
             prompt,
             timeout_seconds,
             subagent_id,
-            cached_reason,
-            "codex_exec_cache",
-            _invoke_codex_exec,
+            reason=cached_reason,
+            source="codex_exec_cache",
+            invoke_codex_exec=_invoke_codex_exec,
+            env=os.environ,
+            which=shutil_which,
+            cwd=config.root,
+            default_model=SECONDARY_CODEX_DEFAULT_MODEL,
+            default_thinking=SECONDARY_CODEX_DEFAULT_THINKING,
+            invalid_result_prefix="invalid_subagent_result:",
         )
         if chained_fallback is not None:
             return chained_fallback
     rc, stdout, stderr = _invoke_codex_exec(timeout_seconds)
     combined = "\n".join(part for part in (stdout, stderr) if str(part or "").strip())
     if _looks_like_rate_limited(combined):
-        chained_fallback = _maybe_run_secondary_then_qwen_fallback(
-            config,
-            plan,
+        chained_fallback = model_plane_run_secondary_then_qwen_fallback(
+            str(plan.get("target_role", "")),
+            plan.get("model", ""),
+            plan.get("thinking", ""),
             prompt,
             timeout_seconds,
             subagent_id,
-            combined,
-            "codex_exec_rate_limit",
-            _invoke_codex_exec,
+            reason=combined,
+            source="codex_exec_rate_limit",
+            invoke_codex_exec=_invoke_codex_exec,
+            env=os.environ,
+            which=shutil_which,
+            cwd=config.root,
+            default_model=SECONDARY_CODEX_DEFAULT_MODEL,
+            default_thinking=SECONDARY_CODEX_DEFAULT_THINKING,
+            invalid_result_prefix="invalid_subagent_result:",
         )
         if chained_fallback is not None:
             return chained_fallback
@@ -2024,46 +1749,39 @@ def _run_codex_exec_subagent(
         retry_rc, retry_stdout, retry_stderr = _invoke_codex_exec(retry_timeout)
         retry_combined = "\n".join(part for part in (retry_stdout, retry_stderr) if str(part or "").strip())
         if _looks_like_rate_limited(retry_combined):
-            qwen_fallback = _maybe_run_qwen_fallback(
-                config,
+            qwen_fallback = model_plane_run_qwen_cli_fallback(
                 prompt,
                 timeout_seconds,
                 subagent_id,
-                retry_combined,
-                "codex_exec_retry",
+                reason=retry_combined,
+                source="codex_exec_retry",
+                env=os.environ,
+                which=shutil_which,
+                cwd=config.root,
             )
             if qwen_fallback is not None:
                 return qwen_fallback
         if "invalid_subagent_result:" not in retry_combined:
             return retry_rc, retry_stdout, retry_stderr, f"codex_exec:{subagent_id}"
-        secondary_fallback = _run_secondary_codex_fallback(
-            config,
-            plan,
+        chained_fallback = model_plane_run_secondary_then_qwen_fallback(
+            str(plan.get("target_role", "")),
+            plan.get("model", ""),
+            plan.get("thinking", ""),
             prompt,
             timeout_seconds,
             subagent_id,
-            _normalized_retryable_backend_issue(retry_combined),
-            "codex_exec_invalid_result",
-            _invoke_codex_exec,
+            reason=_normalized_retryable_backend_issue(retry_combined),
+            source="codex_exec_invalid_result",
+            invoke_codex_exec=_invoke_codex_exec,
+            env=os.environ,
+            which=shutil_which,
+            cwd=config.root,
+            default_model=SECONDARY_CODEX_DEFAULT_MODEL,
+            default_thinking=SECONDARY_CODEX_DEFAULT_THINKING,
+            invalid_result_prefix="invalid_subagent_result:",
         )
-        if secondary_fallback is not None:
-            secondary_combined = "\n".join(part for part in secondary_fallback[1:3] if str(part or "").strip())
-            if not _looks_like_rate_limited(secondary_combined) and "invalid_subagent_result:" not in secondary_combined:
-                return secondary_fallback
-            retry_combined = secondary_combined or retry_combined
-            retry_rc = secondary_fallback[0]
-            retry_stdout = secondary_fallback[1]
-            retry_stderr = secondary_fallback[2]
-        qwen_fallback = _maybe_run_qwen_fallback(
-            config,
-            prompt,
-            timeout_seconds,
-            subagent_id,
-            _normalized_retryable_backend_issue(retry_combined),
-            "codex_exec_invalid_result",
-        )
-        if qwen_fallback is not None:
-            return qwen_fallback
+        if chained_fallback is not None:
+            return chained_fallback
         return max(retry_rc, 65), retry_stdout, retry_stderr, f"codex_exec:{subagent_id}"
     return rc, stdout, stderr, f"codex_exec:{subagent_id}"
 
@@ -2108,20 +1826,18 @@ def plan_subagent(
     if allowed and active_count >= config.max_active:
         allowed = False
         reason = f"max_active_reached:{active_count}/{config.max_active}"
-    elif allowed and chosen_backend == "codex_exec" and not _codex_available():
-        allowed = False
-        reason = "codex_missing"
-    elif allowed and chosen_backend == "openclaw" and not _openclaw_available():
-        allowed = False
-        reason = "openclaw_missing"
-    elif allowed and chosen_backend not in {"codex_exec", "openclaw", "mock"}:
-        allowed = False
-        reason = f"unsupported_backend:{chosen_backend}"
+    elif allowed:
+        backend_reason = model_plane_validate_planner_dispatch_backend(chosen_backend, which=shutil_which)
+        if backend_reason:
+            allowed = False
+            reason = backend_reason
     model, thinking, sandbox = _role_runtime_defaults(config, target)
     sandbox = _effective_task_sandbox(target, task_kind, sandbox)
     return {
         "allowed": allowed,
         "reason": reason,
+        "provider_policy_plane": "model_plane",
+        "operator_plane": "openclaw",
         "parent_role": parent_role,
         "target_role": target,
         "owner_task_id": owner_task_id,
@@ -2135,6 +1851,14 @@ def plan_subagent(
         "sandbox": sandbox,
         "duplicate_subagent_id": duplicate.subagent_id if duplicate else "",
     }
+
+
+def _planner_batch_id(owner_task_id: str) -> str:
+    token = str(owner_task_id or "").strip()
+    parts = [part for part in token.split("-") if part]
+    if len(parts) >= 2 and parts[0].upper() in {"BATCH", "VB"}:
+        return "-".join(parts[:2])
+    return token
 
 
 def run_subagent(
@@ -2169,7 +1893,7 @@ def run_subagent(
         expires_at=_iso(now + timedelta(minutes=ttl)),
         ttl_min=ttl,
         backend=plan["backend"],
-        metadata={"model": plan["model"], "thinking": plan["thinking"], "sandbox": plan["sandbox"], "purpose": task_kind, "role": plan["target_role"], "monitor_agent_id": "", "target_agent_id": "", "last_meaningful_delta": "spawned", "stalled": False, "backend_route_reason": "none", "backend_cooldown_until": ""},
+        metadata={"model": plan["model"], "thinking": plan["thinking"], "sandbox": plan["sandbox"], "purpose": task_kind, "role": plan["target_role"], "monitor_agent_id": "", "target_agent_id": "", "last_meaningful_delta": "spawned", "stalled": False, "backend_route_reason": "none", "backend_cooldown_until": "", "provider_policy_plane": "model_plane", "operator_plane": "openclaw"},
     )
     records.append(record)
     _save_registry(config.registry_path, records)
@@ -2194,24 +1918,58 @@ def run_subagent(
     backend_cooldown_until = str(active_invalid_route.get("cooldown_until", "") or "").strip()
     record.metadata["backend_route_reason"] = backend_route_reason
     record.metadata["backend_cooldown_until"] = backend_cooldown_until
+    capability_task = CapabilityTask(
+        batch_id=_planner_batch_id(owner_task_id),
+        task_id=owner_task_id,
+        task_kind=task_kind,
+        owner_role=plan["parent_role"],
+        target_role=plan["target_role"],
+        backend=chosen_backend,
+        model=str(plan["model"] or ""),
+        thinking=str(plan["thinking"] or ""),
+        sandbox=str(plan["sandbox"] or ""),
+        timeout_seconds=int(timeout_seconds or 0),
+        queue_snapshot_ref=str(resolve_orchestrator_read_path(config.root, "priority-queue.json")),
+        workboard_snapshot_ref=str(resolve_orchestrator_read_path(config.root, "parallel-workstreams.json")),
+        metadata={
+            "subagent_id": subagent_id,
+            "backend_requested": chosen_backend,
+            "backend_route_reason": backend_route_reason,
+            "backend_cooldown_until": backend_cooldown_until,
+            "provider_policy_plane": "model_plane",
+            "operator_plane": "openclaw",
+        },
+    )
+    try:
+        PlannerGraphRuntime(config.root).observe_dispatch(capability_task)
+    except Exception:
+        pass
+
+    if chosen_backend == "openclaw":
+        chosen_backend = "codex_exec"
+        effective_backend = "codex_exec"
+        backend_route_reason = "openclaw_provider_removed"
+        record.metadata["backend_route_reason"] = backend_route_reason
 
     if active_invalid_route and chosen_backend != "mock":
         chosen_backend = "qwen"
         effective_backend = "qwen"
-        backend_ref = f"qwen:{subagent_id}"
-        if not _planner_qwen_fallback_enabled():
+        qwen_fallback = model_plane_run_qwen_cli_fallback(
+            prompt,
+            timeout_seconds,
+            subagent_id,
+            reason=backend_route_reason,
+            source="invalid_result_route",
+            env=os.environ,
+            which=shutil_which,
+            cwd=config.root,
+        )
+        if qwen_fallback is None:
             rc = 5
+            backend_ref = f"qwen:{subagent_id}"
             stderr = f"qwen_route_disabled:{backend_route_reason}"
-        elif _active_rate_limit_reason(("qwen",)):
-            rc = 5
-            stderr = f"qwen_rate_limited:{backend_route_reason}"
         else:
-            rc, stdout, stderr, backend_ref = _run_qwen_subagent(
-                config,
-                prompt,
-                timeout_seconds,
-                subagent_id,
-            )
+            rc, stdout, stderr, backend_ref = qwen_fallback
     elif chosen_backend == "mock":
         stdout = json.dumps(
             {
@@ -2231,160 +1989,6 @@ def run_subagent(
             },
             ensure_ascii=True,
         )
-    elif chosen_backend == "openclaw":
-        cached_reason = _active_rate_limit_reason(("codex", "global"))
-        fallback_backend = None
-        def _invoke_openclaw_secondary(timeout_override_seconds: int, model_override: str = "", thinking_override: str = "") -> tuple[int, str, str]:
-            with tempfile.TemporaryDirectory(prefix="planner-subagent-") as td:
-                tmpdir = Path(td)
-                schema_path = tmpdir / "schema.json"
-                out_path = tmpdir / "last_message.json"
-                schema_path.write_text(json.dumps(RESULT_SCHEMA, ensure_ascii=True), encoding="utf-8")
-                cmd = [
-                    "codex",
-                    "exec",
-                    "--enable",
-                    "multi_agent",
-                    "--enable",
-                    "apps",
-                    "--enable",
-                    "js_repl",
-                    "-C",
-                    str(config.root),
-                    "--skip-git-repo-check",
-                    "--color",
-                    "never",
-                    "--output-schema",
-                    str(schema_path),
-                    "-o",
-                    str(out_path),
-                    "-m",
-                    str(model_override or plan["model"]),
-                    "-c",
-                    f'model_reasoning_effort="{thinking_override or plan["thinking"]}"',
-                ]
-                sandbox_token = str(plan["sandbox"]).strip().lower()
-                if sandbox_token in {"off", "danger-full-access"}:
-                    cmd.append("--dangerously-bypass-approvals-and-sandbox")
-                else:
-                    cmd.extend(["--sandbox", str(plan["sandbox"])])
-                if sandbox_token == "workspace-write":
-                    cmd.append("--full-auto")
-                timeout_value = _subprocess_timeout_value(timeout_override_seconds)
-                try:
-                    proc = subprocess.run(
-                        cmd + [prompt],
-                        text=True,
-                        capture_output=True,
-                        check=False,
-                        cwd=str(config.root),
-                        timeout=timeout_value,
-                    )
-                    rc_local = proc.returncode
-                    stdout_local = _load_structured_output(out_path)
-                    stderr_local = proc.stderr or ""
-                    if not stdout_local:
-                        normalized_issue = _normalized_retryable_backend_issue(proc.stdout or stderr_local or "")
-                        stderr_local = "\n".join(part for part in (normalized_issue, stderr_local) if str(part or "").strip())
-                        stdout_local = proc.stdout or ""
-                except subprocess.TimeoutExpired as exc:
-                    rc_local = 124
-                    stdout_local = str(exc.stdout or "")
-                    timeout_label = timeout_value if isinstance(timeout_value, int) else "unbounded"
-                    stderr_local = str(exc.stderr or "") or f"codex_exec_timeout_after_{timeout_label}s"
-                return rc_local, stdout_local, stderr_local
-        if cached_reason:
-            fallback_backend = _maybe_run_secondary_then_qwen_fallback(
-                config,
-                plan,
-                prompt,
-                timeout_seconds,
-                subagent_id,
-                cached_reason,
-                "openclaw_cache",
-                _invoke_openclaw_secondary,
-            )
-        if fallback_backend is not None:
-            rc, stdout, stderr, backend_ref = fallback_backend
-            effective_backend = "qwen" if str(backend_ref or "").strip().lower().startswith("qwen:") else "codex_exec"
-        else:
-            openclaw_model = _openclaw_runtime_model(plan["model"], plan["sandbox"])
-            ok, backend_ref = _ensure_openclaw_agent(
-                subagent_id,
-                config.root,
-                openclaw_model,
-                workspace_key=f"planner-{plan['target_role']}",
-                thinking=plan["thinking"],
-            )
-            if not ok:
-                rc, stdout, stderr, backend_ref = _run_codex_exec_subagent(
-                    config,
-                    plan,
-                    prompt,
-                    timeout_seconds,
-                    subagent_id,
-                )
-                chosen_backend = "codex_exec"
-            else:
-                try:
-                    timeout_value = _subprocess_timeout_value(timeout_seconds)
-                    agent_cmd = [
-                        "openclaw",
-                        "agent",
-                        "--agent",
-                        subagent_id,
-                        "--json",
-                        "--thinking",
-                        str(plan["thinking"]),
-                        "--message",
-                        prompt,
-                    ]
-                    if isinstance(timeout_value, int):
-                        agent_cmd.extend(["--timeout", str(timeout_value)])
-                    proc = subprocess.run(
-                        agent_cmd,
-                        text=True,
-                        capture_output=True,
-                        check=False,
-                        env=_openclaw_env(),
-                        timeout=(timeout_value + 15) if isinstance(timeout_value, int) else None,
-                    )
-                    rc = proc.returncode
-                    stdout = proc.stdout or ""
-                    stderr = proc.stderr or ""
-                    openclaw_failure_blob = f"{stdout}\n{stderr}".strip()
-                    if _looks_like_rate_limited(openclaw_failure_blob):
-                        fallback_backend = _maybe_run_secondary_then_qwen_fallback(
-                            config,
-                            plan,
-                            prompt,
-                            timeout_seconds,
-                            subagent_id,
-                            openclaw_failure_blob,
-                            "openclaw",
-                            _invoke_openclaw_secondary,
-                        )
-                        if fallback_backend is not None:
-                            rc, stdout, stderr, backend_ref = fallback_backend
-                            effective_backend = "qwen" if str(backend_ref or "").strip().lower().startswith("qwen:") else "codex_exec"
-                    if effective_backend != "qwen" and rc != 0 and (
-                        "Unknown agent id" in openclaw_failure_blob
-                        or "Gateway agent failed" in openclaw_failure_blob
-                        or "openclaw_agent_not_visible_after_add" in openclaw_failure_blob
-                    ):
-                        rc, stdout, stderr, backend_ref = _run_codex_exec_subagent(
-                            config,
-                            plan,
-                            prompt,
-                            timeout_seconds,
-                            subagent_id,
-                        )
-                        chosen_backend = "codex_exec"
-                except subprocess.TimeoutExpired as exc:
-                    rc = 124
-                    stdout = str(exc.stdout or "")
-                    timeout_label = (timeout_value + 15) if isinstance(timeout_value, int) else "unbounded"
-                    stderr = str(exc.stderr or "") or f"openclaw_timeout_after_{timeout_label}s"
     elif chosen_backend == "codex_exec":
         rc, stdout, stderr, backend_ref = _run_codex_exec_subagent(
             config,
@@ -2404,6 +2008,11 @@ def run_subagent(
         effective_backend = "codex_exec"
     elif effective_backend != "qwen":
         effective_backend = chosen_backend
+    if backend_route_reason in {"", "none"}:
+        if backend_ref_token.startswith("codex_exec:") and str(backend_ref or "").count(":") >= 2:
+            backend_route_reason = "secondary_codex_fallback"
+        elif backend_ref_token.startswith("qwen:") or effective_backend == "qwen":
+            backend_route_reason = "qwen_fallback"
 
     config.results_dir.mkdir(parents=True, exist_ok=True)
     raw_path = config.results_dir / f"{subagent_id}.raw.txt"
@@ -2416,11 +2025,6 @@ def run_subagent(
             normalized_error = line0
             break
     result_source = normalized_error or (stdout if stdout else stderr)
-    if effective_backend == "openclaw" and stdout:
-        extracted_text, extracted_ref = _extract_openclaw_payload_text(stdout)
-        result_source = extracted_text or stdout
-        if extracted_ref:
-            backend_ref = extracted_ref
     result = _parse_result_payload(
         result_source,
         subagent_id,
@@ -2430,15 +2034,19 @@ def run_subagent(
         task_kind,
         effective_backend,
     )
-    result.raw_output_ref = str(raw_path.relative_to(config.root))
+    result.raw_output_ref = _runtime_relpath(raw_path, config.root)
     result.backend_ref = backend_ref
     result.started_at = record.created_at
     result.finished_at = _iso()
-    route_reason_value, result_model, result_thinking = _effective_backend_details(
+    route_reason_value, result_model, result_thinking = model_plane_resolve_effective_backend_details(
         plan,
         effective_backend,
         backend_ref,
         backend_route_reason,
+        env=os.environ,
+        default_qwen_model="qwen",
+        default_secondary_model=SECONDARY_CODEX_DEFAULT_MODEL,
+        default_secondary_thinking=SECONDARY_CODEX_DEFAULT_THINKING,
     )
     result.backend_route_reason = route_reason_value
     result.model = result_model
@@ -2495,6 +2103,50 @@ def run_subagent(
                             result.recommended_next = "planner_retry_with_qwen_after_invalid_result_burst"
     result_path = config.results_dir / f"{subagent_id}.result.json"
     result_path.write_text(json.dumps(result.as_dict(), indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    capability_result = CapabilityResult(
+        batch_id=_planner_batch_id(owner_task_id),
+        task_id=owner_task_id,
+        owner_role=plan["parent_role"],
+        target_role=plan["target_role"],
+        backend=effective_backend,
+        status=str(result.status or ""),
+        rc=int(rc or 0),
+        summary=str(result.summary or ""),
+        blocking_issue=str(result.blocking_issue or "none"),
+        artifact=str(result.artifact or "none"),
+        verify=str(result.verify or "none"),
+        files_touched=str(result.files_touched or "none"),
+        tests_run=str(result.tests_run or "none"),
+        commit_sha=str(result.commit_sha or "none"),
+        raw_output_ref=str(result.raw_output_ref or ""),
+        backend_ref=str(result.backend_ref or ""),
+        result_path=_runtime_relpath(result_path, config.root),
+        metadata={
+            "subagent_id": subagent_id,
+            "backend_requested": capability_task.metadata.get("backend_requested", ""),
+            "backend_used": effective_backend,
+            "backend_route_reason": route_reason_value,
+        },
+    )
+    delivery_proof = None
+    if _result_has_delivery_proof(result, target_role=plan["target_role"]):
+        delivery_proof = DeliveryProof(
+            batch_id=_planner_batch_id(owner_task_id),
+            task_id=owner_task_id,
+            artifact=str(result.artifact or "none"),
+            verify=str(result.verify or "none"),
+            tests_run=str(result.tests_run or "none"),
+            commit_sha=str(result.commit_sha or "none"),
+            summary=str(result.summary or ""),
+        )
+    try:
+        PlannerGraphRuntime(config.root).observe_result(
+            capability_task,
+            capability_result,
+            delivery_proof=delivery_proof,
+        )
+    except Exception:
+        pass
     if effective_backend == "qwen" and str(result.status).strip().lower() in SUCCESS_RESULT_STATUSES:
         _clear_invalid_result_route(config, owner_task_id, plan["target_role"])
         backend_cooldown_until = ""
@@ -2530,9 +2182,9 @@ def run_subagent(
             break
     _save_registry(config.registry_path, records)
     emitted = next((row for row in records if row.subagent_id == subagent_id), record)
-    _emit_event(config, "planner_subagent_result", emitted, {"rc": rc, "result_path": str(result_path.relative_to(config.root))})
+    _emit_event(config, "planner_subagent_result", emitted, {"rc": rc, "result_path": _runtime_relpath(result_path, config.root)})
     if plan["parent_role"] == "planner" and plan["target_role"] in config.managed_roles:
-        _trigger_bridge_collect(config, owner_task_id=owner_task_id, target_role=plan["target_role"])
+        _trigger_runtime_collect(config, owner_task_id=owner_task_id, target_role=plan["target_role"])
     payload = result.as_dict()
     payload["ok"] = rc == 0 and str(result.status).strip().lower() in SUCCESS_RESULT_STATUSES
     payload["rc"] = rc
@@ -2758,20 +2410,59 @@ def cleanup_subagents(config: PlannerSubagentConfig) -> dict[str, Any]:
 
 
 def status_snapshot(config: PlannerSubagentConfig, role: str = "") -> dict[str, Any]:
-    records = _records_from_registry(_load_registry(config.registry_path))
-    records, removed = _cleanup_records(config, records)
-    if removed:
-        _save_registry(config.registry_path, records)
+    records = []
     role_token = canonical_role(role) if role else ""
-    filtered = [record for record in records if not role_token or record.parent_role == role_token]
+    runtime_truth_source = "fallback"
+    event_store_primary = False
 
-    active = [record.as_dict() for record in filtered if _record_effectively_active(config, record)]
-    active.sort(key=lambda row: str(row.get("last_update_at") or row.get("created_at") or ""), reverse=True)
-    recent = [record.as_dict() for record in filtered if record.status in FINISHED_STATUSES]
-    recent.sort(key=lambda row: str(row.get("merged_at") or row.get("last_update_at") or row.get("created_at") or ""), reverse=True)
-    recent = recent[:8]
+    def _normalize_dispatch_row(row: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(row)
+        normalized["target_role"] = str(row.get("target_role") or row.get("role", "")).strip()
+        normalized["role"] = str(row.get("role") or row.get("target_role", "")).strip()
+        normalized["parent_role"] = str(row.get("parent_role") or "planner").strip()
+        normalized["monitor_agent_id"] = str(row.get("monitor_agent_id", "")).strip()
+        normalized["target_agent_id"] = str(row.get("target_agent_id", "")).strip()
+        normalized["last_update_at"] = str(row.get("last_update_at", "")).strip()
+        normalized["created_at"] = str(row.get("created_at", "")).strip()
+        normalized["merged_at"] = str(row.get("merged_at", "")).strip()
+        normalized["summary"] = str(row.get("summary", "")).strip()
+        normalized["blocking_issue"] = str(row.get("blocking_issue", "")).strip()
+        normalized["last_meaningful_delta"] = _normalize_meaningful_delta(row.get("last_meaningful_delta"), fallback="none")
+        return normalized
 
-    active_openclaw_ids = _openclaw_agent_ids()
+    try:
+        dispatch_snapshot = build_stable_planner_dispatch_snapshot(config.root, recent_limit=8)
+    except Exception:
+        dispatch_snapshot = {}
+    runtime_truth_source = str(dispatch_snapshot.get("runtime_truth_source", "fallback") or "fallback").strip().lower()
+    event_store_primary = bool(dispatch_snapshot.get("event_store_primary", False))
+
+    if runtime_truth_source == "sqlite":
+        active = [
+            _normalize_dispatch_row(row)
+            for row in dispatch_snapshot.get("active", [])
+            if isinstance(row, dict) and (not role_token or canonical_role(row.get("parent_role", "")) == role_token)
+        ]
+        active.sort(key=lambda row: str(row.get("last_update_at") or row.get("created_at") or ""), reverse=True)
+        recent = [
+            _normalize_dispatch_row(row)
+            for row in dispatch_snapshot.get("recent", [])
+            if isinstance(row, dict) and (not role_token or canonical_role(row.get("parent_role", "")) == role_token)
+        ]
+        recent.sort(key=lambda row: str(row.get("merged_at") or row.get("last_update_at") or row.get("created_at") or ""), reverse=True)
+        recent = recent[:8]
+    else:
+        records = _records_from_registry(_load_registry(config.registry_path))
+        records, removed = _cleanup_records(config, records)
+        if removed:
+            _save_registry(config.registry_path, records)
+        filtered = [record for record in records if not role_token or record.parent_role == role_token]
+        active = [record.as_dict() for record in filtered if _record_effectively_active(config, record)]
+        active.sort(key=lambda row: str(row.get("last_update_at") or row.get("created_at") or ""), reverse=True)
+        recent = [record.as_dict() for record in filtered if record.status in FINISHED_STATUSES]
+        recent.sort(key=lambda row: str(row.get("merged_at") or row.get("last_update_at") or row.get("created_at") or ""), reverse=True)
+        recent = recent[:8]
+
     anomaly_after_seconds = max(300, int(os.environ.get("FC_PLANNER_NATIVE_DELTA_STALE_SECONDS", "1800")))
     now = _now()
     anomalies: list[dict[str, Any]] = []
@@ -2784,7 +2475,7 @@ def status_snapshot(config: PlannerSubagentConfig, role: str = "") -> dict[str, 
         last_update_at = _parse_iso(str(row.get("last_update_at", "")).strip()) or _parse_iso(str(row.get("created_at", "")).strip())
         age_seconds = int((now - last_update_at).total_seconds()) if last_update_at else -1
         delta = _normalize_meaningful_delta(row.get("last_meaningful_delta"), fallback="none")
-        if backend == "openclaw" and subagent_id and subagent_id not in active_openclaw_ids and not _subagent_launcher_alive(subagent_id):
+        if backend == "openclaw" and subagent_id and not _subagent_launcher_alive(subagent_id):
             anomalies.append({"code": "agent_referenced_missing", "subagent_id": subagent_id})
         if monitor_agent_id and target_agent_id and target_agent_id not in known_ids:
             anomalies.append({"code": "monitor_without_target", "subagent_id": subagent_id, "target_agent_id": target_agent_id})
@@ -2818,7 +2509,7 @@ def status_snapshot(config: PlannerSubagentConfig, role: str = "") -> dict[str, 
             bucket["fallback_like"] += 1
 
     latest = active[0] if active else (recent[0] if recent else {})
-    active_invalid_routes = _active_invalid_result_routes(config)
+    active_invalid_routes = [] if event_store_primary else _active_invalid_result_routes(config)
     latest_invalid_route = active_invalid_routes[0] if active_invalid_routes else {}
     latest_status = str(latest.get("status", "")).strip().lower()
     latest_backend = str(latest.get("backend", "")).strip().lower()
@@ -2851,6 +2542,14 @@ def status_snapshot(config: PlannerSubagentConfig, role: str = "") -> dict[str, 
         "ok": True,
         "enabled": config.enabled,
         "cron_planner_only": config.cron_planner_only,
+        "legacy_compat_only": True,
+        "decision_capable": False,
+        "storage_plane": "runtime_mutable",
+        "provider_policy_plane": "model_plane",
+        "operator_plane": "openclaw",
+        "runtime_truth_source": runtime_truth_source,
+        "event_store_primary": event_store_primary,
+        "registry_secondary_only": True,
         "role": role_token,
         "active_count": len(active),
         "max_active": config.max_active,
@@ -2885,8 +2584,13 @@ def status_snapshot(config: PlannerSubagentConfig, role: str = "") -> dict[str, 
         "planner_state": planner_state,
         "status": planner_state,
         "anomalies": anomalies[:8],
-        "events_path": str(config.events_path.relative_to(config.root)),
-        "registry_path": str(config.registry_path.relative_to(config.root)),
+        "compat_registry_present": False if event_store_primary else config.registry_path.exists(),
+        "compat_events_present": False if event_store_primary else config.events_path.exists(),
+        "compat_results_present": False if event_store_primary else config.results_dir.exists(),
+        "events_path": "secondary_compat_only",
+        "registry_path": "secondary_compat_only",
+        "secondary_registry_path": "secondary_compat_only",
+        "active_storage_root": "secondary_compat_only" if event_store_primary else _runtime_relpath(config.registry_path.parent, config.root),
     }
 
 
@@ -2897,24 +2601,25 @@ def prompt_context(config: PlannerSubagentConfig, role: str) -> str:
     max_active = int(snapshot.get("max_active", 0) or 0)
     active_count = int(snapshot.get("active_count", 0) or 0)
     open_slots = max(0, max_active - active_count)
-    active_bits = [f"{item.get('target_role')}:{item.get('owner_task_id')}:{item.get('status')}" for item in active[:3]]
-    recent_bits = [f"{item.get('target_role')}:{item.get('owner_task_id')}:{_compact(item.get('summary', ''), 80)}" for item in recent[-3:]]
+    active_bits = [f"{item.get('target_role') or item.get('role')}:{item.get('owner_task_id')}:{item.get('status')}" for item in active[:3]]
+    recent_bits = [f"{item.get('target_role') or item.get('role')}:{item.get('owner_task_id')}:{_compact(item.get('summary', ''), 80)}" for item in recent[-3:]]
     return (
         f"planner_orchestrator_enabled={1 if config.enabled else 0} | "
         f"planner_cron_only={1 if config.cron_planner_only else 0} | "
+        f"planner_subagent_storage_plane=runtime_mutable | "
         f"planner_subagent_open_slots={open_slots} | "
         f"planner_subagent_active={'; '.join(active_bits) if active_bits else 'none'} | "
         f"planner_subagent_recent={'; '.join(recent_bits) if recent_bits else 'none'}"
     )
 
 
-def _trigger_bridge_collect(config: PlannerSubagentConfig, owner_task_id: str, target_role: str) -> None:
-    bridge_path = config.root / "platform" / "automation" / "planner_orchestrator_bridge.py"
-    if not bridge_path.exists():
+def _trigger_runtime_collect(config: PlannerSubagentConfig, owner_task_id: str, target_role: str) -> None:
+    runtime_actions_path = config.root / "platform" / "automation" / "runtime" / "planner" / "planner_runtime_actions.py"
+    if not runtime_actions_path.exists():
         return
     cmd = [
         os.environ.get("PYTHON", "python3"),
-        str(bridge_path),
+        str(runtime_actions_path),
         "--root",
         str(config.root),
         "--role",
@@ -2942,6 +2647,10 @@ def _trigger_bridge_collect(config: PlannerSubagentConfig, owner_task_id: str, t
         return
 
 
+def _trigger_bridge_collect(config: PlannerSubagentConfig, owner_task_id: str, target_role: str) -> None:
+    _trigger_runtime_collect(config, owner_task_id, target_role)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Planner-owned Codex subagent manager")
     parser.add_argument("--root", default=str(Path.cwd()))
@@ -2960,7 +2669,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--task-kind", default="delivery")
     p_run.add_argument("--message", required=True)
     p_run.add_argument("--ttl-min", type=int, default=0)
-    p_run.add_argument("--backend", default="auto", choices=["auto", "openclaw", "codex_exec", "mock"])
+    p_run.add_argument("--backend", default="auto", choices=["auto", "codex_exec", "mock"])
     p_run.add_argument("--timeout-seconds", type=int, default=240)
     p_run.add_argument("--subagent-id", default="")
 
@@ -2981,14 +2690,36 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _canonical_runtime_root(root: Path) -> Path:
-    canonical = Path("/home/venom/analyse-financiere")
     try:
-        if canonical.exists() and (canonical / "platform").is_dir() and (canonical / "scripts").is_dir():
-            if str(root).startswith("/home/venom/shared/analyse-financiere"):
-                return canonical
+        if CANONICAL_VM_ROOT.exists() and (CANONICAL_VM_ROOT / "platform").is_dir() and (CANONICAL_VM_ROOT / "scripts").is_dir():
+            if str(root).startswith(str(SHARED_VM_ROOT)):
+                return CANONICAL_VM_ROOT
     except Exception:
         pass
     return root
+
+
+def _runtime_relpath(path: Path, root: Path) -> str:
+    candidate_path = Path(path)
+    candidate_root = Path(root)
+    try:
+        if str(candidate_path).startswith(str(SHARED_VM_ROOT)):
+            candidate_path = CANONICAL_VM_ROOT / candidate_path.relative_to(SHARED_VM_ROOT)
+        elif str(candidate_path).startswith(str(CANONICAL_VM_ROOT)):
+            candidate_path = CANONICAL_VM_ROOT / candidate_path.relative_to(CANONICAL_VM_ROOT)
+    except Exception:
+        candidate_path = Path(path)
+    try:
+        if str(candidate_root).startswith(str(SHARED_VM_ROOT)):
+            candidate_root = CANONICAL_VM_ROOT / candidate_root.relative_to(SHARED_VM_ROOT)
+        elif str(candidate_root).startswith(str(CANONICAL_VM_ROOT)):
+            candidate_root = CANONICAL_VM_ROOT / candidate_root.relative_to(CANONICAL_VM_ROOT)
+    except Exception:
+        candidate_root = Path(root)
+    try:
+        return str(candidate_path.relative_to(candidate_root))
+    except Exception:
+        return str(candidate_path)
 
 
 def main() -> int:

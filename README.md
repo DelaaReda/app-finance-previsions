@@ -20,6 +20,10 @@
 ---
 
 ## Démarrer / arrêter
+- Afficher le brief du jour en CLI :
+  ```bash
+  ./finance-copilot.sh brief
+  ```
 - (Re)lancer backend + jobs + frontend statique :
   ```bash
   ./finance-copilot.sh restart
@@ -103,10 +107,6 @@
 - Primary command:
   ```bash
   scripts/use-claude-deep-troubleshoot.sh
-  ```
-- Compatibility alias:
-  ```bash
-  scripts/use-claude-deep-troobleshoot.sh
   ```
 
 ## Claude Desktop UI I/O (Input -> Output)

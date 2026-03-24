@@ -1,0 +1,81 @@
+{
+  "task_id": "BATCH-24-ADMIN-01",
+  "captured_at": "2026-03-13T06:26:00Z",
+  "status": "blocked_after_runtime_fix",
+  "runtime_fix": {
+    "summary": "Restore strict runtime-first orchestrator reads so live monitor/API consumers do not regress to newer-but-stale docs projections.",
+    "files": [
+      "platform/automation/orchestrator_paths.py",
+      "platform/automation/parallel_workstream.py",
+      "platform/automation/tests/test_orchestrator_paths.py"
+    ],
+    "verification": {
+      "tests": "python3 platform/automation/tests/test_orchestrator_paths.py",
+      "result": "pass"
+    }
+  },
+  "live_runtime": {
+    "host_check": {
+      "runtime_is_vm": 1,
+      "workspace": "/home/venom/analyse-financiere"
+    },
+    "monitor_status": {
+      "url": "http://192.168.64.9:7780/api/status?lite=1",
+      "http_status": 200,
+      "health": "DEGRADED",
+      "queue_active": [
+        {
+          "id": "BATCH-25",
+          "state": "WAITING_DEP"
+        }
+      ],
+      "queue_waiting_dep": 1,
+      "queue_in_progress": 0,
+      "queue_source": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+      "workboard_source": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json",
+      "evidence": "BATCH-24 no longer appears as the live WAITING_DEP item on the canonical monitor path."
+    },
+    "runtime_diagnostics": {
+      "url": "http://192.168.64.9:7780/api/runtime-diagnostics?lite=1",
+      "http_status": 200,
+      "health": "DEGRADED",
+      "planner_blocker_id": "PLANNER_ORCHESTRATOR_BRIDGE_FAILED",
+      "top_findings": [
+        "NO_RUNTIME_ANOMALY"
+      ]
+    }
+  },
+  "api_contract": {
+    "copilot_start_url": "http://127.0.0.1:8050/api/copilot/start",
+    "http_status": 200,
+    "brief_summary": "Daily market brief: BEARISH. 0 opportunites haussieres, 1 risques majeurs.",
+    "top_risk_example": {
+      "ticker": "AAPL",
+      "priority": "medium",
+      "priority_score": 37.7,
+      "horizon": "1w",
+      "alert_fingerprint": "AAPL:1w:bearish",
+      "suppressed": false,
+      "duplicate_count": 0,
+      "urgent_bypass": false
+    },
+    "backward_compatibility": "ok_existing_brief_route_still_returns brief_of_day summary/source/generated_at while carrying new alerting fields."
+  },
+  "proof_gap": {
+    "alerts_snapshot": "apps/api/runtime/data/alerts.json",
+    "generated_at": "2026-03-13T06:24:16.497427Z",
+    "active_count": 0,
+    "suppressed_count": 0,
+    "pipeline": {
+      "dedupe": true,
+      "priority_ordering": true,
+      "suppression_window_minutes": 15,
+      "fatigue_threshold": 2
+    },
+    "warnings": [
+      "no_news_rows"
+    ],
+    "blocking_reason": "Live runtime data does not currently contain a suppressed duplicate or urgent alert, so ADMIN-01 cannot produce the required live examples for dedupe reduction and <=60s urgent surfacing."
+  },
+  "next_planner_action": "Repair planner capability bridge, refresh canonical forecast/news inputs to produce at least one suppressed duplicate and one urgent alert on the live pipeline, then rerun BATCH-24-ADMIN-01 proof capture."
+}

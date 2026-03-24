@@ -22,7 +22,7 @@ superseded_by:
 - `bash -n scripts/fc_setup_crons.sh`
 - `bash -n platform/automation/cron_tmux_role_runner.sh`
 - `python3 -m py_compile apps/monitor/server.py`
-- `python3 -m py_compile platform/automation/parallel_workstream.py`
+- `python3 -m py_compile platform/automation/compat/projections/parallel_workstream.py`
 - focused pytest suites for monitor/runner/workstream
 - 2026-03-06T10:46Z baseline snapshot (pre-patch): health=DEGRADED, doctor=degraded, queue mismatch samples={BATCH-27 READY_PLANNER/READY, BATCH-55 READY_DEV/WAITING_DEP, BATCH-56 READY_DEV/WAITING_DEP}, agents={planner:IN_PROGRESS,dev:READY,admin:BLOCKED,scrum:WAIT}.
 - 2026-03-06T10:50Z patch set applied:
@@ -41,7 +41,7 @@ superseded_by:
 
 ## 2026-03-06 06:35 ET — READY_DEV alignment + admin runtime false-blocker normalization
 - Scope:
-  - `platform/automation/parallel_workstream.py`
+  - `platform/automation/compat/projections/parallel_workstream.py`
   - `platform/automation/cron_tmux_role_runner.sh`
   - `platform/automation/tests/test_parallel_workstream_queue_sync.py`
 - Changes:
@@ -58,7 +58,7 @@ superseded_by:
   - `docs/operations/orchestrator/proofs/runtime-gate/doctor_postfix_20260306T113544Z.json`
 - Validation:
   - `bash -n platform/automation/cron_tmux_role_runner.sh` OK
-  - `python3 -m py_compile platform/automation/parallel_workstream.py platform/policies/role_contract_guard.py` OK
+  - `python3 -m py_compile platform/automation/compat/projections/parallel_workstream.py platform/policies/role_contract_guard.py` OK
   - `pytest` targeted suite: 13 passed
 - Runtime outcome (2 consecutive cycles):
   - health=OK

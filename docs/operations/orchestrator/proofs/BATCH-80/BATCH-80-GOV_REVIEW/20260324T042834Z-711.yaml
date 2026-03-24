@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-80-BATCH-80-GOV_REVIEW-20260324T042834Z-711"
+stream_id: "BATCH-80"
+task_id: "BATCH-80-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-03-24T04:28:34Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(governance review only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T04:28:34Z"
+      ended_at_utc: "2026-03-24T04:28:34Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(governance review only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-gov-review-20260324T042700Z"
+  review_ref: "runner:BATCH-80-GOV_REVIEW"
+  note: "source=runner | root_cause=planner GOV_REVIEW remained open after downstream orchestration matured | fix_applied=completed planner governance review with canonical architecture refs and delivery proof | verify=before=planner context reported BATCH-80-GOV_REVIEW as sole in-progress task; after=planner governance review completion requested with canonical artifact; test=parallel_workstream context executed successfully for planner role | architecture_check=architecture_plan_ref=docs/architecture/ARCHITECTURE_MAP.md; implementation_tracks=apps/api|apps/web; integration_reuse=apps/api/src/domains|apps/web/src; acceptance_gate=gov_review_complete | vision_alignment=batch=BATCH-80; target=personal finance copilot governance closure; impact=planner lane can advance without review debt"

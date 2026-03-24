@@ -1,0 +1,62 @@
+{
+  "task_id": "BATCH-63-ADMIN-01",
+  "stream": "BATCH-63",
+  "role": "admin",
+  "captured_at_utc": "2026-03-14T02:39:30Z",
+  "scope": "Validate runtime truth and observability for the personal finance copilot after BATCH-63-DEV-03.",
+  "runtime_host_check": {
+    "runtime_is_vm": true,
+    "workspace": "/home/venom/analyse-financiere"
+  },
+  "product_runtime_checks": {
+    "personal_finance_start": {
+      "ok": true,
+      "brief_summary_present": true,
+      "ask_count": 3,
+      "open_count": 3,
+      "generated_at": "2026-03-14T02:36:35.796639Z"
+    },
+    "personal_finance_ask": {
+      "ok": true,
+      "verdict": "hold",
+      "confidence": 0.4,
+      "sources_count": 5
+    }
+  },
+  "observability_checks": {
+    "fc_health_check": {
+      "overall": "DEGRADED",
+      "backend": "UP",
+      "frontend": "UP",
+      "monitor_contract": "PASS",
+      "forecasts_available": true,
+      "news_available": true,
+      "planner_session": "codex_planner_cron",
+      "cron_agent_jobs": 1
+    },
+    "monitor_contract_smoke": "PASS primary_status=degraded roles=1 agents=4 queue_states=1 workboard_ready=0 admin_timeouts_recent=0 issues_records=2",
+    "status_brief": "Santé: DEGRADED · mode=planner_experimental · freshness=fresh/80s"
+  },
+  "runtime_truth": {
+    "batch_63_admin_state": "IN_PROGRESS",
+    "batch_63_gov_review_state": "WAITING_DEP",
+    "planner_status": "BLOCKED",
+    "planner_blocker": "PLANNER_RUNTIME_ACTIONS_FAILED",
+    "planner_next": "owner=planner; action=repair planner runtime actions now"
+  },
+  "root_cause": "The product slice is live, but planner-owned runtime actions are failing to materialize or dispatch BATCH-63-ADMIN-01 cleanly. The latest planner contracts report GLOBAL_READY_NOT_MATERIALIZED_FOR_PLANNER while monitor status reports planner blocker PLANNER_RUNTIME_ACTIONS_FAILED.",
+  "unblock_assessment": "blocked",
+  "next_planner_action": "Repair planner runtime actions for BATCH-63 so the READY admin work can materialize into a mergeable dispatch path, then rerun ADMIN-01 verification.",
+  "evidence": [
+    "bash scripts/runtime_host_check.sh",
+    "bash scripts/fc_health_check.sh",
+    "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779",
+    "curl http://127.0.0.1:8050/api/personal-finance/start",
+    "curl -X POST http://127.0.0.1:8050/api/personal-finance/ask",
+    "curl http://127.0.0.1:7779/api/status?lite=1",
+    "curl http://127.0.0.1:7779/api/runtime-diagnostics?lite=1",
+    "bash scripts/fc_status_brief.sh",
+    "tail -n 120 logs-codex-runs/role-runner/planner.live.log",
+    "sed -n '1,220p' .tmp/role-runner/planner/tmp.6m8m31JWhA"
+  ]
+}

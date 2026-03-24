@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-70-BATCH-70-ANALYSIS-20260320T153242Z-289"
+stream_id: "BATCH-70"
+task_id: "BATCH-70-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-20T15:32:42Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_task)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T15:32:42Z"
+      ended_at_utc: "2026-03-20T15:32:42Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_task)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "planner-b70-analysis-complete-20260320t153113z"
+  review_ref: "/home/venom/analyse-financiere/docs/ops/ACTIVE_DOCS_INDEX.md,/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md,/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md"
+  note: "Analyse planner BATCH-70 bouclee sur les sources canoniques; lot pret pour dispatch dev sur BATCH-70-DEV-01."

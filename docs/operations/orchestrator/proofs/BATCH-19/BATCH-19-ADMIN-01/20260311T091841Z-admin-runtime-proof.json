@@ -1,0 +1,37 @@
+{
+  "task_id": "BATCH-19-ADMIN-01",
+  "stream_id": "BATCH-19",
+  "role": "admin",
+  "produced_at_utc": "2026-03-11T09:18:41Z",
+  "status": "unblocked",
+  "summary": "Explainability Graph + Source Traceability runtime validation completed. All runtime probes confirm the Judge endpoint serves the explainability graph contract, web traceability tests pass, and monitor observability is healthy.",
+  "root_cause": "No runtime blocker found. Previous monitor instability (documented in earlier proofs) was resolved via runtime-only repair. The live Judge endpoint on :8050 serves the new explainability graph and source-traceability contract, and monitor observability on :7779 is healthy.",
+  "fix_applied": "SKIP(no_code_or_config_change_needed). Runtime validation only - all systems operational. Previous monitor repair (restart of canonical monitor server) remains stable.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-19/BATCH-19-ADMIN-01/20260311T091841Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "judge_runtime": "PASS GET /api/judge?limit=1&ticker=AAPL => explainability=true, schema_version=judge_explainability_graph_v1, source_traceability=true",
+    "judge_traceability_contract": "PASS data.explainability.source_traceability present with supporting_sources[].link_status and freshness markers",
+    "judge_metadata_tests": "PASS pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -k 'weighted_source_traceability or invalid_source_links' => 2 passed",
+    "web_traceability_tests": "PASS node --test apps/web/src/domains/forecasts/pages/app.test.js --test-name-pattern='explainability graph|source traceability' => 69 passed",
+    "monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=3 workboard_ready=0",
+    "fc_status_brief": "PASS health=OK mode=planner_experimental freshness=fresh",
+    "runtime_diagnostics_lite": "PASS health=OK",
+    "batch_state": "BATCH-19 has 3/4 tasks DONE, 1 PLANNED (ADMIN-01 itself)"
+  },
+  "files_touched": "1 file: docs/operations/orchestrator/proofs/BATCH-19/BATCH-19-ADMIN-01/20260311T091841Z-admin-runtime-proof.json",
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "curl -sS --max-time 15 'http://127.0.0.1:8050/api/judge?limit=1&ticker=AAPL'",
+    "python3 -m pytest apps/api/src/domains/judge/tests/test_judge_metadata_contract.py -k 'weighted_source_traceability or invalid_source_links' -q",
+    "node --test apps/web/src/domains/forecasts/pages/app.test.js --test-name-pattern='explainability graph|source traceability'",
+    "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779 --timeout 20",
+    "bash scripts/fc_status_brief.sh",
+    "curl -sS --max-time 20 http://127.0.0.1:7779/api/runtime-diagnostics?lite=1"
+  ],
+  "commit_sha": "SKIP(no_code_or_config_change)",
+  "architecture_check": "PASS(batch-scoped runtime validation only): existing Judge API (apps/api/src/domains/judge/application/judge_endpoint_service.py:_build_explainability_graph), web traceability rendering (apps/web/src/domains/forecasts/pages/app.test.js), and monitor observability surfaces reused without schema or config changes.",
+  "vision_alignment": "PASS(BATCH-19): acceptance evidence covers weighted sources, freshness markers, link-status traceability, zero broken-source count on live payload, and healthy monitor visibility after the dev chain.",
+  "recommended_next": "Planner can merge BATCH-19-ADMIN-01 and close BATCH-19 stream. All runtime probes confirm the explainability graph + source traceability feature is operational and observable.",
+  "blocking_issue": "none"
+}

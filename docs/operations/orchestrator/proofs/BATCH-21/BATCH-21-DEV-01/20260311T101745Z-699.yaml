@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-21-BATCH-21-DEV-01-20260311T101745Z-699"
+stream_id: "BATCH-21"
+task_id: "BATCH-21-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-11T10:17:45Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope paper trading simulator + execution journal [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_paper_trading_simulator_+_execution_journal_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T10:17:45Z"
+      ended_at_utc: "2026-03-11T10:17:45Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest apps/api/src/domains/copilot/tests/test_decision_journal.py apps/api/src/domains/copilot/tests/test_decision_journal_routes.py"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "POST `/api/copilot/paper-trades/execute` returning `fill_assumptions`, `position`, `pnl`, and persisted under `copilot_paper_trade_execution_records`; GET `/api/copilot/decision-journal` now includes `paper_trade_executi"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-21-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-21-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=BATCH-21 had no execution entrypoint tying a recommendation/decision to an append-only paper trade record, so fill assumptions and PnL could not be journaled from the existing copilot backend flow. | fix_applied=Extended `apps/api/src/domains/copilot/application/decision_journal.py` with paper-trade execution storage/calculation helpers and journal enrichment, then added `POST /api/copilot/paper-trades/execute` in `apps/api/src/ | verify=before=no paper-trade execution endpoint and no execution records attached to decision journal; after=`/api/copilot/paper-trades/execute` journals fill assumptions + unrealized PnL and `get_decision_journal()` exposes `p | architecture_check=layer=route orchestrator in `api/copilot.py`, business/storage logic in `application/decision_journal.py`; imports_ok=yes, route only calls application service and reuses existing copilot journal module; path_target=apps | vision_alignment=batch=BATCH-21; target=backend-first paper trading simulator + execution journal vertical slice; impact=recommendation-linked paper executions can now be recorded with fee/slippage assumptions and surfaced through the ex"

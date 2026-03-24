@@ -83,6 +83,14 @@ def _action_from_token(token: str) -> str:
     up = str(token or "").upper()
     if not up:
         return "NOOP"
+    if up.endswith("_DELTA"):
+        if up == "TEST_DELTA":
+            return "TEST"
+        if up in {"ARTIFACT_DELTA", "CODE_DELTA"}:
+            return "PATCH"
+        return "PROGRESS"
+    if up.endswith("BRIDGE_RESULT") or up == "BRIDGE_RESULT":
+        return "PROGRESS"
     if "CLAIM" in up:
         return "CLAIM"
     if "COMPLETE" in up or "DONE" in up:
@@ -123,15 +131,6 @@ def _build_orchestrator_event_rows(
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for raw in _tail_lines(path, max_lines):
-    token_text = str(token or "").strip().upper()
-    if token_text.endswith("_DELTA"):
-        if token_text == "TEST_DELTA":
-            return "TEST"
-        if token_text in {"ARTIFACT_DELTA", "CODE_DELTA"}:
-            return "PATCH"
-        return "PROGRESS"
-    if token_text.endswith("BRIDGE_RESULT") or token_text == "BRIDGE_RESULT":
-        return "PROGRESS"
         line = raw.strip()
         if not line:
             continue

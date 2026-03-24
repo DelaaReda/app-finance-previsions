@@ -23,9 +23,9 @@ CONTRACT_KEYS = {
     "NEXT_ACTION_UNIQUE",
 }
 
-DEFAULT_QUEUE_FILE = Path(os.environ.get("EXEC_MONITOR_QUEUE_FILE", "docs/orchestrator-ops/priority-queue.json"))
+DEFAULT_QUEUE_FILE = Path(os.environ.get("EXEC_MONITOR_QUEUE_FILE", "logs-codex-runs/orchestrator-state/priority-queue.json"))
 DEFAULT_WORKBOARD_FILE = Path(
-    os.environ.get("EXEC_MONITOR_WORKBOARD_FILE", "docs/orchestrator-ops/parallel-workstreams.json")
+    os.environ.get("EXEC_MONITOR_WORKBOARD_FILE", "logs-codex-runs/orchestrator-state/parallel-workstreams.json")
 )
 ISSUE_CODE_RE = re.compile(r"^[a-z0-9_]{3,64}$")
 ISSUE_SEVERITIES = {"none", "low", "medium", "high", "critical"}

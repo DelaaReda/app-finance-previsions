@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T183512Z-923"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T18:35:12Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T18:35:12Z"
+      ended_at_utc: "2026-03-24T18:35:12Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_required)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/.tmp/role-runner/planner/BATCH-84-ANALYSIS-architecture-audit.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "BATCH-84-ANALYSIS_CLOSE_P1774377133_2233"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=guardian_missing_architecture_refs_and_state_transition_stuck | fix_applied=reused_existing_architecture_audit_and_canonical_refs_for_planner_closure | verify=before=BATCH-84-ANALYSIS:IN_PROGRESS_with_BATCH-84-PLAN_DONE; after=BATCH-84-ANALYSIS:complete_requested; test=parallel_workstream_context_role_planner_limit5_rc0 | architecture_check=architecture_plan_ref=docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md|docs/product/PRODUCT_VISION.md; architecture_audit=apps/api/src/domains/*,apps/web/src,apps/api/runtime/; dependency_policy=intra_stream_BATCH_84; acceptance_gate=BATCH-84-ADMIN-01 | vision_alignment=batch=BATCH-84; target=brief_du_jour_et_ouverture_analysis; impact=fermeture_ANALYSIS_pour_reprise_ADMIN_01"

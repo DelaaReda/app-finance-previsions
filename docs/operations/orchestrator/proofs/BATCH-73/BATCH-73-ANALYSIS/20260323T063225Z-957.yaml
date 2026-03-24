@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-73-BATCH-73-ANALYSIS-20260323T063225Z-957"
+stream_id: "BATCH-73"
+task_id: "BATCH-73-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-23T06:32:25Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(runtime_no_code)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T06:32:25Z"
+      ended_at_utc: "2026-03-23T06:32:25Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_doc_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/product/PRODUCT_VISION.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner_complete_batch73_analysis_P1774247415_16773"
+  review_ref: "runner:BATCH-73-ANALYSIS"
+  note: "source=runner | root_cause=BATCH-73-ANALYSIS est restee IN_PROGRESS alors que la file n a aucun READY et que GOV_REVIEW attend uniquement sa cloture planner | fix_applied=Le planner clot la tache ANALYSIS qu il possede directement avec preuve runtime au lieu de traiter WAITING_DEP comme un faux blocage | verify=before=parallel_workstream context montrait in_progress BATCH-73-ANALYSIS et waiting_dep BATCH-73-GOV_REVIEW; after=la cloture planner retire le faux goulot et permet la reprise de la revue finale; test=python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=PASS(cloture planner conforme aux chemins canoniques apps/api et apps/web); imports_ok=no_legacy_src; path_target=no_copilot_app_regression | vision_alignment=batch=BATCH-73; target=copilot finance personnel avec brief quotidien et analyse ouvrable; impact=cloture de l analyse planner pour debloquer GOV_REVIEW"

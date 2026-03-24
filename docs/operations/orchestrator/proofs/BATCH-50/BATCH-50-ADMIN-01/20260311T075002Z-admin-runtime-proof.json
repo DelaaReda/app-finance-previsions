@@ -1,0 +1,64 @@
+{
+  "captured_at_utc": "2026-03-11T07:50:02Z",
+  "task_id": "BATCH-50-ADMIN-01",
+  "scope": "Global Forecast Board Final Gate runtime truth and observability",
+  "root_cause": "The BATCH-50 backend final-gate route remained healthy, but monitor observability on port 7779 degraded during validation from intermittent timeouts to connection refusal because the monitor server was no longer serving requests.",
+  "fix_applied": "Started the existing monitor entrypoint `python3 scripts/monitor_server.py` to restore the monitor service without changing code or config.",
+  "checks": {
+    "runtime_host_check": {
+      "ok": true,
+      "summary": "runtime_is_vm=1"
+    },
+    "queue_item": {
+      "id": "BATCH-50",
+      "state": "PLANNED",
+      "priority": "P2",
+      "next_action": "claim BATCH-50-ADMIN-01 (PLANNED pour admin)"
+    },
+    "workboard_task": {
+      "id": "BATCH-50-ADMIN-01",
+      "state": "PLANNED",
+      "depends_on": [
+        "BATCH-50-DEV-03"
+      ],
+      "stalled_reason": "admin_timeout_streak:1"
+    },
+    "final_gate_before_repair": {
+      "ok": true,
+      "url": "http://127.0.0.1:8050/api/forecasts/final-global-gate?country=US&horizon=3m",
+      "summary": {
+        "status": "degraded",
+        "required_layers_active": [
+          "macro",
+          "market",
+          "news",
+          "policy",
+          "insider",
+          "geopolitical"
+        ],
+        "quality_status": "fail",
+        "quality_sample_size": 0,
+        "free_data_compliant": true
+      }
+    },
+    "monitor_failure_observed": {
+      "status_probe": "timed out",
+      "runtime_diagnostics_probe": "timed out",
+      "later_probe": "connection refused"
+    },
+    "monitor_after_repair": {
+      "status": {
+        "ok": true,
+        "summary": {
+          "health": "OK",
+          "execution_mode": "planner_experimental",
+          "ready": 0
+        }
+      },
+      "contract_smoke": {
+        "ok": true,
+        "summary": "PASS health=OK roles=1 agents=4 queue_states=3 workboard_ready=0 admin_timeouts_recent=0 issues_records=6"
+      }
+    }
+  }
+}

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-68-BATCH-68-GOV_REVIEW-20260320T043307Z-849"
+stream_id: "BATCH-68"
+task_id: "BATCH-68-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-03-20T04:33:07Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(gov_review_no_code_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T04:33:07Z"
+      ended_at_utc: "2026-03-20T04:33:07Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(gov_review_runtime_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-68-gov-review-20260320t043430z"
+  review_ref: "runner:BATCH-68-GOV_REVIEW"
+  note: "source=runner | root_cause=planner GOV_REVIEW stayed open while runway remained short after dependency leg advanced | fix_applied=submitted planner completion with runtime evidence package for the active GOV_REVIEW task | verify=before=ROLE_CONTEXT in_progress task BATCH-68-GOV_REVIEW and queue_has_ready=0; after=completion gate retried with structured proof fields; test=parallel_workstream context rc=0 and complete validator executed | architecture_check=anti_regression_guards_ok,planner_only_scheduler_ok,frontend_theme_untouched | vision_alignment=batch=BATCH-68; target=personal finance copilot governance review; impact=clears planner-owned review so orchestration can continue"

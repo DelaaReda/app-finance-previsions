@@ -233,11 +233,11 @@ ls -la scripts/team_chat_*.sh
 
 ### Message not appearing
 ```bash
-# Check TEAM_CHAT.md exists
-ls -la docs/ops/TEAM_CHAT.md
+# Check ARCHIVE_TEAM_CHAT.md exists
+ls -la docs/ops/ARCHIVE_TEAM_CHAT.md
 
 # View recent messages
-tail -50 docs/ops/TEAM_CHAT.md
+tail -50 docs/ops/ARCHIVE_TEAM_CHAT.md
 ```
 
 ### Wrong role set
@@ -253,10 +253,10 @@ export TEAM_CHAT_ROLE=<correct_role>
 
 ## 📚 RELATED DOCUMENTATION
 
-- **TEAM_CHAT.md**: Main chat file (`docs/ops/TEAM_CHAT.md`)
+- **ARCHIVE_TEAM_CHAT.md**: Main chat file (`docs/ops/ARCHIVE_TEAM_CHAT.md`)
 - **Helper Scripts**: `scripts/team_chat_*.sh`
 - **Product Vision**: `docs/product/PRODUCT_VISION.md`
-- **Onboarding**: `docs/ops/NOUVEAUX_AGENTS_ONBOARDING.md`
+- **Onboarding**: `docs/ops/ARCHIVE_NOUVEAUX_AGENTS_ONBOARDING.md`
 
 ---
 

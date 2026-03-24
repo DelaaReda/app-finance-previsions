@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-70-BATCH-70-GOV_REVIEW-20260320T213333Z-209"
+stream_id: "BATCH-70"
+task_id: "BATCH-70-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-03-20T21:33:33Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(runtime_state_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T21:33:33Z"
+      ended_at_utc: "2026-03-20T21:33:33Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(governance_close_no_code)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "PLANNER_COMPLETE_BATCH-70-GOV-REVIEW-20260320T213013Z-R3"
+  review_ref: "planner:gov-review:BATCH-70"
+  note: "source=planner | root_cause=planner GOV review remained IN_PROGRESS after canonical dependencies reached DONE in runtime workboard | fix_applied=closed GOV review through planner runtime complete using canonical projections only | verify=before=BATCH-70-GOV_REVIEW IN_PROGRESS with BATCH-70-ADMIN-01 DONE and BATCH-70-DEV-01 DONE; after=planner GOV review completion recorded canonically; test=parallel_workstream context role=planner showed single in_progress task BATCH-70-GOV_REVIEW | architecture_check=planner_only_scheduler_preserved;queue_workboard_as_projections;no_frontend_theme_change | vision_alignment=batch=BATCH-70; target=brief plus ask finance copilot final governance close; impact=unblocks canonical stream closure without frontend changes"

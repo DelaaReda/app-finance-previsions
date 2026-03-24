@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-46-BATCH-46-DEV-01-20260311T044343Z-155"
+stream_id: "BATCH-46"
+task_id: "BATCH-46-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-11T04:43:43Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope country/continent/world macro regime forecasts [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_country/continent/world_macro_regime_forecasts_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T04:43:43Z"
+      ended_at_utc: "2026-03-11T04:43:43Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest -q apps/api/src/domains/forecasts/tests/test_global_signal_mesh_route.py -q"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=0297d147620f3c29977ea2419f7cbac8c8219727; endpoint=/api/forecasts/macro-regime-hierarchy; contract_additions=data.confidence,data.consistency.contradiction_count,data.consistency.alignment_status,data.stats.hierar"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-46-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-46-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The macro regime hierarchy endpoint already returned per-level confidence and pairwise diagnostics, but it did not expose a deterministic top-level confidence or compact contradiction summary that downstream consumers ca | fix_applied=Patched `apps/api/src/domains/forecasts/application/global_signal_mesh_service.py` to compute `confidence` from the hierarchy, degrade it when cross-level contradictions exist, and enrich `consistency` with `contradictio | verify=before=hierarchy payload exposed only per-level confidence and raw pair diagnostics; after=payload now exposes aggregate top-level confidence plus compact contradiction summary for direct consumer use; test=`pytest -q ap | architecture_check=layer=route kept as orchestrator-only, logic stays in forecasts application service; imports_ok=yes reused existing forecasts domain + Judge LLM entrypoint pattern without new route/business coupling; path_target=apps/ap | vision_alignment=batch=BATCH-46; target=country/continent/world macro regime forecasts with explicit confidence and contradiction diagnostics; impact=improves contract readiness for downstream UI/integration without widening scope beyond"

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-49-BATCH-49-PLAN-20260313T161255Z-845"
+stream_id: "BATCH-49"
+task_id: "BATCH-49-PLAN"
+role: "planner"
+produced_at_utc: "2026-03-13T16:12:55Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no_runtime_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-13T16:12:55Z"
+      ended_at_utc: "2026-03-13T16:12:55Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_runtime_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "none"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "B49PLANP1773418296"
+  review_ref: "docs/architecture/ARCHITECTURE_MAP.md"
+  note: "root_cause=BATCH-49-PLAN was claimed without canonical planner delivery proof fields on the task node.; fix_applied=Attached canonical planner proof fields directly to the exact BATCH-49-PLAN node before replaying planner complete.; verify=before=context rc=0 montrait BATCH-49-PLAN in_progress sans champs planner; after=complete replay requested on the same canonical node; test=context rc=0 plus raw node inspection; vision_alignment=batch=BATCH-49; target=Multi-Layer Forecast Fusion + Attribution; impact=unlock planner plan gate for the forecast fusion delivery stream; architecture_check=planner proof fields persisted on exact BATCH-49-PLAN node; architecture_plan_ref=docs/architecture/ARCHITECTURE_MAP.md; architecture_audit=apps/api|apps/web"

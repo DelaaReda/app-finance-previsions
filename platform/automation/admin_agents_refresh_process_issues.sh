@@ -2,18 +2,23 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-DEFAULT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
-VM_SHARED_ROOT="/home/venom/shared/analyse-financiere"
-ROOT="${FINANCE_COPILOT_ROOT:-$DEFAULT_ROOT}"
-if [[ -z "${FINANCE_COPILOT_ROOT:-}" && -d "$VM_SHARED_ROOT" ]]; then
-  ROOT="$VM_SHARED_ROOT"
+SOURCE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd -P)"
+WORKSPACE_HELPER="${SCRIPT_DIR}/lib/workspace_paths.sh"
+if [[ -n "${FINANCE_COPILOT_ROOT:-}" ]]; then
+  ROOT="${FINANCE_COPILOT_ROOT}"
+elif [[ -f "$WORKSPACE_HELPER" ]]; then
+  # shellcheck source=/dev/null
+  source "$WORKSPACE_HELPER"
+  ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+else
+  ROOT="$SOURCE_ROOT"
 fi
 cd "$ROOT"
 
 STATE_DIR="${ADMIN_AGENTS_REFRESH_STATE_DIR:-$HOME/.openclaw/cron/admin-state}"
 mkdir -p "$STATE_DIR"
 
-EXEC_LATEST_FILE="${EXEC_LATEST_FILE:-docs/orchestrator-ops/executors-monitoring-latest.json}"
+EXEC_LATEST_FILE="${EXEC_LATEST_FILE:-logs-codex-runs/orchestrator-state/executors-monitoring-latest.json}"
 CHAT_FILE="${ADMIN_AGENTS_CHAT_FILE:-docs/ops/ADMIN_TEAM_CHAT.md}"
 
 LIMIT="${1:-4}"
@@ -122,7 +127,7 @@ refreshed=()
 for role in "${roles_to_refresh[@]}"; do
   [[ -z "$role" ]] && continue
   # Probe channels to confirm locks are accessible now.
-  if python3 scripts/parallel_workstream.py channels --role "$role" --limit 2 >/dev/null 2>&1; then
+  if python3 platform/automation/compat/projections/parallel_workstream.py channels --role "$role" --limit 2 >/dev/null 2>&1; then
     # Force a role tick to refresh last_contract/issues.
     if bash scripts/cron_run_manager.sh run-now --job "$role" --timeout 180000 >/dev/null 2>&1; then
       ok=$((ok+1))

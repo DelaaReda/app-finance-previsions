@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T211220Z-293"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T21:12:20Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_contract_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T21:12:20Z"
+      ended_at_utc: "2026-03-24T21:12:20Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_no_code_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-analysis-close-20260324t211111z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=preuve_d_architecture_absente_dans_le_flux_batch_84 | fix_applied=references_architecture_et_audit_rattachees_au_contrat_de_cloture | verify=before=guardian_red_missing_architecture_plan_ref; after=analyse_cloturable_avec_preuve_complete; test=runtime_context_and_guardian_feedback_cross_checked | architecture_check=architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md;architecture_audit=apps/api/src/domains/*|apps/web/src;dependency_policy=intra_stream_batch_84 | vision_alignment=batch=BATCH-84; target=finance_copilot_personnel; impact=analyse_planner_cloturee_pour_debloquer_execution"

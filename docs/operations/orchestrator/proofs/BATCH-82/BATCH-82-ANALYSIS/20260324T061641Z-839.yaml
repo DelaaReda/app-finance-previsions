@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-82-BATCH-82-ANALYSIS-20260324T061641Z-839"
+stream_id: "BATCH-82"
+task_id: "BATCH-82-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T06:16:41Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(runtime_closure_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T06:16:41Z"
+      ended_at_utc: "2026-03-24T06:16:41Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_runtime_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "BATCH-82-ANALYSIS_COMPLETE_P1774332855_30448"
+  review_ref: "runner:BATCH-82-ANALYSIS"
+  note: "source=runner | root_cause=Analyse planner restee ouverte sans preuve runtime finale alors que BATCH-82-PLAN est DONE | fix_applied=Cloture planner de BATCH-82-ANALYSIS apres verification de la dependance et de la projection canonique | verify=before=BATCH-82-ANALYSIS:IN_PROGRESS_dep_PLAN_DONE; after=BATCH-82-ANALYSIS:complete_requested; test=parallel_workstream_context_and_runtime_board_checked | architecture_check=layer=planner_runtime; imports_ok=yes; path_target=apps/api|apps/web|platform/orchestration | vision_alignment=batch=BATCH-82; target=deep_dive_assistant_brief_plus_ask; impact=unlock_admin_runtime_step"

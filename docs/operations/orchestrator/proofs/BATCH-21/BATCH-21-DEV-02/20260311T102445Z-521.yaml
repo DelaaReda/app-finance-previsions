@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-21-BATCH-21-DEV-02-20260311T102445Z-521"
+stream_id: "BATCH-21"
+task_id: "BATCH-21-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T10:24:45Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope paper trading simulator + execution journal [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_paper_trading_simulator_+_execution_journal_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T10:24:45Z"
+      ended_at_utc: "2026-03-11T10:24:45Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=98b1a8ced7bd7b1f78e5358480e7622cbfa33090; feature=Trade Ideas paper-trade CTA wired to copilot execution journal via existing forecasts dashboard surfaces"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-21-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-21-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=Frontend had no path from existing recommendation/trade-idea cards to the new backend paper-trade execution journal flow introduced by BATCH-21-DEV-01, so users could not trigger or track paper executions from the recomm | fix_applied=Extended `apps/web/src/domains/forecasts/contracts/apiConnector.js` with `getCopilotDecisionJournal()` and `executePaperTrade()`, hydrated `window.copilotDecisionJournal`, and exposed it through `window.FinanceAPI`/live  | verify=before=Trade Ideas cards only showed a placeholder trade button and had no wired path to the copilot paper-trade execution journal; after=cards with a linked decision journal entry show a `Paper Trade` CTA that calls the | architecture_check=layer=web forecasts connector + existing Trade Ideas widget only; imports_ok=yes, reused existing `window.FinanceAPI`/forecast dashboard wiring and did not introduce new component trees; path_target=apps/web/src/domains/ | vision_alignment=batch=BATCH-21; target=frontend execute-and-track paper trade flow from recommendation surfaces; impact=one existing widget now advances the backend execution journal slice into a user-triggerable paper-trading action wi"

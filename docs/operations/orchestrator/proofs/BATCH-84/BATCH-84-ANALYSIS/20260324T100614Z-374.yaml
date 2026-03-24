@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T100614Z-374"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T10:06:14Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner close only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T10:06:14Z"
+      ended_at_utc: "2026-03-24T10:06:14Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime context proof only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b84-analysis-close-20260324t100446z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=analyse planner laissee ouverte sans preuve explicite de fermeture malgre dependances aval normales | fix_applied=cloture planner avec preuve canonique et references architecture apps api web | verify=before=ANALYSIS in_progress sans cloture planner; after=ANALYSIS complete avec artefact runtime et dependances aval intactes; test=ROLE_CONTEXT planner montrait BATCH-84-ANALYSIS comme seul in_progress | architecture_check=architecture_plan_ref=apps/api/src/domains/*,apps/web/src;architecture_audit=apps/api/runtime/,docs/ops/AGENTS_READY.md;frontend_theme_preserved=yes | vision_alignment=batch=BATCH-84; target=copilot finance personnel quotidien; impact=fermeture analyse planner pour enchaine gouvernance"

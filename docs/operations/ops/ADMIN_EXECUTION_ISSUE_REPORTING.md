@@ -32,7 +32,7 @@ Remonter systématiquement si l’un des signaux apparaît:
 
 ## Format de remontée (obligatoire)
 
-Dans `docs/ops/ADMIN_TEAM_CHAT.md`:
+Dans `docs/ops/ADMIN_ARCHIVE_TEAM_CHAT.md`:
 - TYPE: `ALERT` (ou `BLOCKER` si la livraison est arrêtée)
 - MSG: doit inclure **evidence + action**.
 

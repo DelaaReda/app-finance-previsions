@@ -1,0 +1,64 @@
+proof_id: "PRF-BATCH-21-BATCH-21-DEV-03-20260311T104753Z-174"
+stream_id: "BATCH-21"
+task_id: "BATCH-21-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T10:47:53Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope paper trading simulator + execution journal [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_paper_trading_simulator_+_execution_journal_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T10:47:53Z"
+      ended_at_utc: "2026-03-11T10:47:53Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PYTHONPATH=/home/venom/analyse-financiere:/home/venom/analyse-financiere/apps/api/src pytest -q apps/api/src/domains/copilot/tests/test_decision_journal.py apps/api/src/domains/copilot/tests/test_decision_journal_routes."
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=cc5719a79217c7a57536bdca2f08a9c6c004a558; feature=paper-trade execution quality metrics now flow through decision-journal entry payloads and `/api/copilot/decision-journal/metrics`"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+  qa_reviewer: "qa_reviewer_worker"
+  qa_reviewed_at: "2026-03-11T12:00:00Z"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-21-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-21-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=BATCH-21-DEV-03 was still missing the data slice for execution-quality feedback: paper trades were stored, but there was no aggregate metric layer tying fills/slippage/fees/PnL back into the journal or metrics endpoint. | fix_applied=Extended `apps/api/src/domains/copilot/application/decision_journal.py` with reusable `_build_execution_quality_metrics(...)`, attached `paper_trade_execution.execution_quality` per journal entry, and exposed aggregate ` | verify=before=paper trades were append-only records with no aggregate execution-quality metrics in journal payloads or metrics output; after=journal entries include `paper_trade_execution.execution_quality` and metrics output i | architecture_check=layer=domains/copilot application service only with existing metrics route consuming service output; imports_ok=yes, reused existing paper-trade journal storage/helpers and did not add duplicate transaction models; path_ | vision_alignment=batch=BATCH-21; target=execution quality metrics for the paper trading simulator + execution journal slice; impact=recommendation-linked paper trades now produce measurable fee/slippage/PnL feedback for downstream review"
+  qa_review:
+    tests_run: "51 passed in 0.40s (test_decision_journal.py, test_decision_journal_routes.py, test_decision_journal_integration.py)"
+    key_validations:
+      - "_build_execution_quality_metrics: aggregates fees, slippage, PnL, win rate"
+      - "get_decision_journal: enriches entries with paper_trade_execution.execution_quality"
+      - "compute_metrics: exposes aggregate paper_trade_execution metrics"
+      - "/api/copilot/decision-journal/metrics: HTTP endpoint returns metrics"
+    commit_verified: "cc5719a7 feat(copilot): add paper trade execution quality metrics"
+    regression_check: "pre-existing failures unrelated to BATCH-21-DEV-03 (copilot context route, market_data endpoints)"

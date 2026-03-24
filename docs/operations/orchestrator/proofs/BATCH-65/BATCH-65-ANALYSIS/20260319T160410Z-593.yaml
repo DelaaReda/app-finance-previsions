@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-65-BATCH-65-ANALYSIS-20260319T160410Z-593"
+stream_id: "BATCH-65"
+task_id: "BATCH-65-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-19T16:04:10Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(orchestration_state_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-19T16:04:10Z"
+      ended_at_utc: "2026-03-19T16:04:10Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(orchestration_state_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/product/PRODUCT_VISION.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "b65-analysis-complete-proof-1773936088"
+  review_ref: "runner:BATCH-65-ANALYSIS"
+  note: "source=runner | root_cause=BATCH-65-ANALYSIS remained planner-owned in_progress after BATCH-65-PLAN was DONE and kept downstream planner tasks waiting | fix_applied=planner complete executed with canonical docs validation and runtime proof | verify=before=context showed in_progress_tasks=BATCH-65-ANALYSIS and waiting_dep_tasks=BATCH-65-ARCH,BATCH-65-GOV_REVIEW while BATCH-65-PLAN was DONE; after=analysis closure requested for downstream unblock; test=context rc=0 plus projection verification | architecture_check=docs/ops/ACTIVE_DOCS_INDEX.md|docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md|docs/product/PRODUCT_VISION.md | vision_alignment=batch=BATCH-65; target=personal finance copilot brief and ask flow; impact=unblock architecture and governance tasks"

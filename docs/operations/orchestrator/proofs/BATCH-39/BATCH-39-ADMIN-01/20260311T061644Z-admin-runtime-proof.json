@@ -1,0 +1,50 @@
+{
+  "task_id": "BATCH-39-ADMIN-01",
+  "stream_id": "BATCH-39",
+  "role": "admin",
+  "produced_at_utc": "2026-03-11T06:16:44Z",
+  "status": "blocked",
+  "summary": "BATCH-39 forecast SLA/provenance delivery is live on the API and covered by targeted tests, but the runtime observability surface is not trustworthy enough to mark the admin lane clean.",
+  "root_cause": "The monitor server is listening on :7779, yet direct probes to `http://127.0.0.1:7779/api/status` timed out or reset while `monitor-guard.log` still reported `local=up lan=up`. This creates a false-green observability state for the batch validation gate.",
+  "fix_applied": "none (validation-only evidence capture; no safe runtime repair was applied inside this task).",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-39/BATCH-39-ADMIN-01/20260311T061644Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "api_live_contract": {
+      "forecasts_rows": 1,
+      "forecast_id": "AAPL:1w:2026-03-11T06:04:24.200365Z",
+      "top_level_has_provenance_sla": true,
+      "first_row_has_provenance_sla": true,
+      "detail_has_provenance_sla": true,
+      "detail_updated_at": "2026-03-11T06:04:24.200365Z",
+      "detail_sla_within_target": true
+    },
+    "tests": {
+      "forecast_detail_pytest": "PASS",
+      "forecast_page_node_test": "PASS"
+    },
+    "monitor_observability": {
+      "listener_probe": "PASS ss shows python3 listening on 0.0.0.0:7779",
+      "http_probe": "FAIL timeout/reset on /api/status",
+      "monitor_contract_smoke": "FAIL curl(28) timeout after 8s",
+      "health_snapshot": "DEGRADED/STALE with blocked planner and stale widgets",
+      "fc_doctor": "DEGRADED"
+    }
+  },
+  "files_touched": [
+    "docs/operations/orchestrator/proofs/BATCH-39/BATCH-39-ADMIN-01/20260311T061644Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "PYTHONPATH=apps/api/src python3 -m pytest apps/api/src/domains/forecasts/tests/test_forecasts_template_parity.py -q -k 'forecast_detail'",
+    "node --test apps/web/src/domains/forecasts/pages/app.test.js",
+    "bash scripts/monitor_contract_smoke.sh",
+    "bash scripts/fc_doctor.sh --json",
+    "bash scripts/health_snapshot.sh"
+  ],
+  "commit_sha": "SKIP(no_code_change; evidence_only)",
+  "architecture_check": "admin validation only; no code/config mutation; batch contract verified on existing API/web paths; observability blocker isolated to monitor/runtime layer.",
+  "vision_alignment": "BATCH-39 expects forecast data quality SLA + provenance to be live and observable. Live API truth is aligned, but batch closure remains blocked because the monitor surface cannot currently prove that truth reliably.",
+  "recommended_next": "Planner should dispatch a dedicated admin runtime repair for the monitor surface on :7779 and its guard truth, then rerun BATCH-39-ADMIN-01 validation once `/api/status` and `monitor_contract_smoke.sh` pass consistently.",
+  "blocking_issue": "monitor_observability_false_green_on_7779"
+}

@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-41-BATCH-41-DEV-02-20260311T040207Z-360"
+stream_id: "BATCH-41"
+task_id: "BATCH-41-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T04:02:07Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope free global signal mesh [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_free_global_signal_mesh_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T04:02:07Z"
+      ended_at_utc: "2026-03-11T04:02:07Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js; node --test apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Forecast shell provenance now includes mesh metadata from `/api/forecasts/global-signal-mesh`, e.g. `mesh: 9 sources (7 nominal) across 6 layers | licenses: public_open_data:5, public_market_data_terms:2`."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-41-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-41-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=BATCH-41 already had a backend `/api/forecasts/global-signal-mesh` contract, but the current web connector never fetched it and the forecast shell never surfaced that provenance/compliance context. | fix_applied=Added `getGlobalSignalMesh()` to the forecasts connector, fetched/stored the mesh during live-data hydration, passed it through the existing dashboard payload/meta flow, and extended `updateLiveProvenance()` to render so | verify=before=forecast shell only showed source/model/freshness/SLA and ignored the existing free-source mesh contract; after=live connector fetches `global-signal-mesh` and provenance text includes mesh source/layer/license co | architecture_check=layer=web forecasts connector + existing provenance UI; imports_ok=yes (no new module boundary violations, reused existing apps/web forecast shell wiring); path_target=apps/web/src/domains/forecasts/contracts/apiConnecto | vision_alignment=batch=BATCH-41; target=surface free global signal mesh provenance/licensing in the live forecast shell using existing widgets/wiring; impact=small verifiable vertical slice that exposes free-data compliance context to th"

@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-38-BATCH-38-DEV-03-20260311T035155Z-835"
+stream_id: "BATCH-38"
+task_id: "BATCH-38-DEV-03"
+role: "dev"
+produced_at_utc: "2026-03-11T03:51:55Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope walk-forward forecast scoreboard [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_walk-forward_forecast_scoreboard_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T03:51:55Z"
+      ended_at_utc: "2026-03-11T03:51:55Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest apps/api/src/domains/forecasts/tests/test_walk_forward_scoreboard_route.py -q; node --test apps/web/src/domains/forecasts/contracts/apiConnector.test.js apps/web/src/domains/forecasts/pages/app.test.js; scripts/ba"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=b23e6f6; endpoint=/api/forecasts/scoreboard; contract=threshold_summary.walk_forward_direction_hit_rate.{target,comparator,value,status,sample_size,scope,updated_at}"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-38-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-38-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=The scoreboard endpoint exposed only the target/comparator policy, so downstream UI/planner consumers had to infer the current walk-forward result from `rows` instead of reading a stable threshold summary block. | fix_applied=Updated `apps/api/src/domains/forecasts/application/forecasts_service.py` to populate `threshold_summary.walk_forward_direction_hit_rate` with `value`, `status`, `sample_size`, `scope`, and `updated_at`. Extended `apps/a | verify=before=`threshold_summary` only exposed target/comparator and consumers had to inspect `rows`; after=`threshold_summary` carries the live overall hit-rate verdict and provenance timestamp; test=`pytest apps/api/src/domai | architecture_check=layer=backend forecasts application+route contract test; imports_ok=yes (no new imports or cross-domain helpers); path_target=apps/api/src/domains/forecasts/application/forecasts_service.py | vision_alignment=batch=BATCH-38; target=rolling quality dashboard contract for walk-forward scoreboard; impact=exposes a stable quality-bar summary that frontend/planner consumers can read without duplicating row parsing."

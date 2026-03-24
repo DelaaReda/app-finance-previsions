@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-69-BATCH-69-DEV-02-20260320T103548Z-723"
+stream_id: "BATCH-69"
+task_id: "BATCH-69-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-20T10:35:48Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T10:35:48Z"
+      ended_at_utc: "2026-03-20T10:35:48Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`node --test apps/web/src/domains/forecasts/pages/app.test.js apps/web/src/domains/forecasts/contracts/apiConnector.test.js`"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=5af66be612208344a82fd74b1d33d0a0068a19da; behavior=brief starter CTA now resolves to overview hero brief (`heroSection`) via shared app+connector wiring."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-69-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-69-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The shared copilot starter normalization mapped `/brief/daily` and related brief aliases to `market`, so the brief CTA opened the wrong surface instead of the landing brief section the user starts from. | fix_applied=Updated `normalizeCopilotStartOpenTarget` in the app and `normalizeCopilotOpenTarget` in the connector to normalize brief aliases to `overview`, and updated overview routing to scroll to `heroSection` so the brief CTA la | verify=before=starter brief open actions normalized to `market` and could pull users away from the landing brief; after=brief open actions normalize to `overview` and `runCopilotStartOpen('/brief/daily')` switches to overview a | architecture_check=layer=web starter flow only; imports_ok=yes (no new imports/modules); path_target=apps/web/src/domains/forecasts/{pages/app.js,contracts/apiConnector.js} | vision_alignment=batch=BATCH-69; target=personal finance copilot starts with brief of the day and lets the user ask or open; impact=brief CTA now opens the correct landing brief surface, reducing friction in the first interaction slice"

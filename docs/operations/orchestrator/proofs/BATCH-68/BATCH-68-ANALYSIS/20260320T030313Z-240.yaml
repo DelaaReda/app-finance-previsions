@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-68-BATCH-68-ANALYSIS-20260320T030313Z-240"
+stream_id: "BATCH-68"
+task_id: "BATCH-68-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-20T03:03:13Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no code change in planner analysis close tick)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T03:03:13Z"
+      ended_at_utc: "2026-03-20T03:03:13Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime state transition only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b68-analysis-close-20260320t0301z-v2"
+  review_ref: "runner:BATCH-68-ANALYSIS"
+  note: "source=runner | root_cause=open planner analysis was still holding downstream gov review despite ready=0 and in_progress=1 in canonical context | fix_applied=planner closed BATCH-68-ANALYSIS directly after runtime context refresh | verify=before=ready0_inprogress1_waitingdep1; after=analysis_close_requested_with_delivery_proof; test=parallel_workstream_context_rc0 | architecture_check=refs=docs/ops/ACTIVE_DOCS_INDEX.md,docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md,docs/product/PRODUCT_VISION.md; audit=apps/api,apps/web; theme=preserved | vision_alignment=batch=BATCH-68; target=personal finance copilot delivery flow; impact=planner stream unblocked for next review"

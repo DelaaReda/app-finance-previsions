@@ -1,0 +1,36 @@
+{
+  "task_id": "BATCH-23-ADMIN-01",
+  "stream_id": "BATCH-23",
+  "role": "admin",
+  "produced_at_utc": "2026-03-13T04:44:40Z",
+  "status": "unblocked",
+  "summary": "BATCH-23 runtime validation passed after the DEV-03 chain. Monitor and cron diagnostics are healthy on the VM workspace, the live cost-awareness API exposes the thin-edge warning contract, and the only code drift found was in the fallback `/api/execution-costs` helper path, which still used the pre-DEV-03 low-edge threshold.",
+  "root_cause": "The shared runtime estimator already used the new thin-edge policy, but `apps/api/src/domains/judge/api/execution_costs.py::_simple_cost_estimate()` still warned only at `net<=25bps` or `net<=25% gross`. That fallback drift could silently disagree with the canonical BATCH-23 policy if the shared estimator import path is unavailable.",
+  "fix_applied": "Updated the fallback low-edge threshold to match the shared estimator (`net<=50bps` or `net<=60% gross`) and refreshed the BATCH-23 execution-cost tests so verification matches the current shared route contract and liquidity helper signature.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-23/BATCH-23-ADMIN-01/20260313T044440Z-admin-runtime-proof.json",
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "monitor_status_lite": "PASS GET http://127.0.0.1:7779/api/status?lite=1 => health=OK execution_mode=planner_experimental root=/home/venom/analyse-financiere",
+    "monitor_runtime_diagnostics_lite": "PASS GET http://127.0.0.1:7779/api/runtime-diagnostics?lite=1 => health=OK admin delta=CAPABILITY_ACTIVE blocker=NONE",
+    "fc_status_brief": "PASS Santé: OK, ready=0, in_progress=1, waiting_dep=2, mismatch_count=0, blocker=none",
+    "live_execution_costs_route": "PASS GET http://127.0.0.1:8050/api/execution-costs?ticker=SPY&expected_return=0.005&horizon=1d => asset_class=etf warning.low_edge=true severity=medium",
+    "live_strategy_playbooks_route": "PASS GET http://127.0.0.1:8050/api/judge/strategy-playbooks?limit=1&ticker=SPY&profile=equity_1w&debug=true => HTTP 200 ok=true",
+    "fallback_alignment_probe_before_fix": "PASS python import probe showed fallback warning.low_edge=false while shared estimator warning.low_edge=true for SPY/0.5%/1d",
+    "targeted_pytests": "PASS pytest apps/api/src/domains/judge/tests/test_execution_cost_estimation.py -q && pytest apps/api/src/domains/judge/tests/test_execution_costs_endpoint.py -q"
+  },
+  "files_touched": [
+    "apps/api/src/domains/judge/api/execution_costs.py",
+    "apps/api/src/domains/judge/tests/test_execution_cost_estimation.py",
+    "apps/api/src/domains/judge/tests/test_execution_costs_endpoint.py",
+    "docs/operations/orchestrator/proofs/BATCH-23/BATCH-23-ADMIN-01/20260313T044440Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "pytest apps/api/src/domains/judge/tests/test_execution_cost_estimation.py -q",
+    "pytest apps/api/src/domains/judge/tests/test_execution_costs_endpoint.py -q"
+  ],
+  "commit_sha": "92292c39030d82ff9bba0da35e17c89e2a32b412",
+  "architecture_check": "The fix stays inside the BATCH-23 judge cost-awareness surface. No queue/workboard/runtime control-plane files were changed, and the fallback API now mirrors the shared application estimator instead of redefining a divergent warning policy.",
+  "vision_alignment": "BATCH-23 requires actionable gross-vs-net visibility and a reliable low-edge warning. This repair closes the last policy drift between the live route, fallback route, and regression tests so admin can hand off a consistent cost-awareness contract.",
+  "recommended_next": "Planner can merge BATCH-23-ADMIN-01 and advance the batch toward closure or GOV_REVIEW.",
+  "blocking_issue": "none"
+}

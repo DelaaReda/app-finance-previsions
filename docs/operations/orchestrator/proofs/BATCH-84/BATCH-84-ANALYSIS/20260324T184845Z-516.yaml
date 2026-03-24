@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T184845Z-516"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T18:48:45Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_contract_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T18:48:45Z"
+      ended_at_utc: "2026-03-24T18:48:45Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_for_analysis_task)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch84-analysis-20260324t184735z"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=dependency_policy_not_enforced_and_missing_architecture_refs | fix_applied=analysis_closed_with_architecture_plan_ref_and_architecture_audit_linked_to_apps_api_apps_web_runtime | verify=before=analysis_in_progress_without_explicit_architecture_refs; after=analysis_closed_with_architecture_refs_and_audit; test=parallel_workstream_context_role_planner_ready0_inprogress1_waitingdep1 | architecture_check=architecture_plan_ref=/home/venom/analyse-financiere/docs/product/PRODUCT_VISION.md; architecture_audit=apps/api/src/domains/*|apps/web/src|apps/api/runtime/; anti_regression=copilot_app_forbidden,backend_src_dup_forbidden,legacy_src_imports_forbidden | vision_alignment=batch=BATCH-84; target=personal_finance_copilot_day_brief_and_analysis_open; impact=planner_analysis_gate_closed_for_orchestrator_followup"

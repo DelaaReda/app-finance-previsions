@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-70-BATCH-70-ANALYSIS-20260320T150212Z-313"
+stream_id: "BATCH-70"
+task_id: "BATCH-70-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-20T15:02:12Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_contract_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-20T15:02:12Z"
+      ended_at_utc: "2026-03-20T15:02:12Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/product/PRODUCT_VISION.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b70-analysis-complete-20260320T150012Z"
+  review_ref: "runner:BATCH-70-ANALYSIS"
+  note: "source=runner | root_cause=planner_analysis_left_open_without_canonical_delivery_proof | fix_applied=validated_ACTIVE_DOCS_INDEX_PLANE_BACKLOG_INTEGRATION_SPEC_PRODUCT_VISION_and_closed_analysis | verify=before=planner_context_in_progress_B70_ANALYSIS; after=planner_analysis_marked_complete; test=parallel_workstream_context_confirmed_single_in_progress_analysis | architecture_check=anti_regression=apps/api/src/domains/*,apps/web/src,apps/api/runtime/; backlog_truth=plane_runtime_only; frontend_theme=preserved | vision_alignment=batch=BATCH-70,target=brief_plus_ask_investment_memo,impact=planner_analysis_closed_for_runtime_delivery"

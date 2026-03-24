@@ -19,34 +19,39 @@ Checklist (reuse-first marker):
 Pour rendre la reutilisation visible rapidement (sans chercher fichier par fichier), utiliser:
 
 - Index auto-genere: `docs/ops/LARGE_MODULE_REUSE_INDEX.md`
-- Generateur: `scripts/generate_large_module_reuse_index.py`
+- Generateur canonique: `platform/automation/generate_large_module_reuse_index.py`
 
 Commande de regeneration:
 
 ```bash
-python3 scripts/generate_large_module_reuse_index.py
+python3 platform/automation/generate_large_module_reuse_index.py
 ```
 
 Regle: avant de creer un nouveau module "large", verifier d'abord cet index et etendre un module existant si possible.
 
 ## Facades de reutilisation (imports stables)
 
-Pour simplifier le dev des agents moins experimentes, utiliser en premier:
+Les anciennes facades `copilot-app/backend/src/reuse/*.py` sont historiques et ne doivent plus etre traitees comme surfaces actives.
+Le chemin canonique est maintenant:
 
-- `copilot-app/backend/src/reuse/llm.py`
-- `copilot-app/backend/src/reuse/forecasting.py`
-- `copilot-app/backend/src/reuse/judge.py`
-- `copilot-app/backend/src/reuse/data.py`
+- `apps/api/src/**` pour le backend
+- `apps/web/src/**` pour le frontend
 
-Ces facades exposent les points d'entree canoniques (LLM, previsions, template judge, data quality) avec imports stables.
+Pour simplifier le dev des agents moins experimentes:
+- commencer par `docs/ops/LARGE_MODULE_REUSE_INDEX.md`
+- chercher ensuite directement dans `apps/api/src` et `apps/web/src`
+- ne pas recreer de facades legacy `copilot-app/...` ou `src/reuse/*`
 
 Règle: avant d'ajouter un nouveau fichier, faire:
 
 ```bash
-rg -n "<mot-cle>" copilot-app/backend/src copilot-app/backend/services copilot-app/backend/storage copilot-app/backend/models copilot-app/backend/jobs copilot-app/frontend/app
+rg -n "<mot-cle>" apps/api/src apps/web/src
 ```
 
 ## Canonical Reference: Judge API Stack
+
+Note stricte: les chemins `copilot-app/...` qui peuvent encore apparaitre plus bas sont des alias historiques de reference.
+Pour le travail actif, resoudre toujours ces references vers `apps/api/src/...` ou `apps/web/src/...` avant de lire, modifier ou importer un module.
 
 Le squelette "endpoint robuste" de reference est `/api/judge` (cache + debug + validation + fallback multi-provider + contrat typé).
 

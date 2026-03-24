@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-39-BATCH-39-DEV-02-20260311T034515Z-578"
+stream_id: "BATCH-39"
+task_id: "BATCH-39-DEV-02"
+role: "dev"
+produced_at_utc: "2026-03-11T03:45:15Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope forecast data quality sla + provenance [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_forecast_data_quality_sla_+_provenance_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T03:45:15Z"
+      ended_at_utc: "2026-03-11T03:45:15Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Frontend delivery commit `bb531f1a5f86fd56979297f4a220bad785228e6e` adds visible forecast SLA provenance on the existing live provenance widget without introducing new components."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-39-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-39-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The web forecast shell was dropping row-level `provenance.sla` data during sanitization, so the existing live provenance surface could not expose forecast freshness SLA coverage even though backend forecast contracts alr | fix_applied=Updated `apps/web/src/domains/forecasts/pages/app.js` to preserve row `updatedAt` and `provenance.sla`, added `summarizeForecastSla(rows)`, and wired `liveDataMeta.forecastSla` into `updateLiveProvenance()` so the existi | verify=before=`updateLiveProvenance()` only rendered source/model/freshness/warnings and `sanitizeForecastRows()` discarded row provenance`; after=`sanitizeForecastRows()` preserves `provenance.sla`, `applyLiveDashboardData()`  | architecture_check=layer=web forecast page only; imports_ok=yes (no new imports or cross-layer dependencies); path_target=apps/web/src/domains/forecasts/pages/app.js | vision_alignment=batch=BATCH-39; target=surface forecast data quality SLA + provenance in the existing decision-facing UI; impact=users can now see aggregate forecast freshness compliance from live payload provenance on the current hero"

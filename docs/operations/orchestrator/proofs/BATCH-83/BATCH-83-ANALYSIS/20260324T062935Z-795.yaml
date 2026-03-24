@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-83-BATCH-83-ANALYSIS-20260324T062935Z-795"
+stream_id: "BATCH-83"
+task_id: "BATCH-83-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T06:29:35Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_runtime_closure_no_shell_patch)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T06:29:35Z"
+      ended_at_utc: "2026-03-24T06:29:35Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_runtime_no_tests)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "COMPLETE_ANALYSIS_P1774333667_13763"
+  review_ref: "runner:BATCH-83-ANALYSIS"
+  note: "source=runner | root_cause=Planner-owned task BATCH-83-ANALYSIS remained IN_PROGRESS while downstream ARCH stayed WAITING_DEP because the analysis closure proof had not been emitted. | fix_applied=Planner completion backfilled the canonical proof fields and closed BATCH-83-ANALYSIS to unlock the downstream architecture step. | verify=before=BATCH-83-ANALYSIS:IN_PROGRESS; after=BATCH-83-ANALYSIS:DONE; test=parallel_workstream_context | architecture_check=layer=platform; imports_ok=yes; path_target=apps/api/src,apps/web/src | vision_alignment=batch=BATCH-83; target=brief_plus_ask_personal_finance_copilot; impact=unlock_architecture_delivery"

@@ -157,10 +157,11 @@ test('BATCH-82-DEV-02: Widget wires to correct API endpoints', () => {
   const widgetPath = path.join(__dirname, 'copilot-panel.html');
   const source = fs.readFileSync(widgetPath, 'utf8');
 
-  assert.ok(source.includes('/api/copilot/start'), 'Must wire to /api/copilot/start');
-  assert.ok(source.includes('/api/copilot/ask'), 'Must wire to /api/copilot/ask');
-  // Note: personal-finance namespace is configured in the page, not the widget
-  assert.ok(source.includes('COPILOT_API_BASE') || source.includes('FinanceAPI'), 'Must support configurable API base');
+  assert.ok(source.includes('function getCopilotApiBase('), 'Must expose API base helper');
+  assert.ok(source.includes('function getCopilotNamespace('), 'Must expose namespace helper');
+  assert.ok(source.includes('${getCopilotApiBase()}/${namespace}/start'), 'Must build start endpoint from namespace');
+  assert.ok(source.includes('${getCopilotApiBase()}/${namespace}/ask'), 'Must build ask endpoint from namespace');
+  assert.ok(source.includes("window.COPILOT_NAMESPACE || 'copilot'"), 'Must default namespace safely');
 });
 
 test('BATCH-82-DEV-02: renderCopilotBrief renders brief summary', () => {

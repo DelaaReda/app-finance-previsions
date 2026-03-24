@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-82-BATCH-82-ANALYSIS-20260324T060127Z-767"
+stream_id: "BATCH-82"
+task_id: "BATCH-82-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T06:01:27Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_closure_runtime_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T06:01:27Z"
+      ended_at_utc: "2026-03-24T06:01:27Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b82-analysis-p1774332018-3685"
+  review_ref: "runner:BATCH-82-ANALYSIS"
+  note: "source=runner | root_cause=analyse planner laissee ouverte sans cloture explicite du stream BATCH-82 | fix_applied=cloture runtime de BATCH-82-ANALYSIS avec preuve architecture et livraison | verify=before=analysis_in_progress_et_gov_review_en_attente; after=analyse_planner_prete_a_etre_closee; test=parallel_workstream_context_role_planner_confirme_in_progress_unique | architecture_check=apps/api/src/domains/*|apps/web/src|apps/api/runtime/|docs/ops/AGENTS_READY.md | vision_alignment=batch=BATCH-82,target=brief quotidien et ouverture analyse finance personnelle,impact=deverrouille gouvernance planner du copilot"

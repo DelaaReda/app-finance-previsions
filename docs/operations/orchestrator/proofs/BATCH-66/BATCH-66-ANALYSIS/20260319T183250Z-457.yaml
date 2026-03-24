@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-66-BATCH-66-ANALYSIS-20260319T183250Z-457"
+stream_id: "BATCH-66"
+task_id: "BATCH-66-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-19T18:32:50Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-19T18:32:50Z"
+      ended_at_utc: "2026-03-19T18:32:50Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_analysis_contract_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b66-analysis-complete-20260319t1833z"
+  review_ref: "runner:BATCH-66-ANALYSIS"
+  note: "source=runner | root_cause=planner_delivery_proof_missing_on_analysis_closeout | fix_applied=added structured delivery proof with canonical refs and architecture evidence | verify=before=analysis task open without contract proof,after=analysis closeout carries verify and architecture refs,test=parallel_workstream context confirmed BATCH-66-ANALYSIS as sole planner in_progress | architecture_check=architecture_plan_ref=/home/venom/analyse-financiere/docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md; architecture_audit=apps/api/src/domains and apps/web/src referenced; anti_regression=copilot-app forbidden backend/src/backend/src forbidden legacy src imports forbidden | vision_alignment=batch=BATCH-66,target=brief du jour plus copilot finance personnel,impact=planner analysis closed for downstream delivery"

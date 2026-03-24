@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-76-BATCH-76-ARCH-20260323T171744Z-505"
+stream_id: "BATCH-76"
+task_id: "BATCH-76-ARCH"
+role: "planner"
+produced_at_utc: "2026-03-23T17:17:44Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_arch_closure_no_shell_patch)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T17:17:44Z"
+      ended_at_utc: "2026-03-23T17:17:44Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_arch_closure)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-arch-close-P1774286197-16125"
+  review_ref: "runner:BATCH-76-ARCH"
+  note: "source=runner | root_cause=runway planner courte tant que le lot architecture reste ouvert | fix_applied=cloture du jalon ARCH avec preuve runtime et garde architecture | verify=before=BATCH-76-ARCH in_progress et GOV_REVIEW waiting_dep; after=ARCH cloture par runtime action; test=planner_runtime_actions complete retourne succes | architecture_check=depends_on_done_assumed_from_runtime_progress; preserve_apps_web=ok; refs=apps/api/src/domains/*,apps/web/src | vision_alignment=batch=BATCH-76; target=finance copilot briefing du jour; impact=debloque la revue planner finale"

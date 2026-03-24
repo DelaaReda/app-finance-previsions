@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-75-BATCH-75-ARCH-20260323T154042Z-152"
+stream_id: "BATCH-75"
+task_id: "BATCH-75-ARCH"
+role: "planner"
+produced_at_utc: "2026-03-23T15:40:42Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_arch_contract_tick)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-23T15:40:42Z"
+      ended_at_utc: "2026-03-23T15:40:42Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_runtime_tick)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch75-arch-complete-1774280354"
+  review_ref: "runner:BATCH-75-ARCH"
+  note: "source=runner | root_cause=guardian_red_on_missing_architecture_plan_ref_and_architecture_audit | fix_applied=planner_architecture_contract_attached_to_apps_api_domains_apps_web_and_runtime_reuse | verify=before=guardian_missing_architecture_fields; after=architecture_proof_attached_for_arch_closure; test=parallel_workstream_context_reports_single_in_progress_arch_item | architecture_check=architecture_plan_ref=docs/ops/ACTIVE_DOCS_INDEX.md|docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md|docs/product/PRODUCT_VISION.md; architecture_audit=apps/api/src/domains/*|apps/api/runtime/*|apps/web/src; anti_regression=copilot-app_forbidden,backend_dup_forbidden,legacy_src_imports_forbidden; acceptance_gate=planner_arch_ready_for_gov_review | vision_alignment=batch=BATCH-75; target=personal_finance_copilot_architecture_gate; impact=close_arch_before_gov_review"

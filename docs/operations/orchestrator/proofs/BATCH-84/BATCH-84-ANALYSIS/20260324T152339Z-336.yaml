@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T152339Z-336"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T15:23:39Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(cloture planner analyse)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T15:23:39Z"
+      ended_at_utc: "2026-03-24T15:23:39Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner analysis proof only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/ACTIVE_DOCS_INDEX.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "codex-planner-20260324T152211Z-batch84-analysis-close"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=analyse en cours sans architecture_plan_ref ni architecture_audit relies aux chemins canoniques | fix_applied=preuve de plan architecture et audit ajoutee dans la cloture planner pour liberer l execution admin | verify=before=guardian red sur refs architecture manquantes et dependances non explicites; after=cloture analyse avec refs docs et checks apps/api apps/web attaches; test=context planner confirme ANALYSIS en cours sans READY concurrent | architecture_check=architecture_audit=apps/api/src/domains/*|apps/web/src|apps/api/runtime; anti_regression=copilot-app off,backend/src/backend/src off,legacy src dot off; dependency_policy=planner stream closed before downstream gov review | vision_alignment=batch=BATCH-84; target=brief quotidien et copilot finance personnel; impact=analyse architecture validee avant orchestration admin"

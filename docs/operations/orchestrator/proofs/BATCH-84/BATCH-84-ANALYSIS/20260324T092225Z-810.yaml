@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260324T092225Z-810"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T09:22:25Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_no_code_completion)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T09:22:25Z"
+      ended_at_utc: "2026-03-24T09:22:25Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_no_code_completion)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "complete_batch84_analysis_P1774343987_13667"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=Analyse planner BATCH-84 restee ouverte sans cloture canonique alors que depends_on=none et que le guard demandait une ref d architecture canonique | fix_applied=Cloture planner avec preuve canonique docs/architecture/ARCHITECTURE_MAP.md et alignement apps/api apps/web pour debloquer GOV_REVIEW | verify=before=BATCH-84-ANALYSIS:IN_PROGRESS; after=BATCH-84-ANALYSIS:DONE_REQUESTED; test=parallel_workstream_context_role_planner_2026-03-24 | architecture_check=layer=apps; imports_ok=yes; path_target=apps/api/src/platform/main.py|apps/web/src | vision_alignment=batch=BATCH-84; target=brief_plus_ask_finance_copilot; impact=deblocage_gov_review_backend_first"

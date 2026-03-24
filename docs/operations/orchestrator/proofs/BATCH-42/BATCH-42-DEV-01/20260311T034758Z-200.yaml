@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-42-BATCH-42-DEV-01-20260311T034758Z-200"
+stream_id: "BATCH-42"
+task_id: "BATCH-42-DEV-01"
+role: "dev"
+produced_at_utc: "2026-03-11T03:47:58Z"
+inputs:
+  queue_snapshot_ref: "docs/operations/orchestrator/priority-queue.json"
+  workboard_snapshot_ref: "docs/operations/orchestrator/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope geopolitical risk graph + conflict escalation [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_geopolitical_risk_graph_+_conflict_escalation_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-11T03:47:58Z"
+      ended_at_utc: "2026-03-11T03:47:58Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest apps/api/src/domains/judge/tests/test_judge_route_orchestration.py apps/api/src/domains/judge/tests/test_judge_geopolitical_risk_graph_service.py -q; python3 -m py_compile apps/api/src/domains/judge/api/judge.py a"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Endpoint artifact: `GET /api/judge/geopolitical-risk-graph?region=ukraine&limit=2` now returns `{ok:true,data:{nodes,edges,alerts,stats,filters_applied,warnings,...}}` via Judge route->service reuse path."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-42-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-42-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=BATCH-42 had no concrete backend surface exposing geopolitical/conflict escalation data through the existing Judge endpoint architecture, so forecast-adjacent consumers had no verifiable graph payload to integrate agains | fix_applied=Added `get_judge_geopolitical_risk_graph_payload(...)` plus deterministic graph/scoring helpers in `apps/api/src/domains/judge/application/judge_endpoint_service.py`; exposed `/api/judge/geopolitical-risk-graph` in `apps | verify=before=no Judge endpoint exposed a geopolitical/conflict escalation graph payload; after=`/api/judge/geopolitical-risk-graph` returns stable graph/alert payload with never-empty fallback; test=`pytest apps/api/src/domain | architecture_check=layer=Judge API route orchestrator -> judge endpoint service -> persisted news snapshot reuse; imports_ok=yes (route imports `services.judge_endpoint_service`, service reuses existing flattened/canonical aliasing and leg | vision_alignment=batch=BATCH-42; target=Geopolitical Risk Graph + Conflict Escalation; impact=adds the first minimal verifiable backend contract for region/event risk graph and escalation alerts without widening scope beyond Judge-stack"

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-83-BATCH-83-ANALYSIS-20260324T070153Z-634"
+stream_id: "BATCH-83"
+task_id: "BATCH-83-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-03-24T07:01:53Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_closure)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-03-24T07:01:53Z"
+      ended_at_utc: "2026-03-24T07:01:53Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_change_context_validation_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-b83-analysis-1774335636"
+  review_ref: "runner:BATCH-83-ANALYSIS"
+  note: "source=runner | root_cause=architecture_plan_ref_and_architecture_audit_missing_on_batch_83_analysis | fix_applied=analysis_completion_now_binds_apps_api_src_domains_and_apps_web_src_with_dependency_policy_guard | verify=before=guardian_red_missing_architecture_plan_ref_and_audit; after=batch_83_analysis_carries_architecture_binding_and_runtime_alignment; test=parallel_workstream_context_confirms_batch_83_analysis_was_only_planner_in_progress | architecture_check=architecture_plan_ref=apps/api/src/domains/*|apps/web/src; architecture_audit=anti_regression_guards_checked,no_copilot_app,no_backend_src_dup,no_legacy_src_imports | vision_alignment=batch=BATCH-83,target=personal_finance_copilot_daily_brief_and_analysis_surface,impact=planner_analysis_closed_for_gov_review_progression"

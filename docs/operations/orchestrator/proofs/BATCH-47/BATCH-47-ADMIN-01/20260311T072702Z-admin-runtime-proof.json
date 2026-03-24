@@ -1,0 +1,44 @@
+{
+  "task_id": "BATCH-47-ADMIN-01",
+  "stream_id": "BATCH-47",
+  "role": "admin",
+  "produced_at_utc": "2026-03-11T07:27:02Z",
+  "status": "UNBLOCKED",
+  "summary": "Runtime validation completed after the BATCH-47 dev chain. The monitor process was present but unresponsive on 127.0.0.1:7779, which blocked task-scoped observability. A reversible restart restored monitor health and task-scoped runtime checks now pass.",
+  "root_cause": "Stale monitor process on PID 2024562 stayed alive but stopped serving /api/status, causing fc_status_brief and monitor_contract_smoke to time out even though the backend API itself remained healthy.",
+  "fix_applied": {
+    "type": "reversible_runtime_repair",
+    "actions": [
+      "killed stale monitor process PID 2024562",
+      "restarted monitor via nohup python3 scripts/monitor_server.py",
+      "new live monitor PID observed: 2027439"
+    ]
+  },
+  "verify": {
+    "runtime_host_check": "PASS runtime_is_vm=1",
+    "api_health": "PASS backend_up=true status=ok generated_at=2026-03-11T07:24:56.539549Z",
+    "pre_fix_monitor": "FAIL fc_status_brief=monitor_unreachable ; monitor_contract_smoke=curl timeout on http://127.0.0.1:7779/api/status",
+    "post_fix_monitor_status": "PASS health=OK runtime_mode=planner_experimental queue.in_progress=3 queue.waiting_dep=9",
+    "post_fix_monitor_contract_smoke": "PASS health=OK roles=1 agents=4 queue_states=4 workboard_ready=0 admin_timeouts_recent=0 issues_records=7",
+    "post_fix_fc_status_brief": "PASS freshness=fresh/64s mismatch_count=0 planner_subagents.active=0",
+    "post_fix_health_snapshot": "PASS health=OK critical_widgets=ok",
+    "policy_impact_runtime": "PASS endpoint reachable at /api/forecasts/policy-impact?limit=3&debug=true; current live payload returned items_count=0 but no contract/runtime error"
+  },
+  "artifacts": [
+    "/home/venom/analyse-financiere/docs/operations/orchestrator/proofs/BATCH-47/BATCH-47-ADMIN-01/20260311T072702Z-admin-runtime-proof.json"
+  ],
+  "files_touched": [
+    "docs/operations/orchestrator/proofs/BATCH-47/BATCH-47-ADMIN-01/20260311T072702Z-admin-runtime-proof.json"
+  ],
+  "tests_run": [
+    "bash scripts/runtime_host_check.sh",
+    "curl -fsS --max-time 10 http://127.0.0.1:8050/api/health",
+    "bash scripts/monitor_contract_smoke.sh --base-url http://127.0.0.1:7779",
+    "bash scripts/fc_status_brief.sh",
+    "bash scripts/health_snapshot.sh",
+    "python3 inline probe for http://127.0.0.1:8050/api/forecasts/policy-impact?limit=3&debug=true"
+  ],
+  "commit_sha": "SKIP(no_code_or_config_change)",
+  "architecture_check": "Runtime/admin-only intervention. No code or config path changed; repair stayed on the existing monitor process boundary and reused the canonical backend and monitor endpoints.",
+  "vision_alignment": "BATCH-47 remains runtime-unblocked: sector-to-company transmission delivery is observable again through the existing monitor/runtime surfaces without widening scope beyond admin recovery."
+}

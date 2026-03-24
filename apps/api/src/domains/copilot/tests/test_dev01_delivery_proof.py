@@ -1,5 +1,5 @@
 """
-BATCH-71-DEV-01: Personal Finance Copilot - Minimal Slice Delivery Proof
+BATCH-83-DEV-01: Personal Finance Copilot - Minimal Slice Delivery Proof
 
 Task: Build a personal finance copilot that starts with a brief of the day, 
       lets the user ask or open.

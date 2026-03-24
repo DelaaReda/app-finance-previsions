@@ -18,7 +18,7 @@ def _run_context(workboard_role_has_work: str, workboard_role_has_ready: str, wo
     with tempfile.TemporaryDirectory() as td:
         workspace = Path(td)
         (workspace / "docs/orchestrator-ops").mkdir(parents=True, exist_ok=True)
-        (workspace / "docs/planning").mkdir(parents=True, exist_ok=True)
+        (workspace / "docs/product/planning").mkdir(parents=True, exist_ok=True)
         (workspace / "state").mkdir(parents=True, exist_ok=True)
         (workspace / "memory/agents").mkdir(parents=True, exist_ok=True)
         (workspace / "docs/ops").mkdir(parents=True, exist_ok=True)
@@ -27,7 +27,7 @@ def _run_context(workboard_role_has_work: str, workboard_role_has_ready: str, wo
         (workspace / "docs/orchestrator-ops/priority-queue.json").write_text(
             json.dumps({"items": []}), encoding="utf-8"
         )
-        (workspace / "docs/planning/WORKSTATE.md").write_text("none\n", encoding="utf-8")
+        (workspace / "docs/product/planning/WORKSTATE.md").write_text("none\n", encoding="utf-8")
         (workspace / "state/dev.last_contract").write_text(
             "STATUS: IN_PROGRESS\nDELTA: DEV_TICK\nNEXT_ACTION_UNIQUE: DEV_ACTION\n",
             encoding="utf-8",
