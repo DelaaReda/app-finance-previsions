@@ -3,6 +3,23 @@
  * Lazy-loads HTML fragment files into DOM targets.
  */
 
+function cloneScript(script) {
+  const nextScript = document.createElement('script');
+  for (const attr of script.attributes) {
+    nextScript.setAttribute(attr.name, attr.value);
+  }
+  nextScript.textContent = script.textContent;
+  return nextScript;
+}
+
+function activateInlineScripts(target) {
+  const scripts = Array.from(target.querySelectorAll('script'));
+  scripts.forEach((script) => {
+    const nextScript = cloneScript(script);
+    script.parentNode?.replaceChild(nextScript, script);
+  });
+}
+
 /**
  * Load a single HTML component into a target selector.
  * @param {string} path - relative path to HTML file
@@ -15,6 +32,7 @@ export async function loadComponent(path, target) {
     const res = await fetch(path);
     if (res.ok) {
       el.innerHTML = await res.text();
+      activateInlineScripts(el);
       return true;
     } else {
       console.warn('[ComponentLoader] 404:', path);

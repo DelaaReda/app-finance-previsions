@@ -189,9 +189,9 @@ def test_get_conversation_with_limit():
         )
     
     result = conversation_history.get_conversation(conversation_id=conv_id, limit=3)
-    
+
     assert result["status"] == "ok"
-    assert result["returned_count"] == 3
+    assert result["message_count"] == 3
     assert result["total_message_count"] == 6  # 1 initial + 5 added
 
 
@@ -207,9 +207,8 @@ def test_list_conversations():
         conv_ids.append(result["conversation_id"])
     
     result = conversation_history.list_conversations(limit=10)
-    
-    assert result["status"] is None or "ok" not in result or result.get("returned_count", 0) >= 3
-    assert result["returned_count"] >= 3
+
+    assert result.get("returned_count", 0) >= 3
 
 
 def test_list_conversations_filter_by_tickers():

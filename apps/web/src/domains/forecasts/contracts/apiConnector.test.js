@@ -577,7 +577,7 @@ test('getCopilotContext normalizes brief-first entry points into ask/open starte
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'overview' },
+      { id: 'brief_of_day', target: 'market' },
       { id: 'open_copilot', target: 'copilot' },
     ]
   );
@@ -731,7 +731,7 @@ test('getCopilotContext normalizes direct copilot_start open targets for the exi
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'overview' },
+      { id: 'brief_of_day', target: 'market' },
       { id: 'copilot', target: 'copilot' },
     ]
   );
@@ -1204,7 +1204,7 @@ test('getCopilotStart unwraps the dedicated starter contract and normalizes open
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
     [
-      { id: 'brief_of_day', target: 'overview' },
+      { id: 'brief_of_day', target: 'market' },
       { id: 'open_copilot', target: 'copilot' },
     ]
   );
@@ -1537,7 +1537,7 @@ test('getCopilotStart falls back to copilot context when the starter route is un
   );
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
-    [{ id: 'brief_of_day', target: 'overview' }]
+    [{ id: 'brief_of_day', target: 'market' }]
   );
 });
 
@@ -1615,7 +1615,7 @@ test('getCopilotStart keeps ask/open starter actions when namespaced start falls
   );
   assert.deepEqual(
     copilotStart.open.map((item) => ({ id: item.id, target: item.target })),
-    [{ id: 'brief_of_day', target: 'overview' }]
+    [{ id: 'brief_of_day', target: 'market' }]
   );
 });
 
@@ -2686,7 +2686,7 @@ test('getCopilotStart injects an event calendar open action when the brief carri
   assert.deepEqual(
     JSON.parse(JSON.stringify(payload.copilot_start.open.map((item) => ({ id: item.id, target: item.target })))),
     [
-      { id: 'brief_of_day', target: 'overview' },
+      { id: 'brief_of_day', target: 'market' },
       { id: 'event_calendar', target: 'calendar' },
     ],
   );

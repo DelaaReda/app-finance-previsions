@@ -645,9 +645,14 @@ function executeCopilotAction(kind, target, prefillQuestion) {
         setCopilotQuestion(prefillQuestion);
         focusCopilotInput();
     } else if (kind === 'open' && target) {
-        // Navigate to target
-        if (target.startsWith('/')) {
+        if (typeof target === 'string' && target.startsWith('#')) {
             window.location.hash = target;
+        } else if (typeof target === 'string' && target.startsWith('/')) {
+            if (window.location && typeof window.location.assign === 'function') {
+                window.location.assign(target);
+            } else if (window.location) {
+                window.location.href = target;
+            }
         } else {
             showToast(`Opening ${target}...`, 'info');
         }

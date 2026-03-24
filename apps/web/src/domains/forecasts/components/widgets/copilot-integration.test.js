@@ -1,10 +1,10 @@
 /**
- * BATCH-74-DEV-02: Personal Finance Copilot - Minimal Vertical Slice Integration Test
+ * BATCH-74-DEV-02: Personal Finance Copilot - Minimal Vertical Slice UI Contract Test
  * 
- * Verifies the minimal working slice:
- * 1. Backend /api/copilot/start returns brief_of_day + ask/open actions
- * 2. Frontend copilot-panel.html renders the brief correctly
- * 3. End-to-end wiring from API to UI
+ * Verifies the minimal working slice at the contract/render layer:
+ * 1. The expected /api/copilot/start payload shape includes brief_of_day + ask/open actions
+ * 2. Frontend copilot-panel.html render helpers consume that shape correctly
+ * 3. The widget file exposes the expected API wiring hooks
  * 
  * Product vision: "Build a personal finance copilot that starts with a brief of the day"
  */
@@ -14,7 +14,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// Mock API response structure (simulates backend /api/copilot/start)
+// Mock API response structure matching the backend /api/copilot/start contract.
 const mockApiResponse = {
   ok: true,
   data: {
@@ -234,5 +234,5 @@ test('BATCH-74-DEV-02: Copilot widget HTML file exists and is valid', () => {
   assert.ok(content.includes('/api/copilot/start'), 'Must wire to backend API');
 });
 
-console.log('\n✅ BATCH-74-DEV-02: All integration tests passed!');
-console.log('Minimal vertical slice verified: Backend API → Frontend Widget → User Value');
+console.log('\n✅ BATCH-74-DEV-02: All UI contract tests passed!');
+console.log('Minimal vertical slice verified: payload contract + widget rendering + wiring hooks');

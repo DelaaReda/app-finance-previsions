@@ -103,6 +103,28 @@
     window.COPILOT_API_BASE = window.FinanceAPI?.BASE_URL || 'http://localhost:8050/api';
     window.COPILOT_NAMESPACE = 'personal-finance';
 
+    function cloneInlineScript(script) {
+      const nextScript = document.createElement('script');
+      for (const attr of script.attributes) {
+        nextScript.setAttribute(attr.name, attr.value);
+      }
+      nextScript.textContent = script.textContent;
+      return nextScript;
+    }
+
+    function activateInlineScripts(target) {
+      const scripts = Array.from(target.querySelectorAll('script'));
+      scripts.forEach((script) => {
+        const nextScript = cloneInlineScript(script);
+        script.parentNode?.replaceChild(nextScript, script);
+      });
+    }
+
+    function injectWidgetMarkup(container, html) {
+      container.innerHTML = html;
+      activateInlineScripts(container);
+    }
+
     /**
      * Load copilot panel widget dynamically
      */
@@ -115,7 +137,7 @@
         const html = await response.text();
         const container = document.getElementById('copilot-panel-container');
         if (container) {
-          container.innerHTML = html;
+          injectWidgetMarkup(container, html);
 
           // Override the loadCopilotStart function to use personal-finance endpoint
           const originalLoadCopilotStart = window.loadCopilotStart;

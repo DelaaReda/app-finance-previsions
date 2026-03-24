@@ -33,7 +33,10 @@ function buildHarness({ dashedContainer, camelContainer, panel } = {}) {
     initCopilotPanel() {
       initCalls += 1;
     },
+    window: {},
   };
+  sandbox.window.window = sandbox.window;
+  sandbox.globalThis = sandbox;
 
   vm.createContext(sandbox);
   vm.runInContext(
@@ -78,6 +81,7 @@ test('bootstrapCopilotPanel initializes the visible panel container', () => {
 
   assert.equal(dashedContainer.style.display, 'block');
   assert.equal(harness.initCalls, 1);
+  assert.equal(harness.sandbox.window.bootstrapCopilotPanel, harness.sandbox.bootstrapCopilotPanel);
 });
 
 test('renderCopilotPortfolio displays portfolio context with holdings', () => {
@@ -228,4 +232,56 @@ test('renderCopilotPortfolio shows alert severity styling', () => {
 
   assert.ok(alertList.innerHTML.includes('alert-medium'), 'Should include severity class');
   assert.ok(alertList.innerHTML.includes('AAPL'), 'Should show symbol');
+});
+
+test('executeCopilotAction navigates open route targets with location.assign', () => {
+  const calls = [];
+  const sandbox = {
+    window: {
+      location: {
+        assign(target) {
+          calls.push({ type: 'assign', target });
+        },
+        hash: '',
+      },
+    },
+    showToast(message, level) {
+      calls.push({ type: 'toast', message, level });
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    extractFunction('executeCopilotAction', 'setCopilotQuestion'),
+    sandbox,
+    { filename: 'copilot-panel.html' },
+  );
+
+  sandbox.executeCopilotAction('open', '/brief/daily');
+
+  assert.deepEqual(calls[0], { type: 'assign', target: '/brief/daily' });
+  assert.deepEqual(calls[1], { type: 'toast', message: 'open /brief/daily', level: 'info' });
+});
+
+test('executeCopilotAction preserves hash navigation for in-page targets', () => {
+  const calls = [];
+  const location = { hash: '' };
+  const sandbox = {
+    window: { location },
+    showToast(message, level) {
+      calls.push({ message, level });
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    extractFunction('executeCopilotAction', 'setCopilotQuestion'),
+    sandbox,
+    { filename: 'copilot-panel.html' },
+  );
+
+  sandbox.executeCopilotAction('open', '#copilot');
+
+  assert.equal(location.hash, '#copilot');
+  assert.deepEqual(calls, [{ message: 'open #copilot', level: 'info' }]);
 });

@@ -1044,7 +1044,7 @@ function loadSanitizeCopilotStart() {
         || normalizedTarget === 'live_brief'
         || normalizedTarget === 'daily_brief'
       ) {
-        return 'overview';
+        return 'market';
       }
       if (
         normalizedId === 'ask_copilot'
@@ -1498,7 +1498,7 @@ function loadRunCopilotStartOpen() {
         || normalizedTarget === 'live_brief'
         || normalizedTarget === 'daily_brief'
       ) {
-        return 'overview';
+        return 'market';
       }
       if (
         normalizedId === 'ask_copilot'
@@ -1590,7 +1590,7 @@ function loadRunCopilotStartOpenTickerHarness() {
         || normalizedTarget === 'live_brief'
         || normalizedTarget === 'daily_brief'
       ) {
-        return 'overview';
+        return 'market';
       }
       if (
         normalizedId === 'ask_copilot'
@@ -3653,14 +3653,14 @@ test('runCopilotStartOpen opens the overlay for a nested copilot target', () => 
   assert.deepEqual(calls.toasts, []);
 });
 
-test('runCopilotStartOpen routes the landing brief back to overview and scrolls the hero brief', () => {
+test('runCopilotStartOpen routes the landing brief to the market tab and scrolls the market brief', () => {
   const { sandbox, overlay, calls } = loadRunCopilotStartOpen();
 
   sandbox.runCopilotStartOpen('/brief/daily');
 
   assert.equal(overlay.style.display, 'none');
-  assert.deepEqual(calls.switched, ['overview']);
-  assert.equal(calls.scrolled, 1);
+  assert.deepEqual(calls.switched, ['market']);
+  assert.equal(calls.scrolled, 0);
   assert.deepEqual(calls.toasts, []);
 });
 
@@ -3903,7 +3903,7 @@ test('renderHeroCopilotBrief swaps the static hero copy for live brief and actio
       tickers: ['NVDA'],
     },
   ]);
-  assert.deepEqual(openCalls, ['overview']);
+  assert.deepEqual(openCalls, ['market']);
 });
 
 test('renderHeroCopilotBrief accepts raw copilot_start payloads from app state', () => {
@@ -3943,7 +3943,7 @@ test('renderHeroCopilotBrief accepts raw copilot_start payloads from app state',
       tickers: ['NVDA', 'MSFT'],
     },
   ]);
-  assert.deepEqual(openCalls, ['overview']);
+  assert.deepEqual(openCalls, ['market']);
 });
 
 test('renderPortfolioHealthFullDetails maps portfolio state and risk profile into the full analysis panel', () => {
@@ -4365,7 +4365,7 @@ test('sanitizeCopilotStart preserves starter tickers and normalizes brief open t
   });
 
   assert.deepEqual(JSON.parse(JSON.stringify(result.ask[0].tickers)), ['NVDA', 'MSFT']);
-  assert.equal(result.open[0].target, 'overview');
+  assert.equal(result.open[0].target, 'market');
 });
 
 test('sanitizeCopilotStart maps open_copilot open action to copilot without relying on target', () => {
@@ -4403,7 +4403,7 @@ test('sanitizeCopilotStart maps trailing-slash copilot open action to copilot', 
   assert.equal(result.open[0].target, 'copilot');
 });
 
-test('sanitizeCopilotStart maps trimmed brief open target variants to overview', () => {
+test('sanitizeCopilotStart maps trimmed brief open target variants to market', () => {
   const sandbox = loadSanitizeCopilotStart();
 
   const result = sandbox.sanitizeCopilotStart({
@@ -4418,7 +4418,7 @@ test('sanitizeCopilotStart maps trimmed brief open target variants to overview',
 
   assert.equal(result.open.length, 1);
   assert.equal(result.open[0].id, 'daily_brief');
-  assert.equal(result.open[0].target, 'overview');
+  assert.equal(result.open[0].target, 'market');
 });
 
 test('sanitizeCopilotStart maps nested copilot open targets to copilot', () => {
@@ -4819,7 +4819,7 @@ test('buildCopilotStartState derives ticker open actions from focus tickers', ()
   assert.deepEqual(
     JSON.parse(JSON.stringify(state.open.map((item) => ({ id: item.id, target: item.target })))),
     [
-      { id: 'brief_of_day', target: 'overview' },
+      { id: 'brief_of_day', target: 'market' },
       { id: 'open_nvda', target: 'ticker:NVDA' },
       { id: 'open_msft', target: 'ticker:MSFT' },
     ]

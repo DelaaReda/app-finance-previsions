@@ -82,6 +82,10 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _cache_now_epoch() -> float:
+    return datetime.now(timezone.utc).timestamp()
+
+
 def _normalize_string_list(value: Any) -> List[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
@@ -452,8 +456,31 @@ def _copilot_start_cache_key(
 def _copilot_start_cached_payload(
     cache_key: Optional[str],
 ) -> Optional[Dict[str, Any]]:
-    if not cache_key or not callable(response_cache_get):
+    if not cache_key:
         return None
+    if not callable(response_cache_get):
+        cached = _COPILOT_START_CACHE.get(cache_key)
+        if not isinstance(cached, dict):
+            return None
+        payload = cached.get("payload")
+        stored_at = float(cached.get("stored_at") or 0.0)
+        age_seconds = max(0.0, _cache_now_epoch() - stored_at) if stored_at else 0.0
+        if COPILOT_START_CACHE_TTL_SECONDS > 0 and age_seconds > COPILOT_START_CACHE_TTL_SECONDS:
+            _COPILOT_START_CACHE.pop(cache_key, None)
+            return None
+        if not isinstance(payload, dict):
+            return None
+        response = dict(payload)
+        response["cache"] = {
+            "hit": True,
+            "age_seconds": age_seconds,
+            "ttl_seconds": COPILOT_START_CACHE_TTL_SECONDS,
+        }
+        source = response.get("source") if isinstance(response.get("source"), list) else []
+        response["source"] = list(source) if source else ["copilot_start_route"]
+        if "copilot_start_cache_hit" not in response["source"]:
+            response["source"].append("copilot_start_cache_hit")
+        return response
     return response_cache_get(
         _COPILOT_START_CACHE,
         cache_key,
@@ -482,7 +509,50 @@ def _copilot_start_store_payload(
             response,
             max_entries=COPILOT_START_CACHE_MAX_ENTRIES,
         )
+    elif cache_key:
+        cached_payload = dict(response)
+        _COPILOT_START_CACHE[cache_key] = {
+            "payload": cached_payload,
+            "stored_at": _cache_now_epoch(),
+        }
+        while len(_COPILOT_START_CACHE) > COPILOT_START_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_COPILOT_START_CACHE))
+            if oldest_key == cache_key and len(_COPILOT_START_CACHE) == 1:
+                break
+            _COPILOT_START_CACHE.pop(oldest_key, None)
     return response
+
+
+async def _copilot_start_compute_singleflight(
+    cache_key: str,
+    compute_fn,
+):
+    if callable(compute_singleflight):
+        return await compute_singleflight(
+            _COPILOT_START_INFLIGHT,
+            _COPILOT_START_INFLIGHT_LOCK,
+            cache_key,
+            compute_fn,
+        )
+
+    async with _COPILOT_START_INFLIGHT_LOCK:
+        inflight_task = _COPILOT_START_INFLIGHT.get(cache_key)
+        if inflight_task is None:
+            inflight_task = asyncio.create_task(compute_fn())
+            _COPILOT_START_INFLIGHT[cache_key] = inflight_task
+            created = True
+        else:
+            created = False
+
+    try:
+        payload = await inflight_task
+        return payload, created
+    finally:
+        if created:
+            async with _COPILOT_START_INFLIGHT_LOCK:
+                current_task = _COPILOT_START_INFLIGHT.get(cache_key)
+                if current_task is inflight_task:
+                    _COPILOT_START_INFLIGHT.pop(cache_key, None)
 
 
 def _resolve_effective_scope(
@@ -783,10 +853,10 @@ async def copilot_start(
 ):
     scope = _normalize_scope(tickers)
     normalized_tickers = list((scope or {}).get("tickers") or [])
-    # The starter payload can embed user-scoped context such as portfolio drift alerts.
-    # Route-level caching keyed only by brief/tickers can therefore serve stale or incomplete
-    # personalized data across requests, so keep this endpoint uncached.
-    cache_key = None
+    cache_key = _copilot_start_cache_key(
+        tickers=normalized_tickers,
+        namespace=namespace,
+    )
 
     if not debug:
         cached_payload = _copilot_start_cached_payload(cache_key)
@@ -871,15 +941,10 @@ async def copilot_start(
                 allocation_drift_alerts=fallback_payload.get("allocation_drift_alerts"),
             )
 
-    if debug or not callable(compute_singleflight) or not cache_key:
+    if debug or not cache_key:
         return {"ok": True, "data": _copilot_start_store_payload(None if debug else cache_key, await _compute_payload())}
 
-    payload, _ = await compute_singleflight(
-        _COPILOT_START_INFLIGHT,
-        _COPILOT_START_INFLIGHT_LOCK,
-        cache_key,
-        _compute_payload,
-    )
+    payload, _ = await _copilot_start_compute_singleflight(cache_key, _compute_payload)
     cached_payload = _copilot_start_cached_payload(cache_key)
     if isinstance(cached_payload, dict):
         return {"ok": True, "data": cached_payload}

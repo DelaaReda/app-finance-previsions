@@ -5798,7 +5798,7 @@ function normalizeCopilotStartOpenTarget(target, id = '') {
     || normalizedTarget === 'live_brief'
     || normalizedTarget === 'daily_brief'
   ) {
-    return 'overview';
+    return 'market';
   }
   if (
     normalizedId === 'event_calendar'
