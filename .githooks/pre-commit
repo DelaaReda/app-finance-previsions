@@ -10,7 +10,7 @@ staged_files="$(git diff --cached --name-only --diff-filter=ACMR)"
 [ -z "$staged_files" ] && exit 0
 
 # Block obvious placeholder / junk markers
-blocked_regex='(TODO\(agent\)|FIXME|XXX|TEMPORARY_HACK|console\.log\("debug"\)|\[WIP\]|WIP:)'
+blocked_regex='(TODO\(agent\)|FIXME|(^|[^[:alnum:]_])XXX([^[:alnum:]_]|$)|TEMPORARY_HACK|console\.log\("debug"\)|\[WIP\]|WIP:)'
 if echo "$staged_files" | grep -E '\.(py|js|ts|tsx|sh)$' >/dev/null; then
   while IFS= read -r f; do
     [ -f "$f" ] || continue

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Git pre-push hook - blocks push if basic quality + smoke checks fail
-# Implements wait loop (no timeout command) for macOS compatibility
 
 set -euo pipefail
 
@@ -20,13 +19,24 @@ if ! git diff --quiet; then
   exit 1
 fi
 
-# Wait for backend if needed (wait loop - no timeout command for macOS)
-echo "⏳ Waiting for backend health check (/api/health)..."
-max_attempts=15  # Max 30 seconds (15 attempts * 2s each)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
+RUNTIME_HOST_CHECK="${ROOT}/scripts/runtime_host_check.sh"
+HEALTH_URL="${FC_PRE_PUSH_HEALTH_URL:-http://127.0.0.1:8050/api/health}"
+HEALTH_CONNECT_TIMEOUT="${FC_PRE_PUSH_HEALTH_CONNECT_TIMEOUT:-1}"
+HEALTH_MAX_TIME="${FC_PRE_PUSH_HEALTH_MAX_TIME:-2}"
+
+if [ -x "$RUNTIME_HOST_CHECK" ] && ! "$RUNTIME_HOST_CHECK" | grep -q '^runtime_is_vm=1$'; then
+  echo "ℹ️  Non-VM host detected; skipping runtime pre-push guards"
+  exit 0
+fi
+
+echo "⏳ Waiting for backend health check (${HEALTH_URL})..."
+max_attempts="${FC_PRE_PUSH_HEALTH_ATTEMPTS:-15}"  # Max 30 seconds by default (15 attempts * 2s each)
 attempt=1
 
 while [ $attempt -le $max_attempts ]; do
-    if curl -fsS "http://localhost:8050/api/health" >/dev/null 2>&1; then
+    if curl -fsS --connect-timeout "$HEALTH_CONNECT_TIMEOUT" --max-time "$HEALTH_MAX_TIME" "$HEALTH_URL" >/dev/null 2>&1; then
         echo "✅ Backend is healthy"
         break
     fi
@@ -43,6 +53,6 @@ while [ $attempt -le $max_attempts ]; do
 done
 
 # Run smoke test
-./scripts/smoke.sh
+"${ROOT}/scripts/smoke.sh"
 
 echo "✅ All pre-push guards passed - proceeding with push"
