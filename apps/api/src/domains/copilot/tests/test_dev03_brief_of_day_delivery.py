@@ -455,13 +455,17 @@ class TestDEV03PortfolioDriftAlerts:
     def test_allocation_drift_alerts_present_in_start_response(self, monkeypatch):
         """
         DEV-03: Portfolio drift alerts must be exposed in copilot start response.
-        
+
         When the user has a saved portfolio with drift from target allocation,
         the brief must include allocation_drift_alerts with:
         - active: boolean indicating if alerts exist
         - alerts: list of drift violations
         - weights_analyzed: current portfolio weights
         """
+        # Clear cache to ensure fresh payload with mocked data
+        from domains.copilot.api import copilot as copilot_route
+        copilot_route._COPILOT_START_CACHE.clear()
+        
         # Mock build_context_payload to simulate drift scenario
         async def mock_build_context_payload_with_drift(context_service_cls=None, scope=None):
             return {
