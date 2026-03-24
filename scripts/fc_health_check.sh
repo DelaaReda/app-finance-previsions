@@ -93,6 +93,7 @@ fi
 # ── 3. Monitor Contract ────────────────────────────────────
 echo -e "\n${BOLD}[ Monitor Contract ]${NC}"
 MONITOR_BASE_URL="${FC_MONITOR_BASE_URL:-http://127.0.0.1:7779}"
+MONITOR_STATUS_ENDPOINT="${FC_MONITOR_STATUS_ENDPOINT:-/api/status?lite=1}"
 MONITOR_SMOKE="$ROOT/scripts/monitor_contract_smoke.sh"
 if [[ -x "$MONITOR_SMOKE" ]]; then
   MONITOR_SUMMARY="$("$MONITOR_SMOKE" --base-url "$MONITOR_BASE_URL" 2>&1)"
@@ -103,7 +104,7 @@ if [[ -x "$MONITOR_SMOKE" ]]; then
     fail "Monitor API contract FAILED (${MONITOR_BASE_URL}) | ${MONITOR_SUMMARY}"
   fi
 else
-  MON_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "${MONITOR_BASE_URL}/api/status" 2>/dev/null)
+  MON_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "${MONITOR_BASE_URL}${MONITOR_STATUS_ENDPOINT}" 2>/dev/null)
   [[ "$MON_CODE" == "200" ]] && warn "monitor_contract_smoke.sh missing, fallback check only (/api/status=200)" || fail "Monitor API not reachable (${MONITOR_BASE_URL})"
 fi
 
@@ -128,25 +129,28 @@ fi
 
 # ── 3b. Issue Reporting Compliance ────────────────────────
 echo -e "\n${BOLD}[ Issue Reporting Compliance ]${NC}"
-ISSUE_STATUS_JSON="$(curl -s --max-time 3 "${MONITOR_BASE_URL}/api/status" 2>/dev/null)"
+ISSUE_STATUS_JSON="$(curl -s --max-time 5 "${MONITOR_BASE_URL}/api/issues/summary?window_min=60" 2>/dev/null)"
 if [[ -n "$ISSUE_STATUS_JSON" ]]; then
+  SCHEDULED_ROLE_COUNT="${#SCHEDULED_ROLES[@]}"
   ISSUE_SUMMARY="$(echo "$ISSUE_STATUS_JSON" | python3 -c "import sys,json
 try:
     d=json.load(sys.stdin)
 except Exception:
     print('ERR')
     raise SystemExit(0)
-ir=d.get('issue_reporting') if isinstance(d,dict) else None
-if not isinstance(ir,dict):
+if not isinstance(d,dict):
     print('ERR')
     raise SystemExit(0)
-roles_total=int(ir.get('roles_total',0) or 0)
-missing=ir.get('roles_missing_report',[])
-if not isinstance(missing,list):
-    missing=[]
-reports_with_issues=int(ir.get('reports_with_issues',0) or 0)
-critical_count=int(ir.get('critical_count',0) or 0)
-print(f'{roles_total}|{len(missing)}|{reports_with_issues}|{critical_count}|{','.join(missing[:6]) if missing else 'none'}')
+roles_total=${SCHEDULED_ROLE_COUNT}
+issues_gap=d.get('issue_publication_gap_roles',[])
+if not isinstance(issues_gap,list):
+    issues_gap=[]
+issues_recent_by_role=d.get('issues_recent_by_role',{})
+if not isinstance(issues_recent_by_role,dict):
+    issues_recent_by_role={}
+reports_with_issues=sum(1 for value in issues_recent_by_role.values() if int(value or 0) > 0)
+critical_count=int(d.get('critical_open_count',0) or 0)
+print(f'{roles_total}|{len(issues_gap)}|{reports_with_issues}|{critical_count}|{','.join(issues_gap[:6]) if issues_gap else 'none'}')
 " 2>/dev/null)"
   if [[ "$ISSUE_SUMMARY" != "ERR" && -n "$ISSUE_SUMMARY" ]]; then
     IFS='|' read -r IR_TOTAL IR_MISSING IR_OPEN IR_CRIT IR_MISSING_ROLES <<< "$ISSUE_SUMMARY"
@@ -156,7 +160,7 @@ print(f'{roles_total}|{len(missing)}|{reports_with_issues}|{critical_count}|{','
       warn "Issue reports incomplets | missing=${IR_MISSING:-0}/${IR_TOTAL:-0} roles=${IR_MISSING_ROLES:-none} | open=${IR_OPEN:-0} | critical=${IR_CRIT:-0}"
     fi
   else
-    warn "Impossible de parser issue_reporting depuis /api/status"
+    warn "Impossible de parser la synthèse d'issues depuis /api/issues/summary"
   fi
 else
   warn "Issue reporting indisponible (monitor API non joignable)"
@@ -413,14 +417,14 @@ info "quality window: roles=$(IFS=,; echo "${QUALITY_ROLES[*]}") minutes=${QUALI
 echo -e "\n${BOLD}[ Issue Publication ]${NC}"
 ISSUE_EVENTS_FILE="$ROOT/logs-codex-runs/orchestrator-state/agent-iteration-issues.jsonl"
 [[ -f "$ISSUE_EVENTS_FILE" ]] || ISSUE_EVENTS_FILE="$ROOT/docs/operations/orchestrator/agent-iteration-issues.jsonl"
-ISSUE_STATUS_SNAPSHOT="$(curl -s --max-time 3 "${MONITOR_BASE_URL}/api/status" 2>/dev/null)"
+ISSUE_STATUS_SNAPSHOT="$(curl -s --max-time 5 "${MONITOR_BASE_URL}/api/issues/summary?window_min=120" 2>/dev/null)"
 ISSUE_STATUS_SUMMARY="$(printf '%s' "$ISSUE_STATUS_SNAPSHOT" | python3 -c "import json,sys
 try:
     d=json.load(sys.stdin)
 except Exception:
     print('ERR')
     raise SystemExit(0)
-roles=d.get('roles', [])
+roles=d.get('roles_touched', [])
 if not isinstance(roles, list):
     roles=[]
 gaps=d.get('issue_publication_gap_roles', [])
