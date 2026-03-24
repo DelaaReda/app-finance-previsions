@@ -269,7 +269,7 @@ test('BATCH-82-DEV-02: personal-finance-start.html page exists', () => {
   assert.ok(content.length > 500, 'Page must have substantial content');
   assert.ok(content.includes('copilot-panel-container'), 'Must have copilot panel container');
   assert.ok(content.includes('loadCopilotWidget'), 'Must load copilot widget');
-  assert.ok(content.includes('/personal-finance/start'), 'Must wire to personal-finance endpoint');
+  assert.ok(content.includes('/judge/personal-finance/start'), 'Must wire to judge personal-finance start endpoint');
 });
 
 test('BATCH-82-DEV-02: Personal finance page loads widget dynamically', () => {
@@ -372,8 +372,10 @@ async function runAllTests() {
     { name: 'Widget wires to API', fn: () => {
       const widgetPath = path.join(__dirname, 'copilot-panel.html');
       const source = fs.readFileSync(widgetPath, 'utf8');
-      assert.ok(source.includes('/api/copilot/start'), 'Must wire to /api/copilot/start');
-      assert.ok(source.includes('/api/copilot/ask'), 'Must wire to /api/copilot/ask');
+      assert.ok(source.includes('function getCopilotApiBase('), 'Must expose API base helper');
+      assert.ok(source.includes('function getCopilotNamespace('), 'Must expose namespace helper');
+      assert.ok(source.includes('${getCopilotApiBase()}/${namespace}/start'), 'Must build start endpoint from namespace');
+      assert.ok(source.includes('${getCopilotApiBase()}/${namespace}/ask'), 'Must build ask endpoint from namespace');
     }},
     { name: 'Renders brief summary', fn: () => {
       const widgetPath = path.join(__dirname, 'copilot-panel.html');
