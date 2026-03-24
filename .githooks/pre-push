@@ -13,9 +13,15 @@ fi
 
 echo "🧪 Running pre-push guards..."
 
-# Ensure workspace is clean enough (no unstaged changes) to avoid pushing accidental state
-if ! git diff --quiet; then
-  echo "❌ Unstaged changes detected. Commit or stash before push."
+# Ignore live-generated runtime/state artifacts that may legitimately drift
+# during a push, but still block on real unstaged source/doc changes.
+unstaged_files="$(git diff --name-only || true)"
+significant_unstaged="$(
+  printf '%s\n' "$unstaged_files" | grep -Ev '^$|^docs/operations/orchestrator/legacy/planner-subagents-(events\.jsonl|registry\.json)$|^docs/operations/orchestrator/(parallel-workstreams|priority-queue)\.json$|^memory/agents/admin-agents\.md$' || true
+)"
+if [ -n "$significant_unstaged" ]; then
+  echo "❌ Unstaged significant changes detected. Commit or stash before push."
+  echo "$significant_unstaged" | sed 's/^/   - /'
   exit 1
 fi
 
