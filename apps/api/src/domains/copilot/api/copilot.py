@@ -385,8 +385,17 @@ def _build_start_response(
         payload["portfolio_context"] = dict(portfolio_context)
     if isinstance(regime_detection, dict) and regime_detection:
         payload["regime_detection"] = dict(regime_detection)
-    if isinstance(allocation_drift_alerts, dict) and allocation_drift_alerts:
+    # BATCH-80-DEV-03: Always include allocation_drift_alerts (even if empty/inactive)
+    # Tests require this field to always be present for portfolio drift detection
+    if isinstance(allocation_drift_alerts, dict):
         payload["allocation_drift_alerts"] = dict(allocation_drift_alerts)
+    else:
+        # Fallback: always expose the field, even when no drift detected
+        payload["allocation_drift_alerts"] = {
+            "active": False,
+            "alerts": [],
+            "weights_analyzed": {},
+        }
     return payload
 
 
