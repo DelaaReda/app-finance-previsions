@@ -1,5 +1,5 @@
 """
-BATCH-63-DEV-03: Personal Finance Copilot - Minimal Slice Verification
+BATCH-74-DEV-02: Personal Finance Copilot - Minimal Slice Verification
 
 Test the personal finance copilot start endpoint that delivers:
 1. Brief of the day (market summary, sentiment, risks, macro, sectors)
@@ -175,6 +175,43 @@ class TestPersonalFinanceCopilotIntegration:
         assert result["ask"][0]["target"] == "/personal-finance/ask"
         assert result["open"][0]["target"] == "/personal-finance"
         assert result["scope_tickers"] == ["NVDA"]
+
+    def test_personal_finance_start_splits_comma_delimited_tickers(self, monkeypatch):
+        async def fake_build_context_payload(**_kwargs):
+            return {
+                "daily_brief": {
+                    "summary": "Markets are steady ahead of CPI.",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-03-14T02:00:00Z",
+                    "freshness": "2026-03-14T02:00:00Z",
+                    "source": ["personal_finance_start_route_contract"],
+                },
+                "entry_points": [
+                    {"id": "brief_of_day", "kind": "open", "target": "/brief/daily"},
+                    {"id": "ask_copilot", "kind": "ask", "target": "/copilot/ask"},
+                    {"id": "open_copilot", "kind": "open", "target": "/copilot"},
+                ],
+                "copilot_start": {
+                    "brief_of_day": {
+                        "summary": "Markets are steady ahead of CPI.",
+                        "market_sentiment": "NEUTRAL",
+                        "generated_at": "2026-03-14T02:00:00Z",
+                        "freshness": "2026-03-14T02:00:00Z",
+                        "source": ["personal_finance_start_route_contract"],
+                    },
+                    "ask": [{"id": "ask_copilot", "kind": "ask", "target": "/copilot/ask"}],
+                    "open": [{"id": "open_copilot", "kind": "open", "target": "/copilot"}],
+                },
+            }
+
+        monkeypatch.setattr(copilot_route.copilot_service, "build_context_payload", fake_build_context_payload)
+
+        client = _client()
+        response = client.get("/api/personal-finance/start?tickers=nvda,aapl")
+
+        assert response.status_code == 200
+        result = response.json()["data"]
+        assert result["scope_tickers"] == ["NVDA", "AAPL"]
 
     def test_personal_finance_ask_endpoint_route_contract(self, monkeypatch):
         async def fake_build_ask_payload(**_kwargs):

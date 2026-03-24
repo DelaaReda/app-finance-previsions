@@ -40,7 +40,7 @@ storage.io                          | storage.io                                
 ✅ **Canonical paths used:**
 - Backend: `apps/api/src/domains/copilot/`
 - Runtime data: `apps/api/runtime/data/brief_daily.json`
-- **No legacy imports detected** (no `copilot-app/*`, `backend/src/backend/src/*`, `src.*`)
+- **No forbidden path imports detected** (no `copilot-app/*`, `backend/src/backend/src/*`); compatibility fallback imports from `services.*` / `src.*` remain present in route/service modules
 
 ✅ **Endpoint patterns (Judge-style):**
 ```python
@@ -316,7 +316,7 @@ python3 -m pytest apps/api/src/domains/copilot/tests/ -k "dev01 or personal_fina
 | `apps/api/runtime/data/brief_daily.json` | Data | Daily brief snapshot | ~130 |
 
 **New files created:** 0 (all infrastructure already in place from BATCH-77)
-**Files modified:** 0 (no changes needed - verification only)
+**Files modified:** 1 (`BATCH-78-DEV-01-DELIVERY-PROOF.md` corrected to match current architecture evidence)
 
 ## Architecture Check
 
@@ -331,7 +331,8 @@ python3 -m pytest apps/api/src/domains/copilot/tests/ -k "dev01 or personal_fina
     "apps/api/src/api/templates/judge_like_endpoint",
     "apps/api/runtime/data/brief_daily.json"
   ],
-  "legacy_imports_detected": false,
+  "legacy_imports_detected": true,
+  "legacy_imports_scope": "Compatibility fallback imports from services.* / src.* are still present; forbidden copilot-app and duplicated backend/src paths were not detected.",
   "reuse_modules": [
     "copilot_service (business logic)",
     "judge_like_endpoint (cache/single-flight)",
@@ -368,9 +369,9 @@ python3 -m pytest apps/api/src/domains/copilot/tests/ -k "dev01 or personal_fina
 - ✅ Ask endpoint created
 
 ### After (BATCH-78 Verification)
-- ✅ **All 29 tests passing** - comprehensive test coverage
+- ✅ **All 43 targeted tests passing** - comprehensive test coverage
 - ✅ **Live endpoints verified** - contracts match documentation
-- ✅ **Architecture compliance proven** - no legacy imports, canonical paths only
+- ✅ **Architecture compliance proven** - canonical paths used for the delivered slice, with compatibility fallback imports still documented
 - ✅ **Reuse-first documented** - all modules traced to source
 - ✅ **Delivery proof complete** - this document serves as merge evidence
 
@@ -413,7 +414,7 @@ bash scripts/backend_regression_gate.sh --no-live
 - [x] Never-empty contract honored
 - [x] All tests passing (43 tests)
 - [x] Architecture compliance verified
-- [x] No forbidden paths or legacy imports
+- [x] No forbidden paths detected; compatibility fallback imports documented
 - [x] Delivery proof documented (this document)
 
 ---
