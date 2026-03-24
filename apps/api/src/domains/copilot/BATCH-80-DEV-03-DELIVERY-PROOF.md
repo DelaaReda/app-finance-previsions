@@ -6,7 +6,8 @@
 **Dependencies:** BATCH-80-DEV-02 ✅ SATISFIED
 **Date:** 2026-03-24
 **Role:** dev
-**Status:** ✅ COMPLETE - VERIFIED
+**Status:** ✅ COMPLETE - VERIFIED - MERGED
+**Commit:** 8befb199 (test cache fix) + 960fe819 (drift alerts always present)
 
 ---
 
@@ -176,7 +177,7 @@ apps/api/src/domains/copilot/tests/test_dev03_decision_journal_integration.py . 
 apps/api/src/domains/copilot/tests/test_dev03_portfolio_decision_integration.py . [ 64%]
 ............                                                             [100%]
 
-======================== 34 passed in 109.17s ================================
+======================== 34 passed in 63.24s ================================
 ```
 
 ### Test Coverage Breakdown
@@ -399,15 +400,20 @@ python3 -m pytest apps/api/src/domains/copilot/tests/test_dev03_*.py -v
 **Root Cause:**
 The `allocation_drift_alerts` field was only included in the response when non-empty. Tests expected this field to always be present (even when inactive) for consistent frontend handling.
 
+Additionally, one test (`test_allocation_drift_alerts_present_in_start_response`) had a test isolation issue where the response cache from previous tests would override the mocked payload.
+
 **Fix Applied:**
-Modified `_build_start_response()` to always include `allocation_drift_alerts`:
-- When computed alerts exist → include them
-- When no alerts → include empty structure with `active: false`
+1. Modified `_build_start_response()` to always include `allocation_drift_alerts`:
+   - When computed alerts exist → include them
+   - When no alerts → include empty structure with `active: false`
+
+2. Added cache clear to test to prevent stale cached payloads from affecting mock data
 
 **Verify:**
 - Before: `allocation_drift_alerts` missing when no drift
 - After: `allocation_drift_alerts` always present
 - Test: 34/34 tests passing
+- Commit: 8befb199 (test fix) + 960fe819 (drift alerts)
 
 ---
 
@@ -432,11 +438,12 @@ Modified `_build_start_response()` to always include `allocation_drift_alerts`:
 
 ## Execution Trace
 
-- **Actions:** Identified missing drift alerts in response, fixed `_build_start_response()` to always include field, ran full test suite (34 tests), created delivery proof
-- **Files changed:** 1 file (copilot.py, +12 lines)
+- **Actions:** Identified missing drift alerts in response, fixed `_build_start_response()` to always include field, discovered test isolation issue (cache pollution), added cache clear to test, ran full test suite (34 tests), updated delivery proof
+- **Files changed:** 2 files (copilot.py +12 lines, test_dev03_brief_of_day_delivery.py +4 lines)
 - **Files read:** copilot.py, copilot_service.py, test_dev03_*.py (3 files), decision_journal.py
 - **Tests run:** 34 tests across 3 test files (all passing)
 - **Network/API calls:** None (local testing only)
+- **Commits:** 8befb199 (test cache fix), 960fe819 (drift alerts always present)
 
 ---
 
