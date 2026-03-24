@@ -513,4 +513,4 @@ python3 -m pytest apps/api/src/domains/copilot/tests/test_dev02_conversation_his
 **Verified By:** dev role (planner_capability mode)
 **Ready for:** Planner review and merge
 **Next Task:** BATCH-81-DEV-04 (Conversation management UI)
-**Commit:** Pending
+**Commit:** 47185071444380b1886e9a983fad970a3f498e03
