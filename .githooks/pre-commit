@@ -39,7 +39,27 @@ if [ -n "$py_files" ]; then
   while IFS= read -r f; do
     [ -f "$f" ] || continue
     python3 -m py_compile "$f"
-  done <<< "$py_files"
+done <<< "$py_files"
+fi
+
+# JavaScript syntax check on staged JS files
+js_files="$(echo "$staged_files" | grep -E '\.(js|mjs|cjs)$' || true)"
+if [ -n "$js_files" ] && command -v node >/dev/null 2>&1; then
+  echo "🟨 pre-commit: javascript syntax check"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    node --check "$f"
+  done <<< "$js_files"
+fi
+
+# JSON schema sanity on staged JSON files
+json_files="$(echo "$staged_files" | grep -E '\.json$' || true)"
+if [ -n "$json_files" ]; then
+  echo "🧾 pre-commit: json parse check"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    python3 -m json.tool "$f" >/dev/null
+  done <<< "$json_files"
 fi
 
 # Shell syntax check on staged shell scripts
