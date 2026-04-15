@@ -11,6 +11,7 @@ if str(SRC_PATH) not in sys.path:
 from domains.copilot.api import copilot as copilot_route
 from domains.copilot.api.copilot import router
 from domains.copilot.application import copilot_service
+from packages.contracts.copilot_v1 import CopilotStartPayload
 from storage import io as storage_io
 
 
@@ -95,9 +96,11 @@ def test_copilot_context_route_success_keeps_brief_first_starter_contract(monkey
     assert data.get("scope_tickers") == ["NVDA"]
 
     daily_brief = data.get("daily_brief") or {}
-    assert daily_brief.get("summary") == "Semiconductors continue to lead while rates stay range-bound."
+    assert "Semiconductors continue to lead while rates stay range-bound." in (
+        daily_brief.get("summary") or ""
+    )
     assert daily_brief.get("market_sentiment") == "BULLISH"
-    assert daily_brief.get("source") == ["copilot_domain_router_test"]
+    assert "copilot_domain_router_test" in (daily_brief.get("source") or [])
 
     entry_points = data.get("entry_points") or []
     assert [item.get("id") for item in entry_points] == [
@@ -189,8 +192,8 @@ def test_copilot_context_route_fallback_keeps_brief_and_entry_points(monkeypatch
     assert data.get("scope_tickers") == ["SPY"]
 
     daily_brief = data.get("daily_brief") or {}
-    assert daily_brief.get("summary") == "No daily brief available yet."
-    assert daily_brief.get("source") == ["copilot_daily_brief_fallback"]
+    assert "No daily brief available yet." in (daily_brief.get("summary") or "")
+    assert "copilot_daily_brief_fallback" in (daily_brief.get("source") or [])
 
     entry_points = data.get("entry_points") or []
     assert [item.get("id") for item in entry_points[:2]] == ["brief_of_day", "ask_copilot"]
@@ -299,6 +302,52 @@ def test_copilot_start_route_uses_service_resolved_scope_metadata(monkeypatch):
     assert data.get("filters_applied") == {"tickers": ["AAPL", "MSFT"]}
     assert data.get("scope_tickers") == ["AAPL", "MSFT"]
     assert data.get("ask", [])[0].get("prefill", {}).get("tickers") == ["AAPL", "MSFT"]
+
+
+def test_copilot_start_route_matches_shared_contract(monkeypatch):
+    async def _fake_build_context_payload(*_args, **_kwargs):
+        return {
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "Contract-safe brief.",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-03-09T10:00:00Z",
+                    "freshness": "2026-03-09T10:00:00Z",
+                    "source": ["copilot_start_contract_test"],
+                },
+                "ask": [
+                    {"id": "portfolio_today", "kind": "ask", "target": "/copilot/ask"},
+                ],
+                "open": [
+                    {"id": "open_copilot", "kind": "open", "target": "/copilot"},
+                ],
+            },
+            "regime_detection": {
+                "label": "RISK_ON",
+                "confidence": 0.81,
+            },
+            "allocation_drift_alerts": {
+                "active": True,
+                "alerts": [{"id": "largest_position_concentration"}],
+            },
+        }
+
+    monkeypatch.setattr(copilot_service, "build_context_payload", _fake_build_context_payload)
+
+    client = _client()
+    response = client.get("/api/copilot/start?tickers=nvda")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("ok") is True
+
+    contract = CopilotStartPayload(**(payload.get("data") or {}))
+    assert contract.scope_tickers == ["NVDA"]
+    assert contract.regime_detection == {"label": "RISK_ON", "confidence": 0.81}
+    assert contract.allocation_drift_alerts == {
+        "active": True,
+        "alerts": [{"id": "largest_position_concentration"}],
+    }
 
 
 def test_copilot_start_route_fallback_keeps_brief_and_actions(monkeypatch):

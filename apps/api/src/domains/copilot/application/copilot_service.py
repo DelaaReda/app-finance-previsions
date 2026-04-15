@@ -52,6 +52,11 @@ except Exception:  # pragma: no cover
     get_price_history = None  # type: ignore
     get_fundamentals = None  # type: ignore
 
+try:
+    from packages.contracts.copilot_v1 import CopilotStartPayload as SharedCopilotStartPayload
+except Exception:  # pragma: no cover
+    SharedCopilotStartPayload = BaseModel  # type: ignore[misc,assignment]
+
 
 def utc_now_iso() -> str:
     """Return canonical UTC ISO timestamp without service bridge dependencies."""
@@ -1178,7 +1183,7 @@ def _fetch_live_market_indicators() -> Dict[str, Any]:
     }
 
     live_market_enabled = str(
-        __import__("os").getenv("FC_COPILOT_LIVE_MARKET_DATA", "0")
+        __import__("os").getenv("FC_COPILOT_LIVE_MARKET_DATA", "1")
     ).strip().lower() in {"1", "true", "yes", "on"}
     if not live_market_enabled:
         fallback["degraded_reason"] = "Live data disabled - using snapshot brief only"
@@ -1279,7 +1284,7 @@ def _enhance_brief_with_live_data(brief: Dict[str, Any], live_data: Dict[str, An
         if vix is not None or spy_change is not None:
             live_context_parts = []
             if vix is not None:
-                vix_level = "elevé" if vix > 20 else "bas" if vix < 15 else "normal"
+                vix_level = "élevé" if vix > 20 else "bas" if vix < 15 else "normal"
                 live_context_parts.append(f"VIX={vix:.1f} ({vix_level})")
             if spy_change is not None:
                 spy_direction = "haussier" if spy_change > 0.5 else "baissier" if spy_change < -0.5 else "stable"
@@ -1356,10 +1361,6 @@ def _load_daily_brief_payload() -> Dict[str, Any]:
         live_data = _fetch_live_market_indicators()
         if live_data and not live_data.get("degraded", True):
             normalized = _enhance_brief_with_live_data(normalized, live_data)
-            # Add live data source to brief sources
-            existing_sources = normalized.get("source", [])
-            if "live_market_data" not in existing_sources:
-                normalized["source"] = existing_sources + ["live_market_data"]
     except Exception:
         # Silently continue with snapshot-only brief if live data fails
         pass
@@ -1500,24 +1501,8 @@ def _build_copilot_start_payload(
     return _with_scope_tickers(legacy_payload, scope=scope)
 
 
-class CopilotStartPayloadContract(BaseModel):
-    brief_of_day: Dict[str, Any] = Field(default_factory=dict)
-    ask: List[Dict[str, Any]] = Field(default_factory=list)
-    open: List[Dict[str, Any]] = Field(default_factory=list)
-    generated_at: str = ""
-    freshness: str = ""
-    source: List[str] = Field(default_factory=list)
-    sources: List[str] = Field(default_factory=list)
-    filters_applied: Dict[str, Any] = Field(default_factory=dict)
-    stats: Dict[str, Any] = Field(default_factory=dict)
-    warnings: List[str] = Field(default_factory=list)
-    note: Optional[str] = None
-    scope_tickers: Optional[List[str]] = None
-    context_influence: Optional[Dict[str, Any]] = None
-    portfolio_context: Optional[Dict[str, Any]] = None
-    regime_detection: Optional[Dict[str, Any]] = None
-    allocation_drift_alerts: Optional[Dict[str, Any]] = None
-    fallback_used: Optional[str] = None
+class CopilotStartPayloadContract(SharedCopilotStartPayload):
+    pass
 
 
 def _contract_dump(model: BaseModel) -> Dict[str, Any]:
@@ -1539,9 +1524,11 @@ def _resolve_start_effective_scope(
     )
     if payload_scope:
         return {"tickers": payload_scope}
-    requested_tickers = _normalize_tickers(
-        requested_scope.get("tickers") if isinstance(requested_scope, dict) else []
-    )
+    requested_tickers: List[str] = []
+    for item in (requested_scope.get("tickers") if isinstance(requested_scope, dict) else []) or []:
+        token = _safe_text(item).upper()
+        if token and token not in requested_tickers:
+            requested_tickers.append(token)
     return {"tickers": requested_tickers} if requested_tickers else None
 
 
@@ -1562,9 +1549,11 @@ def build_copilot_start_response(
         if isinstance(resolved_start.get("brief_of_day"), dict)
         else {}
     )
-    resolved_scope_tickers = _normalize_tickers(
-        scope.get("tickers") if isinstance(scope, dict) else []
-    )
+    resolved_scope_tickers: List[str] = []
+    for item in (scope.get("tickers") if isinstance(scope, dict) else []) or []:
+        token = _safe_text(item).upper()
+        if token and token not in resolved_scope_tickers:
+            resolved_scope_tickers.append(token)
     ask_items = [
         dict(item) for item in resolved_start.get("ask", []) if isinstance(item, dict)
     ]
@@ -1640,12 +1629,8 @@ def build_copilot_start_response(
         regime_detection=dict(regime_detection) if isinstance(regime_detection, dict) and regime_detection else None,
         allocation_drift_alerts=(
             dict(allocation_drift_alerts)
-            if isinstance(allocation_drift_alerts, dict)
-            else {
-                "active": False,
-                "alerts": [],
-                "weights_analyzed": {},
-            }
+            if isinstance(allocation_drift_alerts, dict) and allocation_drift_alerts
+            else None
         ),
         fallback_used=fallback_used,
     )

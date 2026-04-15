@@ -80,6 +80,8 @@ class CopilotStartPayload(BaseModel):
     warnings: List[str] = Field(default_factory=list)
     fallback_used: Optional[str] = None
     context_influence: Optional[Dict[str, Any]] = None
+    regime_detection: Optional[Dict[str, Any]] = None
+    allocation_drift_alerts: Optional[Dict[str, Any]] = None
     scope_tickers: Optional[List[str]] = None
     note: Optional[str] = None
     status: Optional[str] = "ok"
