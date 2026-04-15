@@ -10,9 +10,13 @@ from fastapi.testclient import TestClient
 SRC_PATH = Path(__file__).resolve().parents[3]
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
+REPO_ROOT = Path(__file__).resolve().parents[6]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from domains.judge.api import judge as judge_route  # noqa: E402
 from services import judge_endpoint_service  # noqa: E402
+from packages.contracts.copilot_v1 import CopilotStartPayload  # noqa: E402
 
 
 def _client() -> TestClient:
@@ -1412,6 +1416,62 @@ def test_judge_personal_finance_start_service_fills_missing_ask_open(monkeypatch
     assert data["open"][0]["target"] == "/personal-finance"
     assert data["stats"]["ask_count"] == 1
     assert data["stats"]["open_count"] == 1
+
+
+def test_judge_personal_finance_start_service_includes_ranked_action(monkeypatch):
+    async def fake_build_context_payload(**_kwargs):
+        return {
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "Sector rotation is mixed.",
+                    "generated_at": "2026-03-30T11:00:00Z",
+                    "freshness": "2026-03-30T11:00:00Z",
+                    "source": ["copilot_context_test"],
+                },
+                "ask": [
+                    {
+                        "id": "ask_ranked",
+                        "kind": "ask",
+                        "label": "Top ranked ask",
+                        "target": "/copilot/ask",
+                    }
+                ],
+                "open": [
+                    {
+                        "id": "open_ranked",
+                        "kind": "open",
+                        "label": "Open ranked",
+                        "target": "/copilot/overview",
+                    },
+                ],
+            },
+            "source": ["judge_personal_finance_start_service", "copilot_route"],
+            "sources": ["judge_personal_finance_start_service", "copilot_route"],
+        }
+
+    class CopilotService:
+        build_context_payload = fake_build_context_payload
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_resolve_copilot_services",
+        lambda: (CopilotService, None),
+    )
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_personal_finance_start_payload(tickers=["amzn"])
+    )
+
+    assert payload["ok"] is True
+    data = payload["data"]
+    contract_data = CopilotStartPayload(**data)
+    assert contract_data.ranked_action is not None
+    assert contract_data.ranked_action.target == "/personal-finance/ask"
+    assert contract_data.ranked_action.kind == "ask"
+    assert data["ranked_action"]["id"] == "ask_ranked"
+    assert data["ranked_action"]["target"] == "/personal-finance/ask"
+    assert data["ask"][0]["target"] == "/personal-finance/ask"
+    assert data["open"][0]["target"] == "/personal-finance"
 
 
 def test_judge_personal_finance_context_route_delegates_to_service(monkeypatch):

@@ -73,6 +73,10 @@ try:
     from platform.legacy.research.versioned_notes import VersionedNotesStore  # type: ignore
 except Exception:  # pragma: no cover
     VersionedNotesStore = None  # type: ignore
+try:
+    from packages.contracts.copilot_v1 import CopilotStartPayload  # type: ignore
+except Exception:  # pragma: no cover
+    CopilotStartPayload = None  # type: ignore
 
 # Keep legacy imports and flattened imports in sync for test monkeypatching and callers.
 if __name__ == "domains.judge.application.judge_endpoint_service":
@@ -205,6 +209,19 @@ def _rewrite_personal_finance_start_targets(payload: Any) -> Any:
         rewritten[key] = updated_items
 
     return rewritten
+
+
+def _pick_ranked_action(
+    ask_items: List[Dict[str, Any]],
+    open_items: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    for item in ask_items + open_items:
+        if not isinstance(item, dict):
+            continue
+        if not item.get("id") or not item.get("target"):
+            continue
+        return dict(item)
+    return None
 
 
 def _default_risk_levels() -> List[str]:
@@ -3396,8 +3413,10 @@ async def get_judge_personal_finance_start_payload(
                         if isinstance(item, dict)
                     ]
 
+        ranked_action = _pick_ranked_action(ask_items, open_items)
         result: Dict[str, Any] = {
             "brief_of_day": brief,
+            "ranked_action": ranked_action,
             "ask": ask_items,
             "open": open_items,
             "generated_at": brief.get("generated_at") or now_iso,
@@ -3429,6 +3448,9 @@ async def get_judge_personal_finance_start_payload(
         if not (result.get("source") or [])[0:1] and not result.get("sources"):
             result["source"] = ["judge_personal_finance_start_service", "copilot_route_fallback"]
             result["sources"] = ["judge_personal_finance_start_service", "copilot_route_fallback"]
+
+        if CopilotStartPayload is not None:
+            CopilotStartPayload(**result)
 
         if (payload or {}).get("regime") == "fallback":
             result.setdefault("warnings", []).append("Market context service temporarily unavailable.")
