@@ -1427,3 +1427,40 @@ Architecture note
 - target: contrat partagé `copilot_start_v1` + `copilot_endpoint_service` pour centraliser metadata/fallback et rendre la route mince.
 - patch_now: no
 - next_action: converger `/api/copilot/start` après le ship du lot fiabilité, sans ouvrir de refactor plus large tant que `BATCH-85-DEV-01` n’est pas stabilisé.
+
+## 2026-04-15T04:52:24Z orchestration-architect
+
+Verdict
+- app_progress: yes
+- orchestration_efficiency: poor
+- delivered_value_now: moderate
+
+What changed since previous run
+- Changed: `priority-queue.json` and `parallel-workstreams.json` now both point to `compléter BATCH-85-DEV-01`, so the stale `ANALYSIS` wording is gone.
+- Changed: the canonical static runtime still shows one real `BATCH-85` row in SQLite/planner graph, while `BATCH-84` still leaves six old rows behind as residue.
+- Changed: the active app lot is still concrete and recent; commit `aaeb75dc` plus touched files in `apps/api` and `apps/monitor` confirm a real brief/action/memo reliability slice exists.
+- Unchanged: `runtime_is_vm=0`, so there is still no live VM proof and no active runtime recovery from this context.
+- Unchanged: queue/workboard still expose `BATCH-85` without any materialized task list and keep `user_value_delta_visible=0`, so delivery surfaces still under-report the actual delta.
+- Worse: `BATCH-85-DEV-01` remains `retryable` after a proof-backed code/test result, which means orchestration still converts a real delivery delta into control-plane churn.
+
+Top priorities
+1. Ship the current `apps/api` + `apps/monitor` reliability lot independently of orchestration cleanup.
+2. Stop re-queueing proof-backed `BATCH-85-DEV-01` results as retryable in `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py`.
+3. Make projections carry real runtime meaning: `priority-queue.json`, `parallel-workstreams.json`, and monitor status should materialize the active task and value delta from SQLite/event-store truth instead of empty stream shells.
+
+Main blocker
+- `BATCH-85-DEV-01` is still the bottleneck: one real SQLite/planner-graph row exists for it, but it remains `retryable` after a failed fallback path while queue/workboard keep an empty `BATCH-85` shell (`tasks_count=0`, `user_value_delta_visible=0`).
+
+False progress detected
+- `priority-queue.json` and `parallel-workstreams.json` moved forward to `DEV-01`, but they still expose no task list and still claim `user_value_delta_visible=0`.
+- `planner-graph-state.json` contains the proof-backed `BATCH-85-DEV-01` result and also a large volume of unrelated `retryable` residue, so more runtime rows do not mean more user value.
+- `parallel-workstreams.json` repeats `dev_invalid_result_streak=0` and `planner_takeover_required=false` across many blocks while the real active task is still unresolved; those counters currently hide churn more than they explain it.
+- `worker_manager.py` and the legacy registries remain explicitly `legacy_compat_only` / `decision_capable=false`, yet planner-side code still reads around them and OpenClaw compatibility hooks remain loaded in active paths.
+
+Next useful delivery
+- Release the existing brief/action/memo reliability slice now: hardened `/api/copilot/start`, cached/copilot context improvements, explicit degraded portfolio risk metadata, and monitor status that prefers event-store/runtime truth.
+
+Architecture note
+- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py` and `platform/automation/runtime/truth/dispatch_snapshot.py` as the primary truth boundary; they already quarantine retryable residue and mark compat surfaces non-decision-capable.
+- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still mix runtime truth with projection/compat/OpenClaw logic.
+- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py` from any active planner decision path; `planner-subagents-registry.json`, `dynamic-workers-registry.json`, `agent-message-bus.jsonl`, and `intent-registry.json` must stay passive mirrors only.
