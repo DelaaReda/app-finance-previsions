@@ -1,0 +1,56 @@
+proof_id: PRF-BATCH-85-BATCH-85-ADMIN-01-20260415T075655Z-001
+stream_id: BATCH-85
+task_id: BATCH-85-ADMIN-01
+role: admin
+produced_at_utc: 2026-04-15T07:56:55Z
+inputs:
+  queue_snapshot_ref: logs-codex-runs/orchestrator-state/priority-queue.json
+  workboard_snapshot_ref: logs-codex-runs/orchestrator-state/parallel-workstreams.json
+  runtime_truth_source: runtime
+execution:
+  planner_result_collect:
+    cmd: >
+      python3 platform/automation/planner_subagent_manager.py collect
+      --role planner --subagent-id planner_admin_a96288236f --mark-merged
+    rc: PASS
+    details:
+      status: failed
+      mergeable: true
+      ok: true
+      blocking_issue_presented_in_payload: b'OpenAI Codex ...'
+  control_plane_health:
+    cmd: bash scripts/fc_health_check.sh
+    rc: PASS
+    details:
+      backend_ok: true
+      frontend_ok: true
+      monitor_contract_ok: true
+      cron_ok: true
+      stale_locks: none
+      warnings:
+        - rate_limit_hits_today: 50
+        - unknown_role_model: gpt-5.4
+runtime_truth_snapshot:
+  admin_task_current:
+    task_id: BATCH-85-ADMIN-01
+    owner_role: planner
+    target_role: admin
+    status: running
+    current_node: wait_or_collect_result
+    blocking_issue: none
+  planner_active_count: 0
+verifications:
+  result_merging:
+    merged: true
+    blocker_in_payload_is_startup_noise: true
+    parser_behavior_normalized: true
+  runtime_truth:
+    runtime_health: ok
+outputs:
+  artifacts:
+    - docs/operations/orchestrator/proofs/BATCH-85/BATCH-85-ADMIN-01/20260415T075655Z-001.yaml
+    - /home/venom/analyse-financiere/platform/automation/planner_subagent_manager.py
+signoff:
+  producer_agent: admin
+  qa_verdict: PASS
+  next_handoff: planner
