@@ -709,17 +709,69 @@ function executeCopilotAction(kind, target, prefillQuestion) {
             : (typeof COPILOT_NAMESPACE !== 'undefined' ? COPILOT_NAMESPACE : 'copilot'));
         let resolvedTarget = target;
 
+        const useCopilotOpenFlow = (normalized, namespaceValue) => {
+            if (typeof runCopilotStartOpen !== 'function') {
+                return false;
+            }
+            const normalizedNamespace = typeof namespaceValue === 'string'
+                ? namespaceValue.trim().toLowerCase()
+                : '';
+            if (normalized === 'copilot' || normalized === '/copilot' || normalized === '/copilot/' || normalized === 'copilot/') {
+                return true;
+            }
+            if (normalized.startsWith('/copilot/')) {
+                return true;
+            }
+            if (
+                normalizedNamespace
+                && (normalized === normalizedNamespace || normalized === `/${normalizedNamespace}` || normalized === `/${normalizedNamespace}/`)
+            ) {
+                return true;
+            }
+            return false;
+        };
+
         if (typeof resolvedTarget !== 'string') {
             resolvedTarget = String(resolvedTarget || '');
         }
 
         if (typeof resolvedTarget === 'string') {
             const stripped = resolvedTarget.trim();
-            const namespaceOpenTarget = namespace ? ('/' + namespace + '/open') : '';
             if (stripped === '/copilot/open') {
                 resolvedTarget = namespace ? ('/' + namespace) : '/copilot';
-            } else if (namespaceOpenTarget && stripped === namespaceOpenTarget) {
-                resolvedTarget = '/' + namespace;
+            } else if (typeof namespace === 'string' && namespace.trim() && stripped === `/${namespace}/open`) {
+                resolvedTarget = namespace ? ('/' + namespace) : '/copilot';
+            }
+
+            const normalizedTarget = stripped.toLowerCase().replace(/\/+$/, '');
+            const finalTarget = String(resolvedTarget || '').toLowerCase().replace(/\/+$/, '');
+            if (useCopilotOpenFlow(finalTarget, namespace)) {
+                runCopilotStartOpen(finalTarget);
+                showToast(`${kind} ${target || prefillQuestion || ''}`, 'info');
+                return;
+            }
+            resolvedTarget = finalTarget;
+        }
+
+        const resolvedTargetString = String(resolvedTarget || '');
+        if (
+            resolvedTargetString === '/copilot' ||
+            resolvedTargetString === '/copilot/' ||
+            resolvedTargetString === 'copilot' ||
+            resolvedTargetString === 'copilot/'
+        ) {
+            resolvedTarget = '/copilot';
+        }
+        if (
+            namespace &&
+            resolvedTargetString === ('/' + namespace) &&
+            typeof window !== 'undefined' &&
+            typeof window.COPILOT_OPEN_FALLBACK_URL === 'string' &&
+            typeof runCopilotStartOpen !== 'function'
+        ) {
+            const fallback = window.COPILOT_OPEN_FALLBACK_URL.trim();
+            if (fallback) {
+                resolvedTarget = fallback;
             }
         }
 

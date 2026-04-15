@@ -330,7 +330,7 @@ test('executeCopilotAction preserves hash navigation for in-page targets', () =>
   assert.deepEqual(calls, [{ message: 'open #copilot', level: 'info' }]);
 });
 
-test('executeCopilotAction resolves namespace open shortcuts to namespace root', () => {
+test('executeCopilotAction routes namespace open targets through copilot open flow', () => {
   const calls = [];
   const sandbox = {
     window: {
@@ -342,6 +342,9 @@ test('executeCopilotAction resolves namespace open shortcuts to namespace root',
       COPILOT_NAMESPACE: 'personal-finance',
     },
     getCopilotNamespace: () => 'personal-finance',
+    runCopilotStartOpen(target) {
+      calls.push({ type: 'runOpen', target });
+    },
     showToast(message, level) {
       calls.push({ type: 'toast', message, level });
     },
@@ -356,6 +359,38 @@ test('executeCopilotAction resolves namespace open shortcuts to namespace root',
 
   sandbox.executeCopilotAction('open', '/personal-finance/open');
 
-  assert.deepEqual(calls[0], { type: 'assign', target: '/personal-finance' });
-  assert.deepEqual(calls[1], { type: 'toast', message: 'open /personal-finance', level: 'info' });
+  assert.deepEqual(calls[0], { type: 'runOpen', target: '/personal-finance' });
+  assert.deepEqual(calls[1], { type: 'toast', message: 'open /personal-finance/open', level: 'info' });
+});
+
+test('executeCopilotAction routes nested copilot target to copilot start flow', () => {
+  const calls = [];
+  const sandbox = {
+    window: {
+      location: {
+        assign(target) {
+          calls.push({ type: 'assign', target });
+        },
+      },
+    },
+    getCopilotNamespace: () => 'copilot',
+    runCopilotStartOpen(target) {
+      calls.push({ type: 'runOpen', target });
+    },
+    showToast(message, level) {
+      calls.push({ type: 'toast', message, level });
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    extractFunction('executeCopilotAction', 'setCopilotQuestion'),
+    sandbox,
+    { filename: 'copilot-panel.html' },
+  );
+
+  sandbox.executeCopilotAction('open', '/copilot/overview');
+
+  assert.deepEqual(calls[0], { type: 'runOpen', target: '/copilot/overview' });
+  assert.deepEqual(calls[1], { type: 'toast', message: 'open /copilot/overview', level: 'info' });
 });
