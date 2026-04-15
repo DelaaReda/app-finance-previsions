@@ -37,6 +37,35 @@ BLOCKING_STATES = {"BLOCKED"}
 CORE_ROLES = ("planner", "dev", "admin", "scrum_master")
 DONE_STATES = {"DONE", "CLOSED"}
 NOVELTY_TARGET_OVERDUE_SECONDS = max(300, int(os.environ.get("FC_RECONCILE_NOVELTY_TARGET_OVERDUE_SECONDS", "1800")))
+EMPTY_VALUE_TOKENS = {"", "none", "n/a", "na", "null", "unknown"}
+INVALID_SUBAGENT_RESULT_PREFIXES = (
+    "invalid_subagent_result:start_banner_only",
+    "invalid_subagent_result:structured_output_missing",
+    "invalid_subagent_result:output_schema_missing",
+    "invalid_subagent_result:empty_payload",
+    "invalid_subagent_result:missing_result_payload",
+    "invalid_subagent_result:blocked_without_signal",
+)
+CODEX_STARTUP_NOISE_MARKERS = (
+    "openai codex v",
+    "research preview",
+    "approval: never",
+    "sandbox: danger-full-access",
+    "sandbox: workspace-write",
+    "reasoning effort:",
+    "session id:",
+    "provider: openai",
+    "provider: azure",
+    "provider: anthropic",
+    "provider: google",
+    "failed to refresh available models",
+    "missing bearer or basic authentication",
+    "401 unauthorized",
+    "unexpected status 401 unauthorized",
+    "transport channel",
+    "worker quit with fatal",
+    "reconnecting...",
+)
 
 
 @dataclass
@@ -99,6 +128,53 @@ def _parse_iso_epoch(value: str) -> int:
 
 def _preferred_ready_state_for_role(role: str) -> str:
     return "READY_DEV" if _canonical_role(role) == "dev" else "READY"
+
+
+def _looks_like_placeholder_only_value(value: str) -> bool:
+    token = " ".join(str(value or "").strip().split()).lower()
+    if not token:
+        return True
+    if token in {"...", "..", ".", "…", "?", "??", "tbd"}:
+        return True
+    if re.fullmatch(r"(?:[a-z_]+=\.\.\.)(?:\s*;\s*[a-z_]+=\.\.\.)*", token):
+        return True
+    return False
+
+
+def _looks_like_startup_noise(value: str) -> bool:
+    token = " ".join(str(value or "").strip().lower().split())
+    if not token:
+        return True
+    return any(marker in token for marker in CODEX_STARTUP_NOISE_MARKERS)
+
+
+def _runtime_blocking_issue_is_noneish(value: str) -> bool:
+    token = str(value or "").strip().lower()
+    if not token:
+        return True
+    if token in EMPTY_VALUE_TOKENS:
+        return True
+    if _looks_like_startup_noise(token):
+        return True
+    return False
+
+
+def _runtime_blocking_issue_allows_semantic_success(value: str) -> bool:
+    token = str(value or "").strip().lower()
+    if _runtime_blocking_issue_is_noneish(token):
+        return True
+    if any(token.startswith(prefix) for prefix in INVALID_SUBAGENT_RESULT_PREFIXES):
+        return True
+    return False
+
+
+def _value_present(value: str) -> bool:
+    token = str(value or "").strip().lower()
+    if token in EMPTY_VALUE_TOKENS:
+        return False
+    if _looks_like_placeholder_only_value(token):
+        return False
+    return True
 
 
 def _board_active_batch_ids(board: dict) -> set[str]:
@@ -312,6 +388,55 @@ def _task_has_delivery_evidence(task: dict) -> bool:
     if proof_count.isdigit() and int(proof_count) > 0:
         return True
     return False
+
+
+def _normalize_task_placeholder_delivery_fields(task: dict) -> bool:
+    changed = False
+    placeholder_scalar_keys = (
+        "artifact",
+        "runtime_artifact",
+        "verify",
+        "commit_sha",
+        "files_touched",
+        "tests_run",
+    )
+    meaningful_proof_keys = (
+        "artifact",
+        "runtime_artifact",
+        "verify",
+        "commit_sha",
+        "files_touched",
+        "tests_run",
+    )
+    meaningful_proof_count = 0
+
+    for key in placeholder_scalar_keys:
+        raw_value = str(task.get(key, "") or "").strip()
+        if _value_present(raw_value):
+            meaningful_proof_count += 1
+            continue
+        if raw_value and raw_value.lower() not in {"none", "n/a", "na"}:
+            task[key] = ""
+            changed = True
+
+    for key in ("artifacts", "proof_manifests"):
+        raw = task.get(key)
+        if isinstance(raw, list):
+            present = [str(item).strip() for item in raw if _value_present(item)]
+            if present:
+                meaningful_proof_count += len(present)
+            if len(present) != len(raw):
+                task[key] = present
+                changed = True
+
+    raw_proof_count = str(task.get("proof_count", "") or "").strip()
+    if raw_proof_count == "":
+        return changed
+    normalized_proof_count = meaningful_proof_count
+    if raw_proof_count.isdigit() and int(raw_proof_count) == normalized_proof_count:
+        return changed
+    task["proof_count"] = normalized_proof_count
+    return True
 
 
 def _active_cycle_ids(queue_obj: dict, board: dict) -> set[str]:
@@ -582,7 +707,7 @@ def _runtime_item_proof_fields(item: dict) -> dict[str, str]:
     merged: dict[str, str] = {}
     for key in ("artifact", "verify", "commit_sha", "tests_run", "summary", "proof_manifest"):
         value = str(result.get(key, "") or proof.get(key, "") or item.get(key, "") or "").strip()
-        if value and value.lower() not in {"none", "n/a", "na"}:
+        if _value_present(value):
             merged[key] = value
     return merged
 
@@ -597,7 +722,7 @@ def _runtime_item_next_action(item: dict) -> str:
         if token and token.lower() not in {"none", "n/a", "na"}:
             return token
     blocking_issue = str(item.get("blocking_issue", "") or "").strip()
-    if blocking_issue and blocking_issue.lower() not in {"none", "n/a", "na"}:
+    if blocking_issue and not _runtime_blocking_issue_allows_semantic_success(blocking_issue):
         return f"resolve_{blocking_issue}"
     return ""
 
@@ -612,7 +737,19 @@ def _runtime_item_progress_at(item: dict) -> str:
 
 def _runtime_item_is_success(item: dict) -> bool:
     status = str(item.get("status", "") or "").strip().lower()
-    return status in {"completed", "done", "pass", "passed", "ok", "success", "merged"}
+    result_status = str(((item.get("capability_result") or {}).get("status") or "")).strip().lower()
+    next_action = str(item.get("next_action", "") or "").strip().lower()
+    proof_count = _runtime_item_proof_count(item)
+    blocking_issue = str(item.get("blocking_issue", "") or "").strip()
+    if status in {"completed", "done", "pass", "passed", "ok", "success", "merged"}:
+        return True
+    if status in {"failed", "retryable"}:
+        if proof_count > 0 and _runtime_blocking_issue_allows_semantic_success(blocking_issue):
+            return True
+    if status == "running" and next_action == "wait_or_collect_result" and proof_count > 0 and _runtime_blocking_issue_is_noneish(blocking_issue):
+        if result_status in {"completed", "done", "pass", "passed", "ok", "success", "merged", "failed", "retryable"}:
+            return True
+    return False
 
 
 def _sync_runtime_truth_projection(root: Path, board: dict, active_cycle_ids: set[str], now: str) -> dict[str, int]:
@@ -647,6 +784,7 @@ def _sync_runtime_truth_projection(root: Path, board: dict, active_cycle_ids: se
         item = by_task_id.get(task_id)
         if not isinstance(item, dict):
             continue
+        proof_count = _runtime_item_proof_count(item)
         runtime_status = str(item.get("status", "") or "").strip().lower()
         blocking_issue = str(item.get("blocking_issue", "") or "").strip().lower()
         task_state = _task_operational_state(task)
@@ -654,6 +792,7 @@ def _sync_runtime_truth_projection(root: Path, board: dict, active_cycle_ids: se
             runtime_status == "retryable"
             and blocking_issue == "invalid_subagent_result:start_banner_only"
             and task_state in READY_STATES
+            and proof_count == 0
         )
         if retryable_banner_residue:
             if _quarantine_retryable_runtime_residue(task, item, now):
@@ -667,7 +806,6 @@ def _sync_runtime_truth_projection(root: Path, board: dict, active_cycle_ids: se
         if not str(task.get("status", "") or "").strip() and str(task.get("state", "") or "").strip():
             task["status"] = str(task.get("state", "")).strip()
             changed = True
-        proof_count = _runtime_item_proof_count(item)
         if proof_count > 0 and task.get("proof_count") != proof_count:
             task["proof_count"] = proof_count
             changed = True
@@ -820,6 +958,8 @@ def _normalize_projection_operational_fields(board: dict, active_cycle_ids: set[
             row_changed = True
         if str(task.get("proof_count", "") or "").strip() == "":
             task["proof_count"] = 0
+            row_changed = True
+        if _normalize_task_placeholder_delivery_fields(task):
             row_changed = True
         if not str(task.get("next_action", "") or "").strip():
             next_action = _default_next_action_for_state(state)

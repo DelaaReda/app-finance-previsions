@@ -44,6 +44,38 @@ def _sort_ts(item: dict[str, Any]) -> float:
     return 0.0
 
 
+def _truth_value_present(value: Any) -> bool:
+    token = str(value or "").strip()
+    if not token:
+        return False
+    token_lower = token.lower()
+    if token_lower in {"none", "n/a", "na", "null", "unknown"}:
+        return False
+    if token_lower in {"...", "…", "before=...; after=...; test=..."}:
+        return False
+    if token_lower == "...." or token_lower == "...".lstrip():
+        return False
+    return True
+
+
+def _task_has_delivery_evidence(item: dict[str, Any]) -> bool:
+    proof = item.get("delivery_proof", {}) if isinstance(item.get("delivery_proof"), dict) else {}
+    result = item.get("capability_result", {}) if isinstance(item.get("capability_result"), dict) else {}
+    for key in ("artifact", "verify", "tests_run", "commit_sha", "proof_manifest"):
+        if _truth_value_present(item.get(key, "")):
+            return True
+        if _truth_value_present(result.get(key, "")) or _truth_value_present(proof.get(key, "")):
+            return True
+    return False
+
+
+def _proof_field(*parts: Any) -> str:
+    for part in parts:
+        if _truth_value_present(part):
+            return str(part).strip()
+    return "none"
+
+
 def _normalize_state(item: dict[str, Any]) -> dict[str, Any]:
     request = item.get("capability_request", {}) if isinstance(item.get("capability_request"), dict) else {}
     result = item.get("capability_result", {}) if isinstance(item.get("capability_result"), dict) else {}
@@ -60,12 +92,13 @@ def _normalize_state(item: dict[str, Any]) -> dict[str, Any]:
         "next_action": str(item.get("next_action", "")).strip(),
         "blocking_issue": str(item.get("blocking_issue", "") or result.get("blocking_issue", "") or "none").strip(),
         "backend": str(result.get("backend", "") or request.get("backend", "")).strip(),
-        "artifact": str(result.get("artifact", "") or proof.get("artifact", "") or "none").strip(),
-        "verify": str(result.get("verify", "") or proof.get("verify", "") or "none").strip(),
-        "commit_sha": str(result.get("commit_sha", "") or proof.get("commit_sha", "") or "none").strip(),
+        "artifact": _proof_field(result.get("artifact", ""), proof.get("artifact", "")),
+        "verify": _proof_field(result.get("verify", ""), proof.get("verify", "")),
+        "commit_sha": _proof_field(result.get("commit_sha", ""), proof.get("commit_sha", "")),
         "updated_at": str(item.get("updated_at", "")).strip(),
         "subagent_id": str(metadata.get("subagent_id", "")).strip(),
         "checkpoint_id": str(item.get("checkpoint_id", "")).strip(),
+        "tests_run": _proof_field(result.get("tests_run", ""), proof.get("tests_run", "")),
         "engine": str(item.get("engine", "")).strip(),
     }
 
@@ -122,6 +155,8 @@ def _quarantine_retryable_residue(
         ]
     ).strip().lower()
     if not any(marker in issue_bits for marker in INVALID_RESULT_MARKERS):
+        return None
+    if _task_has_delivery_evidence(item):
         return None
 
     quarantined = dict(item)
