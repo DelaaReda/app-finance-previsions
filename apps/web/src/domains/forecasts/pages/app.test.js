@@ -1462,6 +1462,11 @@ function loadRunCopilotStartOpen() {
       fn();
       return 0;
     },
+    window: {
+      location: {
+        href: 'index.html',
+      },
+    },
     document: {
       getElementById(id) {
         if (id === 'aiCopilotOverlay') return overlay;
@@ -3634,9 +3639,10 @@ test('runCopilotStartOpen opens the overlay for a personal-finance namespace tar
 
   sandbox.runCopilotStartOpen('/personal-finance');
 
-  assert.equal(calls.toggled, 1);
-  assert.equal(calls.focused, 1);
-  assert.equal(overlay.style.display, 'block');
+  assert.equal(sandbox.window.location.href, 'personal-finance-start.html');
+  assert.equal(calls.toggled, 0);
+  assert.equal(calls.focused, 0);
+  assert.equal(overlay.style.display, '');
   assert.deepEqual(calls.switched, []);
   assert.deepEqual(calls.toasts, []);
 });

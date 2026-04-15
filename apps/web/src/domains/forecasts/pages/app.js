@@ -6137,6 +6137,27 @@ function runCopilotStartPrompt(prompt, tickers = []) {
 }
 
 function resolveCopilotStartOpenDestination(target) {
+  const rawTarget = toString(target, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '');
+  if (
+    rawTarget === 'personal-finance'
+    || rawTarget === '/personal-finance'
+    || rawTarget === '/personal-finance/start'
+    || rawTarget === '/personal-finance/context'
+    || rawTarget === 'personal-finance/start'
+    || rawTarget === 'personal-finance/context'
+    || rawTarget.startsWith('/personal-finance/')
+    || rawTarget.startsWith('personal-finance/')
+  ) {
+    return {
+      target: 'personal-finance',
+      pageHref: 'personal-finance-start.html'
+    };
+  }
+
   const normalizedTarget = normalizeCopilotStartOpenTarget(target);
   if (!normalizedTarget) return null;
   const ticker = parseCopilotStartTickerTarget(normalizedTarget);
@@ -6239,6 +6260,15 @@ function runCopilotStartOpen(target) {
     })());
   const overlay = document.getElementById('aiCopilotOverlay');
   if (!destination) {
+    showToast(`Open ${target} is unavailable`, 'error');
+    return;
+  }
+
+  if (destination.pageHref) {
+    if (typeof window !== 'undefined' && window.location) {
+      window.location.href = destination.pageHref;
+      return;
+    }
     showToast(`Open ${target} is unavailable`, 'error');
     return;
   }
