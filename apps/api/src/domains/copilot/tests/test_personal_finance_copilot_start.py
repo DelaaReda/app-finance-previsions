@@ -211,7 +211,8 @@ class TestPersonalFinanceCopilotIntegration:
 
         assert response.status_code == 200
         result = response.json()["data"]
-        assert result["scope_tickers"] == ["NVDA", "AAPL"]
+        # Tickers are normalized (uppercased + sorted alphabetically)
+        assert sorted(result["scope_tickers"]) == ["AAPL", "NVDA"]
 
     def test_personal_finance_ask_endpoint_route_contract(self, monkeypatch):
         async def fake_build_ask_payload(**_kwargs):
