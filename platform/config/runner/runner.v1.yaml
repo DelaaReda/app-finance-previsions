@@ -23,7 +23,7 @@
       "tick_timeout_seconds": 420
     },
     "dev": {
-      "model": "gpt-5.3-codex-spark",
+      "model": "gpt-5.4",
       "thinking": "medium",
       "resume": 1,
       "codex_require_fresh_tick": 0,
