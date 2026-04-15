@@ -638,6 +638,8 @@ def _copilot_start_response_from_context(
     response = dict(start_payload)
     response.setdefault("ask", [])
     response.setdefault("open", [])
+    ask_fallback_target = _normalized_action_target("/copilot/ask", "ask", namespace) or "/copilot/ask"
+    open_fallback_target = _normalized_action_target("/copilot", "open", namespace) or "/copilot"
 
     if not response["ask"]:
         response["ask"] = [
@@ -645,7 +647,7 @@ def _copilot_start_response_from_context(
                 "id": "ask_copilot",
                 "kind": "ask",
                 "label": "Ask a question",
-                "target": f"{'/'+namespace if namespace else ''}/ask".replace("//", "/"),
+                "target": ask_fallback_target,
                 "prefill": {
                     "question": "What's moving today?",
                     "tickers": list(resolved_scope_tickers),
@@ -658,7 +660,7 @@ def _copilot_start_response_from_context(
                 "id": "open_copilot",
                 "kind": "open",
                 "label": "Open Copilot",
-                "target": f"/{namespace}" if namespace else "/copilot",
+                "target": open_fallback_target,
             }
         ]
 
