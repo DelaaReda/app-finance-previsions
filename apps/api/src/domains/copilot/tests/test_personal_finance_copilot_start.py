@@ -214,6 +214,46 @@ class TestPersonalFinanceCopilotIntegration:
         # Tickers are normalized (uppercased + sorted alphabetically)
         assert sorted(result["scope_tickers"]) == ["AAPL", "NVDA"]
 
+    def test_personal_finance_start_debug_bypasses_route_cache(self, monkeypatch):
+        call_count = [0]
+
+        async def fake_build_copilot_start_endpoint_payload(**_kwargs):
+            call_count[0] += 1
+            return {
+                "brief_of_day": {
+                    "summary": f"fresh-{call_count[0]}",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-03-14T02:00:00Z",
+                    "freshness": "2026-03-14T02:00:00Z",
+                    "source": ["personal_finance_start_route_contract"],
+                },
+                "ask": [{"id": "ask_copilot", "kind": "ask", "target": "/copilot/ask"}],
+                "open": [{"id": "open_copilot", "kind": "open", "target": "/copilot"}],
+                "generated_at": "2026-03-14T02:00:00Z",
+                "freshness": "2026-03-14T02:00:00Z",
+                "source": ["personal_finance_start_route_contract"],
+                "filters_applied": {"tickers": []},
+                "stats": {"ask_count": 1, "open_count": 1},
+                "warnings": [],
+            }
+
+        monkeypatch.setattr(
+            copilot_route.copilot_service,
+            "build_copilot_start_endpoint_payload",
+            fake_build_copilot_start_endpoint_payload,
+        )
+
+        client = _client()
+        response1 = client.get("/api/personal-finance/start?debug=true")
+        response2 = client.get("/api/personal-finance/start?debug=true")
+
+        assert response1.status_code == 200
+        assert response2.status_code == 200
+        assert call_count[0] == 2, "debug=true should bypass cache and recompute each request"
+        assert response1.json()["data"]["brief_of_day"]["summary"] == "fresh-1"
+        assert response2.json()["data"]["brief_of_day"]["summary"] == "fresh-2"
+
+
     def test_personal_finance_ask_endpoint_route_contract(self, monkeypatch):
         async def fake_build_ask_payload(**_kwargs):
             return {

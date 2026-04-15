@@ -934,9 +934,10 @@ async def copilot_start(
 @router.get("/personal-finance/start")
 async def personal_finance_start(
     tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+    debug: bool = Query(False, description="Bypass route cache and return fresh payload"),
 ):
     """Alias entrypoint for the personal finance copilot starter."""
-    return await copilot_start(tickers=tickers, namespace="personal-finance")
+    return await copilot_start(tickers=tickers, namespace="personal-finance", debug=debug)
 
 
 @router.get("/personal-finance/context")
