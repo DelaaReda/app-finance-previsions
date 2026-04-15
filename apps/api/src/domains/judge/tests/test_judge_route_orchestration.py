@@ -1474,6 +1474,29 @@ def test_judge_personal_finance_start_service_includes_ranked_action(monkeypatch
     assert data["open"][0]["target"] == "/personal-finance"
 
 
+def test_judge_personal_finance_start_service_critical_fallback_keeps_actions(monkeypatch):
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_resolve_copilot_services",
+        lambda: (_ for _ in ()).throw(RuntimeError("service unavailable")),
+    )
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_personal_finance_start_payload(tickers=["nvda"])
+    )
+
+    assert payload["ok"] is True
+    data = payload["data"]
+    contract_data = CopilotStartPayload(**data)
+    assert data["status"] == "degraded"
+    assert data["ask"][0]["target"] == "/personal-finance/ask"
+    assert data["open"][0]["target"] == "/personal-finance"
+    assert contract_data.ranked_action is not None
+    assert contract_data.ranked_action.target == "/personal-finance/ask"
+    assert data["stats"] == {"ask_count": 1, "open_count": 1}
+    assert data["filters_applied"] == {"tickers": ["NVDA"]}
+
+
 def test_judge_personal_finance_context_route_delegates_to_service(monkeypatch):
     captured = {}
 

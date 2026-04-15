@@ -224,6 +224,66 @@ def _pick_ranked_action(
     return None
 
 
+def _default_personal_finance_start_payload(
+    *,
+    now_iso: str,
+    tickers: List[str],
+    source: List[str],
+    warnings: Optional[List[str]] = None,
+    error: Optional[str] = None,
+    message: Optional[str] = None,
+    status: str = "ok",
+) -> Dict[str, Any]:
+    ask_items = [
+        {
+            "id": "ask_copilot",
+            "kind": "ask",
+            "label": "Ask Copilot",
+            "target": "/personal-finance/ask",
+        }
+    ]
+    open_items = [
+        {
+            "id": "open_copilot",
+            "kind": "open",
+            "label": "Open Copilot",
+            "target": "/personal-finance",
+        }
+    ]
+    result: Dict[str, Any] = {
+        "brief_of_day": {
+            "summary": "No daily brief available yet.",
+            "market_sentiment": "UNKNOWN",
+            "top_signals": [],
+            "top_risks": [],
+            "macro_signals": [],
+            "sector_rotation": {"top": [], "bottom": []},
+            "generated_at": now_iso,
+            "freshness": now_iso,
+            "source": ["judge_personal_finance_fallback"],
+        },
+        "ranked_action": _pick_ranked_action(ask_items, open_items),
+        "ask": ask_items,
+        "open": open_items,
+        "generated_at": now_iso,
+        "freshness": now_iso,
+        "source": list(source),
+        "sources": list(source),
+        "filters_applied": {"tickers": list(tickers)},
+        "stats": {
+            "ask_count": len(ask_items),
+            "open_count": len(open_items),
+        },
+        "warnings": list(warnings or []),
+        "status": status,
+    }
+    if error is not None:
+        result["error"] = error
+    if message is not None:
+        result["message"] = message
+    return result
+
+
 def _default_risk_levels() -> List[str]:
     return ["low", "medium", "high", "critical"]
 
@@ -3353,22 +3413,11 @@ async def get_judge_personal_finance_start_payload(
                     scope=scope,
                 )
             else:
-                daily_brief = {
-                    "summary": "No daily brief available yet.",
-                    "market_sentiment": "UNKNOWN",
-                    "top_signals": [],
-                    "top_risks": [],
-                    "macro_signals": [],
-                    "sector_rotation": {"top": [], "bottom": []},
-                    "generated_at": now_iso,
-                    "freshness": now_iso,
-                    "source": ["judge_personal_finance_fallback"],
-                }
-                copilot_start = {
-                    "brief_of_day": daily_brief,
-                    "ask": [],
-                    "open": [],
-                }
+                copilot_start = _default_personal_finance_start_payload(
+                    now_iso=now_iso,
+                    tickers=normalized_tickers,
+                    source=["judge_personal_finance_start_service", "copilot_route_fallback"],
+                )
 
         resolved_start = _rewrite_personal_finance_start_targets(copilot_start)
         resolved_start = dict(resolved_start) if isinstance(resolved_start, dict) else {}
@@ -3462,33 +3511,15 @@ async def get_judge_personal_finance_start_payload(
         )
     except Exception as exc:
         return service_response_with_metadata(
-            {
-                "brief_of_day": {
-                    "summary": "No daily brief available yet.",
-                    "market_sentiment": "UNKNOWN",
-                    "top_signals": [],
-                    "top_risks": [],
-                    "macro_signals": [],
-                    "sector_rotation": {"top": [], "bottom": []},
-                    "generated_at": now_iso,
-                    "freshness": now_iso,
-                    "source": ["judge_personal_finance_fallback"],
-                },
-                "ask": [],
-                "open": [],
-                "generated_at": now_iso,
-                "freshness": now_iso,
-                "source": ["judge_personal_finance_start_service", "critical_error_fallback"],
-                "sources": ["judge_personal_finance_start_service", "critical_error_fallback"],
-                "filters_applied": {"tickers": list(normalized_tickers)},
-                "stats": {
-                    "ask_count": 0,
-                    "open_count": 0,
-                },
-                "warnings": ["Fell back to judge personal finance starter defaults."],
-                "error": str(exc),
-                "message": "personal-finance start fallback response",
-            },
+            _default_personal_finance_start_payload(
+                now_iso=now_iso,
+                tickers=normalized_tickers,
+                source=["judge_personal_finance_start_service", "critical_error_fallback"],
+                warnings=["Fell back to judge personal finance starter defaults."],
+                error=str(exc),
+                message="personal-finance start fallback response",
+                status="degraded",
+            ),
             default_source="judge_personal_finance_start_service",
             freshness=now_iso,
             status="degraded",
