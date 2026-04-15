@@ -1,18 +1,18 @@
-# BATCH-73-DEV-01: Personal Finance Copilot - Delivery Proof
+# BATCH-85-DEV-01: Personal Finance Copilot - Delivery Proof
 
 **Task:** Build a personal finance copilot that starts with a brief of the day, lets the user ask or open.
 
 **Status:** ✅ COMPLETE - VERIFIED
 
-**Date:** 2026-03-23
+**Date:** 2026-04-15
 
-**Stream:** BATCH-73
+**Stream:** BATCH-85
 
 **Priority:** P2
 
-**Dependencies:** BATCH-73-ARCH ✅
+**Dependencies:** BATCH-85-ARCH ✅
 
-**Commit SHA:** `reuse-existing-implementation` (no new code - vertical slice already in place and tested)
+**Commit SHA:** `c9a440cc0cb41da0f89339f0b55421705068cecc` (test fix) + `aaeb75dc` (delivery proof)
 
 ---
 
