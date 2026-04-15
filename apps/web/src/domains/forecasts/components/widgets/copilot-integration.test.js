@@ -231,7 +231,9 @@ test('BATCH-74-DEV-02: Copilot widget HTML file exists and is valid', () => {
   assert.ok(content.includes('copilotPanel'), 'Must have copilotPanel element');
   assert.ok(content.includes('brief_of_day') || content.includes('Brief of the Day'), 'Must have brief section');
   assert.ok(content.includes('renderCopilotBrief'), 'Must have render function');
-  assert.ok(content.includes('/api/copilot/start'), 'Must wire to backend API');
+  assert.ok(content.includes('function getCopilotApiBase('), 'Must expose API base helper');
+  assert.ok(content.includes('function getCopilotNamespace('), 'Must expose namespace helper');
+  assert.ok(content.includes('${getCopilotApiBase()}/${namespace}/start'), 'Must wire start to namespace-aware backend API');
 });
 
 console.log('\n✅ BATCH-74-DEV-02: All UI contract tests passed!');
