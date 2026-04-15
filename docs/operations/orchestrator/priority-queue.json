@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-04-15T04:43:01Z",
+  "updated_at": "2026-04-15T04:52:12Z",
   "active_cycle": {
     "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
     "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
@@ -2306,7 +2306,7 @@
     {
       "id": "BATCH-85",
       "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
-      "state": "WAITING_DEP",
+      "state": "IN_PROGRESS",
       "priority": "P2",
       "owner_role": "planner",
       "created_by": "planner_autonomy",
@@ -2315,15 +2315,16 @@
       "novelty_class": "reuse_only",
       "delivery_kind": "reuse_only",
       "user_value_delta_visible": 0,
-      "next_action": "attendre completion de BATCH-85-DEV-01 puis claim BATCH-85-DEV-02 (role=dev)",
+      "next_action": "compl\u00e9ter BATCH-85-DEV-01 (READY_PLANNER pour dev)",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-04-15T03:46:32Z",
-      "updated_at": "2026-04-15T04:43:01Z",
+      "updated_at": "2026-04-15T04:52:12Z",
       "novelty_target": "fiabiliser le slice app independamment du churn admin",
       "stagnation_alert": false,
       "dispatch_authorized": true,
-      "ready_at": "2026-04-15T04:13:51Z"
+      "ready_at": "2026-04-15T04:13:51Z",
+      "opened_at": "2026-04-15T04:44:06Z"
     }
   ],
   "meta": {
@@ -2350,17 +2351,17 @@
     "planner_hard_guard": {
       "active": false,
       "reason": "none",
-      "updated_at": "2026-04-15T04:30:04Z"
+      "updated_at": "2026-04-15T04:51:11Z"
     },
     "workboard_decision_capable": false,
     "workboard_decision_capability_reason": "projection_missing_operational_fields",
-    "workboard_decision_capability_checked_at": "2026-04-15T04:30:04Z",
+    "workboard_decision_capability_checked_at": "2026-04-15T04:51:11Z",
     "novelty_target_required": false,
     "novelty_target_missing_fields": [],
     "novelty_target_audit": {
       "status": "clear",
       "reason": "novelty_target_present",
-      "updated_at": "2026-04-15T04:30:04Z"
+      "updated_at": "2026-04-15T04:51:11Z"
     },
     "novelty_target": "portfolio_first_brief_with_ranked_actions",
     "user_visible_delta": "daily brief surfaces the top portfolio or watchlist action and opens an investment memo in one click",
@@ -2369,12 +2370,12 @@
       "reason": "backend_runtime_recovered",
       "affected_stream_ids": [],
       "affected_task_ids": [],
-      "updated_at": "2026-04-15T04:30:04Z"
+      "updated_at": "2026-04-15T04:51:11Z"
     },
     "novelty_target_workflow": {
       "status": "clear",
       "reason": "novelty_target_present",
-      "updated_at": "2026-04-15T04:30:04Z"
+      "updated_at": "2026-04-15T04:51:11Z"
     }
   }
 }

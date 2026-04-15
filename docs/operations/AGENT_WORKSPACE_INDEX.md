@@ -49,6 +49,7 @@ For the shortest current doc set, start with `docs/ops/CURRENT_ARCHITECTURE_ENTR
 - Runner config (v1): `/home/venom/analyse-financiere/platform/config/runner/runner.v1.yaml`
 - Runner schema (v1): `/home/venom/analyse-financiere/platform/config/schema/runner.v1.schema.json`
 - Doctor CLI: `/home/venom/analyse-financiere/scripts/fc_doctor.sh`
+- Endpoint architecture target: `/home/venom/analyse-financiere/docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md`
 
 ## 4) Runtime Behavior and Edge Cases
 - Compatibility alias `/home/venom/analyse-financiere/docs/orchestrator-ops` may exist and be readable.

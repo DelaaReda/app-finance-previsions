@@ -1540,7 +1540,8 @@ def _heal_upstream_progress_conflicts(board: dict) -> None:
                 continue
             task["state"] = STATE_DONE
             task["status"] = STATE_DONE
-            task.setdefault("completed_at", now)
+            if not str(task.get("completed_at", "")).strip():
+                task["completed_at"] = now
             task["updated_at"] = now
             task["blocked_reason"] = ""
 

@@ -3,6 +3,9 @@
 ## Objectif
 Standardiser tous les endpoints avec le même niveau de qualité que les endpoints robustes du projet (cache, fallback, payload utile, contrat stable).
 
+Référence d'architecture cible à lire avant une refonte importante:
+- `docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md`
+
 ## Architecture (obligatoire)
 - Les routes API sont des orchestrateurs:
   - validation des paramètres,
@@ -70,6 +73,10 @@ Référence:
 - route orchestrateur: `apps/api/src/domains/judge/api/judge.py`
 - service endpoint: `apps/api/src/domains/judge/application/judge_endpoint_service.py`
 - logique métier: `apps/api/src/domains/judge/application/judge_pipeline.py` + `apps/api/src/domains/judge/application/g4f_client.py`
+
+Lecture recommandée:
+- `docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md`
+- ce document explique quoi copier de `judge` et quoi ne pas recopier.
 
 Règles supplémentaires:
 - Le service endpoint ne doit pas importer dynamiquement la route.

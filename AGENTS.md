@@ -94,6 +94,7 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 
 Engineering reference (API endpoints):
 - `docs/ops/API_ENDPOINT_BEST_PRACTICES.md`
+- `docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md` (target backend architecture; use `judge` as the reference model for non-trivial endpoints)
 
 ### 🛡️ Command Safety Gate (mandatory)
 

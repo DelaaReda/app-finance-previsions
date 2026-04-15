@@ -51,6 +51,25 @@ def _serialize_profile(profile: Any) -> Dict[str, Any]:
     raise TypeError("Portfolio risk profile must serialize to a dict payload.")
 
 
+def _normalize_source_tags(payload: Dict[str, Any]) -> list[str]:
+    source = payload.get("source")
+    if isinstance(source, list):
+        return [str(item).strip() for item in source if str(item).strip()]
+    return []
+
+
+def _resolve_risk_profile_degradation(payload: Dict[str, Any]) -> tuple[Optional[str], str]:
+    source_tags = _normalize_source_tags(payload)
+
+    if "portfolio_risk_profile_service_fallback" in source_tags:
+        return "service_fallback", "degraded"
+    if "portfolio_risk_profile_fallback" in source_tags:
+        return "metrics_unavailable", "degraded"
+    if "portfolio_risk_profile_composition_only" in source_tags:
+        return "composition_only", "degraded"
+    return None, "ok"
+
+
 def _fallback_payload(
     *,
     portfolio_id: str,
@@ -101,6 +120,7 @@ def _fallback_payload(
         "confidence": 0.35,
         "generated_at": now_iso,
         "last_update": now_iso,
+        "fallback_used": "service_fallback",
         "source": [
             "portfolio_risk_profile_service",
             "portfolio_risk_profile_service_fallback",
@@ -189,11 +209,14 @@ def get_portfolio_risk_profile_payload(
             ),
             freshness=payload.get("generated_at"),
         )
+        fallback_used, response_status = _resolve_risk_profile_degradation(payload)
+        if fallback_used and not payload.get("fallback_used"):
+            payload["fallback_used"] = fallback_used
         return service_response_with_metadata(
             payload,
             default_source="portfolio_risk_profile_service",
             freshness=payload.get("generated_at"),
-            status="degraded" if payload.get("error") else "ok",
+            status=response_status,
             error=payload.get("error"),
         )
     except Exception as exc:

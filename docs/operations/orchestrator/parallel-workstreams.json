@@ -1,6 +1,6 @@
 {
   "version": "workboard_1773198383_vb_runtime_bridge",
-  "updated_at": "2026-04-15T04:44:06Z",
+  "updated_at": "2026-04-15T04:52:12Z",
   "active_cycle": {
     "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
     "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
@@ -1471,15 +1471,15 @@
       "id": "BATCH-85",
       "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open",
       "priority": "P2",
-      "source_state": "READY_PLANNER",
-      "state": "BLOCKED",
+      "source_state": "IN_PROGRESS",
+      "state": "IN_PROGRESS",
       "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
       "novelty_class": "reuse_only",
       "user_value_delta_visible": 0,
       "created_at": "2026-04-15T03:46:32Z",
-      "updated_at": "2026-04-15T04:44:06Z",
+      "updated_at": "2026-04-15T04:52:12Z",
       "novelty_target": "fiabiliser le slice app independamment du churn admin",
-      "next_action": "attendre completion de BATCH-85-DEV-01 puis claim BATCH-85-DEV-02 (role=dev)"
+      "next_action": "compl\u00e9ter BATCH-85-DEV-01 (READY_PLANNER pour dev)"
     }
   ],
   "tasks": [
@@ -2872,7 +2872,7 @@
       "depends_on": [],
       "assignee": "dev",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-04-15T04:44:06Z",
+      "updated_at": "2026-04-15T04:52:12Z",
       "started_at": "2026-03-03T14:37:05Z",
       "completed_at": "2026-03-03T15:28:08Z",
       "notes": [
@@ -3016,7 +3016,7 @@
       "depends_on": [],
       "assignee": "dev",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-04-15T04:44:06Z",
+      "updated_at": "2026-04-15T04:52:12Z",
       "started_at": "2026-03-03T16:50:27Z",
       "completed_at": "2026-03-03T16:51:41Z",
       "notes": [
@@ -38777,7 +38777,7 @@
       ],
       "handoff_to": "",
       "created_at": "2026-04-15T03:46:32Z",
-      "updated_at": "2026-04-15T04:43:01Z",
+      "updated_at": "2026-04-15T04:51:11Z",
       "started_at": "2026-04-15T04:32:18Z",
       "completed_at": "",
       "status": "DONE",
@@ -38785,7 +38785,7 @@
       "owner": "planner",
       "proof_count": 0,
       "next_action": "continue_in_progress",
-      "projection_normalized_at": "2026-04-15T04:30:04Z",
+      "projection_normalized_at": "2026-04-15T04:51:11Z",
       "root_cause": "analysis task remained in progress after sync repaired the synthetic plan blocker and deps were none",
       "fix_applied": "planner completed the planner owned analysis task directly to unlock the canonical arch step",
       "verify": "before=BATCH-85-ANALYSIS:IN_PROGRESS deps=none ready=0; after=complete_requested arch_can_become_ready; test=parallel_workstream_context_role_planner_limit_5",
@@ -38839,14 +38839,14 @@
       ],
       "handoff_to": "",
       "created_at": "2026-04-15T03:49:05Z",
-      "updated_at": "2026-04-15T04:30:04Z",
+      "updated_at": "2026-04-15T04:51:11Z",
       "started_at": "2026-04-15T04:16:15Z",
       "completed_at": "2026-04-15T04:27:15Z",
       "status": "DONE",
       "owner": "planner",
       "proof_count": 0,
       "next_action": "wait_for_dependencies",
-      "projection_normalized_at": "2026-04-15T04:30:04Z",
+      "projection_normalized_at": "2026-04-15T04:51:11Z",
       "last_idempotency_key": "planner-batch-85-arch-complete-20260415t042301z",
       "root_cause": "stale planner subagent refs delayed planner-owned arch closure",
       "fix_applied": "planner_subagent_manager cleanup reset active registry to zero",
@@ -38885,36 +38885,36 @@
       "code": "DEV-01",
       "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open [DEV-01]",
       "role": "dev",
-      "state": "BLOCKED",
+      "state": "IN_PROGRESS",
       "priority": "P2",
       "depends_on": [
         "BATCH-85-ARCH"
       ],
       "assignee": "dev",
-      "blocked_reason": "planner_dev_capability_failed:subagent_status_failed",
+      "blocked_reason": "",
       "artifacts": [],
       "notes": [
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md."
       ],
       "handoff_to": "",
       "created_at": "2026-04-15T03:49:05Z",
-      "updated_at": "2026-04-15T04:43:01Z",
+      "updated_at": "2026-04-15T04:52:12Z",
       "started_at": "2026-04-15T04:30:28Z",
       "completed_at": "",
-      "status": "BLOCKED",
+      "status": "IN_PROGRESS",
       "owner": "dev",
-      "proof_count": 0,
-      "next_action": "wait_for_dependencies",
+      "proof_count": 3,
+      "next_action": "wait_or_collect_result",
       "projection_normalized_at": "2026-04-15T04:30:04Z",
       "dev_recovery_required": false,
       "dev_recovery_reason": "",
       "dev_invalid_result_streak": 0,
       "dev_timeout_streak": 0,
-      "dev_no_progress_streak": 1,
+      "dev_no_progress_streak": 0,
       "dev_orphaned_streak": 0,
-      "dev_execution_state": "no_progress",
-      "last_progress_at": "2026-04-15T04:30:28Z",
-      "stalled_reason": "stalled_delivery_streak:1",
+      "dev_execution_state": "running",
+      "last_progress_at": "2026-04-15T04:52:12Z",
+      "stalled_reason": "",
       "ready_starvation": false,
       "ready_starved_at": "",
       "prechange_plan_items": [
@@ -38940,9 +38940,14 @@
       ],
       "prechange_gate_version": 2,
       "last_idempotency_key": "",
-      "last_capability_failure_mode": "no_progress",
-      "stalled_capability_reason": "stalled_delivery_streak:1",
-      "stalled_capability_role": "dev"
+      "last_capability_failure_mode": "",
+      "stalled_capability_reason": "",
+      "stalled_capability_role": "",
+      "last_meaningful_progress_at": "2026-04-15T04:45:46.424440Z",
+      "artifact": "docs/operations/orchestrator/proofs/BATCH-85/BATCH-85-DEV-01/delivery-proof.json",
+      "verify": "before=brief_daily.json exists in storage with summary/market_sentiment/top_signals/top_risks; after=/api/personal-finance/start returns {ok:true, data:{brief_of_day, ask, open, cache, stats, source, generated_at, freshn",
+      "commit_sha": "aaeb75dc",
+      "runtime_truth_synced_at": "2026-04-15T04:51:11Z"
     },
     {
       "id": "BATCH-85-DEV-02",
@@ -38963,14 +38968,14 @@
       ],
       "handoff_to": "",
       "created_at": "2026-04-15T03:49:05Z",
-      "updated_at": "2026-04-15T04:30:04Z",
+      "updated_at": "2026-04-15T04:51:11Z",
       "started_at": "",
       "completed_at": "",
       "status": "WAITING_DEP",
       "owner": "dev",
       "proof_count": 0,
       "next_action": "wait_for_dependencies",
-      "projection_normalized_at": "2026-04-15T04:30:04Z"
+      "projection_normalized_at": "2026-04-15T04:51:11Z"
     },
     {
       "id": "BATCH-85-DEV-03",
@@ -38991,14 +38996,14 @@
       ],
       "handoff_to": "",
       "created_at": "2026-04-15T03:49:05Z",
-      "updated_at": "2026-04-15T04:30:04Z",
+      "updated_at": "2026-04-15T04:51:11Z",
       "started_at": "",
       "completed_at": "",
       "status": "WAITING_DEP",
       "owner": "dev",
       "proof_count": 0,
       "next_action": "wait_for_dependencies",
-      "projection_normalized_at": "2026-04-15T04:30:04Z"
+      "projection_normalized_at": "2026-04-15T04:51:11Z"
     },
     {
       "id": "BATCH-85-ADMIN-01",
@@ -39019,14 +39024,14 @@
       ],
       "handoff_to": "",
       "created_at": "2026-04-15T03:49:05Z",
-      "updated_at": "2026-04-15T04:30:04Z",
+      "updated_at": "2026-04-15T04:51:11Z",
       "started_at": "",
       "completed_at": "",
       "status": "WAITING_DEP",
       "owner": "admin",
       "proof_count": 0,
       "next_action": "wait_for_dependencies",
-      "projection_normalized_at": "2026-04-15T04:30:04Z"
+      "projection_normalized_at": "2026-04-15T04:51:11Z"
     },
     {
       "id": "BATCH-85-GOV_REVIEW",
@@ -39048,14 +39053,14 @@
       ],
       "handoff_to": "",
       "created_at": "2026-04-15T03:49:05Z",
-      "updated_at": "2026-04-15T04:30:04Z",
+      "updated_at": "2026-04-15T04:51:11Z",
       "started_at": "",
       "completed_at": "",
       "status": "WAITING_DEP",
       "owner": "planner",
       "proof_count": 0,
       "next_action": "wait_for_dependencies",
-      "projection_normalized_at": "2026-04-15T04:30:04Z"
+      "projection_normalized_at": "2026-04-15T04:51:11Z"
     }
   ],
   "handoffs": [],
@@ -565551,6 +565556,472 @@
         "decoupled_open": "0",
         "waiting_dep_reclassified": "0"
       }
+    },
+    {
+      "at": "2026-04-15T04:45:19Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:21Z",
+      "kind": "state_reconcile",
+      "details": {
+        "role": "planner",
+        "parked_inprogress_fixed": "0",
+        "stale_inprogress_marked": "0",
+        "proof_transition_stalled": "0",
+        "ready_starvation_detected": "0",
+        "dependency_starvation_detected": "0",
+        "completed_state_repaired": "0",
+        "stagnation_hard_guarded": "0",
+        "projection_decision_disabled": "1",
+        "runtime_projection_synced": "7",
+        "runtime_completion_consumed": "0"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:30Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:33Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "BATCH-85",
+        "synced_queue_items": "0",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:37Z",
+      "kind": "block",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "reason": "planner_dev_capability_failed:subagent_status_failed"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:37Z",
+      "kind": "planner_orchestrator_dev_dispatch_failed",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "source": "planner_autonomy_tick",
+        "subagent_id": "planner_dev_18d83dcc5d"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:37Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:39Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:42Z",
+      "kind": "block",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "reason": "planner_dev_capability_failed:subagent_status_failed"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:42Z",
+      "kind": "planner_orchestrator_dev_dispatch_failed",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "source": "planner_autonomy_tick",
+        "subagent_id": "planner_dev_18d83dcc5d"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:42Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:44Z",
+      "kind": "planner_orchestrator_retry_ready",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "source": "planner_autonomy_tick",
+        "reason": "recoverable_capability_failure"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:44Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-85-DEV-01",
+        "prechange_plan_count": "6",
+        "prechange_arch_count": "4",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:44Z",
+      "kind": "planner_orchestrator_claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-85-DEV-01",
+        "source": "planner_autonomy_tick"
+      }
+    },
+    {
+      "at": "2026-04-15T04:45:44Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "1",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:46:03Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-04-15T04:46:10Z",
+      "kind": "planner_autobatch_stagnation_alert",
+      "details": {
+        "reason": "idle_no_ready",
+        "source": "runner",
+        "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+        "recent_classes": "reuse_only,reuse_only",
+        "novelty_target_required": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:50:05Z",
+      "kind": "planner_orchestrator_stalled_delivery",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "source": "primary_structured",
+        "subagent_id": "planner_dev_f25c4f58ba",
+        "age_s": 243,
+        "baseline_age_s": 245,
+        "no_progress_streak": 1
+      }
+    },
+    {
+      "at": "2026-04-15T04:50:06Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "1",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:50:31Z",
+      "kind": "block",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "reason": "planner_dev_capability_failed:subagent_status_failed"
+      }
+    },
+    {
+      "at": "2026-04-15T04:50:31Z",
+      "kind": "planner_orchestrator_dev_dispatch_failed",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "source": "primary_structured",
+        "subagent_id": "planner_dev_18d83dcc5d"
+      }
+    },
+    {
+      "at": "2026-04-15T04:50:32Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:50:44Z",
+      "kind": "planner_orchestrator_retry_ready",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "source": "primary_structured",
+        "reason": "recoverable_capability_failure"
+      }
+    },
+    {
+      "at": "2026-04-15T04:50:44Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-85-DEV-01",
+        "prechange_plan_count": "6",
+        "prechange_arch_count": "4",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-04-15T04:50:44Z",
+      "kind": "planner_orchestrator_claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-85-DEV-01",
+        "source": "primary_structured"
+      }
+    },
+    {
+      "at": "2026-04-15T04:50:44Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "1",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:51:18Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:51:24Z",
+      "kind": "state_reconcile",
+      "details": {
+        "role": "planner",
+        "parked_inprogress_fixed": "0",
+        "stale_inprogress_marked": "0",
+        "proof_transition_stalled": "0",
+        "ready_starvation_detected": "0",
+        "dependency_starvation_detected": "0",
+        "completed_state_repaired": "0",
+        "stagnation_hard_guarded": "0",
+        "projection_decision_disabled": "1",
+        "runtime_projection_synced": "7",
+        "runtime_completion_consumed": "0"
+      }
+    },
+    {
+      "at": "2026-04-15T04:51:34Z",
+      "kind": "dependency_policy_migration_v1",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "dependency_policy": "single_batch",
+        "all_batches": "1",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
+      }
+    },
+    {
+      "at": "2026-04-15T04:51:53Z",
+      "kind": "block",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "reason": "planner_dev_capability_failed:subagent_status_failed"
+      }
+    },
+    {
+      "at": "2026-04-15T04:51:54Z",
+      "kind": "planner_orchestrator_dev_dispatch_failed",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "source": "planner_autonomy_tick",
+        "subagent_id": "planner_dev_18d83dcc5d"
+      }
+    },
+    {
+      "at": "2026-04-15T04:51:54Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:51:59Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:52:03Z",
+      "kind": "planner_orchestrator_stalled_delivery",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "source": "planner_autonomy_tick",
+        "subagent_id": "planner_dev_f25c4f58ba",
+        "age_s": 376,
+        "baseline_age_s": 8,
+        "no_progress_streak": 1
+      }
+    },
+    {
+      "at": "2026-04-15T04:52:03Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:52:05Z",
+      "kind": "block",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "reason": "planner_dev_capability_failed:subagent_status_failed"
+      }
+    },
+    {
+      "at": "2026-04-15T04:52:05Z",
+      "kind": "planner_orchestrator_dev_dispatch_failed",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "source": "planner_autonomy_tick",
+        "subagent_id": "planner_dev_18d83dcc5d"
+      }
+    },
+    {
+      "at": "2026-04-15T04:52:05Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "0",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:52:12Z",
+      "kind": "planner_orchestrator_retry_ready",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "source": "planner_autonomy_tick",
+        "reason": "recoverable_capability_failure"
+      }
+    },
+    {
+      "at": "2026-04-15T04:52:12Z",
+      "kind": "claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-85-DEV-01",
+        "prechange_plan_count": "6",
+        "prechange_arch_count": "4",
+        "prechange_reflection_count": "5",
+        "prechange_gate_version": "2"
+      }
+    },
+    {
+      "at": "2026-04-15T04:52:12Z",
+      "kind": "planner_orchestrator_claim",
+      "details": {
+        "role": "dev",
+        "task_id": "BATCH-85-DEV-01",
+        "source": "planner_autonomy_tick"
+      }
+    },
+    {
+      "at": "2026-04-15T04:52:12Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "1",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
     }
   ],
   "dependency_mode": "NONE",
@@ -565570,7 +566041,7 @@
   "meta": {
     "decision_capable": false,
     "decision_capability_reason": "projection_missing_operational_fields",
-    "decision_capability_checked_at": "2026-04-15T04:30:04Z",
-    "decision_capability_missing_fields": 5
+    "decision_capability_checked_at": "2026-04-15T04:51:11Z",
+    "decision_capability_missing_fields": 4
   }
 }

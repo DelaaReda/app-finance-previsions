@@ -1300,6 +1300,40 @@ Architecture note
 - create_now: no
 - next_action: finish BATCH-85 on current code surfaces and validate on the VM
 
+## 2026-04-15T04:45:46Z admin-unblock
+
+Continuity
+- previous_verdict: `BATCH-85` had started to materialize in runtime truth, but queue/workboard/monitor still drifted and kept stale planner-facing next actions
+- previous_main_blocker: false active-cycle progress where planner surfaces still pointed to `BATCH-85-ANALYSIS` or stale planner blockers instead of the live downstream task
+- previous_top_priority: converge canonical surfaces on the real active task and stop counting projection drift as progress
+- changed_since_last_run: local projection logic now collapses impossible upstream states once a downstream step is already active, so `BATCH-85-ANALYSIS` no longer masks the downstream blocker
+
+Verdict
+- blocker: false progress in the workboard projection kept `BATCH-85-ANALYSIS` open after downstream progress, which hid the real blocker on `BATCH-85-DEV-01`
+- blocker_class: false_progress
+- fix_needed: self-heal upstream projection state when a later template step is already started or completed, then let queue/workboard expose the downstream blocker instead of a stale planner action
+- runtime_can_resume: no
+
+Actions taken
+- patched `platform/automation/compat/projections/parallel_workstream.py` so recompute-state marks impossible upstream tasks `DONE` when downstream progress already exists in the same stream
+- added a regression case in `platform/automation/tests/test_parallel_workstream_queue_sync.py` covering the exact `BATCH-85` stale-analysis drift
+- verified locally that the projection now stops pointing to `BATCH-85-ANALYSIS` and instead exposes the downstream `DEV-01` blocker path
+
+Validation
+- command_or_check: `PYTHONPATH=/Users/venom/Documents/analyse-financiere/platform/automation python3 platform/automation/tests/test_parallel_workstream_queue_sync.py`
+- observed_result: `Ran 16 tests in 6.331s` and `OK`; local projection probe now yields `analysis_state=DONE`, `dev01_state=BLOCKED`, and queue/stream next action shifted off the stale planner analysis step
+- canonical_signal_after_fix: the local canonical projection no longer reports `compléter BATCH-85-ANALYSIS`; it now reflects the downstream path, which reveals `BATCH-85-DEV-01` as the actual blocker
+
+Decision
+- next_owner: admin
+- next_action: on the VM, inspect and recover the real `BATCH-85-DEV-01` `no_progress` capability path instead of retrying planner analysis
+- escalation_needed: yes
+
+Notes
+- false_progress_detected: yes; this fix removes a misleading planner-facing next action, but it does not complete delivery by itself
+- legacy_influence: medium; queue/workboard remain derived surfaces and still need VM/runtime truth confirmation for the downstream blocker
+- value_impact: observability-plus-unblock accuracy only; the real delivery blocker is now clearer, but live runtime recovery still requires VM access
+
 ## 2026-04-15T04:38:43Z endpoint-architecture-steward signal
 - endpoint: GET `/api/copilot/start`
 - main_gap: route still owns cache/fallback/response shaping and no shared typed contract exists
@@ -1338,3 +1372,58 @@ Architecture note
 - target: contrat `copilot_start_v1` + façade `copilot_endpoint_service` + route mince avec fallback/métadonnées standardisés.
 - patch_now: no
 - next_action: préparer la refactorisation structurée de `copilot/start` vers Judge-parity sans casser l'alias personal-finance.
+## 2026-04-15T05:05:00Z endpoint-architecture-steward signal
+- endpoint: GET /api/portfolios/{portfolio_id}/risk-profile
+- main_gap: la dégradation `composition_only` ou `metrics_unavailable` n'était pas explicitement matérialisée en metadata canonique.
+- target: garder la façade existante et y normaliser `fallback_used` + `status=degraded`.
+- patch_now: yes
+- next_action: vérifier ensuite les surfaces frontend/monitor qui lisent ce payload pour consommer la dégradation explicite.
+## 2026-04-15T05:14:00Z endpoint-architecture-steward signal
+- endpoint: GET /api/portfolios/{portfolio_id}/performance
+- main_gap: le payload répondait mais sans metadata business suffisante ni fallback explicite.
+- target: enrichir `PortfolioPerformance` in-place avec provenance, filtres, warnings, stats et `fallback_used`.
+- patch_now: yes
+- next_action: vérifier si les surfaces produit consomment ces nouveaux signaux au lieu de traiter les `null` comme silence.
+## 2026-04-15T04:44:30Z orchestration-architect
+
+Verdict
+- app_progress: yes
+- orchestration_efficiency: poor
+- delivered_value_now: moderate
+
+What changed since previous run
+- Changed: `logs-codex-runs/orchestrator-state/planner-graph-state.json` and `orchestration-runtime.sqlite` now carry a real `BATCH-85-DEV-01` runtime record with code/test evidence tied to commit `aaeb75dc`.
+- Changed: `logs-codex-runs/orchestrator-state/parallel-workstreams.json` now marks `BATCH-85-DEV-01` `BLOCKED` with `dev_execution_state=no_progress` instead of leaving the batch only on planner-owned `ANALYSIS/ARCH`.
+- Unchanged: `bash scripts/runtime_host_check.sh` still returns `runtime_is_vm=0`, so this run stayed file-only and produced no live VM proof.
+- Unchanged: `logs-codex-runs/orchestrator-state/priority-queue.json` still tells planner to `compléter BATCH-85-ANALYSIS`, and `executors-monitoring-latest.json` is still stale relative to the live `BATCH-85-DEV-01` runtime row.
+- Worse: the only active `BATCH-85` runtime task is already `retryable` in SQLite with `backend_requested=codex_exec`, `backend_used=qwen`, and `status=failed`, so orchestration turned a real code delta into another retry loop instead of converging it.
+- Real progress: the `apps/api` + `apps/monitor` reliability lot is still a real independent shipment candidate with visible product/runtime gains.
+
+Top priorities
+1. Ship the current `apps/api` + `apps/monitor` reliability lot independently of orchestration cleanup.
+2. Stop `BATCH-85-DEV-01` from re-entering retry churn: fix `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py` so a proof-backed code delta is merged or explicitly blocked once, not converted into `retryable`.
+3. Make queue/workboard/monitor read runtime truth first: `priority-queue.json`, `parallel-workstreams.json`, and `executors-monitoring-latest.json` must stop advertising `ANALYSIS` once SQLite says `BATCH-85-DEV-01`.
+
+Main blocker
+- `BATCH-85-DEV-01` is the real bottleneck: `logs-codex-runs/orchestrator-state/planner-graph-state.json` records it as `retryable` after a failed shadow fallback, while `logs-codex-runs/orchestrator-state/parallel-workstreams.json` reports `planner_dev_capability_failed:subagent_status_failed`; live validation remains blocked by host context (`runtime_is_vm=0`).
+
+False progress detected
+- `BATCH-85-ANALYSIS` and `BATCH-85-ARCH` were both closed as `runtime_no_code`, touching queue/workboard artifacts rather than shipping user-visible delta.
+- `BATCH-85-DEV-01` has a real commit and tests, but the runtime result is still `status=failed` / `guard_status=retryable`; counting that as delivered would be false.
+- `executors-monitoring-latest.json` still reports `done_24h=545` and `proofs=106` while planner is blocked and the active batch is not converged.
+- Legacy secondary surfaces still update (`legacy/planner-subagents-registry.json`) even though they are explicitly `decision_capable=false`.
+
+Next useful delivery
+- Release the existing brief/action/memo reliability slice now: cached `/api/copilot/context`, stable `/api/copilot/start`, composition-only portfolio fallback, cached portfolio price reads, single-worker backend startup, and monitor status semantics that separate product runtime from control-plane degradation.
+
+Architecture note
+- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py` and `platform/automation/runtime/truth/dispatch_snapshot.py` as SQLite-first read boundaries.
+- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still let projection/compat state steer active decisions.
+- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py` from active planner flow; `planner-subagents-registry.json`, `dynamic-workers-registry.json`, `agent-message-bus.jsonl`, and `intent-registry.json` must remain passive mirrors only.
+
+## 2026-04-15T04:44:30Z endpoint-architecture-steward signal
+- endpoint: GET /api/copilot/start
+- main_gap: route encore trop chargée malgré le hardening BATCH-85; cache, namespace rewrite et fallback restent dans l’API au lieu d’une façade service typée.
+- target: contrat partagé `copilot_start_v1` + `copilot_endpoint_service` pour centraliser metadata/fallback et rendre la route mince.
+- patch_now: no
+- next_action: converger `/api/copilot/start` après le ship du lot fiabilité, sans ouvrir de refactor plus large tant que `BATCH-85-DEV-01` n’est pas stabilisé.

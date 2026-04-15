@@ -9,7 +9,24 @@ import os
 import re
 from datetime import datetime, timezone
 from importlib import import_module
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
+
+try:
+    from pydantic import BaseModel, Field
+except ImportError:  # pragma: no cover
+    class BaseModel:  # type: ignore
+        def __init__(self, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+        def model_dump(self, **_kwargs):
+            return dict(self.__dict__)
+
+        def dict(self, **_kwargs):
+            return dict(self.__dict__)
+
+    def Field(default=None, **_kwargs):  # type: ignore
+        return default
 
 try:
     from storage import io as storage_io
@@ -1481,6 +1498,244 @@ def _build_copilot_start_payload(
             continue
 
     return _with_scope_tickers(legacy_payload, scope=scope)
+
+
+class CopilotStartPayloadContract(BaseModel):
+    brief_of_day: Dict[str, Any] = Field(default_factory=dict)
+    ask: List[Dict[str, Any]] = Field(default_factory=list)
+    open: List[Dict[str, Any]] = Field(default_factory=list)
+    generated_at: str = ""
+    freshness: str = ""
+    source: List[str] = Field(default_factory=list)
+    sources: List[str] = Field(default_factory=list)
+    filters_applied: Dict[str, Any] = Field(default_factory=dict)
+    stats: Dict[str, Any] = Field(default_factory=dict)
+    warnings: List[str] = Field(default_factory=list)
+    note: Optional[str] = None
+    scope_tickers: Optional[List[str]] = None
+    context_influence: Optional[Dict[str, Any]] = None
+    portfolio_context: Optional[Dict[str, Any]] = None
+    regime_detection: Optional[Dict[str, Any]] = None
+    allocation_drift_alerts: Optional[Dict[str, Any]] = None
+    fallback_used: Optional[str] = None
+
+
+def _contract_dump(model: BaseModel) -> Dict[str, Any]:
+    if hasattr(model, "model_dump"):
+        return model.model_dump(exclude_none=True)  # type: ignore[attr-defined]
+    if hasattr(model, "dict"):
+        return model.dict(exclude_none=True)  # type: ignore[attr-defined]
+    return dict(getattr(model, "__dict__", {}))
+
+
+def _resolve_start_effective_scope(
+    requested_scope: Optional[Dict[str, Any]],
+    payload: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, List[str]]]:
+    payload_scope = (
+        _normalize_tickers(payload.get("scope_tickers"))
+        if isinstance(payload, dict)
+        else []
+    )
+    if payload_scope:
+        return {"tickers": payload_scope}
+    requested_tickers = _normalize_tickers(
+        requested_scope.get("tickers") if isinstance(requested_scope, dict) else []
+    )
+    return {"tickers": requested_tickers} if requested_tickers else None
+
+
+def build_copilot_start_response(
+    start_payload: Optional[Dict[str, Any]],
+    *,
+    scope: Optional[Dict[str, Any]] = None,
+    note: Optional[str] = None,
+    context_influence: Optional[Dict[str, Any]] = None,
+    portfolio_context: Optional[Dict[str, Any]] = None,
+    regime_detection: Optional[Dict[str, Any]] = None,
+    allocation_drift_alerts: Optional[Dict[str, Any]] = None,
+    fallback_used: Optional[str] = None,
+) -> Dict[str, Any]:
+    resolved_start = dict(start_payload) if isinstance(start_payload, dict) else {}
+    brief_of_day = (
+        dict(resolved_start.get("brief_of_day"))
+        if isinstance(resolved_start.get("brief_of_day"), dict)
+        else {}
+    )
+    resolved_scope_tickers = _normalize_tickers(
+        scope.get("tickers") if isinstance(scope, dict) else []
+    )
+    ask_items = [
+        dict(item) for item in resolved_start.get("ask", []) if isinstance(item, dict)
+    ]
+    open_items = [
+        dict(item) for item in resolved_start.get("open", []) if isinstance(item, dict)
+    ]
+
+    if not ask_items:
+        ask_items = [
+            {
+                "id": "ask_copilot",
+                "kind": "ask",
+                "label": "Ask a question",
+                "target": "/copilot/ask",
+                "prefill": {
+                    "question": "What's moving today?",
+                    "tickers": list(resolved_scope_tickers),
+                },
+            }
+        ]
+
+    if not open_items:
+        open_items = [
+            {
+                "id": "open_copilot",
+                "kind": "open",
+                "label": "Open Copilot",
+                "target": "/copilot",
+            }
+        ]
+
+    generated_at = (
+        _safe_text(brief_of_day.get("freshness") or brief_of_day.get("generated_at"))
+        or utc_now_iso()
+    )
+    if isinstance(allocation_drift_alerts, dict) and allocation_drift_alerts:
+        brief_of_day = dict(brief_of_day)
+        brief_of_day["allocation_drift_alerts"] = dict(allocation_drift_alerts)
+
+    source = brief_of_day.get("sources")
+    if not isinstance(source, list):
+        source = brief_of_day.get("source")
+    normalized_source = [
+        _safe_text(item)
+        for item in (source if isinstance(source, list) else [])
+        if _safe_text(item)
+    ]
+    if "copilot_start_route" not in normalized_source:
+        normalized_source.append("copilot_start_route")
+
+    warnings: List[str] = []
+    if note:
+        warnings.append(note)
+
+    contract = CopilotStartPayloadContract(
+        brief_of_day=brief_of_day,
+        ask=ask_items,
+        open=open_items,
+        generated_at=generated_at,
+        freshness=generated_at,
+        source=normalized_source or ["copilot_start_route"],
+        sources=normalized_source or ["copilot_start_route"],
+        filters_applied={"tickers": list(resolved_scope_tickers)},
+        stats={
+            "ask_count": len(ask_items),
+            "open_count": len(open_items),
+        },
+        warnings=warnings,
+        note=note,
+        scope_tickers=list(resolved_scope_tickers) if resolved_scope_tickers else None,
+        context_influence=dict(context_influence) if isinstance(context_influence, dict) and context_influence else None,
+        portfolio_context=dict(portfolio_context) if isinstance(portfolio_context, dict) and portfolio_context else None,
+        regime_detection=dict(regime_detection) if isinstance(regime_detection, dict) and regime_detection else None,
+        allocation_drift_alerts=(
+            dict(allocation_drift_alerts)
+            if isinstance(allocation_drift_alerts, dict)
+            else {
+                "active": False,
+                "alerts": [],
+                "weights_analyzed": {},
+            }
+        ),
+        fallback_used=fallback_used,
+    )
+    return _contract_dump(contract)
+
+
+async def build_copilot_start_endpoint_payload(
+    *,
+    context_service_cls: Optional[Any] = None,
+    scope: Optional[Dict[str, Any]] = None,
+    namespace: Optional[str] = None,
+    namespace_rewriter: Optional[Callable[[Any, Optional[str]], Any]] = None,
+) -> Dict[str, Any]:
+    fallback_note = "Market context service temporarily unavailable."
+
+    def _rewrite_namespace(payload: Any) -> Any:
+        if callable(namespace_rewriter):
+            return namespace_rewriter(payload, namespace)
+        return payload
+
+    try:
+        payload = await build_context_payload(
+            context_service_cls=context_service_cls,
+            scope=scope,
+        )
+        effective_scope = _resolve_start_effective_scope(scope, payload)
+        start_payload = (
+            payload.get("copilot_start")
+            if isinstance(payload, dict)
+            else None
+        )
+        start_payload = _rewrite_namespace(start_payload)
+
+        fallback_used = None
+        note = None
+        if isinstance(payload, dict) and payload.get("regime") == "fallback":
+            note = fallback_note
+            fallback_used = "market_context_fallback"
+
+        if not isinstance(start_payload, dict) or not start_payload:
+            start_payload = _build_copilot_start_payload(
+                daily_brief=payload.get("daily_brief") if isinstance(payload, dict) else None,
+                entry_points=payload.get("entry_points") if isinstance(payload, dict) else None,
+                scope=effective_scope,
+            )
+            start_payload = _rewrite_namespace(start_payload)
+            if not fallback_used:
+                fallback_used = "copilot_start_rebuilt"
+
+        return build_copilot_start_response(
+            start_payload,
+            scope=effective_scope,
+            note=note,
+            context_influence=payload.get("context_influence") if isinstance(payload, dict) else None,
+            portfolio_context=payload.get("portfolio_context") if isinstance(payload, dict) else None,
+            regime_detection=payload.get("regime_detection") if isinstance(payload, dict) else None,
+            allocation_drift_alerts=payload.get("allocation_drift_alerts") if isinstance(payload, dict) else None,
+            fallback_used=fallback_used,
+        )
+    except Exception:
+        daily_brief = _load_daily_brief_payload()
+        entry_points = _build_copilot_entry_points(scope, daily_brief)
+        module_globals = globals()
+        build_start_payload = module_globals.get(
+            "_build_copilot_start_payload"
+        ) or module_globals.get("_legacy_copilot_start_payload")
+
+        if callable(build_start_payload):
+            fallback_start = build_start_payload(
+                daily_brief=daily_brief,
+                entry_points=entry_points,
+                scope=scope,
+            )
+        else:
+            fallback_start = {
+                "brief_of_day": daily_brief,
+                "ask": [],
+                "open": [],
+            }
+        fallback_start = _rewrite_namespace(fallback_start)
+        return build_copilot_start_response(
+            fallback_start,
+            scope=scope,
+            note=fallback_note,
+            context_influence=None,
+            portfolio_context=None,
+            regime_detection=None,
+            allocation_drift_alerts=None,
+            fallback_used="copilot_context_exception",
+        )
 
 
 def _extract_bullets(text: str) -> List[str]:

@@ -432,7 +432,16 @@ class PortfolioPerformance(BaseModel):
     volatility: Optional[float] = None
     sharpe_ratio: Optional[float] = None
     vs_benchmark: Optional[Dict[str, Any]] = None
+    filters_applied: Dict[str, Any] = Field(default_factory=dict)
+    stats: Dict[str, Any] = Field(default_factory=dict)
+    warnings: List[str] = Field(default_factory=list)
     calculated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    generated_at: str = Field(default_factory=_now_iso)
+    source: List[str] = Field(
+        default_factory=lambda: ["portfolio_service", "portfolio_performance"]
+    )
+    fallback_used: Optional[str] = None
+    error: Optional[str] = None
 
 
 class PortfolioRiskProfile(BaseModel):
@@ -719,6 +728,16 @@ class PortfolioService:
             return None
 
         tickers = sorted(portfolio.tickers)
+        weights, weights_source, weight_warnings = _resolve_portfolio_weights(
+            tickers,
+            portfolio.metadata,
+        )
+        filters_applied = {
+            "portfolio_id": portfolio.id,
+            "benchmark": benchmark,
+            "start_date": start_date,
+            "end_date": end_date,
+        }
 
         if not tickers:
             # Empty portfolio
@@ -733,7 +752,23 @@ class PortfolioService:
                 vs_benchmark={
                     "benchmark": benchmark,
                     "outperformance": None
-                }
+                },
+                filters_applied=filters_applied,
+                stats={
+                    "tickers_count": 0,
+                    "has_live_metrics": False,
+                    "non_null_metrics": 0,
+                    "weights_source": "empty_portfolio",
+                    "equal_weight_assumption": False,
+                },
+                warnings=[
+                    "Add at least one ticker to compute portfolio performance."
+                ],
+                source=[
+                    "portfolio_service",
+                    "portfolio_performance",
+                    "portfolio_performance_empty_state",
+                ],
             )
 
         live_metrics_enabled = str(
@@ -747,7 +782,6 @@ class PortfolioService:
 
         # Use performance service for real calculations
         try:
-            weights, _, _ = _resolve_portfolio_weights(tickers, portfolio.metadata)
             perf_service = _get_performance_service()
             metrics, comparison, _ = perf_service.calculate_performance(
                 tickers=tickers,
@@ -755,6 +789,16 @@ class PortfolioService:
                 start_date=start_date,
                 end_date=end_date,
                 benchmark=benchmark
+            )
+            non_null_metrics = sum(
+                value is not None
+                for value in (
+                    metrics.total_return,
+                    metrics.annualized_return,
+                    metrics.volatility,
+                    metrics.sharpe_ratio,
+                    comparison.outperformance,
+                )
             )
             
             # Map to PortfolioPerformance model
@@ -769,7 +813,16 @@ class PortfolioService:
                 vs_benchmark={
                     "benchmark": comparison.benchmark_ticker,
                     "outperformance": comparison.outperformance
-                }
+                },
+                filters_applied=filters_applied,
+                stats={
+                    "tickers_count": len(tickers),
+                    "has_live_metrics": non_null_metrics > 0,
+                    "non_null_metrics": non_null_metrics,
+                    "weights_source": weights_source,
+                    "equal_weight_assumption": weights_source != "portfolio_metadata",
+                },
+                warnings=weight_warnings,
             )
             
             logger.info(f"Calculated performance for portfolio {portfolio_id}")
@@ -789,7 +842,25 @@ class PortfolioService:
                 vs_benchmark={
                     "benchmark": benchmark,
                     "outperformance": None
-                }
+                },
+                filters_applied=filters_applied,
+                stats={
+                    "tickers_count": len(tickers),
+                    "has_live_metrics": False,
+                    "non_null_metrics": 0,
+                    "weights_source": weights_source,
+                    "equal_weight_assumption": weights_source != "portfolio_metadata",
+                },
+                warnings=weight_warnings + [
+                    "Performance metrics unavailable; returned a degraded snapshot."
+                ],
+                source=[
+                    "portfolio_service",
+                    "portfolio_performance",
+                    "portfolio_performance_fallback",
+                ],
+                fallback_used="metrics_unavailable",
+                error=str(e),
             )
 
     def get_risk_profile(
