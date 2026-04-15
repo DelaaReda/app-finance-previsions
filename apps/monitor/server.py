@@ -4148,11 +4148,13 @@ def status(lite: int = 0):
     summary = latest_snapshot.get("summary", {}) if isinstance(latest_snapshot, dict) else {}
     blocker_roles = summary.get("blocker_roles", []) if isinstance(summary, dict) else []
     blocker_roles = blocker_roles if isinstance(blocker_roles, list) else []
+    stale_context_open = _int_or_default(summary.get("stale_context_open"), 0) if isinstance(summary, dict) else 0
     health = monitor_compute_health(
         force_degraded=force_degraded,
         hard_blocked=hard_blocked,
         has_rate_limits=bool(rl),
         has_rate_limited_agents=rate_limited_agents,
+        has_stale_context=stale_context_open > 0,
         summary_blocker_roles=blocker_roles,
     )
     if runtime_paused:
@@ -4275,7 +4277,11 @@ def status(lite: int = 0):
             pass
         primary_status = str(lite_payload.get("primary_status", "") or "").strip().lower()
         doctor_overall_status = str(lite_payload.get("doctor_overall_status", "") or "").strip().lower()
-        if primary_status == "ok" and doctor_overall_status in {"", "ok"}:
+        if (
+            str(lite_payload.get("health", "") or "").strip().upper() in {"", "UNKNOWN"}
+            and primary_status == "ok"
+            and doctor_overall_status in {"", "ok"}
+        ):
             lite_payload["health"] = "OK"
         return _lite_cache_set(_STATUS_LITE_CACHE, lite_payload)
 
