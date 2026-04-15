@@ -1456,6 +1456,49 @@ def test_judge_personal_finance_context_route_delegates_to_service(monkeypatch):
     assert sorted(captured["tickers"]) == ["MSFT", "NVDA"]
 
 
+def test_judge_personal_finance_open_route_delegates_to_service(monkeypatch):
+    captured = {}
+
+    async def fake_get_judge_personal_finance_context_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "data": {
+                "daily_brief": {
+                    "summary": "Open action uses context payload.",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-03-13T10:00:00Z",
+                    "freshness": "2026-03-13T10:00:00Z",
+                    "source": ["judge_personal_finance_context_service"],
+                },
+                "entry_points": [
+                    {
+                        "id": "brief_of_day",
+                        "kind": "open",
+                        "label": "Brief du jour",
+                        "target": "/brief/daily",
+                    }
+                ],
+                "scope_tickers": ["MSFT", "NVDA"],
+            },
+            "freshness": "2026-03-13T10:00:00Z",
+        }
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "get_judge_personal_finance_context_payload",
+        fake_get_judge_personal_finance_context_payload,
+    )
+
+    client = _client()
+    resp = client.get("/api/judge/personal-finance/open?tickers=nvda&tickers=msft")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["ok"] is True
+    assert payload["data"]["daily_brief"]["summary"] == "Open action uses context payload."
+    assert sorted(captured["tickers"]) == ["MSFT", "NVDA"]
+
+
 def test_judge_personal_finance_ask_route_delegates_to_service(monkeypatch):
     captured = {}
 

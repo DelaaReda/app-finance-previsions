@@ -4049,6 +4049,20 @@ async def post_judge_personal_finance_ask(req: JudgePersonalFinanceAskRequest):
     )
 
 
+@router.get("/personal-finance/open")
+async def get_judge_personal_finance_open(
+    tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+):
+    """Alias endpoint for the personal finance open action."""
+    from services.judge_endpoint_service import (
+        get_judge_personal_finance_context_payload,
+    )
+
+    return await get_judge_personal_finance_context_payload(
+        tickers=normalize_tickers(tickers or []),
+    )
+
+
 @router.get("/decision-journal")
 async def get_judge_decision_journal(
     decision_id: Optional[str] = Query(default=None, description="Filter by decision id"),
