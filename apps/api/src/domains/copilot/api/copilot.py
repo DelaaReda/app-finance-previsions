@@ -87,6 +87,14 @@ _COPILOT_START_INFLIGHT: Dict[str, asyncio.Task] = {}
 _COPILOT_START_INFLIGHT_LOCK = asyncio.Lock()
 
 
+def _callable_cache_token(value: Any) -> str:
+    if not callable(value):
+        return ""
+    module = str(getattr(value, "__module__", "") or "").strip()
+    qualname = str(getattr(value, "__qualname__", "") or getattr(value, "__name__", "") or "").strip()
+    return f"{module}:{qualname}" if module or qualname else repr(value)
+
+
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -356,11 +364,12 @@ def _copilot_start_cache_key(
     if not callable(stable_cache_key):
         return None
     return stable_cache_key(
-        "copilot_start_v1",
+        "copilot_start_v2",
         {
             "brief_signature": payload_signature,
             "tickers": list(tickers or []),
             "namespace": str(namespace or "").strip(),
+            "context_builder": _callable_cache_token(getattr(copilot_service, "build_context_payload", None)),
         },
     )
 
@@ -372,10 +381,11 @@ def _copilot_context_cache_key(
 ) -> Optional[str]:
     if callable(stable_cache_key):
         return stable_cache_key(
-            "copilot_context_v1",
+            "copilot_context_v2",
             {
                 "tickers": list(tickers or []),
                 "namespace": str(namespace or "").strip(),
+                "context_builder": _callable_cache_token(getattr(copilot_service, "build_context_payload", None)),
             },
         )
     return None
@@ -898,6 +908,26 @@ async def copilot_context(
     return {"ok": True, "data": _copilot_context_store_payload(cache_key, payload)}
 
 
+@router.get("/copilot/open")
+async def copilot_open(
+    tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+    namespace: Optional[str] = None,
+):
+    """Alias opener for the copilot context view."""
+    namespace_value = namespace or "copilot"
+    response = await copilot_context(tickers=tickers, namespace=namespace_value, debug=False)
+
+    scope = _normalize_scope(tickers)
+    tickers_scope = list((scope or {}).get("tickers") or [])
+    if tickers_scope and isinstance(response, dict):
+        data = response.get("data")
+        if isinstance(data, dict) and not data.get("scope_tickers"):
+            data = dict(data)
+            data["scope_tickers"] = tickers_scope
+            response["data"] = data
+    return response
+
+
 @router.get("/copilot/start")
 async def copilot_start(
     tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
@@ -949,6 +979,14 @@ async def personal_finance_context(
 ):
     """Alias entrypoint for the personal finance context view."""
     return await copilot_context(tickers=tickers, namespace="personal-finance")
+
+
+@router.get("/personal-finance/open")
+async def personal_finance_open(
+    tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
+):
+    """Alias entrypoint for the personal finance open action."""
+    return await copilot_open(tickers=tickers, namespace="personal-finance")
 
 
 @router.post("/personal-finance/ask")

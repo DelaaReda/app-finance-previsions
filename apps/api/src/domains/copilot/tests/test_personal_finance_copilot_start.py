@@ -253,6 +253,43 @@ class TestPersonalFinanceCopilotIntegration:
         assert response1.json()["data"]["brief_of_day"]["summary"] == "fresh-1"
         assert response2.json()["data"]["brief_of_day"]["summary"] == "fresh-2"
 
+    def test_personal_finance_open_route_alias(self, monkeypatch):
+        async def fake_build_context_payload(**_kwargs):
+            return {
+                "daily_brief": {
+                    "summary": "Open flow summary.",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-03-14T03:00:00Z",
+                    "freshness": "2026-03-14T03:00:00Z",
+                    "source": ["personal_finance_open_route_contract"],
+                },
+                "entry_points": [
+                    {"id": "open_copilot", "kind": "open", "target": "/copilot/open"},
+                ],
+                "copilot_start": {
+                    "brief_of_day": {
+                        "summary": "Open flow summary.",
+                        "market_sentiment": "NEUTRAL",
+                        "generated_at": "2026-03-14T03:00:00Z",
+                        "freshness": "2026-03-14T03:00:00Z",
+                        "source": ["personal_finance_open_route_contract"],
+                    },
+                    "ask": [],
+                    "open": [{"id": "open_copilot", "kind": "open", "target": "/copilot"}],
+                },
+            }
+
+        monkeypatch.setattr(copilot_route.copilot_service, "build_context_payload", fake_build_context_payload)
+
+        client = _client()
+        response = client.get("/api/personal-finance/open?tickers=nvda")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload.get("ok") is True
+        assert payload["data"]["daily_brief"]["summary"] == "Open flow summary."
+        assert payload["data"]["entry_points"][0]["target"] == "/personal-finance"
+        assert payload["data"]["scope_tickers"] == ["NVDA"]
 
     def test_personal_finance_ask_endpoint_route_contract(self, monkeypatch):
         async def fake_build_ask_payload(**_kwargs):
