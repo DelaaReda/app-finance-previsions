@@ -106,7 +106,7 @@
     /**
      * Personal Finance Start Page
      * BATCH-78-DEV-02: Minimal slice - reuses copilot-panel.html widget
-     * Wired to /api/judge/personal-finance/start endpoint via judge stack
+     * Wired to /api/personal-finance/start endpoint via the shared copilot route
      */
 
     // Override COPILOT_API_BASE to use personal-finance namespace
@@ -174,7 +174,7 @@
 
             try {
               // Use personal-finance namespace endpoint
-              const response = await fetch(`${window.COPILOT_API_BASE}/judge/personal-finance/start`, {
+              const response = await fetch(`${window.COPILOT_API_BASE}/personal-finance/start`, {
                 method: 'GET',
                 headers: { 'Accept': 'application/json' }
               });

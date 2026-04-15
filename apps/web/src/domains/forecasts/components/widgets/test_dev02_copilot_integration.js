@@ -270,7 +270,7 @@ test('BATCH-82-DEV-02: personal-finance-start.html page exists', () => {
   assert.ok(content.length > 500, 'Page must have substantial content');
   assert.ok(content.includes('copilot-panel-container'), 'Must have copilot panel container');
   assert.ok(content.includes('loadCopilotWidget'), 'Must load copilot widget');
-  assert.ok(content.includes('/judge/personal-finance/start'), 'Must wire to judge personal-finance start endpoint');
+  assert.ok(content.includes('/personal-finance/start'), 'Must wire to personal-finance start endpoint');
 });
 
 test('BATCH-82-DEV-02: Personal finance page loads widget dynamically', () => {

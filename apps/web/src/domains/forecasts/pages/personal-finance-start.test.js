@@ -130,7 +130,7 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
           },
         };
       }
-      if (url === 'http://localhost:8050/api/judge/personal-finance/start') {
+      if (url === 'http://localhost:8050/api/personal-finance/start') {
         return {
           ok: true,
           async json() {
@@ -220,7 +220,7 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
   await sandbox.window.loadCopilotStart();
 
   assert.equal(fetchCalls[0].url, '../components/widgets/copilot-panel.html');
-  assert.equal(fetchCalls[1].url, 'http://localhost:8050/api/judge/personal-finance/start');
+  assert.equal(fetchCalls[1].url, 'http://localhost:8050/api/personal-finance/start');
   assert.equal(sandbox.initCalls, 1, 'widget init should run after scripts activate');
   assert.equal(sandbox.bootstrapCalls, 0, 'init path should be preferred when available');
   assert.equal(sandbox.renderActionsCalls, 1, 'actions should render after data load');
