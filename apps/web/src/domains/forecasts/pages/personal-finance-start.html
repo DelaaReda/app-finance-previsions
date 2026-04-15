@@ -303,6 +303,24 @@
         });
       }
 
+      if (rewritten.ranked_action && typeof rewritten.ranked_action === 'object') {
+        const rankedAction = { ...rewritten.ranked_action };
+        const rawTarget = toNormalizedTarget(rankedAction.target);
+        if (typeof rawTarget === 'string' && rawTarget.startsWith('/copilot')) {
+          const rewrittenTarget = dedupeNamespaceTarget(rawTarget.replace('/copilot', normalizedNamespace));
+          rankedAction.target = rankedAction.kind === 'ask'
+            ? (rewrittenTarget === `${normalizedNamespace}/${normalizedNamespace.replace(/^\//, '')}`
+              ? `${normalizedNamespace}/ask`
+              : rewrittenTarget)
+            : (rewrittenTarget.startsWith(normalizedNamespace) ? normalizedNamespace : rewrittenTarget);
+        } else if (typeof rawTarget === 'string' && rawTarget.startsWith(normalizedNamespace)) {
+          rankedAction.target = rankedAction.kind === 'ask' ? rawTarget : normalizedNamespace;
+        } else {
+          rankedAction.target = rawTarget;
+        }
+        rewritten.ranked_action = rankedAction;
+      }
+
       return rewritten;
     }
 

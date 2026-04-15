@@ -506,15 +506,37 @@ function renderCopilotPortfolio(data) {
  * Render ask/open actions
  */
 function renderCopilotActions() {
+    const rankedAction = copilotState.briefData && typeof copilotState.briefData === 'object'
+        ? copilotState.briefData.ranked_action
+        : null;
+    const askActions = Array.isArray(copilotState.askActions) ? [...copilotState.askActions] : [];
+    const openActions = Array.isArray(copilotState.openActions) ? [...copilotState.openActions] : [];
+    const rankedActionId = rankedAction && rankedAction.id ? String(rankedAction.id) : '';
+    const rankedActionKind = rankedAction && rankedAction.kind ? String(rankedAction.kind).toLowerCase() : '';
+    const rankedQuestion = rankedAction?.prefill?.question || rankedAction?.prompt || rankedAction?.question || '';
+    const rankedTarget = rankedAction?.target || '';
+    const isRankedAsk = rankedActionKind === 'ask' && (rankedQuestion || rankedTarget);
+    const isRankedOpen = rankedActionKind === 'open' && rankedTarget;
+
+    if (isRankedAsk && !askActions.some((action) => String(action?.id || '') === rankedActionId)) {
+        askActions.unshift(rankedAction);
+    }
+    if (isRankedOpen && !openActions.some((action) => String(action?.id || '') === rankedActionId)) {
+        openActions.unshift(rankedAction);
+    }
+
     // Render ask actions
     const askListEl = document.getElementById('copilotAskList');
-    if (askListEl && copilotState.askActions.length > 0) {
-        askListEl.innerHTML = copilotState.askActions.map((action) => {
+    if (askListEl && askActions.length > 0) {
+        askListEl.innerHTML = askActions.map((action) => {
             const kind = action && action.kind ? action.kind : 'ask';
             const target = action && action.target ? action.target : '';
             const prefillQuestion = action?.prefill?.question || action?.prompt || action?.question || '';
             const escapedQuestion = escapeHtml(prefillQuestion);
-            const label = escapeHtml(action?.label || action?.question || 'Ask');
+            const isPrimaryAction = rankedActionId && String(action?.id || '') === rankedActionId;
+            const label = escapeHtml(isPrimaryAction
+                ? `Top action: ${action?.label || action?.question || 'Ask'}`
+                : (action?.label || action?.question || 'Ask'));
 
             return `
                 <button class="copilot-action-btn" onclick="executeCopilotAction('${escapeHtml(kind)}', '${escapeHtml(target)}', '${escapedQuestion}')">
@@ -532,10 +554,12 @@ function renderCopilotActions() {
     
     // Render open actions
     const openListEl = document.getElementById('copilotOpenList');
-    if (openListEl && copilotState.openActions.length > 0) {
-        openListEl.innerHTML = copilotState.openActions.map(action => `
+    if (openListEl && openActions.length > 0) {
+        openListEl.innerHTML = openActions.map(action => `
             <button class="copilot-action-btn secondary" onclick="executeCopilotAction('${escapeHtml(action.kind || 'open')}', '${escapeHtml(action.target || '')}')">
-                ${escapeHtml(action.label || 'Open')}
+                ${escapeHtml(rankedActionId && String(action?.id || '') === rankedActionId
+                    ? `Top action: ${action.label || 'Open'}`
+                    : (action.label || 'Open'))}
             </button>
         `).join('');
     }

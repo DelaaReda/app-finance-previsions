@@ -137,6 +137,15 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
             return {
                 data: {
               freshness: '2026-03-23T20:00:00Z',
+                ranked_action: {
+                  id: 'ranked_today',
+                  kind: 'ask',
+                  label: 'Portfolio today',
+                  target: '/copilot/ask',
+                  prefill: {
+                    question: 'What should I do with my portfolio today?',
+                  },
+                },
                 ask: [
                   { label: 'Ask', target: '/copilot/ask' },
                   { label: 'Ask portfolio', target: '/copilot/personal-finance/ask' },
@@ -224,6 +233,7 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
   assert.equal(sandbox.initCalls, 1, 'widget init should run after scripts activate');
   assert.equal(sandbox.bootstrapCalls, 0, 'init path should be preferred when available');
   assert.equal(sandbox.renderActionsCalls, 1, 'actions should render after data load');
+  assert.equal(sandbox.brief.ranked_action.target, '/personal-finance/ask');
     assert.equal(sandbox.brief.ask[0].target, '/personal-finance/ask');
     assert.equal(sandbox.brief.ask[1].target, '/personal-finance/ask');
     assert.equal(sandbox.brief.open[0].target, '/personal-finance');

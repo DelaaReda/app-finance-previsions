@@ -278,6 +278,66 @@ test('renderCopilotActions uses prompt fallback for ask prefill', () => {
   );
 });
 
+test('renderCopilotActions promotes ranked ask action ahead of generic asks', () => {
+  const askListEl = { innerHTML: '', style: { display: 'block' } };
+  const openListEl = { innerHTML: '', style: { display: 'block' } };
+
+  const sandbox = {
+    document: {
+      getElementById(id) {
+        return id === 'copilotAskList'
+          ? askListEl
+          : id === 'copilotOpenList'
+            ? openListEl
+            : null;
+      },
+    },
+    copilotState: {
+      briefData: {
+        ranked_action: {
+          id: 'ranked_today',
+          kind: 'ask',
+          label: 'Portfolio today',
+          target: '/copilot/ask',
+          prefill: {
+            question: 'What should I do with my portfolio today?',
+          },
+        },
+      },
+      askActions: [
+        {
+          id: 'market_theme',
+          kind: 'ask',
+          label: 'Best theme now?',
+          prompt: 'Which market theme deserves a deep dive right now?',
+        },
+      ],
+      openActions: [],
+    },
+    escapeHtml(text) {
+      return String(text || '');
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    extractFunction('renderCopilotActions', 'renderCopilotSuggestions'),
+    sandbox,
+    { filename: 'copilot-panel.html' },
+  );
+
+  sandbox.renderCopilotActions();
+
+  assert.ok(
+    askListEl.innerHTML.includes('Top action: Portfolio today'),
+    'Ranked action should be labeled as the top action'
+  );
+  assert.ok(
+    askListEl.innerHTML.indexOf('Top action: Portfolio today') < askListEl.innerHTML.indexOf('Best theme now?'),
+    'Ranked action should render before the generic ask actions'
+  );
+});
+
 test('executeCopilotAction navigates open route targets with location.assign', () => {
   const calls = [];
   const sandbox = {
