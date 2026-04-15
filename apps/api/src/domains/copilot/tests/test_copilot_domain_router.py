@@ -598,12 +598,16 @@ def test_personal_finance_start_alias_reuses_copilot_start_payload(monkeypatch):
     assert finance_data_ask_targets == ["/personal-finance/ask"]
     assert start_data_open_targets == ["/copilot"]
     assert finance_data_open_targets == ["/personal-finance"]
+    assert start_data.get("ranked_action", {}).get("target") == "/copilot/ask"
+    assert finance_data.get("ranked_action", {}).get("target") == "/personal-finance/ask"
 
     # Ensure stable contract parity while allowing runtime timestamps to differ.
     start_data.pop("generated_at", None)
     start_data.pop("freshness", None)
     finance_data.pop("generated_at", None)
     finance_data.pop("freshness", None)
+    start_data.pop("ranked_action", None)
+    finance_data.pop("ranked_action", None)
     start_data.pop("ask", None)
     finance_data.pop("ask", None)
     start_data.pop("open", None)

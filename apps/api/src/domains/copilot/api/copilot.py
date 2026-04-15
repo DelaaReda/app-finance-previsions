@@ -1167,21 +1167,20 @@ async def copilot_start(
             return {"ok": True, "data": cached_payload}
 
     async def _compute_payload() -> Dict[str, Any]:
-        if namespace is not None:
-            try:
-                endpoint_payload = await copilot_service.build_copilot_start_endpoint_payload(
-                    context_service_cls=ContextService,
-                    scope=scope,
-                    namespace=namespace,
-                    namespace_rewriter=_rewrite_namespace_targets,
-                )
-                if (
-                    isinstance(endpoint_payload, dict)
-                    and (endpoint_payload.get("brief_of_day") or endpoint_payload.get("copilot_start"))
-                ):
-                    return endpoint_payload
-            except Exception:
-                pass
+        try:
+            endpoint_payload = await copilot_service.build_copilot_start_endpoint_payload(
+                context_service_cls=ContextService,
+                scope=scope,
+                namespace=namespace,
+                namespace_rewriter=_rewrite_namespace_targets,
+            )
+            if (
+                isinstance(endpoint_payload, dict)
+                and (endpoint_payload.get("brief_of_day") or endpoint_payload.get("copilot_start"))
+            ):
+                return endpoint_payload
+        except Exception:
+            pass
 
         context_payload = await copilot_service.build_context_payload(
             context_service_cls=ContextService,
