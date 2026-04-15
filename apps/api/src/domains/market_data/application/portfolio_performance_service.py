@@ -5,6 +5,10 @@ Task: API-PORTFOLIO-003 - Performance Analytics Phase 2
 """
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import hashlib
+import json
+import os
 from pydantic import BaseModel, Field
 import logging
 import numpy as np
@@ -19,6 +23,114 @@ try:
 except ImportError:
     logger.warning("yfinance not available - performance calculations will use mock data")
     YFINANCE_AVAILABLE = False
+
+
+PRICE_CACHE_TTL_SECONDS = max(
+    60,
+    int(os.getenv("FC_PORTFOLIO_PRICE_CACHE_TTL_SECONDS", "900") or "900"),
+)
+YFINANCE_TIMEOUT_SECONDS = max(
+    1.0,
+    float(os.getenv("FC_PORTFOLIO_YFINANCE_TIMEOUT_SECONDS", "5") or "5"),
+)
+PRICE_CACHE_DIR = (
+    Path(__file__).resolve().parents[4] / "runtime" / "cache" / "portfolio-performance"
+)
+
+
+def _normalize_cache_tickers(tickers: List[str]) -> List[str]:
+    return sorted(
+        {
+            str(ticker or "").strip().upper()
+            for ticker in tickers
+            if str(ticker or "").strip()
+        }
+    )
+
+
+def _price_cache_path(
+    tickers: List[str],
+    start_date: str,
+    end_date: str,
+) -> Path:
+    cache_seed = json.dumps(
+        {
+            "tickers": _normalize_cache_tickers(tickers),
+            "start_date": start_date,
+            "end_date": end_date,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    cache_key = hashlib.sha1(cache_seed.encode("utf-8")).hexdigest()
+    return PRICE_CACHE_DIR / f"{cache_key}.json"
+
+
+def _read_price_cache(
+    tickers: List[str],
+    start_date: str,
+    end_date: str,
+    *,
+    allow_stale: bool = False,
+) -> Optional[pd.DataFrame]:
+    cache_path = _price_cache_path(tickers, start_date, end_date)
+    if not cache_path.exists():
+        return None
+
+    try:
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        generated_at_raw = str(payload.get("generated_at") or "").strip()
+        if generated_at_raw:
+            generated_at = datetime.fromisoformat(generated_at_raw.replace("Z", "+00:00"))
+            age_seconds = (datetime.now(timezone.utc) - generated_at).total_seconds()
+            if not allow_stale and age_seconds > PRICE_CACHE_TTL_SECONDS:
+                return None
+
+        rows = payload.get("rows")
+        if not isinstance(rows, list) or not rows:
+            return None
+
+        data = pd.DataFrame(rows)
+        required_columns = {"Date", "Close", "Ticker"}
+        if not required_columns.issubset(set(data.columns)):
+            return None
+
+        data = data.loc[:, ["Date", "Close", "Ticker"]].copy()
+        data["Date"] = pd.to_datetime(data["Date"], errors="coerce")
+        data["Close"] = pd.to_numeric(data["Close"], errors="coerce")
+        data["Ticker"] = data["Ticker"].astype(str)
+        data = data.dropna(subset=["Date", "Close", "Ticker"])
+        if data.empty:
+            return None
+        return data
+    except Exception as exc:
+        logger.warning("Failed to read portfolio price cache %s: %s", cache_path, exc)
+        return None
+
+
+def _write_price_cache(
+    tickers: List[str],
+    start_date: str,
+    end_date: str,
+    prices: pd.DataFrame,
+) -> None:
+    if prices.empty:
+        return
+
+    try:
+        PRICE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache_path = _price_cache_path(tickers, start_date, end_date)
+        serializable = prices.loc[:, ["Date", "Close", "Ticker"]].copy()
+        serializable["Date"] = pd.to_datetime(serializable["Date"], errors="coerce").astype(str)
+        payload = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "rows": serializable.to_dict(orient="records"),
+        }
+        temp_path = cache_path.with_suffix(".tmp")
+        temp_path.write_text(json.dumps(payload), encoding="utf-8")
+        temp_path.replace(cache_path)
+    except Exception as exc:
+        logger.warning("Failed to write portfolio price cache: %s", exc)
 
 
 # ============================================================================
@@ -85,13 +197,43 @@ def fetch_price_data(
         end_date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     if start_date is None:
         start_date = (datetime.now(timezone.utc) - timedelta(days=365)).strftime('%Y-%m-%d')
+
+    normalized_tickers = _normalize_cache_tickers(tickers)
+    if not normalized_tickers:
+        return pd.DataFrame()
+
+    cached = _read_price_cache(normalized_tickers, start_date, end_date)
+    if cached is not None:
+        logger.info(
+            "Using cached portfolio price data for %s tickers (%s -> %s)",
+            len(normalized_tickers),
+            start_date,
+            end_date,
+        )
+        return cached
+
+    stale_cached = _read_price_cache(
+        normalized_tickers,
+        start_date,
+        end_date,
+        allow_stale=True,
+    )
     
     all_data = []
     
-    for ticker in tickers:
+    for ticker in normalized_tickers:
         try:
             ticker_obj = yf.Ticker(ticker)
-            hist = ticker_obj.history(start=start_date, end=end_date)
+            history_kwargs = {
+                "start": start_date,
+                "end": end_date,
+                "timeout": YFINANCE_TIMEOUT_SECONDS,
+            }
+            try:
+                hist = ticker_obj.history(**history_kwargs)
+            except TypeError:
+                history_kwargs.pop("timeout", None)
+                hist = ticker_obj.history(**history_kwargs)
             
             if hist.empty:
                 logger.warning(f"No data for {ticker}")
@@ -109,10 +251,28 @@ def fetch_price_data(
             continue
     
     if not all_data:
+        if stale_cached is not None:
+            logger.warning(
+                "Returning stale cached portfolio price data for %s tickers (%s -> %s)",
+                len(normalized_tickers),
+                start_date,
+                end_date,
+            )
+            return stale_cached
         return pd.DataFrame()
     
     # Combine all data
     combined = pd.concat(all_data, ignore_index=True)
+    combined["Date"] = pd.to_datetime(combined["Date"], errors="coerce", utc=True).dt.tz_localize(None)
+    combined["Close"] = pd.to_numeric(combined["Close"], errors="coerce")
+    combined["Ticker"] = combined["Ticker"].astype(str).str.upper().str.strip()
+    combined = (
+        combined.dropna(subset=["Date", "Close", "Ticker"])
+        .sort_values(["Ticker", "Date", "Close"])
+        .drop_duplicates(subset=["Date", "Ticker"], keep="last")
+        .reset_index(drop=True)
+    )
+    _write_price_cache(normalized_tickers, start_date, end_date, combined)
     return combined
 
 
@@ -132,7 +292,7 @@ def calculate_returns(prices: pd.DataFrame) -> pd.DataFrame:
     returns_list = []
     
     for ticker in prices['Ticker'].unique():
-        ticker_data = prices[prices['Ticker'] == ticker].sort_values('Date')
+        ticker_data = prices[prices['Ticker'] == ticker].sort_values('Date').copy()
         ticker_data['Return'] = ticker_data['Close'].pct_change()
         returns_list.append(ticker_data[['Date', 'Ticker', 'Return']])
     
@@ -155,21 +315,31 @@ def calculate_portfolio_returns(
         Series with Date index and portfolio returns
     """
     if returns.empty:
-        return pd.Series()
+        return pd.Series(dtype=float)
     
     # Pivot to wide format (tickers as columns)
-    returns_wide = returns.pivot(index='Date', columns='Ticker', values='Return')
+    returns_wide = (
+        returns.pivot_table(
+            index='Date',
+            columns='Ticker',
+            values='Return',
+            aggfunc='last',
+        )
+        .sort_index()
+    )
+    if returns_wide.empty:
+        return pd.Series(dtype=float)
     
     if weights is None:
         # Equal weights
         weights = {ticker: 1.0 / len(returns_wide.columns) for ticker in returns_wide.columns}
     
     # Calculate weighted returns
-    portfolio_returns = pd.Series(0.0, index=returns_wide.index)
+    portfolio_returns = pd.Series(0.0, index=returns_wide.index, dtype=float)
     
     for ticker, weight in weights.items():
         if ticker in returns_wide.columns:
-            portfolio_returns += returns_wide[ticker] * weight
+            portfolio_returns += returns_wide[ticker].fillna(0.0) * weight
     
     return portfolio_returns
 

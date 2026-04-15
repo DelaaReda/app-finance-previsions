@@ -94,3 +94,29 @@ def test_copilot_start_debug_bypasses_cache(monkeypatch):
     assert replay_data["brief_of_day"]["summary"] == "Fresh market brief #1"
     assert debug_data["cache"]["hit"] is False
     assert "copilot_start_cache_hit" not in (debug_data.get("source") or [])
+
+
+def test_copilot_context_repeated_calls_return_cache_hit(monkeypatch):
+    copilot_route._COPILOT_CONTEXT_CACHE.clear()
+    calls = {"count": 0}
+
+    async def fake_build_context_payload(**_kwargs):
+        calls["count"] += 1
+        return _payload(f"Fresh context #{calls['count']}")
+
+    monkeypatch.setattr(copilot_route.copilot_service, "build_context_payload", fake_build_context_payload)
+
+    client = _client()
+    first = client.get("/api/copilot/context?tickers=nvda")
+    second = client.get("/api/copilot/context?tickers=nvda")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert calls["count"] == 1
+
+    first_data = first.json()["data"]
+    second_data = second.json()["data"]
+    assert first_data["cache"] == {"hit": False, "age_seconds": 0.0, "ttl_seconds": copilot_route.COPILOT_CONTEXT_CACHE_TTL_SECONDS}
+    assert second_data["cache"]["hit"] is True
+    assert second_data["cache"]["ttl_seconds"] == copilot_route.COPILOT_CONTEXT_CACHE_TTL_SECONDS
+    assert "copilot_context_cache_hit" in (second_data.get("source") or [])

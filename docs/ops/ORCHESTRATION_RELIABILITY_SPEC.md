@@ -35,6 +35,8 @@ This specification replaces older multi-lane target assumptions.
 ### Session Freshness and Resume
 - tmux/Codex role sessions **MUST NOT** be resumed blindly across runtime, prompt, or workspace drift.
 - auto lanes **MUST** execute from `/home/venom/analyse-financiere`; foreign or deleted workdirs **MUST NOT** count as ready runtime root
+- deleted tmux workdirs **MUST** fail lane validity even when tmux metadata still looks alive; recovery guards **MUST** inspect pane/process cwd and auto-recreate role lanes instead of counting `(deleted)` sessions as healthy
+- the compatibility alias `/home/venom/shared/analyse-financiere` **MUST NOT** count as a productive runtime root for auto lanes; only the canonical path string `/home/venom/analyse-financiere` is valid for lane readiness
 - `codex exec resume` **MUST** be gated by a freshness guard that invalidates stale session state when:
   - the role/workspace/model/prompt fingerprint changes
   - the stored session exceeds the allowed max age
@@ -50,11 +52,21 @@ This specification replaces older multi-lane target assumptions.
 - stale active subagent rows from inactive cycles **MUST NOT** keep the planner lane off the current queue/workboard target.
 - when SQLite/runtime truth is primary, planner graph rows stuck `running` or `pending` in `wait_or_collect_result` for more than 45 minutes with `last_meaningful_delta=none` **MUST** be quarantined out of canonical `active` dispatch views and treated as stale runtime debt, not live blockers.
 - tmux lane existence **MUST NOT** be treated as proof of useful work; a lane whose pane cwd is deleted, not `samefile`-equivalent to `/home/venom/analyse-financiere`, or blocked on an interactive Codex update prompt **MUST** be treated as invalid and recycled automatically.
+- deleted or foreign tmux workdirs **MUST** fail lane validity with an explicit recovery reason (`deleted_workdir`, `foreign_workdir`, or `missing_workdir`) so auto-recovery can recreate the lane instead of preserving a false-positive shell.
+- lane validity **MUST** inspect both tmux pane metadata and the real cwd of the pane process/children; pane metadata alone is insufficient after VM resume or deleted-workdir drift.
+- when the canonical active cycle is pinned on an `admin` or `dev` task that remains `IN_PROGRESS` without any meaningful delivery proof (`artifact`, `runtime_artifact`, `verify`, `summary`, or `last_meaningful_progress_at`) past the configured freshness threshold, planner autonomy **MUST** surface `canonical_handoff_stale` on the active cycle instead of reporting only a generic `active_cycle_pinned` state.
 
 ### Delivery Truth
 - no task **MUST** complete without delivery proof
 - code/config/runtime/product-logic completion **MUST** require a valid `commit_sha`
 - false DONE inflation **MUST** be detectable
+- repeated completion proofs for the same task without a new state transition **MUST NOT** count as additional delivery progress; they **MUST** be surfaced as proof churn
+- retryable runtime-truth residues such as `invalid_subagent_result:start_banner_only` **MUST NOT** stay decision-capable after the canonical task has already returned to `READY_PLANNER`/`READY_*`; they **MUST** be quarantined out of primary planner dispatch reasoning
+- this quarantine **MUST** be visible in `runtime_truth_snapshot` itself, not only in planner dispatch views, so admin/monitor/guardian consumers stop reading stale retryable residues as current blockers
+- when such retryable residues are quarantined, canonical task rows **MUST** revert to ready-state semantics (`status=READY_*`, default ready `next_action`) instead of continuing to advertise stale `retry_capability`.
+- invalid auxiliary tmux sessions (`codex_*_cron`, `qwen_*_cron`, `adminapp_codex_sync`, `admin-agents-sync-cron`, `clawsentinel`) **MUST** be quarantined automatically when they no longer point at the VM workspace, even if their owning cron is separate from the core planner/dev/admin recovery loop.
+- degraded app runtime **MUST NOT** be counted as successful independent delivery even when proof coverage is otherwise complete
+- completion idempotency for a given `role + task_id + handoff_to` **MUST** be stable and deterministic; a repeated `complete` on an already terminal task with the same idempotency key **MUST** be a no-op instead of generating another proof/event pair
 
 ### Authority Boundaries
 - workers/subagents **MUST** return results, not final business truth
@@ -78,9 +90,19 @@ This specification replaces older multi-lane target assumptions.
   - `hardening`
   - `validation`
   - `reuse_only`
+- planner supervision artifacts **MUST** stay aligned with canonical active-cycle truth.
+  - `planner-guardian-latest.json` **MUST NOT** recommend `autobatch`, fresh `ANALYSIS`, or new batch creation while queue/workboard already expose a non-terminal canonical task on the active cycle.
+  - `agent-iteration-issues-latest.json` **MUST** refresh `dev` and `admin` role snapshots from canonical queue/workboard truth on planner active-cycle checks, even when those lanes have no fresh useful tick of their own.
+  - when workboard projection fields are too weak for autonomous reasoning, published supervision payloads **MUST** mark them `projection_secondary_only=true` instead of pretending they are decision-capable.
+- stagnation hard-stop **MUST** have an explicit exit workflow.
+  - planner runtime **MUST** provide a canonical way to set `novelty_target` / `user_visible_delta` on the active cycle before reopening the same scope.
+  - once an explicit novelty target is set on the active cycle, the autobatch novelty gate **MAY** reopen the scope intentionally with `reason=novelty_target_set`.
+- monitor `status_service` **MUST NOT** override degraded `doctor` backend/app health to `ok` only because a live HTTP probe still answers.
+- replaying the same completion proof after a task is already terminal or has been handed back to `READY_PLANNER`/`READY_DEV` **MUST** be a no-op until a fresh claim starts a new work cycle.
 - a repeated batch on the same product title/scope **MUST NOT** count as fresh delivery unless it introduces a clearly stated new user-visible capability or closes an explicit regression
 - two consecutive `reuse_only` or `validation` batches on the same scope **MUST** trigger a stagnation alert and force the next planner step to define a novelty target before minting more downstream work
 - throughput **MUST NOT** be reported as value delivery without a separate net-new user-value assessment
+- when the novelty/stagnation guard blocks autobatch or active-cycle continuation, planner autonomy **MUST** stop before claiming more planner work on that same scope and surface `planner_stagnation_requires_novelty_target` explicitly in canonical state instead of continuing same-scope churn.
 - runtime implementation rule: canonical queue items **MUST** persist `scope_key`, `novelty_class`, `delivery_kind`, and `user_value_delta_visible`
 - runtime implementation rule: canonical queue `meta` **MUST** expose a double scoreboard (`throughput_*` vs `net_new_user_value_*`) plus `stagnation_alert` when the same scope loops on low-novelty classes
 
@@ -96,6 +118,7 @@ Required outcomes:
 - stale locks removed
 - stalled in-progress surfaced
 - READY starvation surfaced
+- proof present without transition **MUST** become `proof_transition_stalled` after TTL instead of remaining silently `IN_PROGRESS`
 
 ### `delivery_value_gate.py`
 Purpose:
@@ -190,3 +213,42 @@ Escalated rollback:
 - planner-owned delegation stays thin and observable
 - product-priority protections prevent orchestration drift
 - corrupted compatibility registries or projections do not break the runtime critical path when SQLite is healthy
+
+## Canonical Lane Validity
+- tmux session presence is advisory only; it is never sufficient proof that a core lane is productive.
+- A core lane is productively valid only when bootstrap is healthy and, if the role has actionable work on the active canonical cycle, its `role-state/<role>.last_contract` is both fresh and bound to that same active cycle.
+- If actionable work exists and the contract is missing, stale, or off-cycle, the lane must be marked invalid and recovery may restart it automatically.
+- If no actionable work exists for the role, a stale contract is advisory debt only; it must not be treated as an active blocker for the canonical cycle.
+- A live active-cycle `stagnation_alert` is a hard planner guard, not an advisory signal: canonical planner rows must be blocked with `stagnation_requires_novelty_target` until a novelty target exists.
+- If meaningful proof already exists and no blocker is present, canonical state must transition within the proof TTL or be auto-blocked as `proof_transition_stalled`; repeated proof emission without transition is orchestration debt, not progress.
+- If active-cycle workboard rows are missing operational fields (`state/status`, owner-role, next action, proof count), the projection must be marked `decision_capable=false` and treated as non-decision-capable.
+- Strict delivery completions (`dev`, `admin`) must not pass while local product runtime probes are degraded; the delivery gate must block them with `DELIVERY_RUNTIME_DEGRADED`.
+- Supervision surfaces (`planner-guardian-latest.json`, `agent-iteration-issues-latest.json`, doctor snapshots) must follow canonical active-cycle truth. If a hard guard is active or the active canonical task belongs to a downstream role, those surfaces must not recommend planner analysis, planner autobatch, or new-batch behavior that contradicts the current active task.
+- The same hard guard must expose a canonical `novelty_target_workflow` with `owner_role=planner`, `next_action=define_novelty_target`, required fields `novelty_target`, `user_value_delta`, `scope_delta`, `success_metric`, and policy `no_new_downstream_work` until the target exists.
+- this `novelty_target_workflow` **MUST** be published directly in canonical queue/meta and active batch rows, not only in guardian/advisory artifacts, so planner can recover from the hard stop using queue/workboard truth alone.
+- while that workflow is unresolved, active downstream rows on the same canonical cycle **MUST** be policy-blocked as `novelty_target_required_before_downstream`; once the novelty target is present, reconciler **MUST** restore their prior state instead of leaving stale block markers behind.
+- Health semantics must be explicit and stable across doctor and monitor surfaces:
+  - `doctor.status` = overall control-plane health
+  - `product_runtime.status` = user-facing runtime health
+  - `app_runtime.backend_api.status` = backend API runtime health
+  - `agentic_runtime.status` = delivery control-plane health
+  - `doctor.status=degraded` with `product_runtime.status=ok` means orchestration debt, not app outage
+  - monitor reachability is advisory-only for `product_runtime`; it must not degrade doctor product runtime when `backend_api` remains healthy
+- Completion proof emission must stay idempotent after closure or return-to-planner: replaying the same completion handoff on a task already `DONE`, `READY`, or `READY_PLANNER` must not append a new proof manifest.
+- Exiting `stagnation_requires_novelty_target` requires both fields canonically:
+  - `novelty_target`
+  - `user_visible_delta`
+- `novelty_target` alone is insufficient; planner/autobatch reopening must stay blocked while `user_visible_delta` is empty.
+- If the hard guard persists without an effective write, canonical truth must publish `novelty_target_audit` with missing fields, age, threshold, and overdue status so supervision can escalate from queue/workboard truth directly.
+- If the active canonical cycle contains a downstream `admin` or `dev` task in `READY` or `READY_PLANNER` with `planner_takeover_required=true` or `next_action=retry_capability`, planner autonomy **MUST** attempt a targeted capability dispatch before accepting the cycle as merely pinned.
+- If that targeted dispatch does not materialize into execution, planner autonomy **MUST** emit an explicit blocker (`planner_admin_dispatch_not_materialized` / `planner_dev_dispatch_not_materialized`) instead of collapsing the state into a generic `active_cycle_pinned`.
+- Planner-owned dispatch selection and planner autonomy capability guards **MUST** reason from operational task state (`status` when it carries canonical runtime meaning) instead of raw `state` only; stale `state=IN_PROGRESS` **MUST NOT** suppress a canonical downstream retry once `status` has already returned to `READY_*`.
+- Planner takeover runtime verification **MUST** use lightweight local health surfaces first (`/api/status?lite=1`, `doctor`, direct backend health) and **MUST NOT** fail solely because the full monitor status endpoint is slow during a backend auto-heal window.
+- The admin dispatcher **MUST** treat planner-owned admin handoffs as claimable work when canonical task state is `READY`, `READY_PLANNER`, or `READY_ADMIN`; planner-to-admin dispatch is not allowed to stall solely because the task never normalized back to plain `READY`.
+- Dispatcher/runtime claim logic **MUST** resolve canonical target role from compatible task fields (`role`, `assigned_to`, `assignee`) instead of trusting only one projection key. Role-field drift in the workboard must not hide active or claimable downstream work.
+- When a task row carries a stale `state=IN_PROGRESS` but an operational `status` of `READY`, `READY_PLANNER`, `READY_DEV`, `BLOCKED`, or `WAITING_DEP`, reconciler and monitor surfaces **MUST** treat the operational status as authoritative. Stale `IN_PROGRESS` projection must not count as real execution.
+- `READY_PLANNER > 0` with `IN_PROGRESS = 0` on the active cycle is a stalled-flow condition, not an acceptable steady state, when planner intent is still targeting downstream capability dispatch.
+- Planner-only runtime is not an acceptable independent-delivery steady state when downstream canonical work exists and `admin_autonomy_active=false`; supervision must surface it as delivery paused, not as healthy progress.
+- Full monitor/runtime diagnostics surfaces must prefer a real doctor refresh over deferred placeholders. `doctor_refresh_deferred` is supervision debt and must remain visible until a fresh doctor snapshot exists.
+- Periodic backend auto-heal **MUST** treat a non-responsive `/api/health` as restart-worthy even when there is no socket-pressure signature. A live process with timed-out health is degraded runtime, not success.
+- `READY_PLANNER` or other capability-ready downstream rows must not remain a canonical steady state when planner takeover depends on a degraded `backend_api`. The reconciler must expose that as a delivery-runtime gate in queue/workboard and restore the rows automatically when backend health returns.

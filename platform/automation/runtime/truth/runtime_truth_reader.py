@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,9 @@ LEGACY_BRIDGE_FILES = (
     "agent-message-bus.jsonl",
     "intent-registry.json",
 )
+READY_OWNER_TASK_STATES = {"ready", "ready_dev", "ready_planner", "ready_admin", "done", "closed"}
+RETRYABLE_RESIDUE_STATUSES = {"retryable", "failed", "blocked"}
+INVALID_RESULT_MARKERS = ("invalid_subagent_result", "start_banner_only")
 
 
 def _parse_iso(raw: Any) -> datetime | None:
@@ -66,6 +70,71 @@ def _normalize_state(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _load_workboard_task_index(root: Path) -> dict[str, dict[str, Any]]:
+    path = resolve_orchestrator_read_path(root, "parallel-workstreams.json")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    except Exception:
+        return {}
+    tasks = payload.get("tasks", []) if isinstance(payload, dict) else []
+    if not isinstance(tasks, list):
+        return {}
+    index: dict[str, dict[str, Any]] = {}
+    for row in tasks:
+        if not isinstance(row, dict):
+            continue
+        task_id = str(row.get("id", "") or row.get("task_id", "")).strip()
+        if task_id:
+            index[task_id] = row
+    return index
+
+
+def _task_operational_state(task: dict[str, Any]) -> str:
+    status = str(task.get("status", "") or "").strip().lower()
+    state = str(task.get("state", "") or "").strip().lower()
+    if status in READY_OWNER_TASK_STATES:
+        return status
+    return state or status
+
+
+def _quarantine_retryable_residue(
+    item: dict[str, Any], task_index: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
+    task_id = str(item.get("task_id", "")).strip()
+    if not task_id:
+        return None
+    task = task_index.get(task_id)
+    if not isinstance(task, dict):
+        return None
+
+    task_state = _task_operational_state(task)
+    if task_state not in READY_OWNER_TASK_STATES:
+        return None
+
+    status = str(item.get("status", "")).strip().lower()
+    if status not in RETRYABLE_RESIDUE_STATUSES:
+        return None
+
+    issue_bits = " | ".join(
+        [
+            str(item.get("blocking_issue", "")),
+            str(item.get("next_action", "")),
+        ]
+    ).strip().lower()
+    if not any(marker in issue_bits for marker in INVALID_RESULT_MARKERS):
+        return None
+
+    quarantined = dict(item)
+    quarantined["status"] = "quarantined"
+    quarantined["blocking_issue"] = f"quarantined_retryable_residue:{task_state}"
+    quarantined["next_action"] = "secondary_compat_only"
+    quarantined["decision_capable"] = False
+    quarantined["secondary_compat_only"] = True
+    quarantined["quarantine_reason"] = "owner_task_ready_runtime_residue"
+    quarantined["original_status"] = status
+    return quarantined
+
+
 def _legacy_bridge_snapshot(root: Path, *, hide_paths: bool = False) -> dict[str, Any]:
     files: dict[str, dict[str, Any]] = {}
     existing = 0
@@ -91,8 +160,17 @@ def build_runtime_truth_snapshot(root: Path, *, state_limit: int = 12, event_lim
     root = Path(root)
     sqlite_path = event_store_path(root)
     graph_states = latest_graph_states(root, limit=max(50, state_limit * 4))
-    normalized_states = [_normalize_state(row) for row in graph_states if isinstance(row, dict)]
-    normalized_states.sort(key=_sort_ts, reverse=True)
+    workboard_task_index = _load_workboard_task_index(root)
+    all_states = [_normalize_state(row) for row in graph_states if isinstance(row, dict)]
+    all_states.sort(key=_sort_ts, reverse=True)
+    quarantined_retryable_residue: list[dict[str, Any]] = []
+    normalized_states: list[dict[str, Any]] = []
+    for item in all_states:
+      quarantined = _quarantine_retryable_residue(item, workboard_task_index)
+      if quarantined is not None:
+          quarantined_retryable_residue.append(quarantined)
+      else:
+          normalized_states.append(item)
     shown_states = normalized_states[: max(1, state_limit)]
 
     state_counts = Counter(str(row.get("status", "")).strip().lower() or "unknown" for row in normalized_states)
@@ -120,10 +198,13 @@ def build_runtime_truth_snapshot(root: Path, *, state_limit: int = 12, event_lim
         "legacy_registry_secondary_only": True,
         "sqlite_path": str(sqlite_path),
         "graph_state_count": len(normalized_states),
+        "graph_state_count_total": len(all_states),
         "recent_event_count": len(recent_event_rows),
         "status_counts": dict(state_counts),
         "recent_event_types": dict(recent_event_types),
         "latest_states": shown_states,
+        "quarantined_retryable_residue_count": len(quarantined_retryable_residue),
+        "quarantined_retryable_residue": quarantined_retryable_residue[: max(1, state_limit)],
         "agentic_runtime": {
             "status": agentic_runtime_status,
             "primary_source": "sqlite_event_store" if event_store_primary else "projection_fallback",

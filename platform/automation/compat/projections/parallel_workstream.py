@@ -142,6 +142,7 @@ STATE_IN_PROGRESS = "IN_PROGRESS"
 STATE_REVIEW = "REVIEW"
 STATE_DONE = "DONE"
 STATE_BLOCKED = "BLOCKED"
+DONE_STATES = {STATE_DONE, "CLOSED", "CANCELLED", "ARCHIVED", "PASS"}
 
 ACTIVE_STATES = {STATE_IN_PROGRESS, STATE_REVIEW}
 READY_LIKE_STATES = {STATE_BACKLOG, STATE_WAITING_DEP, STATE_READY, STATE_READY_DEV, STATE_READY_LEGACY}
@@ -212,6 +213,8 @@ STREAM_TEMPLATE: Tuple[TemplateStep, ...] = (
 )
 
 STREAM_TEMPLATE_DEPS: Dict[str, Tuple[str, ...]] = {step.code: step.deps for step in STREAM_TEMPLATE}
+STREAM_TEMPLATE_ORDER: Dict[str, int] = {step.code: idx for idx, step in enumerate(STREAM_TEMPLATE)}
+AUTOBATCH_NOTE_PREFIX = "AUTOBATCH-NOTE:"
 
 DEFAULT_STEP_NOTES: Dict[str, List[str]] = {
     "PLAN": [
@@ -277,9 +280,35 @@ def _yaml_quote(value: str) -> str:
 
 
 def _auto_idempotency_key(role: str, task_id_value: str, handoff_to: str) -> str:
-    seed = f"{role}|{task_id_value}|{handoff_to}|{now_iso()}|{random.randint(1000,9999)}"
+    seed = f"{str(role or '').strip().lower()}|{str(task_id_value or '').strip().upper()}|{str(handoff_to or '').strip().lower()}"
     digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
     return f"IK-{digest}"
+
+
+def _build_novelty_target_workflow(
+    *,
+    batch_id: str,
+    scope_key: str,
+    recent_classes: List[str],
+    reason: str,
+) -> Dict[str, object]:
+    return {
+        "status": "required",
+        "owner_role": "planner",
+        "batch_id": str(batch_id or "").strip().upper(),
+        "scope_key": str(scope_key or "").strip().lower(),
+        "reason": str(reason or "stagnation_requires_novelty_target").strip().lower(),
+        "next_action": "define_novelty_target",
+        "policy": "no_new_downstream_work",
+        "required_fields": [
+            "novelty_target",
+            "user_value_delta",
+            "scope_delta",
+            "success_metric",
+        ],
+        "clear_when": "novelty_target_present",
+        "recent_classes": [str(item or "").strip().lower() for item in recent_classes if str(item or "").strip()],
+    }
 
 
 def _split_reasoning_list(value: str, min_items: int) -> List[str]:
@@ -655,6 +684,19 @@ def _normalize_dep_token(value: str) -> str:
     return re.sub(r"[-_]+", "_", raw)
 
 
+def _task_notes(task: dict) -> List[str]:
+    notes = task.get("notes")
+    if not isinstance(notes, list):
+        return []
+    return [str(note).strip() for note in notes if str(note).strip()]
+
+
+def _is_autobatch_seed_analysis(task: dict) -> bool:
+    if str(task.get("code", "")).strip().upper() != "ANALYSIS":
+        return False
+    return any(note.startswith(AUTOBATCH_NOTE_PREFIX) for note in _task_notes(task))
+
+
 def ensure_stream(
     board: dict,
     stream_id: str,
@@ -681,6 +723,39 @@ def ensure_stream(
     tasks = task_index(board)
     created = 0
     legacy_tasks = {str(code).strip().upper() for code in (legacy_task_codes or []) if str(code).strip()}
+    stream_tasks_existing = [
+        task for task in board.get("tasks", [])
+        if isinstance(task, dict) and str(task.get("stream_id", "")).strip() == stream_id
+    ]
+    autobatch_seed_analysis = next((task for task in stream_tasks_existing if _is_autobatch_seed_analysis(task)), None)
+    autobatch_analysis_order = STREAM_TEMPLATE_ORDER.get("ANALYSIS", 0)
+
+    if isinstance(autobatch_seed_analysis, dict):
+        kept: List[dict] = []
+        pruned_upstream: List[str] = []
+        for task in board.get("tasks", []):
+            if str(task.get("stream_id", "")).strip() != stream_id:
+                kept.append(task)
+                continue
+            code = str(task.get("code", "")).strip().upper()
+            if STREAM_TEMPLATE_ORDER.get(code, 999) >= autobatch_analysis_order:
+                kept.append(task)
+                continue
+            state = str(task.get("state", "")).strip().upper()
+            started_at = str(task.get("started_at", "")).strip()
+            completed_at = str(task.get("completed_at", "")).strip()
+            if state == STATE_DONE or started_at or completed_at:
+                kept.append(task)
+                continue
+            pruned_upstream.append(str(task.get("id", "")) or code or "unknown")
+        if pruned_upstream:
+            board["tasks"] = kept
+            append_event(
+                board,
+                "prune_autobatch_upstream_tasks",
+                {"stream_id": stream_id, "pruned_task_ids": pruned_upstream},
+            )
+            tasks = task_index(board)
 
     if stream_id not in streams:
         board.setdefault("streams", []).append(
@@ -721,6 +796,8 @@ def ensure_stream(
     for step in STREAM_TEMPLATE:
         if legacy_tasks and step.code not in legacy_tasks:
             continue
+        if isinstance(autobatch_seed_analysis, dict) and STREAM_TEMPLATE_ORDER.get(step.code, 999) < autobatch_analysis_order:
+            continue
         tid = task_id(stream_id, step.code)
         deps = [task_id(stream_id, dep) for dep in step.deps]
         default_notes = DEFAULT_STEP_NOTES.get(step.code, [])
@@ -737,9 +814,11 @@ def ensure_stream(
             if str(existing.get("priority", "")) != priority:
                 existing["priority"] = priority
                 updated = True
+            preserve_autobatch_analysis = _is_autobatch_seed_analysis(existing)
             current_deps = [dep for dep in existing.get("depends_on", []) if dep]
-            if str(existing.get("state", "")) != STATE_DONE and current_deps != deps:
-                existing["depends_on"] = deps
+            desired_deps = [] if preserve_autobatch_analysis else deps
+            if str(existing.get("state", "")) != STATE_DONE and current_deps != desired_deps:
+                existing["depends_on"] = desired_deps
                 updated = True
             if default_notes:
                 notes = existing.get("notes")
@@ -904,6 +983,16 @@ def _derive_stream_state_from_task_states(states: set[str]) -> str:
     if states:
         return sorted(states)[0]
     return STATE_BACKLOG
+
+
+def _task_operational_state(task: dict | None) -> str:
+    if not isinstance(task, dict):
+        return STATE_BACKLOG
+    status = _normalize_state_token(task.get("status", ""))
+    state = _normalize_state_token(task.get("state", ""))
+    if status in {STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS, STATE_REVIEW, STATE_WAITING_DEP, STATE_BLOCKED, STATE_DONE}:
+        return status
+    return state
 
 
 def _dependency_batches_closed(queue_states: Dict[str, str], depends_on: List[str]) -> bool:
@@ -1336,10 +1425,10 @@ def _update_stream_next_action(board: dict) -> None:
                 return 999
 
         ready_tasks = sorted(
-            [t for t in stream_tasks if t.get("state") in (STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS)],
+            [t for t in stream_tasks if _task_operational_state(t) in (STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS)],
             key=task_order
         )
-        done_tasks = [t for t in stream_tasks if t.get("state") == STATE_DONE]
+        done_tasks = [t for t in stream_tasks if _task_operational_state(t) == STATE_DONE]
 
         if not ready_tasks:
             # All done or all waiting
@@ -1348,7 +1437,7 @@ def _update_stream_next_action(board: dict) -> None:
             else:
                 # Find next waiting_dep task (what will be ready next)
                 waiting = sorted(
-                    [t for t in stream_tasks if t.get("state") == STATE_WAITING_DEP],
+                    [t for t in stream_tasks if _task_operational_state(t) == STATE_WAITING_DEP],
                     key=task_order
                 )
                 if waiting:
@@ -1361,7 +1450,7 @@ def _update_stream_next_action(board: dict) -> None:
             code = str(next_t.get("code", "")).upper()
             role = str(next_t.get("role", "?"))
             tid = str(next_t.get("id", ""))
-            state = str(next_t.get("state", ""))
+            state = _task_operational_state(next_t)
             verb = "compléter" if state == STATE_IN_PROGRESS else "claim"
             ready_label = "READY_DEV" if state == STATE_READY_DEV else "READY_PLANNER"
             new_action = f"{verb} {tid} ({ready_label} pour {role})"
@@ -1438,7 +1527,15 @@ def recompute_states(board: dict, queue_states: Dict[str, str] | None = None) ->
         if state != raw_state:
             task["state"] = state
             task["updated_at"] = now_iso()
+        raw_status = str(task.get("status", ""))
+        status = _normalize_state_token(raw_status)
+        if status != raw_status:
+            task["status"] = status
+            task["updated_at"] = now_iso()
         if state in {STATE_DONE, STATE_BLOCKED, STATE_IN_PROGRESS, STATE_REVIEW}:
+            if task.get("status") != state:
+                task["status"] = state
+                task["updated_at"] = now_iso()
             continue
         deps = [dep for dep in task.get("depends_on", []) if dep]
         def _dep_satisfied(dep: str) -> bool:
@@ -1465,6 +1562,10 @@ def recompute_states(board: dict, queue_states: Dict[str, str] | None = None) ->
                 new_state = STATE_WAITING_DEP
         if new_state != state:
             task["state"] = new_state
+            task["updated_at"] = now_iso()
+            state = new_state
+        if task.get("status") != state:
+            task["status"] = state
             task["updated_at"] = now_iso()
 
     tasks_by_stream: Dict[str, List[dict]] = {}
@@ -2205,9 +2306,21 @@ def _apply_queue_novelty_policy(queue_obj: dict) -> tuple[bool, dict[str, list[d
         if meta.get("stagnation_alert") != stagnation_payload:
             meta["stagnation_alert"] = stagnation_payload
             changed = True
+        novelty_target_workflow = _build_novelty_target_workflow(
+            batch_id=str(stagnation_payload.get("batch_id", "") or ""),
+            scope_key=str(stagnation_payload.get("scope_key", "") or ""),
+            recent_classes=[str(item) for item in stagnation_payload.get("recent_classes", []) if str(item).strip()],
+            reason="stagnation_requires_novelty_target",
+        )
+        if meta.get("novelty_target_workflow") != novelty_target_workflow:
+            meta["novelty_target_workflow"] = novelty_target_workflow
+            changed = True
     elif "stagnation_alert" in meta:
         meta.pop("stagnation_alert", None)
         changed = True
+        if "novelty_target_workflow" in meta:
+            meta.pop("novelty_target_workflow", None)
+            changed = True
 
     return changed, history_by_scope
 
@@ -2352,6 +2465,15 @@ def planner_autobatch(
         if meta.get("stagnation_alert") != stagnation_payload:
             meta["stagnation_alert"] = stagnation_payload
             queue_policy_changed = True
+        novelty_target_workflow = _build_novelty_target_workflow(
+            batch_id=batch_id,
+            scope_key=scope_key,
+            recent_classes=stagnation_payload["recent_classes"],
+            reason="stagnation_requires_novelty_target",
+        )
+        if meta.get("novelty_target_workflow") != novelty_target_workflow:
+            meta["novelty_target_workflow"] = novelty_target_workflow
+            queue_policy_changed = True
         if queue_policy_changed:
             queue_obj["updated_at"] = now
             _stamp_priority_queue_projection(queue_obj)
@@ -2447,7 +2569,7 @@ def planner_autobatch(
             "novelty_class": novelty_class,
             "delivery_kind": novelty_class,
             "user_value_delta_visible": user_value_delta_visible,
-            "next_action": f"ouvrir {batch_id}-PLAN",
+            "next_action": f"ouvrir {batch_id}-ANALYSIS",
             "depends_on": [],
             "dependency_policy": "single_batch",
             "created_at": now,
@@ -2544,7 +2666,7 @@ def claim_task(
     _wip_limit = 60
     _active_count = sum(
         1 for t in board.get("tasks", [])
-        if str(t.get("state", "")) in (STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS)
+        if _task_operational_state(t) in (STATE_READY, STATE_READY_DEV, STATE_IN_PROGRESS)
     )
     if _active_count > _wip_limit:
         raise RuntimeError(
@@ -2558,7 +2680,7 @@ def claim_task(
     candidates = [
         task
         for task in tasks
-        if str(task.get("state", "")).strip().upper() in {STATE_READY, STATE_READY_DEV, "READY"}
+        if _task_operational_state(task) in {STATE_READY, STATE_READY_DEV}
     ]
     candidates.sort(key=lambda t: (priority_rank(str(t.get("priority", "P9"))), str(t.get("stream_id", "")), str(t.get("code", ""))))
 
@@ -2610,7 +2732,9 @@ def claim_task(
         chosen["prechange_gate_version"] = PRECHANGE_GATE_VERSION
 
     chosen["state"] = STATE_IN_PROGRESS
+    chosen["status"] = STATE_IN_PROGRESS
     chosen["assignee"] = role
+    chosen["last_idempotency_key"] = ""
     chosen["started_at"] = chosen.get("started_at") or now_iso()
     chosen["updated_at"] = now_iso()
     append_event(
@@ -2654,7 +2778,16 @@ def complete_task(
     if task_role != role:
         raise SystemExit(f"COMPLETE_ERROR: role_mismatch task_role={task_role} caller_role={role}")
 
-    if str(task.get("state", "")) not in {STATE_IN_PROGRESS, STATE_READY, STATE_READY_DEV, STATE_REVIEW}:
+    effective_idempotency = (idempotency_key or "").strip() or _auto_idempotency_key(role, task_id_value, handoff_to)
+    existing_idempotency = str(task.get("last_idempotency_key", "") or "").strip()
+    task_state = str(task.get("state", ""))
+    task_state_upper = task_state.strip().upper()
+    if task_state_upper in DONE_STATES:
+        return task
+    if task_state_upper in {STATE_READY, STATE_READY_PLANNER, STATE_READY_DEV} and existing_idempotency and existing_idempotency == effective_idempotency:
+        return task
+
+    if task_state not in {STATE_IN_PROGRESS, STATE_READY, STATE_READY_DEV, STATE_REVIEW}:
         raise SystemExit(f"COMPLETE_ERROR: invalid_state={task.get('state')} task={task_id_value}")
 
     deps = [dep for dep in task.get("depends_on", []) if dep]
@@ -2715,7 +2848,6 @@ def complete_task(
         task["prechange_gate_version"] = PRECHANGE_GATE_VERSION if strict_reflection else max(1, prechange_gate_version)
         prechange_gate_version = int(task.get("prechange_gate_version", 1) or 1)
 
-    effective_idempotency = (idempotency_key or "").strip() or _auto_idempotency_key(role, task_id_value, handoff_to)
     task["last_idempotency_key"] = effective_idempotency
 
     task["state"] = STATE_DONE

@@ -194,7 +194,7 @@ def _resolve_dispatch_backend(root: Path, target_role: str, requested_backend: s
         config_backend=getattr(config, "backend", ""),
         backend_by_role=getattr(config, "backend_by_role", {}),
     )
-    return "codex_exec" if str(chosen_backend).strip().lower() == "openclaw" else str(chosen_backend).strip()
+    return str(chosen_backend).strip()
 
 
 def _parse_contract(text: str) -> dict[str, str]:
@@ -850,6 +850,30 @@ def _payload_has_delivery_evidence(payload: dict[str, Any], target_role: str = "
     return True
 
 
+def _task_operational_state(task: dict[str, Any] | None) -> str:
+    if not isinstance(task, dict):
+        return ""
+    status = str(task.get("status", "") or "").strip().upper()
+    state = str(task.get("state", "") or "").strip().upper()
+    canonical_statuses = {
+        STATE_READY,
+        STATE_READY_DEV,
+        "READY_PLANNER",
+        STATE_IN_PROGRESS,
+        "REVIEW",
+        STATE_BLOCKED,
+        "WAITING_DEP",
+        STATE_DONE,
+        "CLOSED",
+        "PASS",
+    }
+    if status in canonical_statuses:
+        return status
+    if state:
+        return state
+    return status
+
+
 def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | None:
     index = task_index(board)
     recovery_candidates: list[tuple[int, int, dict[str, Any]]] = []
@@ -863,11 +887,11 @@ def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | Non
             continue
         if not _task_in_active_cycle(task, board):
             continue
-        state = str(task.get("state", "")).strip().upper()
+        state = _task_operational_state(task)
         if str(task.get("role", "")).strip().lower() != "dev":
             continue
         deps = [dep for dep in task.get("depends_on", []) if dep]
-        if any(str(index.get(dep, {}).get("state", "")).upper() != STATE_DONE for dep in deps):
+        if any(_task_operational_state(index.get(dep, {})) not in {STATE_DONE, "CLOSED"} for dep in deps):
             continue
         row = (priority_rank(str(task.get("priority", "P9"))), idx, task)
         if bool(task.get("dev_recovery_required")):
@@ -912,11 +936,11 @@ def _select_dispatchable_admin_task(board: dict[str, Any]) -> dict[str, Any] | N
             continue
         if not _task_in_active_cycle(task, board):
             continue
-        state = str(task.get("state", "")).strip().upper()
+        state = _task_operational_state(task)
         if str(task.get("role", "")).strip().lower() != "admin":
             continue
         deps = [dep for dep in task.get("depends_on", []) if dep]
-        if any(str(index.get(dep, {}).get("state", "")).upper() != STATE_DONE for dep in deps):
+        if any(_task_operational_state(index.get(dep, {})) not in {STATE_DONE, "CLOSED"} for dep in deps):
             continue
         row = (priority_rank(str(task.get("priority", "P9"))), idx, task)
         if bool(task.get("planner_takeover_required")):
@@ -944,6 +968,21 @@ def _select_dispatchable_admin_task(board: dict[str, Any]) -> dict[str, Any] | N
         return in_progress_candidates[0][2]
     candidates.sort(key=lambda row: (row[0], row[1]))
     return candidates[0][2]
+
+
+def _admin_collect_secondary_only(board: dict[str, Any]) -> bool:
+    for task in board.get("tasks", []):
+        if not isinstance(task, dict):
+            continue
+        if _task_effectively_done(task):
+            continue
+        if not _task_in_active_cycle(task, board):
+            continue
+        if str(task.get("role", "")).strip().lower() != "admin":
+            continue
+        if bool(task.get("planner_takeover_required")):
+            return True
+    return False
 
 
 def _browser_backfill_candidates(board: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1227,7 +1266,7 @@ def _doctor_takeover_ready(payload: dict[str, Any]) -> bool:
     checks = payload.get("checks", {})
     if not isinstance(checks, dict):
         return False
-    critical = ("runtime_state", "sessions", "locks", "queue_workboard", "providers", "product_value")
+    critical = ("runtime_state", "locks", "queue_workboard")
     for name in critical:
         status = str((checks.get(name, {}) or {}).get("status", "")).strip().lower()
         if status != "ok":
@@ -1235,32 +1274,84 @@ def _doctor_takeover_ready(payload: dict[str, Any]) -> bool:
     return True
 
 
+def _status_takeover_ready(payload: dict[str, Any]) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    product_runtime = payload.get("product_runtime", {})
+    app_runtime = payload.get("app_runtime", {})
+    agentic_runtime = payload.get("agentic_runtime", {})
+    planning_plane = payload.get("planning_plane", {})
+    if not isinstance(product_runtime, dict) or not isinstance(app_runtime, dict):
+        return False
+    if not isinstance(agentic_runtime, dict) or not isinstance(planning_plane, dict):
+        return False
+    product_status = str(product_runtime.get("status", "")).strip().lower()
+    app_status = str(app_runtime.get("status", "")).strip().lower()
+    agentic_status = str(agentic_runtime.get("status", "")).strip().lower()
+    planning_status = str(planning_plane.get("status", "")).strip().lower()
+    if product_status != "ok":
+        return False
+    if app_status != "ok":
+        return False
+    if agentic_status not in {"ok", "unknown"}:
+        return False
+    if planning_status not in {"ok", "unknown"}:
+        return False
+    return True
+
+
+def _backend_takeover_ready(payload: dict[str, Any]) -> bool:
+    app_runtime = payload.get("app_runtime", {})
+    if not isinstance(app_runtime, dict):
+        return False
+    backend_api = app_runtime.get("backend_api", {})
+    if not isinstance(backend_api, dict):
+        return False
+    return str(backend_api.get("status", "")).strip().lower() == "ok"
+
+
+def _attempt_backend_autoheal(root: Path) -> tuple[bool, str]:
+    script = root / "scripts" / "restart_api_if_stale.sh"
+    if not script.exists():
+        return False, "backend_autoheal_script_missing"
+    timeout_seconds = max(30, int(os.environ.get("FC_PLANNER_TAKEOVER_AUTOHEAL_TIMEOUT_SECONDS", "90")))
+    try:
+        result = subprocess.run(
+            [str(script)],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "backend_autoheal_timeout"
+    except Exception:
+        return False, "backend_autoheal_exec_failed"
+    if result.returncode == 0:
+        return True, "backend_autoheal_ok"
+    return False, "backend_autoheal_failed"
+
+
 def _planner_takeover_admin_task(root: Path, task: dict[str, Any], source: str) -> dict[str, Any]:
     task_id_value = str(task.get("id", "")).strip()
     if not task_id_value:
         return {"dispatched": True, "completed": False, "reason": "invalid_admin_task", "backend": "planner_takeover"}
-    status_ok, status_payload, status_reason = _fetch_local_json("http://127.0.0.1:7779/api/status")
+    status_ok, status_payload, status_reason = _fetch_local_json("http://127.0.0.1:7779/api/status?lite=1")
     doctor_ok, doctor_payload, doctor_reason = _fetch_local_json("http://127.0.0.1:7779/api/doctor?refresh=1")
     if not status_ok or not isinstance(status_payload, dict):
-        return {
-            "dispatched": True,
-            "completed": False,
-            "task_id": task_id_value,
-            "reason": f"planner_takeover_status_unavailable:{status_reason}",
-            "backend": "planner_takeover",
-        }
-    if not doctor_ok or not isinstance(doctor_payload, dict):
-        return {
-            "dispatched": True,
-            "completed": False,
-            "task_id": task_id_value,
-            "reason": f"planner_takeover_doctor_unavailable:{doctor_reason}",
-            "backend": "planner_takeover",
-        }
-
+        status_payload = {"health": "UNKNOWN", "status_fetch_reason": status_reason}
     status_health = str(status_payload.get("health", "")).strip().upper()
-    doctor_status = str(doctor_payload.get("status", "")).strip().lower()
-    doctor_takeover_ready = _doctor_takeover_ready(doctor_payload)
+    status_takeover_ready = _status_takeover_ready(status_payload)
+    doctor_payload_valid = doctor_ok and isinstance(doctor_payload, dict)
+    doctor_status = (
+        str(doctor_payload.get("status", "")).strip().lower()
+        if doctor_payload_valid
+        else str(status_payload.get("doctor_overall_status", "unknown")).strip().lower()
+    )
+    doctor_takeover_ready = _doctor_takeover_ready(doctor_payload) if doctor_payload_valid else status_takeover_ready
+    backend_takeover_ready = _backend_takeover_ready(doctor_payload if doctor_payload_valid else status_payload)
+    doctor_reason_value = "" if doctor_payload_valid else str(doctor_reason or "unavailable").strip()
     browser_ok = True
     browser_detail = ""
     browser_artifact = ""
@@ -1268,10 +1359,44 @@ def _planner_takeover_admin_task(root: Path, task: dict[str, Any], source: str) 
         browser_ok, browser_detail = _run_browser_validation(root, task, source=source, phase="planner_takeover")
         browser_artifact = browser_detail if browser_ok else ""
 
-    if status_health not in {"OK", "PAUSED"} or not doctor_takeover_ready or not browser_ok:
+    autoheal_reason = "not_needed"
+    if not browser_ok:
+        issue = "planner_takeover_browser_validation_failed"
+        return {
+            "dispatched": True,
+            "completed": False,
+            "task_id": task_id_value,
+            "reason": issue,
+            "backend": "planner_takeover",
+            "status_health": status_health,
+            "doctor_status": doctor_status,
+        }
+
+    if not backend_takeover_ready:
+        autoheal_ok, autoheal_reason = _attempt_backend_autoheal(root)
+        if autoheal_ok:
+            status_ok, status_payload, status_reason = _fetch_local_json("http://127.0.0.1:7779/api/status?lite=1")
+            doctor_ok, doctor_payload, doctor_reason = _fetch_local_json("http://127.0.0.1:7779/api/doctor?refresh=1")
+            if not status_ok or not isinstance(status_payload, dict):
+                status_payload = {"health": "UNKNOWN", "status_fetch_reason": status_reason}
+            status_health = str(status_payload.get("health", "")).strip().upper()
+            status_takeover_ready = _status_takeover_ready(status_payload)
+            doctor_payload_valid = doctor_ok and isinstance(doctor_payload, dict)
+            doctor_status = (
+                str(doctor_payload.get("status", "")).strip().lower()
+                if doctor_payload_valid
+                else str(status_payload.get("doctor_overall_status", "unknown")).strip().lower()
+            )
+            doctor_takeover_ready = _doctor_takeover_ready(doctor_payload) if doctor_payload_valid else status_takeover_ready
+            backend_takeover_ready = _backend_takeover_ready(doctor_payload if doctor_payload_valid else status_payload)
+            doctor_reason_value = "" if doctor_payload_valid else str(doctor_reason or "unavailable").strip()
+
+    if status_health not in {"OK", "PAUSED", "UNKNOWN"} or not doctor_takeover_ready or not backend_takeover_ready:
         issue = "planner_takeover_runtime_not_healthy"
-        if not browser_ok:
-            issue = "planner_takeover_browser_validation_failed"
+        if not doctor_takeover_ready and doctor_reason_value:
+            issue = f"planner_takeover_doctor_unavailable:{doctor_reason_value}"
+        if not backend_takeover_ready:
+            issue = f"planner_takeover_backend_not_healthy:{autoheal_reason}"
         return {
             "dispatched": True,
             "completed": False,
@@ -1701,7 +1826,7 @@ def _claim_task(
     task = tasks.get(task_id_value)
     if not isinstance(task, dict):
         return False
-    state = str(task.get("state", "")).strip().upper()
+    state = _task_operational_state(task)
     if state == STATE_IN_PROGRESS:
         return True
     task["blocked_reason"] = ""
@@ -2732,11 +2857,12 @@ def _has_active_subagent(root: Path, target_role: str = "") -> bool:
                     continue
                 if _task_effectively_done(owner_task):
                     continue
+                if _task_operational_state(owner_task) in READY_STATES:
+                    continue
                 if str(row.get("blocking_issue", "")).strip().lower() in {"owner_task_already_done", "stale_no_result", "owner_task_target_role_mismatch", "owner_task_outside_active_cycle"}:
                     continue
                 return True
-        if str(snapshot.get("source", "")).strip() != "event_store_primary_no_graph_state":
-            return False
+        return False
     _, rows = _planner_registry_rows(root)
     for row in rows:
         if str(row.get("parent_role", "")).strip().lower() != "planner":
@@ -2756,6 +2882,8 @@ def _has_active_subagent(root: Path, target_role: str = "") -> bool:
         if not _owner_task_matches_target_role(owner_task, str(row.get("target_role", ""))):
             continue
         if _task_effectively_done(owner_task):
+            continue
+        if _task_operational_state(owner_task) in READY_STATES:
             continue
         if _subagent_has_collectible_result(root, row):
             continue
@@ -2787,10 +2915,78 @@ def _collect_finished_dev_subagents(root: Path, source: str, owner_task_filter: 
         raw_path = config.results_dir / f"{subagent_id}.raw.txt"
         if not result_path.exists() and not raw_path.exists():
             continue
+        task_id_value = str(row.get("owner_task_id", "")).strip()
+        if task_id_value:
+            with board_lock(board_path):
+                board = load_board(board_path)
+                live_task = task_index(board).get(task_id_value)
+            if isinstance(live_task, dict) and not _task_in_active_cycle(live_task, board):
+                now_text = now_iso()
+                with board_lock(board_path):
+                    board = load_board(board_path)
+                    live_task = task_index(board).get(task_id_value)
+                    append_event(
+                        board,
+                        "planner_orchestrator_dev_out_of_cycle",
+                        {
+                            "task_id": task_id_value,
+                            "source": source,
+                            "subagent_id": subagent_id,
+                            "task_stream_id": _task_stream_id(live_task),
+                            "active_cycle": ",".join(sorted(_board_active_batch_ids(board))) or "none",
+                        },
+                    )
+                    save_board(board_path, board)
+                row["status"] = "failed"
+                row["failed_at"] = now_text
+                row["summary"] = "ignored dev result because owner task was outside canonical active cycle"
+                row["blocking_issue"] = "owner_task_outside_active_cycle"
+                row["last_update_at"] = now_text
+                _write_planner_registry_rows(config, rows)
+                actions.append(f"dev_out_of_cycle:{task_id_value}")
+                continue
+            if isinstance(live_task, dict) and not _owner_task_matches_target_role(live_task, "dev"):
+                now_text = now_iso()
+                with board_lock(board_path):
+                    board = load_board(board_path)
+                    live_task = task_index(board).get(task_id_value)
+                    append_event(
+                        board,
+                        "planner_orchestrator_dev_route_mismatch",
+                        {
+                            "task_id": task_id_value,
+                            "source": source,
+                            "subagent_id": subagent_id,
+                            "target_role": "dev",
+                            "task_role": _task_capability_role(live_task),
+                        },
+                    )
+                    save_board(board_path, board)
+                row["status"] = "failed"
+                row["failed_at"] = now_text
+                row["summary"] = "ignored dev result because owner task role mismatched target role"
+                row["blocking_issue"] = "owner_task_target_role_mismatch"
+                row["last_update_at"] = now_text
+                _write_planner_registry_rows(config, rows)
+                actions.append(f"dev_route_mismatch:{task_id_value}")
+                continue
+            if _task_effectively_done(live_task):
+                with board_lock(board_path):
+                    board = load_board(board_path)
+                    append_event(
+                        board,
+                        "planner_orchestrator_dev_collect_ignored_done_task",
+                        {"task_id": task_id_value, "source": source, "subagent_id": subagent_id},
+                    )
+                    save_board(board_path, board)
+                if _prune_planner_subagent_row(config, rows, subagent_id):
+                    _write_planner_registry_rows(config, rows)
+                actions.append(f"dev_skip_done:{task_id_value}")
+                continue
         rc, payload = collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
         if not isinstance(payload, dict):
             continue
-        task_id_value = str(payload.get("owner_task_id") or row.get("owner_task_id", "")).strip()
+        task_id_value = str(payload.get("owner_task_id") or task_id_value or row.get("owner_task_id", "")).strip()
         if not task_id_value:
             continue
         actions.append(f"dev_collect:{task_id_value}")
@@ -2956,10 +3152,78 @@ def _collect_finished_admin_subagents(root: Path, source: str, owner_task_filter
         raw_path = config.results_dir / f"{subagent_id}.raw.txt"
         if not result_path.exists() and not raw_path.exists():
             continue
+        task_id_value = str(row.get("owner_task_id", "")).strip()
+        if task_id_value:
+            with board_lock(board_path):
+                board = load_board(board_path)
+                live_task = task_index(board).get(task_id_value)
+            if isinstance(live_task, dict) and not _task_in_active_cycle(live_task, board):
+                now_text = now_iso()
+                with board_lock(board_path):
+                    board = load_board(board_path)
+                    live_task = task_index(board).get(task_id_value)
+                    append_event(
+                        board,
+                        "planner_orchestrator_admin_out_of_cycle",
+                        {
+                            "task_id": task_id_value,
+                            "source": source,
+                            "subagent_id": subagent_id,
+                            "task_stream_id": _task_stream_id(live_task),
+                            "active_cycle": ",".join(sorted(_board_active_batch_ids(board))) or "none",
+                        },
+                    )
+                    save_board(board_path, board)
+                row["status"] = "failed"
+                row["failed_at"] = now_text
+                row["summary"] = "ignored admin result because owner task was outside canonical active cycle"
+                row["blocking_issue"] = "owner_task_outside_active_cycle"
+                row["last_update_at"] = now_text
+                _write_planner_registry_rows(config, rows)
+                actions.append(f"admin_out_of_cycle:{task_id_value}")
+                continue
+            if isinstance(live_task, dict) and not _owner_task_matches_target_role(live_task, "admin"):
+                now_text = now_iso()
+                with board_lock(board_path):
+                    board = load_board(board_path)
+                    live_task = task_index(board).get(task_id_value)
+                    append_event(
+                        board,
+                        "planner_orchestrator_admin_route_mismatch",
+                        {
+                            "task_id": task_id_value,
+                            "source": source,
+                            "subagent_id": subagent_id,
+                            "target_role": "admin",
+                            "task_role": _task_capability_role(live_task),
+                        },
+                    )
+                    save_board(board_path, board)
+                row["status"] = "failed"
+                row["failed_at"] = now_text
+                row["summary"] = "ignored admin result because owner task role mismatched target role"
+                row["blocking_issue"] = "owner_task_target_role_mismatch"
+                row["last_update_at"] = now_text
+                _write_planner_registry_rows(config, rows)
+                actions.append(f"admin_route_mismatch:{task_id_value}")
+                continue
+            if _task_effectively_done(live_task):
+                with board_lock(board_path):
+                    board = load_board(board_path)
+                    append_event(
+                        board,
+                        "planner_orchestrator_admin_collect_ignored_done_task",
+                        {"task_id": task_id_value, "source": source, "subagent_id": subagent_id},
+                    )
+                    save_board(board_path, board)
+                if _prune_planner_subagent_row(config, rows, subagent_id):
+                    _write_planner_registry_rows(config, rows)
+                actions.append(f"admin_skip_done:{task_id_value}")
+                continue
         rc, payload = collect_subagent(config, "planner", subagent_id, "", mark_merged=True)
         if not isinstance(payload, dict):
             continue
-        task_id_value = str(payload.get("owner_task_id") or row.get("owner_task_id", "")).strip()
+        task_id_value = str(payload.get("owner_task_id") or task_id_value or row.get("owner_task_id", "")).strip()
         if not task_id_value:
             continue
         actions.append(f"admin_collect:{task_id_value}")
@@ -3022,6 +3286,32 @@ def _collect_finished_admin_subagents(root: Path, source: str, owner_task_filter
             actions.append(f"admin_skip_done:{task_id_value}")
             continue
         status_token = _payload_status(payload)
+        if isinstance(live_task, dict) and bool(live_task.get("planner_takeover_required")) and status_token not in SUCCESS_SUBAGENT_STATUSES:
+            now_text = now_iso()
+            with board_lock(board_path):
+                board = load_board(board_path)
+                append_event(
+                    board,
+                    "planner_orchestrator_admin_collect_ignored_secondary_compat",
+                    {
+                        "task_id": task_id_value,
+                        "source": source,
+                        "subagent_id": subagent_id,
+                        "reason": str(payload.get("blocking_issue") or payload.get("recommended_next") or status_token or "subagent_not_ready"),
+                    },
+                )
+                save_board(board_path, board)
+            if _prune_planner_subagent_row(config, rows, subagent_id):
+                _write_planner_registry_rows(config, rows)
+            else:
+                row["status"] = "failed"
+                row["failed_at"] = now_text
+                row["summary"] = "ignored secondary compat admin result because planner takeover is authoritative"
+                row["blocking_issue"] = "secondary_compat_only"
+                row["last_update_at"] = now_text
+                _write_planner_registry_rows(config, rows)
+            actions.append(f"admin_collect_secondary_compat:{task_id_value}")
+            continue
         if status_token in SUCCESS_SUBAGENT_STATUSES and _payload_has_delivery_evidence(payload, target_role="admin"):
             evidence = _build_admin_evidence(payload, task_id_value)
             with board_lock(board_path):
@@ -3164,6 +3454,9 @@ def _infer_result_target_role(payload: dict[str, Any], subagent_id: str) -> str:
 
 
 def _collect_orphan_result_payloads(root: Path, source: str, owner_task_filter: str = "", target_role: str = "") -> list[str]:
+    runtime_truth = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24)
+    if bool(runtime_truth.get("event_store_primary", False)):
+        return ["orphan_collect:secondary_compat_only"]
     config = load_subagent_config(root)
     results_dir = config.results_dir
     if not results_dir.exists():
@@ -3171,8 +3464,13 @@ def _collect_orphan_result_payloads(root: Path, source: str, owner_task_filter: 
     _, rows = _planner_registry_rows(root)
     registry_ids = {str(row.get("subagent_id", "")).strip() for row in rows if str(row.get("subagent_id", "")).strip()}
     board_path = _runtime_board_path(root)
+    board = load_board(board_path)
+    admin_collect_secondary = _admin_collect_secondary_only(board)
     actions: list[str] = []
     for result_path in sorted(results_dir.glob("*.result.json")):
+        if admin_collect_secondary and str(result_path.stem).strip().lower().startswith("planner_admin_"):
+            if str(target_role or "").strip().lower() in {"", "admin"}:
+                continue
         try:
             payload = json.loads(result_path.read_text(encoding="utf-8", errors="ignore"))
         except Exception:
@@ -3226,6 +3524,8 @@ def _collect_orphan_result_payloads(root: Path, source: str, owner_task_filter: 
 def collect_pending_results(root: Path, source: str, owner_task_id: str = "", target_role: str = "", subagent_id: str = "") -> dict[str, Any]:
     actions: list[str] = []
     role_token = str(target_role or "").strip().lower()
+    board = load_board(_runtime_board_path(root)) if role_token in {"", "admin"} else {}
+    admin_collect_secondary = _admin_collect_secondary_only(board) if isinstance(board, dict) else False
     if role_token in {"", "dev"}:
         actions.extend(
             _collect_finished_dev_subagents(
@@ -3236,14 +3536,17 @@ def collect_pending_results(root: Path, source: str, owner_task_id: str = "", ta
             )
         )
     if role_token in {"", "admin"}:
-        actions.extend(
-            _collect_finished_admin_subagents(
-                root,
-                source,
-                owner_task_filter=owner_task_id,
-                subagent_filter=subagent_id,
+        if admin_collect_secondary:
+            actions.append("admin_collect:secondary_compat_only")
+        else:
+            actions.extend(
+                _collect_finished_admin_subagents(
+                    root,
+                    source,
+                    owner_task_filter=owner_task_id,
+                    subagent_filter=subagent_id,
+                )
             )
-        )
     if role_token in {"", "qa"}:
         actions.extend(_collect_finished_qa_workers(root, source, owner_task_filter=owner_task_id))
         actions.extend(_prune_resolved_qa_workers(root, source))
@@ -3260,11 +3563,17 @@ def apply_bridge(root: Path, role: str, contract_text: str, source: str, backend
     evidence = _parse_pairs(contract.get("EVIDENCE", ""))
     evidence["next_action_unique"] = contract.get("NEXT_ACTION_UNIQUE", "")
     board_path = _runtime_board_path(root)
+    board_snapshot = load_board(board_path)
+    admin_collect_secondary = _admin_collect_secondary_only(board_snapshot)
     actions: list[str] = []
     actions.extend(_mark_stale_dev_subagents(root, source))
-    actions.extend(_mark_stale_admin_subagents(root, source))
+    if not admin_collect_secondary:
+        actions.extend(_mark_stale_admin_subagents(root, source))
     actions.extend(_collect_finished_dev_subagents(root, source))
-    actions.extend(_collect_finished_admin_subagents(root, source))
+    if admin_collect_secondary:
+        actions.append("admin_collect:secondary_compat_only")
+    else:
+        actions.extend(_collect_finished_admin_subagents(root, source))
     actions.extend(_collect_finished_qa_workers(root, source))
     actions.extend(_prune_resolved_qa_workers(root, source))
     actions.extend(_collect_orphan_result_payloads(root, source))
@@ -3273,7 +3582,7 @@ def apply_bridge(root: Path, role: str, contract_text: str, source: str, backend
     actions.extend(_dispatch_pending_qa_reviews(root, source))
     actions.extend(_auto_complete_planner_gov_reviews(root, source))
 
-    priority_admin = _select_dispatchable_admin_task(load_board(board_path))
+    priority_admin = _select_dispatchable_admin_task(board_snapshot)
     priority_admin_takeover = isinstance(priority_admin, dict) and bool(priority_admin.get("planner_takeover_required"))
 
     dispatch: dict[str, Any] = {
@@ -3368,6 +3677,8 @@ def build_parser() -> argparse.ArgumentParser:
             "sync-priority",
             "reconcile-state",
             "planner-autobatch",
+            "novelty-target",
+            "dispatch-capability",
             "claim",
             "complete",
             "enforce-sla",
@@ -3404,6 +3715,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--idempotency-key", default="")
     parser.add_argument("--proof-root", default=str(DEFAULT_PROOF_ROOT))
     parser.add_argument("--handoff", default="")
+    parser.add_argument("--batch-id", default="")
+    parser.add_argument("--novelty-target", default="")
+    parser.add_argument("--user-visible-delta", default="")
     parser.add_argument("--ack-sla-seconds", type=int, default=900)
     parser.add_argument("--close-sla-seconds", type=int, default=3600)
     parser.add_argument("--apply", action="store_true")
@@ -3468,6 +3782,19 @@ def _projection_runtime_meta(root: Path) -> dict[str, Any]:
         "runtime_truth_source": str(snapshot.get("runtime_truth_source", "fallback") or "fallback"),
         "event_store_primary": bool(snapshot.get("event_store_primary", False)),
     }
+
+
+def _load_json_dict(path: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _save_json_dict(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
 
 
 def _sync_priority_cli(root: Path, board_path: Path, queue_path: Path, include_pass: bool) -> int:
@@ -3576,6 +3903,145 @@ def _planner_autobatch_cli(root: Path, board_path: Path, queue_path: Path, args:
     return 0
 
 
+def _planner_novelty_target_cli(root: Path, board_path: Path, queue_path: Path, args: argparse.Namespace) -> int:
+    runtime_meta = _projection_runtime_meta(root)
+    novelty_target = str(args.novelty_target or "").strip()
+    user_visible_delta = str(args.user_visible_delta or "").strip()
+    batch_id_arg = str(args.batch_id or "").strip().upper()
+    if not novelty_target:
+        print("NOVELTY_TARGET_ERROR reason=missing_novelty_target", file=sys.stderr)
+        return 1
+    if not user_visible_delta:
+        print("NOVELTY_TARGET_ERROR reason=missing_user_visible_delta", file=sys.stderr)
+        return 1
+
+    with board_lock(board_path):
+        board = load_board(board_path)
+        queue_payload = _load_json_dict(queue_path)
+        queue_meta = queue_payload.get("meta")
+        if not isinstance(queue_meta, dict):
+            queue_meta = {}
+            queue_payload["meta"] = queue_meta
+        active_cycle = queue_payload.get("active_cycle")
+        if not isinstance(active_cycle, dict):
+            active_cycle = {}
+        active_batch_ids = [
+            str(item).strip().upper()
+            for item in active_cycle.get("active_batch_ids", [])
+            if str(item).strip()
+        ]
+        target_batch_ids = [batch_id_arg] if batch_id_arg else active_batch_ids
+        if not target_batch_ids:
+            print(
+                "NOVELTY_TARGET_SKIP "
+                "reason=no_active_cycle "
+                f"runtime_truth_source={runtime_meta['runtime_truth_source']} "
+                f"event_store_primary={1 if runtime_meta['event_store_primary'] else 0}"
+            )
+            return 0
+
+        active_cycle["novelty_target"] = novelty_target
+        active_cycle["user_visible_delta"] = user_visible_delta
+        active_cycle["novelty_target_required"] = False
+        active_cycle["novelty_target_set_at"] = now_iso()
+        queue_payload["active_cycle"] = active_cycle
+        queue_meta["novelty_target"] = novelty_target
+        queue_meta["user_visible_delta"] = user_visible_delta
+        queue_meta["novelty_target_required"] = False
+
+        updated_batches = 0
+        queue_items = queue_payload.get("items", [])
+        if isinstance(queue_items, list):
+            for item in queue_items:
+                if not isinstance(item, dict):
+                    continue
+                batch_id = str(item.get("id") or item.get("batch_id") or "").strip().upper()
+                if batch_id not in target_batch_ids:
+                    continue
+                item["novelty_target"] = novelty_target
+                item["user_visible_delta"] = user_visible_delta
+                item["novelty_target_required"] = False
+                item["novelty_target_set_at"] = now_iso()
+                item["blocked_reason"] = "" if str(item.get("blocked_reason") or "").strip() == "stagnation_requires_novelty_target" else item.get("blocked_reason", "")
+                item["stalled_reason"] = "" if str(item.get("stalled_reason") or "").strip() == "stagnation_requires_novelty_target" else item.get("stalled_reason", "")
+                updated_batches += 1
+
+        updated_tasks = 0
+        for task in board.get("tasks", []):
+            if not isinstance(task, dict):
+                continue
+            task_id = str(task.get("id") or "").strip().upper()
+            stream_id = str(task.get("stream_id") or task.get("batch_id") or "").strip().upper()
+            task_batch_id = stream_id or ("-".join(task_id.split("-")[:2]) if task_id.startswith("BATCH-") else "")
+            if task_batch_id not in target_batch_ids:
+                continue
+            if str(task.get("state") or "").strip().upper() in {STATE_DONE, "PASS", "CLOSED"}:
+                continue
+            task["novelty_target"] = novelty_target
+            task["user_visible_delta"] = user_visible_delta
+            task["novelty_target_set_at"] = now_iso()
+            updated_tasks += 1
+
+        append_event(
+            board,
+            "novelty_target",
+            {
+                "role": str(args.role or "planner").strip() or "planner",
+                "batch_ids": ",".join(target_batch_ids),
+                "novelty_target": novelty_target,
+                "user_visible_delta": user_visible_delta or novelty_target,
+            },
+        )
+        save_board(board_path, board)
+        _save_json_dict(queue_path, queue_payload)
+
+    print(
+        "NOVELTY_TARGET_OK "
+        f"batch_ids={','.join(target_batch_ids)} "
+        f"updated_batches={updated_batches} "
+        f"updated_tasks={updated_tasks} "
+        f"runtime_truth_source={runtime_meta['runtime_truth_source']} "
+        f"event_store_primary={1 if runtime_meta['event_store_primary'] else 0}"
+    )
+    return 0
+
+
+def _dispatch_capability_cli(root: Path, args: argparse.Namespace) -> int:
+    runtime_meta = _projection_runtime_meta(root)
+    target_role = str(args.target_role or "").strip().lower()
+    source = str(args.source or "dispatch_capability_cli").strip() or "dispatch_capability_cli"
+    backend = str(args.backend or "auto").strip() or "auto"
+    if target_role == "admin":
+        payload = _dispatch_admin_capability(root, source=source, backend=backend)
+    elif target_role == "dev":
+        payload = _dispatch_dev_capability(root, source=source, backend=backend)
+    else:
+        print(f"DISPATCH_ERROR reason=unsupported_target_role target_role={target_role or 'none'}", file=sys.stderr)
+        return 1
+
+    if bool(payload.get("dispatched")):
+        print(
+            "DISPATCH_OK "
+            f"role={target_role} "
+            f"task_id={payload.get('task_id', 'none')} "
+            f"reason={payload.get('reason', 'dispatched')} "
+            f"backend={payload.get('backend', 'none')} "
+            f"completed={1 if payload.get('completed') else 0} "
+            f"runtime_truth_source={runtime_meta['runtime_truth_source']} "
+            f"event_store_primary={1 if runtime_meta['event_store_primary'] else 0}"
+        )
+        return 0
+
+    print(
+        "DISPATCH_SKIP "
+        f"role={target_role} "
+        f"reason={payload.get('reason', 'not_dispatched')} "
+        f"runtime_truth_source={runtime_meta['runtime_truth_source']} "
+        f"event_store_primary={1 if runtime_meta['event_store_primary'] else 0}"
+    )
+    return 0
+
+
 def main() -> int:
     args = build_parser().parse_args()
     root = _canonical_runtime_root(Path(args.root).expanduser().resolve())
@@ -3615,6 +4081,10 @@ def main() -> int:
             return _reconcile_state_cli(root, board_path, queue_path)
         if args.cmd == "planner-autobatch":
             return _planner_autobatch_cli(root, board_path, queue_path, args)
+        if args.cmd == "novelty-target":
+            return _planner_novelty_target_cli(root, board_path, queue_path, args)
+        if args.cmd == "dispatch-capability":
+            return _dispatch_capability_cli(root, args)
         with board_lock(board_path):
             board = load_board(board_path)
             if args.cmd == "claim":
@@ -3754,7 +4224,30 @@ def main() -> int:
         raise SystemExit("--contract-file is required unless --collect-only is used")
     contract_path = Path(args.contract_file).expanduser().resolve()
     text = contract_path.read_text(encoding="utf-8", errors="ignore")
-    updated, payload = apply_bridge(root=root, role=args.role, contract_text=text, source=args.source, backend=args.backend)
+    try:
+        updated, payload = apply_bridge(root=root, role=args.role, contract_text=text, source=args.source, backend=args.backend)
+    except Exception as exc:
+        fallback = _parse_contract(text)
+        fallback["STATUS"] = "BLOCKED"
+        fallback["DELTA"] = "PLANNER_RUNTIME_ACTIONS_FAILED"
+        fallback["VERDICT"] = "BLOCKED"
+        fallback["BLOCKER"] = "PLANNER_RUNTIME_ACTIONS_FAILED"
+        fallback["NEXT_ACTION_UNIQUE"] = f"PLANNER_RUNTIME_ACTIONS_FAILED_{int(time.time())}"
+        fallback["TASK_UPDATE"] = "blocked"
+        fallback["ISSUE_COUNT"] = "1"
+        fallback["ISSUE_SEVERITY"] = "high"
+        fallback["ISSUES"] = "planner_runtime_actions_failed"
+        fallback["RUN_NOTE"] = "apply_bridge_exception_fallback"
+        fallback["ROOT_CAUSE"] = f"{type(exc).__name__}: {str(exc).strip() or 'apply_bridge_exception'}"
+        fallback["FIX_APPLIED"] = "planner_runtime_actions_exception_converted_to_blocked_contract"
+        fallback["VERIFY"] = f"source={args.source}"
+        updated = _render_contract(fallback)
+        payload = {
+            "ok": False,
+            "actions": ["planner_runtime_actions_failed"],
+            "reason": "apply_bridge_exception",
+            "error": f"{type(exc).__name__}: {str(exc).strip() or 'apply_bridge_exception'}",
+        }
     contract_path.write_text(updated, encoding="utf-8")
     print(json.dumps(payload, ensure_ascii=True))
     return 0

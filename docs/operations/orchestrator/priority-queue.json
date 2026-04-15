@@ -1,20 +1,24 @@
 {
   "version": 1,
-  "updated_at": "2026-03-24T22:40:14Z",
+  "updated_at": "2026-04-15T04:32:18Z",
   "active_cycle": {
     "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
     "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
     "dispatch_namespace": "BATCH",
     "active_batch_ids": [
-      "BATCH-84"
+      "BATCH-85"
     ],
     "recent_completed_batch_ids": [
+      "BATCH-84",
       "BATCH-83",
       "BATCH-82",
       "BATCH-81",
-      "BATCH-80",
-      "BATCH-79"
-    ]
+      "BATCH-80"
+    ],
+    "novelty_target": "portfolio_first_brief_with_ranked_actions",
+    "user_visible_delta": "daily brief surfaces the top portfolio or watchlist action and opens an investment memo in one click",
+    "novelty_target_required": false,
+    "novelty_target_set_at": "2026-03-25T04:46:16Z"
   },
   "items": [
     {
@@ -2239,16 +2243,16 @@
     {
       "id": "BATCH-84",
       "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
-      "state": "IN_PROGRESS",
+      "state": "CLOSED",
       "priority": "P2",
       "owner_role": "planner",
       "created_by": "planner_autonomy",
       "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
-      "next_action": "compl\u00e9ter BATCH-84-ADMIN-01 (READY_PLANNER pour admin)",
+      "next_action": "batch complete \u2014 awaiting GOV_REVIEW closure",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-03-24T07:19:03Z",
-      "updated_at": "2026-03-24T22:40:14Z",
+      "updated_at": "2026-04-15T02:36:45Z",
       "dispatch_authorized": true,
       "ready_at": "2026-03-24T07:21:45Z",
       "opened_at": "2026-03-24T08:47:36Z",
@@ -2256,7 +2260,70 @@
       "novelty_class": "reuse_only",
       "delivery_kind": "reuse_only",
       "user_value_delta_visible": 0,
-      "stagnation_alert": true
+      "stagnation_alert": false,
+      "blocked_reason": "",
+      "stalled_reason": "",
+      "reconciled_at": "2026-04-15T00:43:05Z",
+      "status": "BLOCKED",
+      "novelty_target_required": false,
+      "novelty_target_workflow": {
+        "status": "required",
+        "owner_role": "planner",
+        "batch_id": "BATCH-84",
+        "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+        "reason": "stagnation_requires_novelty_target",
+        "next_action": "define_novelty_target",
+        "policy": "no_new_downstream_work",
+        "required_fields": [
+          "novelty_target",
+          "user_visible_delta",
+          "scope_delta",
+          "success_metric"
+        ],
+        "missing_fields": [
+          "novelty_target",
+          "user_visible_delta"
+        ],
+        "clear_when": "novelty_target_present",
+        "recent_classes": [
+          "reuse_only",
+          "reuse_only",
+          "reuse_only"
+        ],
+        "updated_at": "2026-03-25T04:43:35Z"
+      },
+      "novelty_target_missing_fields": [
+        "novelty_target",
+        "user_visible_delta"
+      ],
+      "novelty_target": "deliver copilot reliability independently while freezing admin retry churn on BATCH-84-ADMIN-01",
+      "user_visible_delta": "daily brief surfaces the top portfolio or watchlist action and opens an investment memo in one click",
+      "novelty_target_set_at": "2026-03-25T04:46:16Z",
+      "ready_starvation": true,
+      "ready_starved_at": "2026-03-27T04:36:55Z",
+      "closed_at": "2026-04-15T02:36:45Z"
+    },
+    {
+      "id": "BATCH-85",
+      "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
+      "state": "IN_PROGRESS",
+      "priority": "P2",
+      "owner_role": "planner",
+      "created_by": "planner_autonomy",
+      "vision_ref": "docs/product/PRODUCT_VISION.md#One sentence",
+      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
+      "novelty_class": "reuse_only",
+      "delivery_kind": "reuse_only",
+      "user_value_delta_visible": 0,
+      "next_action": "compl\u00e9ter BATCH-85-ANALYSIS (READY_PLANNER pour planner)",
+      "depends_on": [],
+      "dependency_policy": "single_batch",
+      "created_at": "2026-04-15T03:46:32Z",
+      "updated_at": "2026-04-15T04:32:18Z",
+      "novelty_target": "fiabiliser le slice app independamment du churn admin",
+      "stagnation_alert": false,
+      "dispatch_authorized": true,
+      "ready_at": "2026-04-15T04:13:51Z"
     }
   ],
   "meta": {
@@ -2272,23 +2339,42 @@
     "canonical_truth": "sqlite_event_store",
     "planner_scheduler": "planner",
     "delivery_scoreboard": {
-      "throughput_total": 82,
-      "throughput_closed": 81,
+      "throughput_total": 83,
+      "throughput_closed": 82,
       "net_new_user_value_total": 50,
       "net_new_user_value_closed": 50,
       "hardening_total": 2,
       "validation_total": 3,
-      "reuse_only_total": 27
+      "reuse_only_total": 28
     },
-    "stagnation_alert": {
-      "batch_id": "BATCH-84",
-      "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
-      "recent_classes": [
-        "reuse_only",
-        "reuse_only",
-        "reuse_only"
-      ],
-      "novelty_target_required": true
+    "planner_hard_guard": {
+      "active": false,
+      "reason": "none",
+      "updated_at": "2026-04-15T04:30:04Z"
+    },
+    "workboard_decision_capable": false,
+    "workboard_decision_capability_reason": "projection_missing_operational_fields",
+    "workboard_decision_capability_checked_at": "2026-04-15T04:30:04Z",
+    "novelty_target_required": false,
+    "novelty_target_missing_fields": [],
+    "novelty_target_audit": {
+      "status": "clear",
+      "reason": "novelty_target_present",
+      "updated_at": "2026-04-15T04:30:04Z"
+    },
+    "novelty_target": "portfolio_first_brief_with_ranked_actions",
+    "user_visible_delta": "daily brief surfaces the top portfolio or watchlist action and opens an investment memo in one click",
+    "delivery_runtime_gate": {
+      "active": false,
+      "reason": "backend_runtime_recovered",
+      "affected_stream_ids": [],
+      "affected_task_ids": [],
+      "updated_at": "2026-04-15T04:30:04Z"
+    },
+    "novelty_target_workflow": {
+      "status": "clear",
+      "reason": "novelty_target_present",
+      "updated_at": "2026-04-15T04:30:04Z"
     }
   }
 }

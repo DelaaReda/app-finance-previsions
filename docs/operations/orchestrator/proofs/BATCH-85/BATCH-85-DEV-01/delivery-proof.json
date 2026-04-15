@@ -1,0 +1,52 @@
+{
+  "task_id": "BATCH-85-DEV-01",
+  "task_title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open",
+  "stream": "BATCH-85",
+  "priority": "P2",
+  "status": "delivered",
+  "summary": "Personal finance copilot minimal vertical slice is fully implemented and verified. /api/personal-finance/start returns brief_of_day + ask + open entry points. /api/personal-finance/ask returns structured investment memo with verdict. Routes reuse Judge endpoint patterns (cache, single-flight, fallback, never-empty contract). All 26 tests pass.",
+  "root_cause": "none - feature already implemented in prior delivery cycle",
+  "fix_applied": "none - verified existing implementation, ran full test suite to confirm delivery state",
+  "artifact": {
+    "endpoints": [
+      "GET /api/personal-finance/start - returns brief_of_day + ask + open actions with namespace rewriting",
+      "POST /api/personal-finance/ask - returns structured investment memo (verdict, horizon, confidence, why, risks, sources)",
+      "GET /api/personal-finance/context - returns market context with brief integration"
+    ],
+    "key_files": [
+      "apps/api/src/domains/copilot/api/copilot.py (routes: copilot_start, copilot_ask, personal_finance_start, personal_finance_ask)",
+      "apps/api/src/domains/copilot/application/copilot_service.py (build_context_payload, build_ask_payload, _load_daily_brief_payload, _build_copilot_start_payload)",
+      "apps/api/src/domains/copilot/tests/test_dev01_delivery_proof.py (13 tests)",
+      "apps/api/src/domains/copilot/tests/test_brief_of_day_feature.py (4 tests)",
+      "apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py (9 tests)"
+    ],
+    "brief_source": "apps/api/runtime/data/brief_daily.json (live, generated 2026-04-15T04:16:30Z)",
+    "test_results": "26/26 passed in 3.83s"
+  },
+  "verify": {
+    "before": "brief_daily.json exists in storage with summary, market_sentiment, top_signals, top_risks, generated_at, freshness, source",
+    "after": "/api/personal-finance/start returns {ok:true, data:{brief_of_day:{summary, market_sentiment, top_signals, top_risks}, ask:[{id,kind,label,target}], open:[{id,kind,label,target}], cache:{hit,age_seconds,ttl_seconds}, stats, source, generated_at, freshness}}",
+    "test": "python3 -m pytest domains/copilot/tests/test_dev01_delivery_proof.py domains/copilot/tests/test_brief_of_day_feature.py domains/copilot/tests/test_personal_finance_copilot_start.py -v => 26 passed"
+  },
+  "files_touched": 0,
+  "tests_run": [
+    "domains/copilot/tests/test_dev01_delivery_proof.py (13 tests - all pass)",
+    "domains/copilot/tests/test_brief_of_day_feature.py (4 tests - all pass)",
+    "domains/copilot/tests/test_personal_finance_copilot_start.py (9 tests - all pass)"
+  ],
+  "commit_sha": "23170def (HEAD -> codex/agent-platform-20260307-115454)",
+  "architecture_check": {
+    "layer": "route (copilot.py) -> service (copilot_service.py) -> storage (brief_daily.json)",
+    "imports_ok": true,
+    "path_target": "apps/api/src/domains/copilot/api/copilot.py, apps/api/src/domains/copilot/application/copilot_service.py",
+    "pattern_reused": "Judge endpoint stack: cache (TTL + single-flight), fallback (never-empty), debug mode, namespace rewriting",
+    "best_practices_followed": "docs/ops/API_ENDPOINT_BEST_PRACTICES.md - response contract, cache, fallback, source tags, stats, filters_applied"
+  },
+  "vision_alignment": {
+    "batch": "BATCH-85",
+    "target": "Personal finance copilot MVP - brief of day + ask/open entry points",
+    "impact": "User opens app -> sees daily market brief with sentiment/signals/risks -> can ask questions or open full copilot. Minimal vertical slice delivers user-visible value immediately."
+  },
+  "recommended_next": "BATCH-85-DEV-02: Conversation history and follow-up questions (already implemented at /api/copilot/conversation/* routes)",
+  "blocking_issue": "none"
+}

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-GOV_REVIEW-20260415T023645Z-668"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-04-15T02:36:45Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_gov_review_blocker_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T02:36:45Z"
+      ended_at_utc: "2026-04-15T02:36:45Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_projection_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-gov-review-block-20260415t023500z"
+  review_ref: "runner:BATCH-84-GOV_REVIEW"
+  note: "source=runner | root_cause=BATCH-84-ADMIN-01 remains unresolved in start_banner_only retry churn so GOV_REVIEW cannot pass | fix_applied=planner converted silent in-progress review into explicit blocked dependency hold tied to BATCH-84-ADMIN-01 | verify=before=gov_review_in_progress_with_unresolved_admin_dependency; after=gov_review_closed_with_explicit_blocker_and_runtime_artifact; test=parallel_workstream_context_planner_2026-04-15T02:35Z | architecture_check=apps/api_ref=apps/api/src/domains/*;apps/web_ref=apps/web/src;runtime_ref=apps/api/runtime/;legacy_paths=none;dependency_policy=enforced | vision_alignment=batch=BATCH-84; target=personal_finance_copilot_runtime_governance; impact=stop_false_progress_and_force_targeted_admin_repair"

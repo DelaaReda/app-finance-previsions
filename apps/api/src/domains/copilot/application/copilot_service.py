@@ -631,9 +631,25 @@ def _resolve_saved_portfolio_context(scope: Optional[Dict[str, Any]] = None) -> 
     if not portfolio_id or not tickers:
         return None
 
+    weights: Dict[str, float] = {}
+    weight_warnings: List[str] = []
+    resolve_portfolio_weights = getattr(portfolio_module, "_resolve_portfolio_weights", None)
+    if callable(resolve_portfolio_weights):
+        try:
+            weights, _, weight_warnings = resolve_portfolio_weights(
+                tickers,
+                portfolio_payload.get("metadata"),
+            )
+        except Exception:
+            weights = {}
+            weight_warnings = []
+
     risk_payload: Dict[str, Any] = {}
     get_risk_profile = getattr(service, "get_risk_profile", None)
-    if callable(get_risk_profile):
+    should_load_live_risk = bool(
+        requested_portfolio_id or resolved_scope.get("include_live_risk_profile")
+    )
+    if callable(get_risk_profile) and should_load_live_risk:
         try:
             risk_payload = _model_dump_dict(get_risk_profile(portfolio_id))
         except Exception:
@@ -656,11 +672,14 @@ def _resolve_saved_portfolio_context(scope: Optional[Dict[str, Any]] = None) -> 
         "benchmark": _safe_text(risk_payload.get("benchmark"), ""),
         "why": risk_payload.get("why") if isinstance(risk_payload.get("why"), list) else [],
         "warnings": (
-            risk_payload.get("warnings")
-            if isinstance(risk_payload.get("warnings"), list)
-            else []
+            (risk_payload.get("warnings") if isinstance(risk_payload.get("warnings"), list) else [])
+            + weight_warnings
         ),
-        "weights": risk_payload.get("weights") if isinstance(risk_payload.get("weights"), dict) else {},
+        "weights": (
+            risk_payload.get("weights")
+            if isinstance(risk_payload.get("weights"), dict) and risk_payload.get("weights")
+            else weights
+        ),
         "confidence": risk_payload.get("confidence"),
         "freshness": _safe_text(risk_payload.get("generated_at"), ""),
         "source": _normalize_source_list(
@@ -1140,6 +1159,13 @@ def _fetch_live_market_indicators() -> Dict[str, Any]:
         "degraded": True,
         "degraded_reason": "Live data fetch failed - using cached brief only",
     }
+
+    live_market_enabled = str(
+        __import__("os").getenv("FC_COPILOT_LIVE_MARKET_DATA", "0")
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    if not live_market_enabled:
+        fallback["degraded_reason"] = "Live data disabled - using snapshot brief only"
+        return fallback
     
     if get_price_history is None:
         return fallback
@@ -1700,10 +1726,6 @@ def _fetch_live_market_context() -> str:
     """Fetches live market data (forecasts, brief, news) and formats as context string.
     Returns empty string if backend not reachable - never raises."""
     try:
-        import urllib.request as _ur
-        import json as _json
-        import urllib.error
-
         parts = []
 
         # 1. Brief du jour
@@ -1729,11 +1751,18 @@ def _fetch_live_market_context() -> str:
         except Exception:
             pass
 
-        # 2. Top forecasts (confiance > 60%)
+        # 2. Top forecasts (confiance > 60%) depuis snapshots locaux.
         try:
-            with _ur.urlopen("http://localhost:8050/api/forecasts?limit=10", timeout=3) as r:
-                fc_data = _json.load(r).get("data", {})
-            rows = fc_data.get("rows", [])
+            forecasts_payload = {}
+            if storage_io is not None:
+                forecasts_payload = storage_io.load_json("forecasts") or storage_io.load_json("forecast") or {}
+
+            rows = []
+            if isinstance(forecasts_payload, dict):
+                if isinstance(forecasts_payload.get("rows"), list):
+                    rows = forecasts_payload.get("rows") or []
+                elif isinstance(forecasts_payload.get("data"), dict) and isinstance(forecasts_payload["data"].get("rows"), list):
+                    rows = forecasts_payload["data"].get("rows") or []
             strong = [r for r in rows if r.get("confidence", 0) > 0.60][:6]
             if strong:
                 fc_lines = [f"{r['ticker']} -> {r['direction'].upper()} ({r['confidence']:.0%})" for r in strong]
@@ -1741,11 +1770,22 @@ def _fetch_live_market_context() -> str:
         except Exception:
             pass
 
-        # 3. News récentes (3 dernières)
+        # 3. News récentes (3 dernières) depuis snapshots locaux.
         try:
-            with _ur.urlopen("http://localhost:8050/api/news/feed?limit=3", timeout=3) as r:
-                news_data = _json.load(r).get("data", {})
-            articles = news_data.get("articles", news_data.get("items", []))
+            news_payload = {}
+            if storage_io is not None:
+                news_payload = storage_io.load_json("news_feed") or {}
+
+            articles = []
+            if isinstance(news_payload, dict):
+                if isinstance(news_payload.get("articles"), list):
+                    articles = news_payload.get("articles") or []
+                elif isinstance(news_payload.get("data"), dict):
+                    nested = news_payload.get("data") or {}
+                    if isinstance(nested.get("articles"), list):
+                        articles = nested.get("articles") or []
+                    elif isinstance(nested.get("items"), list):
+                        articles = nested.get("items") or []
             if articles:
                 news_lines = []
                 for a in articles[:3]:

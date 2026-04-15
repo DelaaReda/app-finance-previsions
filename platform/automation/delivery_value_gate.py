@@ -9,6 +9,8 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import Request, urlopen
 
 CONTRACT_KEYS = ["STATUS", "DELTA", "EVIDENCE", "RISKS", "NEXT", "VERDICT", "BLOCKER_ID", "NEXT_ACTION_UNIQUE"]
 PLACEHOLDERS = {"", "none", "n/a", "null", "-", "?", "??", "???", "tbd", "todo", "fixme"}
@@ -19,6 +21,10 @@ ARTIFACT_KEYS = {
     "scrum_master": "scrum_artifact",
 }
 STRICT_DELIVERY_ROLES = {"dev", "admin"}
+RUNTIME_GATE_URLS = (
+    "http://127.0.0.1:8050/api/health",
+    "http://127.0.0.1:7779/api/status",
+)
 
 
 @dataclass
@@ -232,6 +238,45 @@ def _planner_doc_autofill(ev: dict[str, str], values: dict[str, str]) -> dict[st
     return ev
 
 
+def _task_binding(values: dict[str, str], ev: dict[str, str]) -> str:
+    for key in ("task_id", "stream_id"):
+        token = str(ev.get(key, "") or "").strip()
+        if token:
+            return token
+    return str(values.get("NEXT_ACTION_UNIQUE", "") or "").strip() or "unknown"
+
+
+def _delivery_fingerprint(role: str, values: dict[str, str], ev: dict[str, str]) -> str:
+    payload = "|".join(
+        [
+            role,
+            _task_binding(values, ev),
+            str(ev.get("task_update", "") or "").strip().lower(),
+            _artifact_value(role, ev),
+            str(ev.get("verify", "") or "").strip(),
+            str(ev.get("tests_run", "") or "").strip(),
+            str(ev.get("root_cause", "") or "").strip(),
+            str(ev.get("fix_applied", "") or "").strip(),
+        ]
+    )
+    return hashlib.sha1(payload.encode("utf-8", "ignore")).hexdigest()[:12]
+
+
+def _runtime_probes_ok() -> bool:
+    try:
+        for url in RUNTIME_GATE_URLS:
+            req = Request(url, headers={"Accept": "application/json"})
+            with urlopen(req, timeout=1.5) as resp:
+                status = int(getattr(resp, "status", 0) or 0)
+                if not (200 <= status < 300):
+                    return False
+        return True
+    except (URLError, TimeoutError, OSError):
+        return False
+    except Exception:
+        return False
+
+
 def _load_history(path: Path) -> list[dict[str, str | int]]:
     if not path.exists():
         return []
@@ -272,38 +317,74 @@ def evaluate_contract(text: str, config: GateConfig, now_epoch: int | None = Non
     if config.role in STRICT_DELIVERY_ROLES and not _is_doc_only(ev):
         if not _commit_sha_valid(ev.get("commit_sha", "")):
             missing.append("commit_sha")
+    runtime_delivery_required = config.role in STRICT_DELIVERY_ROLES and not _is_doc_only(ev)
+    runtime_ok = True if not runtime_delivery_required else _runtime_probes_ok()
 
     history = _load_history(config.history_path)
+    binding = _task_binding(values, ev)
+    fingerprint = _delivery_fingerprint(config.role, values, ev)
     history.append(
         {
             "at": now_epoch,
             "role": config.role,
             "source": config.source,
             "task_update": task_update,
-            "passed": 1 if not missing else 0,
-            "fingerprint": hashlib.sha1(values.get("NEXT_ACTION_UNIQUE", "").encode("utf-8", "ignore")).hexdigest()[:12],
+            "passed": 1 if (not missing and runtime_ok) else 0,
+            "binding": binding,
+            "fingerprint": fingerprint,
+            "runtime_ok": 1 if runtime_ok else 0,
         }
     )
     window_start = now_epoch - config.burst_window_seconds
-    recent_failures = [entry for entry in history if int(entry.get("at", 0)) >= window_start and int(entry.get("passed", 0)) == 0]
-    inflation_detected = len(recent_failures) >= config.burst_threshold and bool(missing)
+    recent_failures = [
+        entry
+        for entry in history
+        if int(entry.get("at", 0)) >= window_start
+        and int(entry.get("passed", 0)) == 0
+        and str(entry.get("binding", "") or "") == binding
+        and str(entry.get("fingerprint", "") or "") == fingerprint
+    ]
+    inflation_detected = len(recent_failures) >= config.burst_threshold and bool(missing or not runtime_ok)
     _save_history(config.history_path, history)
 
     evidence = values.get("EVIDENCE", "")
-    if missing:
+    if missing or not runtime_ok:
         evidence = _upsert_evidence(evidence, "delivery_gate", "blocked")
-        evidence = _upsert_evidence(evidence, "delivery_gate_missing", ",".join(sorted(set(missing))))
-        evidence = _append_issue(evidence, "delivery_value_insufficient", severity="high")
+        if missing:
+            evidence = _upsert_evidence(evidence, "delivery_gate_missing", ",".join(sorted(set(missing))))
+            evidence = _append_issue(evidence, "delivery_value_insufficient", severity="high")
+        if not runtime_ok:
+            evidence = _upsert_evidence(evidence, "delivery_runtime_gate", "blocked")
+            evidence = _append_issue(evidence, "delivery_runtime_degraded", severity="high")
         if inflation_detected:
             evidence = _append_issue(evidence, "delivery_signal_inflation_detected", severity="high")
+        proof_present = bool(_artifact_value(config.role, ev)) and not _is_placeholder(ev.get("verify", ""))
+        blocker_id = "DELIVERY_VALUE_INSUFFICIENT"
+        delta = "DELIVERY_VALUE_INSUFFICIENT"
+        risks = "delivery evidence incomplete: " + ",".join(sorted(set(missing))) if missing else "delivery gate blocked"
+        next_action = f"owner={config.role}; action=add missing delivery proof then retry complete"
+        if not runtime_ok:
+            blocker_id = "DELIVERY_RUNTIME_DEGRADED"
+            delta = "DELIVERY_RUNTIME_DEGRADED"
+            risks = "product runtime degraded; independent delivery cannot be credited"
+            next_action = f"owner={config.role}; action=restore product runtime health then retry complete"
+            if missing:
+                risks += "; delivery evidence incomplete: " + ",".join(sorted(set(missing)))
+                next_action = f"owner={config.role}; action=restore runtime and add missing delivery proof before retry complete"
+        elif inflation_detected and proof_present:
+            blocker_id = "PROOF_CHURN_NO_STATE_CHANGE"
+            delta = "PROOF_CHURN_NO_STATE_CHANGE"
+            risks = "repeated completion proof emitted without canonical state transition"
+            next_action = "owner=planner; action=consume existing proof or raise explicit blocker instead of re-emitting proof"
+            evidence = _append_issue(evidence, "proof_churn_no_state_change", severity="high")
         values["EVIDENCE"] = evidence
         values["STATUS"] = "BLOCKED"
-        values["DELTA"] = "DELIVERY_VALUE_INSUFFICIENT"
+        values["DELTA"] = delta
         values["VERDICT"] = "BLOCKED"
-        values["BLOCKER_ID"] = "DELIVERY_VALUE_INSUFFICIENT"
-        values["RISKS"] = "delivery evidence incomplete: " + ",".join(sorted(set(missing)))
-        values["NEXT"] = f"owner={config.role}; action=add missing delivery proof then retry complete"
-        values["NEXT_ACTION_UNIQUE"] = f"DELIVERY_VALUE_RETRY_{config.role.upper()}_{now_epoch}"
+        values["BLOCKER_ID"] = blocker_id
+        values["RISKS"] = risks
+        values["NEXT"] = next_action
+        values["NEXT_ACTION_UNIQUE"] = f"{blocker_id}_{config.role.upper()}_{now_epoch}"
         return GateResult(False, values, sorted(set(missing)), inflation_detected)
 
     evidence = _upsert_evidence(evidence, "delivery_gate", "pass")

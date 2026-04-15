@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-85-BATCH-85-ANALYSIS-20260415T041351Z-275"
+stream_id: "BATCH-85"
+task_id: "BATCH-85-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-04-15T04:13:51Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(runtime_no_code)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T04:13:51Z"
+      ended_at_utc: "2026-04-15T04:13:51Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_state_transition_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "COMPLETE_BATCH_85_ANALYSIS_P1776226254_4349"
+  review_ref: "runner:BATCH-85-ANALYSIS"
+  note: "source=runner | root_cause=analysis task remained in progress after sync repaired the synthetic plan blocker and deps were none | fix_applied=planner completed the planner owned analysis task directly to unlock the canonical arch step | verify=before=BATCH-85-ANALYSIS:IN_PROGRESS deps=none ready=0; after=complete_requested arch_can_become_ready; test=parallel_workstream_context_role_planner_limit_5 | architecture_check=layer=platform; imports_ok=yes; path_target=logs-codex-runs/orchestrator-state/parallel-workstreams.json | vision_alignment=batch=BATCH-85; target=brief_action_memo_reliability; impact=unlock_arch_and_delivery_flow"

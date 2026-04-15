@@ -219,6 +219,74 @@ class PlannerDispatchMetricsTests(unittest.TestCase):
             self.assertEqual(metrics["ready_planner_count"], 1)
             self.assertEqual(metrics["planner_state"], "idle")
 
+    def test_event_store_primary_filters_recent_history_to_active_cycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {"active_batch_ids": ["BATCH-85"]},
+                        "items": [
+                            {
+                                "id": "BATCH-85",
+                                "state": "WAITING_DEP",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {"active_batch_ids": ["BATCH-85"]},
+                        "tasks": [
+                            {
+                                "id": "BATCH-85-ANALYSIS",
+                                "stream_id": "BATCH-85",
+                                "role": "planner",
+                                "state": "IN_PROGRESS",
+                            },
+                            {
+                                "id": "BATCH-85-PLAN",
+                                "stream_id": "BATCH-85",
+                                "role": "planner",
+                                "state": "READY_PLANNER",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-83",
+                    task_id="BATCH-83-ANALYSIS",
+                    task_kind="analysis",
+                    owner_role="planner",
+                    target_role="dev",
+                    status="ready_to_merge",
+                    current_node="close_or_requeue",
+                    updated_at="2026-03-13T12:00:00Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-83-ANALYSIS", "target_role": "dev"},
+                    capability_result={"status": "pass", "backend": "codex_exec", "summary": "done"},
+                )
+            )
+
+            metrics = build_planner_dispatch_metrics(root, recent_limit=12)
+
+            self.assertTrue(metrics["event_store_primary"])
+            self.assertEqual(metrics["recent_total"], 0)
+            self.assertEqual(metrics["latest_owner_task_id"], "")
+            self.assertEqual(metrics["tasks_progressed_last_1h"], 0)
+            self.assertEqual(metrics["ready_planner_count"], 1)
+            self.assertEqual(metrics["status"], "dispatch_needed")
+
     def test_build_planner_dispatch_metrics_counts_success_and_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -60,6 +60,16 @@ def _run_uvicorn(reload_enabled: bool = True) -> None:
     from pathlib import Path as _Path
     _src = _Path(__file__).resolve().parents[1]
     _reload_dirs = [str(_src)] if reload_enabled else None
+    worker_count = 1
+    if not reload_enabled:
+        # The backend owns startup jobs and local runtime state; a multi-worker
+        # default duplicates that work and has proven unstable in the VM runtime.
+        default_workers = 1
+        worker_token = str(_os.getenv("FINANCE_COPILOT_API_WORKERS", str(default_workers)) or str(default_workers)).strip()
+        try:
+            worker_count = max(1, min(3, int(worker_token)))
+        except Exception:
+            worker_count = default_workers
     uvicorn.run(
         "api.main:create_app",
         host="127.0.0.1",
@@ -67,6 +77,7 @@ def _run_uvicorn(reload_enabled: bool = True) -> None:
         reload=reload_enabled,
         reload_dirs=_reload_dirs,
         factory=True,
+        workers=worker_count,
         log_level="info",
     )
 

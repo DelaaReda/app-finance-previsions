@@ -268,16 +268,7 @@ def shutil_which(binary: str) -> str:
 
 
 def _openclaw_delete_agent(agent_id: str) -> None:
-    token = str(agent_id or "").strip()
-    if not token or not shutil_which("openclaw"):
-        return
-    subprocess.run(
-        ["openclaw", "agents", "delete", "--force", token],
-        text=True,
-        capture_output=True,
-        check=False,
-        env=_openclaw_env(),
-    )
+    return
 
 
 def _looks_like_rate_limited(text: str) -> bool:
@@ -336,13 +327,7 @@ def _allow_live_openclaw_ops(root: Path) -> bool:
 
 
 def _cleanup_orphan_agents(config: WorkerManagerConfig, records: list[WorkerRecord]) -> list[str]:
-    if not _allow_live_openclaw_ops(config.root):
-        return []
-    removed: list[str] = []
-    for agent_id in _worker_orphan_ids(records):
-        _openclaw_delete_agent(agent_id)
-        removed.append(agent_id)
-    return removed
+    return []
 
 
 def _invoke_secondary_codex_worker(
@@ -746,10 +731,18 @@ def run_worker(
     plan = plan_worker(config, role, worker_type, owner_task_id, task_kind)
     if not plan["allowed"]:
         return 2, plan
-    initial_backend_route_reason = "none"
     if backend == "openclaw":
-        backend = "auto"
-        initial_backend_route_reason = "openclaw_provider_removed"
+        return 2, {
+            "allowed": False,
+            "reason": "openclaw_provider_removed",
+            "provider_policy_plane": "model_plane",
+            "parent_role": canonical_role(role),
+            "worker_type": worker_type,
+            "owner_task_id": owner_task_id,
+            "task_kind": task_kind,
+            "backend": "openclaw",
+        }
+    initial_backend_route_reason = "none"
 
     registry = _load_registry(config.registry_path)
     records = _records_from_registry(registry)

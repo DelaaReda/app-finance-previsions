@@ -21,6 +21,9 @@ VERIFY_SLEEP_SECONDS="${FC_ROLE_RECOVERY_VERIFY_SLEEP_SECONDS:-2}"
 LOG_DIR="${FC_ROLE_RECOVERY_LOG_DIR:-$ROOT/logs-codex-runs}"
 LOG_FILE="${FC_ROLE_RECOVERY_LOG_FILE:-$LOG_DIR/role-recovery.log}"
 TOPOLOGY_FILE="${FC_ROLE_TOPOLOGY_FILE:-$ROOT/logs-codex-runs/orchestrator-state/parallel-role-topology-active.json}"
+LANE_VALIDITY_SCRIPT="${ROOT}/platform/automation/lane_validity.py"
+LANE_VALIDITY_PROOF_MAX_AGE_SECONDS="${FC_LANE_PRODUCTIVE_PROOF_MAX_AGE_SECONDS:-1800}"
+LANE_VALIDITY_SUMMARY_JSON=""
 ROLES=()
 RUN_STARTED_EPOCH="$(date +%s)"
 
@@ -204,15 +207,123 @@ session_has_interactive_codex_prompt() {
 session_path_invalid() {
   local target="$1"
   local path=""
+  local pid=""
+  local child_pids=""
+  local child_pid=""
   path="$(pane_current_path "$target" || true)"
-  [[ -z "$path" ]] && return 0
-  [[ "$path" == *"(deleted)"* ]] && return 0
-  case "$path" in
-    "$ROOT"|"$ROOT"/*)
-      return 1
+  if fc_workspace_runtime_path_invalid "$path" "$ROOT"; then
+    return 0
+  fi
+
+  pid="$(pane_pid "$target" || true)"
+  if fc_pid_workspace_invalid "$pid" "$ROOT"; then
+    return 0
+  fi
+
+  if [[ "$pid" =~ ^[0-9]+$ ]] && command -v pgrep >/dev/null 2>&1; then
+    child_pids="$(pgrep -P "$pid" 2>/dev/null || true)"
+    while IFS= read -r child_pid; do
+      [[ "$child_pid" =~ ^[0-9]+$ ]] || continue
+      if fc_pid_workspace_invalid "$child_pid" "$ROOT"; then
+        return 0
+      fi
+    done <<< "$child_pids"
+  fi
+
+  return 1
+}
+
+session_invalid_reason() {
+  local session="$1"
+  local target="${session}:0.0"
+  local path=""
+  local cmd=""
+  local pid=""
+  local child_pids=""
+  local child_pid=""
+
+  if ! tmux has-session -t "$session" 2>/dev/null; then
+    echo "missing_session"
+    return 0
+  fi
+
+  path="$(pane_current_path "$target" || true)"
+  if [[ -z "$path" ]]; then
+    echo "missing_workdir"
+    return 0
+  fi
+  if [[ "$path" == *"(deleted)"* ]]; then
+    echo "deleted_workdir"
+    return 0
+  fi
+  if fc_workspace_runtime_path_invalid "$path" "$ROOT"; then
+    echo "foreign_workdir"
+    return 0
+  fi
+  pid="$(pane_pid "$target" || true)"
+  if fc_pid_workspace_invalid "$pid" "$ROOT"; then
+    echo "foreign_workdir"
+    return 0
+  fi
+  if [[ "$pid" =~ ^[0-9]+$ ]] && command -v pgrep >/dev/null 2>&1; then
+    child_pids="$(pgrep -P "$pid" 2>/dev/null || true)"
+    while IFS= read -r child_pid; do
+      [[ "$child_pid" =~ ^[0-9]+$ ]] || continue
+      if fc_pid_workspace_invalid "$child_pid" "$ROOT"; then
+        echo "foreign_workdir"
+        return 0
+      fi
+    done <<< "$child_pids"
+  fi
+  if session_has_interactive_codex_prompt "$target"; then
+    echo "interactive_prompt"
+    return 0
+  fi
+
+  cmd="$(pane_current_command "$target" || true)"
+  case "$cmd" in
+    bash|sh|zsh|fish)
+      echo "shell_only"
+      ;;
+    "")
+      echo "missing_pane_command"
+      ;;
+    *)
+      echo "session_not_ready"
       ;;
   esac
-  return 0
+}
+
+session_is_auxiliary_candidate() {
+  local session="$1"
+  case "$session" in
+    codex_*_cron|qwen_*_cron|adminapp_codex_sync|admin-agents-sync-cron|clawsentinel)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+quarantine_invalid_unmapped_sessions() {
+  local -n mapped_ref=$1
+  local session=""
+  local reason=""
+  local count=0
+  local -a sessions=()
+  mapfile -t sessions < <(tmux list-sessions -F '#S' 2>/dev/null || true)
+  for session in "${sessions[@]}"; do
+    session_is_auxiliary_candidate "$session" || continue
+    [[ -n "${mapped_ref[$session]:-}" ]] && continue
+    reason="$(session_invalid_reason "$session" || true)"
+    case "$reason" in
+      deleted_workdir|foreign_workdir|missing_workdir|interactive_prompt)
+        printf '%s [ACTION] quarantine invalid auxiliary session=%s reason=%s\n' "$(ts)" "$session" "$reason" >> "$LOG_FILE"
+        tmux kill-session -t "$session" >/dev/null 2>&1 || true
+        count=$((count + 1))
+        ;;
+    esac
+  done
+  printf '%s' "$count"
 }
 
 dismiss_interactive_codex_prompt() {
@@ -236,6 +347,38 @@ if payload.get("dismissed_version") == latest:
     raise SystemExit(0)
 payload["dismissed_version"] = latest
 path.write_text(json.dumps(payload, separators=(",", ":")) + "\n")
+PY
+}
+
+refresh_lane_validity_summary() {
+  [[ -n "$LANE_VALIDITY_SUMMARY_JSON" ]] && return 0
+  [[ -f "$LANE_VALIDITY_SCRIPT" ]] || return 1
+  command -v python3 >/dev/null 2>&1 || return 1
+  LANE_VALIDITY_SUMMARY_JSON="$(python3 "$LANE_VALIDITY_SCRIPT" summary --root "$ROOT" --roles "$(IFS=,; echo "${ROLES[*]}")" --proof-max-age "$LANE_VALIDITY_PROOF_MAX_AGE_SECONDS" 2>/dev/null || true)"
+  [[ -n "$LANE_VALIDITY_SUMMARY_JSON" ]]
+}
+
+role_canonical_recovery_reason() {
+  local role="$1"
+  refresh_lane_validity_summary || return 0
+  LANE_VALIDITY_SUMMARY_JSON="$LANE_VALIDITY_SUMMARY_JSON" python3 - "$role" <<'PY'
+import json, os, sys
+
+role = sys.argv[1].strip().lower()
+try:
+    payload = json.loads(os.environ.get("LANE_VALIDITY_SUMMARY_JSON", "") or "{}")
+except Exception:
+    raise SystemExit(0)
+roles = payload.get("roles", {}) if isinstance(payload, dict) else {}
+row = roles.get(role, {}) if isinstance(roles, dict) else {}
+if not isinstance(row, dict) or not row.get("needs_recovery"):
+    raise SystemExit(0)
+reason = str(row.get("reason", "canonical_invalid")).strip() or "canonical_invalid"
+task_ids = row.get("actionable_task_ids", [])
+task_ids = ",".join(str(item).strip() for item in task_ids[:3] if str(item).strip()) or "none"
+batch_ids = payload.get("active_batches", []) if isinstance(payload, dict) else []
+batch = str(batch_ids[0]).strip() if batch_ids else "none"
+print(f"{reason} batch={batch} tasks={task_ids}")
 PY
 }
 
@@ -371,6 +514,8 @@ if ! load_roles_from_topology; then
   ROLES=("planner" "dev" "admin")
 fi
 normalize_role_list
+declare -A recovery_reasons=()
+declare -A mapped_sessions=()
 
 down_roles=()
 for role in "${ROLES[@]}"; do
@@ -380,12 +525,28 @@ for role in "${ROLES[@]}"; do
     printf '%s [WARN] no session mapping for role=%s; skip\n' "$(ts)" "$role" >> "$LOG_FILE"
     continue
   fi
+  mapped_sessions["$session"]=1
   if ! session_ready "$session"; then
     down_roles+=("$role")
+    recovery_reasons["$role"]="$(session_invalid_reason "$session" || true)"
+    [[ -n "${recovery_reasons[$role]:-}" ]] || recovery_reasons["$role"]="session_not_ready"
+    continue
+  fi
+  canonical_reason="$(role_canonical_recovery_reason "$role" || true)"
+  if [[ -n "$canonical_reason" ]]; then
+    down_roles+=("$role")
+    recovery_reasons["$role"]="canonical_${canonical_reason}"
   fi
 done
 
+auxiliary_quarantined="$(quarantine_invalid_unmapped_sessions mapped_sessions)"
+
 if [[ ${#down_roles[@]} -eq 0 ]]; then
+  if [[ "${auxiliary_quarantined:-0}" =~ ^[0-9]+$ ]] && [[ "${auxiliary_quarantined:-0}" -gt 0 ]]; then
+    printf '%s [OK] no core recovery needed; quarantined invalid auxiliary sessions=%s\n' "$(ts)" "$auxiliary_quarantined" >> "$LOG_FILE"
+    exec 9>&- 2>/dev/null || true
+    exit 0
+  fi
   printf '%s [OK] no recovery needed; all mapped roles already UP\n' "$(ts)" >> "$LOG_FILE"
   exec 9>&- 2>/dev/null || true
   exit 0
@@ -399,7 +560,7 @@ for role in "${down_roles[@]}"; do
     printf '%s [WARN] no session mapping for role=%s; skip restart\n' "$(ts)" "$role" >> "$LOG_FILE"
     continue
   fi
-  printf '%s [ACTION] restart role=%s session=%s\n' "$(ts)" "$role" "$session" >> "$LOG_FILE"
+  printf '%s [ACTION] restart role=%s session=%s reason=%s\n' "$(ts)" "$role" "$session" "${recovery_reasons[$role]:-session_not_ready}" >> "$LOG_FILE"
   start_or_restart_session "$session"
 done
 

@@ -67,6 +67,15 @@ except Exception:  # pragma: no cover
 
 
 router = APIRouter(tags=["copilot"])
+COPILOT_CONTEXT_CACHE_TTL_SECONDS = max(
+    0, int(os.getenv("COPILOT_CONTEXT_CACHE_TTL_SECONDS", "30") or "30")
+)
+COPILOT_CONTEXT_CACHE_MAX_ENTRIES = max(
+    1, int(os.getenv("COPILOT_CONTEXT_CACHE_MAX_ENTRIES", "32") or "32")
+)
+_COPILOT_CONTEXT_CACHE: Dict[str, Dict[str, Any]] = {}
+_COPILOT_CONTEXT_INFLIGHT: Dict[str, asyncio.Task] = {}
+_COPILOT_CONTEXT_INFLIGHT_LOCK = asyncio.Lock()
 COPILOT_START_CACHE_TTL_SECONDS = max(
     0, int(os.getenv("COPILOT_START_CACHE_TTL_SECONDS", "30") or "30")
 )
@@ -462,6 +471,124 @@ def _copilot_start_cache_key(
     )
 
 
+def _copilot_context_cache_key(
+    *,
+    tickers: Optional[List[str]],
+    namespace: Optional[str],
+) -> Optional[str]:
+    if callable(stable_cache_key):
+        return stable_cache_key(
+            "copilot_context_v1",
+            {
+                "tickers": list(tickers or []),
+                "namespace": str(namespace or "").strip(),
+            },
+        )
+    return None
+
+
+def _copilot_context_cached_payload(
+    cache_key: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    if not cache_key:
+        return None
+    if not callable(response_cache_get):
+        cached = _COPILOT_CONTEXT_CACHE.get(cache_key)
+        if not isinstance(cached, dict):
+            return None
+        payload = cached.get("payload")
+        stored_at = float(cached.get("stored_at") or 0.0)
+        age_seconds = max(0.0, _cache_now_epoch() - stored_at) if stored_at else 0.0
+        if COPILOT_CONTEXT_CACHE_TTL_SECONDS > 0 and age_seconds > COPILOT_CONTEXT_CACHE_TTL_SECONDS:
+            _COPILOT_CONTEXT_CACHE.pop(cache_key, None)
+            return None
+        if not isinstance(payload, dict):
+            return None
+        response = dict(payload)
+        response["cache"] = {
+            "hit": True,
+            "age_seconds": age_seconds,
+            "ttl_seconds": COPILOT_CONTEXT_CACHE_TTL_SECONDS,
+        }
+        source = response.get("source") if isinstance(response.get("source"), list) else []
+        response["source"] = list(source) if source else ["copilot_context_route"]
+        if "copilot_context_cache_hit" not in response["source"]:
+            response["source"].append("copilot_context_cache_hit")
+        return response
+    return response_cache_get(
+        _COPILOT_CONTEXT_CACHE,
+        cache_key,
+        ttl_seconds=COPILOT_CONTEXT_CACHE_TTL_SECONDS,
+        hit_source_tag="copilot_context_cache_hit",
+        default_source="copilot_context_route",
+    )
+
+
+def _copilot_context_store_payload(
+    cache_key: Optional[str],
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    response = dict(payload)
+    cache_meta = response.get("cache") if isinstance(response.get("cache"), dict) else {}
+    cache_meta.update({"hit": False, "age_seconds": 0.0, "ttl_seconds": COPILOT_CONTEXT_CACHE_TTL_SECONDS})
+    response["cache"] = cache_meta
+    if callable(append_source_tag):
+        append_source_tag(response, "copilot_context_route", default_source="copilot_context_route")
+    elif not isinstance(response.get("source"), list):
+        response["source"] = ["copilot_context_route"]
+    if cache_key and callable(response_cache_set):
+        response_cache_set(
+            _COPILOT_CONTEXT_CACHE,
+            cache_key,
+            response,
+            max_entries=COPILOT_CONTEXT_CACHE_MAX_ENTRIES,
+        )
+    elif cache_key:
+        cached_payload = dict(response)
+        _COPILOT_CONTEXT_CACHE[cache_key] = {
+            "payload": cached_payload,
+            "stored_at": _cache_now_epoch(),
+        }
+        while len(_COPILOT_CONTEXT_CACHE) > COPILOT_CONTEXT_CACHE_MAX_ENTRIES:
+            oldest_key = next(iter(_COPILOT_CONTEXT_CACHE))
+            if oldest_key == cache_key and len(_COPILOT_CONTEXT_CACHE) == 1:
+                break
+            _COPILOT_CONTEXT_CACHE.pop(oldest_key, None)
+    return response
+
+
+async def _copilot_context_compute_singleflight(
+    cache_key: str,
+    compute_fn,
+):
+    if callable(compute_singleflight):
+        return await compute_singleflight(
+            _COPILOT_CONTEXT_INFLIGHT,
+            _COPILOT_CONTEXT_INFLIGHT_LOCK,
+            cache_key,
+            compute_fn,
+        )
+
+    async with _COPILOT_CONTEXT_INFLIGHT_LOCK:
+        inflight_task = _COPILOT_CONTEXT_INFLIGHT.get(cache_key)
+        if inflight_task is None:
+            inflight_task = asyncio.create_task(compute_fn())
+            _COPILOT_CONTEXT_INFLIGHT[cache_key] = inflight_task
+            created = True
+        else:
+            created = False
+
+    try:
+        payload = await inflight_task
+        return payload, created
+    finally:
+        if created:
+            async with _COPILOT_CONTEXT_INFLIGHT_LOCK:
+                current_task = _COPILOT_CONTEXT_INFLIGHT.get(cache_key)
+                if current_task is inflight_task:
+                    _COPILOT_CONTEXT_INFLIGHT.pop(cache_key, None)
+
+
 def _copilot_start_cached_payload(
     cache_key: Optional[str],
 ) -> Optional[Dict[str, Any]]:
@@ -802,56 +929,79 @@ async def copilot_history(limit: int = 20):
 async def copilot_context(
     tickers: Optional[List[str]] = Query(None, description="Starter scope tickers"),
     namespace: Optional[str] = None,
+    debug: bool = Query(False, description="Bypass route cache and return fresh payload"),
 ):
     scope = _normalize_scope(tickers)
+    normalized_tickers = list((scope or {}).get("tickers") or [])
+    cache_key = _copilot_context_cache_key(
+        tickers=normalized_tickers,
+        namespace=namespace,
+    )
 
-    try:
-        payload = await copilot_service.build_context_payload(
-            context_service_cls=ContextService,
-            scope=scope,
-        )
-        if isinstance(payload, dict):
-            entry_points = payload.get("entry_points")
-            start_payload = payload.get("copilot_start")
-            if isinstance(start_payload, dict) or isinstance(entry_points, list):
-                payload = dict(payload)
-            if isinstance(entry_points, list):
-                payload["entry_points"] = _rewrite_namespace_entry_points(
-                    entry_points,
-                    namespace,
-                )
-            if isinstance(start_payload, dict):
-                payload["copilot_start"] = _rewrite_namespace_targets(start_payload, namespace)
-        if isinstance(payload, dict) and payload.get("regime") == "fallback":
-            payload.setdefault("note", "Market context service temporarily unavailable.")
-        return {"ok": True, "data": payload}
-    except Exception:
-        daily_brief = copilot_service._load_daily_brief_payload()
-        entry_points = copilot_service._build_copilot_entry_points(scope, daily_brief)
-        build_start_payload = getattr(
-            copilot_service,
-            "_build_copilot_start_payload",
-            None,
-        ) or getattr(copilot_service, "_legacy_copilot_start_payload", None)
+    if not debug:
+        cached_payload = _copilot_context_cached_payload(cache_key)
+        if isinstance(cached_payload, dict):
+            return {"ok": True, "data": cached_payload}
 
-        fallback: Dict[str, Any] = {
-            "note": "Market context service temporarily unavailable.",
-            "daily_brief": daily_brief,
-            "entry_points": _rewrite_namespace_entry_points(entry_points, namespace),
-        }
-        if isinstance(scope, dict) and scope.get("tickers"):
-            fallback["scope_tickers"] = list(scope.get("tickers") or [])
-        if callable(build_start_payload):
-            fallback["copilot_start"] = build_start_payload(
-                daily_brief=daily_brief,
-                entry_points=entry_points,
+    async def _compute_payload() -> Dict[str, Any]:
+        try:
+            payload = await copilot_service.build_context_payload(
+                context_service_cls=ContextService,
                 scope=scope,
             )
-            fallback["copilot_start"] = _rewrite_namespace_targets(
-                fallback["copilot_start"],
-                namespace,
-            )
-        return {"ok": True, "data": fallback}
+            if isinstance(payload, dict):
+                entry_points = payload.get("entry_points")
+                start_payload = payload.get("copilot_start")
+                if isinstance(start_payload, dict) or isinstance(entry_points, list):
+                    payload = dict(payload)
+                if isinstance(entry_points, list):
+                    payload["entry_points"] = _rewrite_namespace_entry_points(
+                        entry_points,
+                        namespace,
+                    )
+                if isinstance(start_payload, dict):
+                    payload["copilot_start"] = _rewrite_namespace_targets(start_payload, namespace)
+            if isinstance(payload, dict) and payload.get("regime") == "fallback":
+                payload.setdefault("note", "Market context service temporarily unavailable.")
+            return payload if isinstance(payload, dict) else {}
+        except Exception:
+            daily_brief = copilot_service._load_daily_brief_payload()
+            entry_points = copilot_service._build_copilot_entry_points(scope, daily_brief)
+            build_start_payload = getattr(
+                copilot_service,
+                "_build_copilot_start_payload",
+                None,
+            ) or getattr(copilot_service, "_legacy_copilot_start_payload", None)
+
+            fallback: Dict[str, Any] = {
+                "note": "Market context service temporarily unavailable.",
+                "daily_brief": daily_brief,
+                "entry_points": _rewrite_namespace_entry_points(entry_points, namespace),
+            }
+            if isinstance(scope, dict) and scope.get("tickers"):
+                fallback["scope_tickers"] = list(scope.get("tickers") or [])
+            if callable(build_start_payload):
+                fallback["copilot_start"] = build_start_payload(
+                    daily_brief=daily_brief,
+                    entry_points=entry_points,
+                    scope=scope,
+                )
+                fallback["copilot_start"] = _rewrite_namespace_targets(
+                    fallback["copilot_start"],
+                    namespace,
+                )
+            return fallback
+
+    if cache_key:
+        payload, created = await _copilot_context_compute_singleflight(cache_key, _compute_payload)
+        if created:
+            payload = _copilot_context_store_payload(cache_key, payload)
+        else:
+            payload = _copilot_context_cached_payload(cache_key) or _copilot_context_store_payload(cache_key, payload)
+        return {"ok": True, "data": payload}
+
+    payload = await _compute_payload()
+    return {"ok": True, "data": _copilot_context_store_payload(cache_key, payload)}
 
 
 @router.get("/copilot/start")

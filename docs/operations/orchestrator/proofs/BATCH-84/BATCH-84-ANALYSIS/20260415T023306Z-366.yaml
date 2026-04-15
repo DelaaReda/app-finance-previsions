@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260415T023306Z-366"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-04-15T02:33:06Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(no code change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T02:33:06Z"
+      ended_at_utc: "2026-04-15T02:33:06Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no code change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner-batch-84-analysis-1776220278-19637"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=retry churn BATCH-84-ADMIN-01 start_banner_only empeche la livraison visible | fix_applied=analyse finalisee avec prochain delta recentre sur takeover admin explicite | verify=before=analyse ouverte sans decision canonique finale; after=analyse fermee avec next admin explicite; test=ROLE_CONTEXT ready=0 in_progress=1 waiting_dep=1 | architecture_check=planner-only orchestration maintained; no frontend theme change; runtime proof attached | vision_alignment=batch=BATCH-84; target=copilot financier livrable; impact=deverrouiller takeover admin sans toucher apps/web"

@@ -16,6 +16,8 @@ source "$RUNTIME_HOST_GUARD"
 fc_runtime_assert_vm_or_exit "planner_companion_tick"
 
 ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
+export PYTHONPATH="${ROOT}/platform/automation${PYTHONPATH:+:$PYTHONPATH}"
+cd "$ROOT"
 STATE_DIR="${ROOT}/logs-codex-runs/orchestrator-state"
 STATE_FILE="${STATE_DIR}/planner-companion-state.json"
 BOARD_RUNTIME_HELPER="${ROOT}/platform/automation/runtime/planner/planner_board_runtime.py"

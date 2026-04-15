@@ -58,19 +58,33 @@ ensure_tmux_session() {
   local target="${session}:0.0"
   local current_path=""
   local tail=""
+  local pid=""
+  local lane_recovery_needed=0
   if ! command -v tmux >/dev/null 2>&1; then
     return 0
   fi
   if tmux has-session -t "$session" 2>/dev/null; then
     current_path="$(tmux display-message -p -t "$target" "#{pane_current_path}" 2>/dev/null || true)"
+    pid="$(tmux display-message -p -t "$target" "#{pane_pid}" 2>/dev/null || true)"
     tail="$(tmux capture-pane -p -t "$target" -S -20 2>/dev/null || true)"
-    if [[ "$current_path" != *"(deleted)"* ]] \
-      && fc_workspace_samefile "$current_path" "$ROOT" \
+    if ! fc_workspace_runtime_path_invalid "$current_path" "$ROOT" \
+      && ! fc_pid_workspace_invalid "$pid" "$ROOT" \
       && [[ "$tail" != *"Skip until next version"* ]] \
       && [[ "$tail" != *"Press enter to continue"* ]]; then
       return 0
     fi
+    case "$session" in
+      codex_*_cron|qwen_*_cron)
+        lane_recovery_needed=1
+        ;;
+    esac
     tmux kill-session -t "$session" >/dev/null 2>&1 || true
+  fi
+  if [[ "$lane_recovery_needed" -eq 1 ]]; then
+    local recovery_script="$ROOT/platform/automation/auto_recover_tmux_roles.sh"
+    if [[ -x "$recovery_script" || -f "$recovery_script" ]]; then
+      bash "$recovery_script" >/dev/null 2>&1 || true
+    fi
   fi
   return 0
 }

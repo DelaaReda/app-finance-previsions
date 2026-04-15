@@ -285,7 +285,7 @@ def _http_ok(url: str, timeout_s: float = 2.0) -> bool:
 
 def _admin_runtime_probe_now() -> tuple[bool, bool]:
     backend_ok = _http_ok("http://127.0.0.1:8050/api/health", timeout_s=2.0)
-    monitor_ok = _http_ok("http://127.0.0.1:7779/api/status", timeout_s=2.0)
+    monitor_ok = _http_ok("http://127.0.0.1:7779/api/status?lite=1", timeout_s=2.0)
     return backend_ok, monitor_ok
 
 
@@ -296,15 +296,18 @@ def _planner_runtime_unavailable(ev: dict[str, str], values: dict[str, str]) -> 
         return False
     if force_down == "1":
         return True
-    runtime_markers = {"backend_api_unreachable", "monitor_api_unreachable", "runtime_unavailable"}
+    # Planner autonomy depends on canonical runtime truth and monitor reachability.
+    # Product/backend health remains a separate delivery gate and must not force
+    # planner passive mode on its own.
+    runtime_markers = {"monitor_api_unreachable", "runtime_unavailable"}
     blocker = str(values.get("BLOCKER_ID", "") or "").strip().lower()
     if blocker in runtime_markers:
         return True
     issues = {tok.strip().lower() for tok in str(ev.get("issues", "") or "").split(",") if tok.strip()}
     if issues & runtime_markers:
         return True
-    backend_ok, monitor_ok = _admin_runtime_probe_now()
-    return not (backend_ok and monitor_ok)
+    _, monitor_ok = _admin_runtime_probe_now()
+    return not monitor_ok
 
 
 def _is_normalized_fallback_issue_report(ev: dict[str, str], source: str) -> bool:

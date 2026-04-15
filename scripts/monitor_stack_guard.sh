@@ -19,6 +19,7 @@ LOCK_DIR_FALLBACK=""
 MONITOR_APP_SCRIPT="${FC_MONITOR_APP_SCRIPT:-$ROOT/apps/monitor/server.py}"
 MONITOR_PYTHON_BIN="${FC_MONITOR_PYTHON_BIN:-$ROOT/apps/monitor/.venv/bin/python}"
 MONITOR_LAN_PROXY_SCRIPT="${FC_MONITOR_LAN_PROXY_SCRIPT:-$ROOT/scripts/monitor_lan_proxy.py}"
+BACKEND_HEAL_SCRIPT="${FC_BACKEND_HEAL_SCRIPT:-$ROOT/scripts/restart_api_if_stale.sh}"
 LOCAL_URL="${FC_MONITOR_LOCAL_URL:-http://127.0.0.1:7779/api/monitor/access}"
 LOCAL_DIAG_URL="${FC_MONITOR_LOCAL_DIAG_URL:-http://127.0.0.1:7779/api/runtime-diagnostics}"
 LAN_PROXY_HOST="${FC_MONITOR_LAN_HOST:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
@@ -55,6 +56,29 @@ ts() {
 
 log() {
   printf '%s [monitor-guard] %s\n' "$(ts)" "$*" >> "$GUARD_LOG"
+}
+
+heal_backend_if_needed() {
+  if [[ ! -x "$BACKEND_HEAL_SCRIPT" && ! -f "$BACKEND_HEAL_SCRIPT" ]]; then
+    log "backend_heal skipped: script missing path=$BACKEND_HEAL_SCRIPT"
+    return 0
+  fi
+  set +e
+  local output=""
+  local rc=0
+  output="$( (exec 9>&-; bash "$BACKEND_HEAL_SCRIPT") 2>&1 )"
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    local detail=""
+    detail="$(printf '%s' "$output" | tail -n 1 | tr '\n' ' ' | tr -s ' ' | cut -c1-180)"
+    log "backend_heal ok detail=${detail:-none}"
+    return 0
+  fi
+  local detail=""
+  detail="$(printf '%s' "$output" | tail -n 3 | tr '\n' ' ' | tr -s ' ' | cut -c1-220)"
+  log "backend_heal failed rc=${rc} detail=${detail:-none}"
+  return 1
 }
 
 current_lan_url() {
@@ -555,6 +579,8 @@ restart_tunnel() {
 }
 
 with_lock_or_exit
+
+heal_backend_if_needed || true
 
 initial_local_up=0
 if is_local_up; then

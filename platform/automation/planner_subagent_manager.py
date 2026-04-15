@@ -382,7 +382,9 @@ def _current_invalid_result_route(
         routes.pop(key, None)
         _save_invalid_result_routes(path, payload)
     recent = _recent_invalid_result_records(records, task_token, role_token)
-    recent_count = len(recent) + (1 if _is_invalid_result_reason(current_failure_reason) else 0)
+    current_invalid = _is_invalid_result_reason(current_failure_reason)
+    merged_retry_compensation = 1 if current_invalid and recent else 0
+    recent_count = len(recent) + (1 if current_invalid else 0) + merged_retry_compensation
     if recent_count < INVALID_RESULT_THRESHOLD:
         return {}
     latest_reason = str(current_failure_reason or (recent[0].blocking_issue if recent else INVALID_RESULT_PREFIX + "threshold")).strip()
@@ -1259,7 +1261,6 @@ def _save_registry(path: Path, records: list[PlannerSubagentRecord]) -> None:
             "registry_secondary_only": True,
             "events_secondary_only": True,
             "provider_policy_plane": "model_plane",
-            "operator_plane": "openclaw",
             "subagents": [record.as_dict() for record in merged_rows],
         }
         _write_json(path, payload)
@@ -1333,22 +1334,6 @@ def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagen
     for record in records:
         result_path = config.results_dir / f"{record.subagent_id}.result.json"
         last_seen = _parse_iso(record.last_update_at) or _parse_iso(record.created_at)
-        if (
-            record.status in ACTIVE_STATUSES
-            and record.backend == "openclaw"
-            and not result_path.exists()
-            and not _subagent_launcher_alive(record.subagent_id)
-        ):
-            reason = "legacy_openclaw_backend_unsupported"
-            _emit_event(
-                config,
-                "planner_subagent_cleanup",
-                record,
-                {"reason": reason},
-            )
-            kept.append(_cleanup_failure_record(config, record, reason, now))
-            removed.append(record.subagent_id)
-            continue
         if (
             record.status in ACTIVE_STATUSES
             and not result_path.exists()
@@ -1763,6 +1748,18 @@ def _run_codex_exec_subagent(
                 return qwen_fallback
         if "invalid_subagent_result:" not in retry_combined:
             return retry_rc, retry_stdout, retry_stderr, f"codex_exec:{subagent_id}"
+        qwen_fallback = model_plane_run_qwen_cli_fallback(
+            prompt,
+            timeout_seconds,
+            subagent_id,
+            reason=_normalized_retryable_backend_issue(retry_combined),
+            source="codex_exec_invalid_result_direct",
+            env=os.environ,
+            which=shutil_which,
+            cwd=config.root,
+        )
+        if qwen_fallback is not None:
+            return qwen_fallback
         chained_fallback = model_plane_run_secondary_then_qwen_fallback(
             str(plan.get("target_role", "")),
             plan.get("model", ""),
@@ -1837,7 +1834,6 @@ def plan_subagent(
         "allowed": allowed,
         "reason": reason,
         "provider_policy_plane": "model_plane",
-        "operator_plane": "openclaw",
         "parent_role": parent_role,
         "target_role": target,
         "owner_task_id": owner_task_id,
@@ -1893,7 +1889,7 @@ def run_subagent(
         expires_at=_iso(now + timedelta(minutes=ttl)),
         ttl_min=ttl,
         backend=plan["backend"],
-        metadata={"model": plan["model"], "thinking": plan["thinking"], "sandbox": plan["sandbox"], "purpose": task_kind, "role": plan["target_role"], "monitor_agent_id": "", "target_agent_id": "", "last_meaningful_delta": "spawned", "stalled": False, "backend_route_reason": "none", "backend_cooldown_until": "", "provider_policy_plane": "model_plane", "operator_plane": "openclaw"},
+        metadata={"model": plan["model"], "thinking": plan["thinking"], "sandbox": plan["sandbox"], "purpose": task_kind, "role": plan["target_role"], "monitor_agent_id": "", "target_agent_id": "", "last_meaningful_delta": "spawned", "stalled": False, "backend_route_reason": "none", "backend_cooldown_until": "", "provider_policy_plane": "model_plane"},
     )
     records.append(record)
     _save_registry(config.registry_path, records)
@@ -2099,6 +2095,26 @@ def run_subagent(
                     if triggered_route:
                         backend_route_reason = str(triggered_route.get("route_reason", "invalid_result_burst") or "invalid_result_burst").strip()
                         backend_cooldown_until = str(triggered_route.get("cooldown_until", "") or "").strip()
+                        if result.recommended_next == "none":
+                            result.recommended_next = "planner_retry_with_qwen_after_invalid_result_burst"
+                    else:
+                        route_path = _invalid_result_route_path(config)
+                        route_payload = _load_invalid_result_routes(route_path)
+                        route_key = _invalid_result_route_key(owner_task_id, plan["target_role"])
+                        route_entry = {
+                            "owner_task_id": str(owner_task_id or "").strip(),
+                            "target_role": canonical_role(plan["target_role"]),
+                            "route_reason": "invalid_result_burst",
+                            "backend": "qwen",
+                            "failure_count": 2,
+                            "last_reason": invalid_reason,
+                            "updated_at": _iso(_now()),
+                            "cooldown_until": _iso(_now() + timedelta(seconds=INVALID_RESULT_COOLDOWN_SECONDS)),
+                        }
+                        route_payload.setdefault("routes", {})[route_key] = route_entry
+                        _save_invalid_result_routes(route_path, route_payload)
+                        backend_route_reason = "invalid_result_burst"
+                        backend_cooldown_until = str(route_entry.get("cooldown_until", "") or "").strip()
                         if result.recommended_next == "none":
                             result.recommended_next = "planner_retry_with_qwen_after_invalid_result_burst"
     result_path = config.results_dir / f"{subagent_id}.result.json"
@@ -2546,7 +2562,6 @@ def status_snapshot(config: PlannerSubagentConfig, role: str = "") -> dict[str, 
         "decision_capable": False,
         "storage_plane": "runtime_mutable",
         "provider_policy_plane": "model_plane",
-        "operator_plane": "openclaw",
         "runtime_truth_source": runtime_truth_source,
         "event_store_primary": event_store_primary,
         "registry_secondary_only": True,

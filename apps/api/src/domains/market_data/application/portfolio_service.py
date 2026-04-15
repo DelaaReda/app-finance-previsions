@@ -736,6 +736,15 @@ class PortfolioService:
                 }
             )
 
+        live_metrics_enabled = str(
+            __import__("os").getenv("FC_PORTFOLIO_LIVE_METRICS", "0")
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        if not live_metrics_enabled:
+            logger.info(
+                "Portfolio live metrics disabled for lightweight routes; calculating explicit performance metrics for %s via cache/time-bounded service",
+                portfolio_id,
+            )
+
         # Use performance service for real calculations
         try:
             weights, _, _ = _resolve_portfolio_weights(tickers, portfolio.metadata)
@@ -849,6 +858,43 @@ class PortfolioService:
                 *state_warnings,
             ]
             payload.confidence = 0.3
+            return payload
+
+        live_metrics_enabled = str(
+            __import__("os").getenv("FC_PORTFOLIO_LIVE_METRICS", "0")
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        if not live_metrics_enabled:
+            logger.info(
+                "Portfolio live metrics disabled; returning composition-only risk profile for %s",
+                portfolio_id,
+            )
+            risk_profile, risk_level, why, warnings = _classify_risk_profile(
+                tickers,
+                volatility=None,
+                max_drawdown=None,
+                beta=None,
+                sharpe_ratio=None,
+            )
+            state_why, state_warnings = _portfolio_state_risk_messages(
+                portfolio_state,
+                tickers_count=len(tickers),
+                risk_level=risk_level,
+            )
+            payload.risk_profile = risk_profile
+            payload.risk_level = risk_level
+            payload.risk = {
+                "level": risk_level,
+                "caveat": "Live performance metrics disabled; profile uses composition-only fallback.",
+            }
+            payload.why = (why + state_why)[:4] or [
+                "Live portfolio metrics are disabled, so the profile falls back to holdings composition only."
+            ]
+            payload.warnings = warnings + state_warnings + weight_warnings + [
+                "Live performance metrics disabled; returned a composition-only fallback profile."
+            ]
+            payload.confidence = 0.35
+            payload.generated_at = _now_iso()
+            payload.source.append("portfolio_risk_profile_composition_only")
             return payload
 
         try:

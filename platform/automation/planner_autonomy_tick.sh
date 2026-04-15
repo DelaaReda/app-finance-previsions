@@ -362,6 +362,180 @@ print(f"{planner_in_progress}|{planner_ready}|{planner_ready_task}|{runway_tasks
 PY
 }
 
+novelty_guard_snapshot() {
+  python3 - "$ROOT" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+guard_path = root / "platform" / "automation" / "product_priority_guard.py"
+spec = importlib.util.spec_from_file_location("fc_product_priority_guard", guard_path)
+if spec is None or spec.loader is None:
+    print("1|guard_missing|none|none")
+    raise SystemExit(0)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+payload = module.build_autobatch_novelty_gate(root)
+allow = "1" if bool(payload.get("allow_autobatch", True)) else "0"
+reason = str(payload.get("reason") or "none").strip() or "none"
+scope = str(payload.get("repeated_scope") or "none").strip() or "none"
+recent = ",".join(
+    str(item.get("classification") or "unknown")
+    for item in payload.get("recent_batches", [])
+    if isinstance(item, dict)
+) or "none"
+print(f"{allow}|{reason}|{scope}|{recent}")
+PY
+}
+
+active_capability_dispatch_snapshot() {
+  python3 - "$BOARD_FILE" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.exists():
+    print("none|none|none|0|none|none")
+    raise SystemExit(0)
+try:
+    board = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    print("none|none|none|0|none|none")
+    raise SystemExit(0)
+
+def canon(value: str) -> str:
+    token = str(value or "").strip().replace("-", "_").lower()
+    if token in {"planner", "analyst", "architect", "po", "scrum_master", "vision_architect_tasks_planner", "vision-architect-tasks-planner"}:
+        return "planner"
+    if token in {"dev", "backend_engineer", "frontend_engineer", "data_analyst", "integrator", "tester", "qa"}:
+        return "dev"
+    if token in {"admin", "clawsentinel", "infra"}:
+        return "admin"
+    return token
+
+def task_batch_id(task: dict) -> str:
+    stream_id = str(task.get("stream_id") or task.get("batch_id") or "").strip().upper()
+    if stream_id:
+        return stream_id
+    task_id = str(task.get("id") or task.get("task_id") or "").strip().upper()
+    if task_id.startswith("BATCH-"):
+        parts = task_id.split("-")
+        if len(parts) >= 2:
+            return "-".join(parts[:2])
+    return ""
+
+def priority_rank(token: str) -> int:
+    raw = str(token or "").strip().upper()
+    if raw.startswith("P") and raw[1:].isdigit():
+        return int(raw[1:])
+    return 9
+
+def op_state(task: dict | None) -> str:
+    if not isinstance(task, dict):
+        return ""
+    status = str(task.get("status") or "").strip().upper()
+    state = str(task.get("state") or "").strip().upper()
+    if status in {"READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS", "REVIEW", "BLOCKED", "WAITING_DEP", "DONE", "CLOSED"}:
+        return status
+    return state or status
+
+active_cycle = board.get("active_cycle")
+if not isinstance(active_cycle, dict):
+    active_cycle = {}
+active_ids = {
+    str(item).strip().upper()
+    for item in active_cycle.get("active_batch_ids", [])
+    if str(item).strip()
+}
+if not active_ids:
+    print("none|none|none|0|none|none")
+    raise SystemExit(0)
+
+tasks = board.get("tasks", [])
+index = {}
+if isinstance(tasks, list):
+    for task in tasks:
+        if isinstance(task, dict):
+            task_id = str(task.get("id") or task.get("task_id") or "").strip()
+            if task_id:
+                index[task_id] = task
+
+candidates = []
+role_order = {"admin": 0, "dev": 1}
+for idx, task in enumerate(tasks if isinstance(tasks, list) else []):
+    if not isinstance(task, dict):
+        continue
+    role = canon(task.get("role", ""))
+    if role not in {"admin", "dev"}:
+        continue
+    state = op_state(task)
+    if state not in {"READY", "READY_PLANNER"}:
+        continue
+    batch_id = task_batch_id(task)
+    if batch_id not in active_ids:
+        continue
+    deps = [str(dep).strip() for dep in task.get("depends_on", []) if str(dep).strip()]
+    if any(op_state(index.get(dep, {})) not in {"DONE", "CLOSED"} for dep in deps):
+        continue
+    next_action = str(task.get("next_action") or "").strip()
+    planner_takeover = bool(task.get("planner_takeover_required"))
+    if not (planner_takeover or "retry_capability" in next_action.lower() or state == "READY_PLANNER"):
+        continue
+    candidates.append(
+        (
+            role_order.get(role, 9),
+            priority_rank(task.get("priority", "P9")),
+            idx,
+            str(task.get("id") or task.get("task_id") or "none").strip() or "none",
+            role,
+            state,
+            "1" if planner_takeover else "0",
+            next_action or "none",
+            str(task.get("blocked_reason") or "none").strip() or "none",
+        )
+    )
+
+if not candidates:
+    print("none|none|none|0|none|none")
+    raise SystemExit(0)
+
+candidates.sort()
+_, _, _, task_id, role, state, planner_takeover, next_action, blocked_reason = candidates[0]
+print(f"{role}|{task_id}|{state}|{planner_takeover}|{next_action}|{blocked_reason}")
+PY
+}
+
+parse_kv_field() {
+  local payload="$1"
+  local field="$2"
+  python3 - "$field" <<'PY' <<<"$payload"
+import sys
+
+field = sys.argv[1]
+raw = sys.stdin.read().strip()
+if not raw:
+    print("")
+    raise SystemExit(0)
+tokens = raw.split()
+values = {}
+for token in tokens[1:]:
+    if "=" not in token:
+        continue
+    key, value = token.split("=", 1)
+    values[key] = value
+print(values.get(field, ""))
+PY
+}
+
+dispatch_capability_capture() {
+  local role="$1"
+  local payload
+  payload="$(run_safe_capture "dispatch_${role}_capability" "python3 platform/automation/runtime/planner/planner_runtime_actions.py dispatch-capability --root \"$ROOT\" --source planner_autonomy_tick --backend auto --target-role \"$role\"")"
+  printf '%s' "$payload"
+}
+
 with_lock
 
 snapshot="$(planner_runway_snapshot)"
@@ -444,6 +618,20 @@ fi
 reconcile_payload="$(run_safe_capture "reconcile_state" "python3 platform/automation/runtime/planner/planner_runtime_actions.py reconcile-state --board \"$BOARD_FILE\" --queue \"$QUEUE_FILE\"")"
 reconcile_rc="$(capture_rc "$reconcile_payload")"
 
+novelty_snapshot="$(novelty_guard_snapshot)"
+novelty_allow="${novelty_snapshot%%|*}"
+novelty_rest="${novelty_snapshot#*|}"
+novelty_reason="${novelty_rest%%|*}"
+novelty_rest="${novelty_rest#*|}"
+novelty_scope="${novelty_rest%%|*}"
+novelty_recent_classes="${novelty_rest#*|}"
+
+if [[ "$novelty_allow" != "1" ]]; then
+  write_state 1 "novelty_guard" "deferred" "planner_stagnation_requires_novelty_target" "none" "planner_stagnation_requires_novelty_target" "reason=${novelty_reason};scope=${novelty_scope};recent_classes=${novelty_recent_classes};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+  echo "PLANNER_AUTONOMY status=warn action=novelty_guard outcome=deferred issue=planner_stagnation_requires_novelty_target reason=${novelty_reason} scope=${novelty_scope} recent_classes=${novelty_recent_classes} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+  exit 0
+fi
+
 snapshot="$(planner_runway_snapshot)"
 planner_in_progress="${snapshot%%|*}"
 rest="${snapshot#*|}"
@@ -453,6 +641,35 @@ planner_ready_task="${rest%%|*}"
 rest="${rest#*|}"
 runway_task_count="${rest%%|*}"
 runway_stream_count="${rest##*|}"
+
+capability_dispatch_snapshot="$(active_capability_dispatch_snapshot)"
+capability_ready_role="${capability_dispatch_snapshot%%|*}"
+capability_dispatch_rest="${capability_dispatch_snapshot#*|}"
+capability_ready_task="${capability_dispatch_rest%%|*}"
+capability_dispatch_rest="${capability_dispatch_rest#*|}"
+capability_ready_state="${capability_dispatch_rest%%|*}"
+capability_dispatch_rest="${capability_dispatch_rest#*|}"
+capability_takeover_required="${capability_dispatch_rest%%|*}"
+capability_dispatch_rest="${capability_dispatch_rest#*|}"
+capability_next_action="${capability_dispatch_rest%%|*}"
+capability_blocked_reason="${capability_dispatch_rest#*|}"
+
+if [[ "$planner_in_progress" == "0" && "$planner_ready" == "0" && -n "$capability_ready_role" && "$capability_ready_role" != "none" && -n "$capability_ready_task" && "$capability_ready_task" != "none" ]]; then
+  targeted_dispatch_payload="$(dispatch_capability_capture "$capability_ready_role")"
+  targeted_dispatch_rc="$(capture_rc "$targeted_dispatch_payload")"
+  targeted_dispatch_out="$(capture_body "$targeted_dispatch_payload")"
+  targeted_dispatch_reason="$(parse_kv_field "$targeted_dispatch_out" "reason")"
+  targeted_dispatch_task="$(parse_kv_field "$targeted_dispatch_out" "task_id")"
+  targeted_dispatch_backend="$(parse_kv_field "$targeted_dispatch_out" "backend")"
+  if [[ "$targeted_dispatch_rc" == "0" && "$targeted_dispatch_out" == DISPATCH_OK* ]]; then
+    write_state 1 "dispatch_ready_capability" "resolved" "planner_${capability_ready_role}_dispatch_active" "${targeted_dispatch_task:-$capability_ready_task}" "none" "role=${capability_ready_role};candidate_task=${capability_ready_task};candidate_state=${capability_ready_state};planner_takeover_required=${capability_takeover_required};next_action=${capability_next_action};blocked_reason=${capability_blocked_reason};backend=${targeted_dispatch_backend:-none};dispatch_reason=${targeted_dispatch_reason:-none};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+    echo "PLANNER_AUTONOMY status=ok action=dispatch_ready_capability outcome=resolved role=${capability_ready_role} task_id=${targeted_dispatch_task:-$capability_ready_task} backend=${targeted_dispatch_backend:-none} dispatch_reason=${targeted_dispatch_reason:-none} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+    exit 0
+  fi
+  write_state 1 "dispatch_ready_capability" "deferred" "planner_${capability_ready_role}_dispatch_not_materialized" "${capability_ready_task}" "planner_${capability_ready_role}_dispatch_not_materialized" "role=${capability_ready_role};candidate_state=${capability_ready_state};planner_takeover_required=${capability_takeover_required};next_action=${capability_next_action};blocked_reason=${capability_blocked_reason};dispatch_reason=${targeted_dispatch_reason:-none};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+  echo "PLANNER_AUTONOMY status=warn action=dispatch_ready_capability outcome=deferred issue=planner_${capability_ready_role}_dispatch_not_materialized role=${capability_ready_role} task_id=${capability_ready_task} candidate_state=${capability_ready_state} planner_takeover_required=${capability_takeover_required} dispatch_reason=${targeted_dispatch_reason:-none} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+  exit 0
+fi
 
 if [[ "$planner_ready" =~ ^[0-9]+$ ]] && (( planner_ready > 0 )); then
   claim_payload="$(run_safe_capture "claim_ready" "$(build_claim_cmd "")")"
@@ -540,6 +757,94 @@ active_batch_ids="${active_cycle_snapshot%%|*}"
 active_cycle_id="${active_cycle_snapshot#*|}"
 
 if [[ -n "$active_batch_ids" && "$active_batch_ids" != "none" ]]; then
+  handoff_stale_seconds="${FC_CANONICAL_HANDOFF_STALE_SECONDS:-1800}"
+  stale_handoff_snapshot="$(
+    ACTIVE_BATCH_IDS="$active_batch_ids" BOARD_PATH="$BOARD_FILE" HANDOFF_STALE_SECONDS="$handoff_stale_seconds" python3 - <<'PY'
+import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+def parse_dt(raw: object) -> datetime | None:
+    token = str(raw or "").strip()
+    if not token:
+        return None
+    try:
+        parsed = datetime.fromisoformat(token.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def task_batch_id(task: dict) -> str:
+    stream_id = str(task.get("stream_id") or task.get("batch_id") or "").strip().upper()
+    if stream_id:
+        return stream_id
+    task_id = str(task.get("id") or task.get("task_id") or "").strip().upper()
+    if task_id.startswith("BATCH-"):
+        parts = task_id.split("-")
+        if len(parts) >= 2:
+            return "-".join(parts[:2])
+    return ""
+
+
+active_ids = {token.strip().upper() for token in str(os.environ.get("ACTIVE_BATCH_IDS", "")).split(",") if token.strip()}
+board_path = Path(os.environ["BOARD_PATH"])
+threshold = max(300, int(os.environ.get("HANDOFF_STALE_SECONDS", "1800")))
+try:
+    board = json.loads(board_path.read_text(encoding="utf-8", errors="ignore"))
+except Exception:
+    print("none|none|0|none")
+    raise SystemExit(0)
+
+tasks = board.get("tasks", [])
+if not isinstance(tasks, list):
+    print("none|none|0|none")
+    raise SystemExit(0)
+
+now = datetime.now(timezone.utc)
+stale_candidates: list[tuple[int, str, str, str]] = []
+for task in tasks:
+    if not isinstance(task, dict):
+        continue
+    batch_id = task_batch_id(task)
+    if batch_id not in active_ids:
+        continue
+    role = str(task.get("role") or "").strip().lower()
+    state = str(task.get("state") or "").strip().upper()
+    if role not in {"admin", "dev"} or state != "IN_PROGRESS":
+        continue
+    if any(str(task.get(field) or "").strip() for field in ("artifact", "runtime_artifact", "verify", "summary", "last_meaningful_progress_at")):
+        continue
+    baseline = parse_dt(task.get("started_at")) or parse_dt(task.get("updated_at")) or parse_dt(task.get("last_progress_at"))
+    if baseline is None:
+        continue
+    age_s = max(0, int((now - baseline).total_seconds()))
+    if age_s >= threshold:
+        task_id = str(task.get("id") or task.get("task_id") or "none").strip() or "none"
+        stale_candidates.append((age_s, task_id, role, batch_id))
+
+if not stale_candidates:
+    print("none|none|0|none")
+    raise SystemExit(0)
+
+stale_candidates.sort(reverse=True)
+age_s, task_id, role, batch_id = stale_candidates[0]
+print(f"{task_id}|{role}|{age_s}|{batch_id}")
+PY
+  )"
+  stale_handoff_task="${stale_handoff_snapshot%%|*}"
+  stale_handoff_role="$(printf '%s' "$stale_handoff_snapshot" | cut -d'|' -f2)"
+  stale_handoff_age_s="$(printf '%s' "$stale_handoff_snapshot" | cut -d'|' -f3)"
+  stale_handoff_batch="$(printf '%s' "$stale_handoff_snapshot" | cut -d'|' -f4)"
+  if [[ -n "$stale_handoff_task" && "$stale_handoff_task" != "none" ]]; then
+    write_state 1 "active_cycle_guard" "deferred" "planner_blocked_canonical_handoff" "$stale_handoff_task" "canonical_handoff_stale" "active_cycle=${active_batch_ids};cycle_id=${active_cycle_id};stale_task=${stale_handoff_task};stale_role=${stale_handoff_role};stale_batch=${stale_handoff_batch};stale_age_s=${stale_handoff_age_s};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+    echo "PLANNER_AUTONOMY status=warn action=active_cycle_guard outcome=deferred issue=canonical_handoff_stale active_cycle=${active_batch_ids} cycle_id=${active_cycle_id} task_id=${stale_handoff_task} role=${stale_handoff_role} age_s=${stale_handoff_age_s} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+    exit 0
+  fi
   write_state 1 "autobatch_guard" "deferred" "planner_active_cycle_pinned" "${active_batch_ids}" "planner_active_cycle_pinned" "active_cycle=${active_batch_ids};cycle_id=${active_cycle_id};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN}"
   echo "PLANNER_AUTONOMY status=warn action=autobatch_guard outcome=deferred issue=planner_active_cycle_pinned active_cycle=${active_batch_ids} cycle_id=${active_cycle_id} planner_ready=0 sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
   exit 0

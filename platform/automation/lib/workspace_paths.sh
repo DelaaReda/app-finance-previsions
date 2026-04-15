@@ -43,6 +43,38 @@ fc_workspace_samefile() {
   [[ -n "$left_real" && -n "$right_real" && "$left_real" == "$right_real" ]]
 }
 
+fc_proc_cwd() {
+  local pid="${1:-}"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  readlink "/proc/${pid}/cwd" 2>/dev/null
+}
+
+fc_workspace_runtime_path_invalid() {
+  local candidate="${1:-}"
+  local root="${2:-}"
+  local shared_root="/home/venom/shared/analyse-financiere"
+  [[ -n "$candidate" && -n "$root" ]] || return 0
+  [[ "$candidate" == *"(deleted)"* ]] && return 0
+  case "$candidate" in
+    "$shared_root"|"$shared_root"/*)
+      return 0
+      ;;
+    "$root"|"$root"/*)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+fc_pid_workspace_invalid() {
+  local pid="${1:-}"
+  local root="${2:-}"
+  local cwd=""
+  [[ "$pid" =~ ^[0-9]+$ && -n "$root" ]] || return 0
+  cwd="$(fc_proc_cwd "$pid" 2>/dev/null || true)"
+  fc_workspace_runtime_path_invalid "$cwd" "$root"
+}
+
 fc_workspace_has_layout() {
   local candidate="${1:-}"
   [[ -n "$candidate" ]] || return 1

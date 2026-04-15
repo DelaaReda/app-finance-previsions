@@ -263,17 +263,7 @@ def publication_channels_hint(
 
 
 def dynamic_worker_context(root: Path, role: str, max_chars: int = 240) -> str:
-    script_path = root / "platform" / "automation" / "compat" / "legacy_workers" / "worker_manager.py"
-    if not script_path.exists():
-        return "none"
-    cmd = [sys.executable, str(script_path), "--root", str(root), "prompt-context", "--role", role]
-    try:
-        cp = subprocess.run(cmd, text=True, capture_output=True, check=False, cwd=str(root))
-    except Exception:
-        return "none"
-    if cp.returncode != 0:
-        return "none"
-    return compact_text(cp.stdout, max_chars)
+    return "secondary_compat_only"
 
 
 def planner_subagent_context(root: Path, role: str, max_chars: int = 240) -> str:
@@ -636,7 +626,7 @@ def main() -> int:
     runtime_truth = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24)
     event_store_primary = bool(runtime_truth.get("event_store_primary", False))
     if (not event_store_primary) and len(sys.argv) != 17:
-        agent_message_bus_file = resolve_orchestrator_read_path(root, "agent-message-bus.jsonl")
+        agent_message_bus_file = root / "logs-codex-runs" / "orchestrator-state" / "agent-message-bus.jsonl"
     queue_data = queue_summary(queue_path)
     workboard_path = queue_path.parent / "parallel-workstreams.json"
     reconcile_data = reconcile_summary(queue_path.parent / "state-reconcile-report.json")

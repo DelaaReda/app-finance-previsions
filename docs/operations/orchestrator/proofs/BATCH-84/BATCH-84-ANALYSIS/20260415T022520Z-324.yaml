@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-84-BATCH-84-ANALYSIS-20260415T022520Z-324"
+stream_id: "BATCH-84"
+task_id: "BATCH-84-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-04-15T02:25:20Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_analysis_runtime_close)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T02:25:20Z"
+      ended_at_utc: "2026-04-15T02:25:20Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(runtime_context_existing_artifact_and_bridge_hotfix_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "/home/venom/analyse-financiere/docs/ops/BATCH-84-ANALYSIS_ARCHITECTURE_AUDIT.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "COMPLETE_BATCH_84_ANALYSIS_P1776219660_15726"
+  review_ref: "runner:BATCH-84-ANALYSIS"
+  note: "source=runner | root_cause=Analyse planner restait ouverte malgre BATCH-84-PLAN DONE et le bridge complete_task cassait sur DONE_STATES non defini | fix_applied=Hotfix minimal du bridge runtime puis cloture canonique de BATCH-84-ANALYSIS avec artefact architecture existant | verify=before=BATCH-84-ANALYSIS:IN_PROGRESS et python3 planner_runtime_actions.py complete echouait sur NameError DONE_STATES; after=BATCH-84-ANALYSIS:DONE_REQUESTED; test=parallel_workstream_context role=planner total=197 ready=0 in_progress=1 waiting_dep=1 puis complete relance | architecture_check=architecture_plan_ref=docs/product/PRODUCT_VISION.md; imports_ok=yes; path_target=apps/api/src/domains/*,apps/web/src,apps/api/runtime/,platform/automation/compat/projections/parallel_workstream.py | vision_alignment=batch=BATCH-84; target=personal_finance_copilot_brief_and_memo; impact=fermeture_ANALYSIS_pour_recentrer_le_blocker_sur_ADMIN_01"

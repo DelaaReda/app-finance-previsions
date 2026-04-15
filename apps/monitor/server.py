@@ -63,8 +63,9 @@ from aggregators import (  # type: ignore
 )
 from api import create_activity_router, create_doctor_router  # type: ignore
 
-LITE_ENDPOINT_CACHE_TTL_SECONDS = max(1.0, float(os.environ.get("FC_MONITOR_LITE_CACHE_TTL_SECONDS", "3") or "3"))
+LITE_ENDPOINT_CACHE_TTL_SECONDS = max(1.0, float(os.environ.get("FC_MONITOR_LITE_CACHE_TTL_SECONDS", "15") or "15"))
 _STATUS_LITE_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
+_STATUS_FULL_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
 _RUNTIME_DIAGNOSTICS_LITE_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
 
 
@@ -810,8 +811,12 @@ def _planner_subagents_snapshot() -> dict:
     ):
         return cached_payload
 
+    runtime_truth = build_runtime_truth_snapshot(ROOT, state_limit=12, event_limit=24)
+    event_store_primary = bool(runtime_truth.get("event_store_primary", False))
+    runtime_truth_source = str(runtime_truth.get("runtime_truth_source", "sqlite" if event_store_primary else "fallback"))
+
     latest_snapshot = monitor_latest_snapshot()
-    if isinstance(latest_snapshot, dict):
+    if isinstance(latest_snapshot, dict) and not event_store_primary:
         latest_subagents = latest_snapshot.get("planner_subagents", {})
         latest_ts = _parse_ts_epoch(str(latest_snapshot.get("ts_utc", "")))
         if (
@@ -824,9 +829,6 @@ def _planner_subagents_snapshot() -> dict:
             _PLANNER_SUBAGENTS_CACHE["ts"] = now
             return latest_subagents
 
-    runtime_truth = build_runtime_truth_snapshot(ROOT, state_limit=12, event_limit=24)
-    event_store_primary = bool(runtime_truth.get("event_store_primary", False))
-    runtime_truth_source = str(runtime_truth.get("runtime_truth_source", "sqlite" if event_store_primary else "fallback"))
     try:
         snapshot = build_stable_planner_dispatch_snapshot(ROOT, recent_limit=12)
     except Exception as dispatch_exc:
@@ -2790,6 +2792,120 @@ def admin_autonomy_snapshot(now_ts: float | None = None) -> dict:
     return payload
 
 
+def _active_cycle_batch_ids(queue_payload: dict | None, workboard_payload: dict | None) -> tuple[str, ...]:
+    ordered: list[str] = []
+    for payload in (queue_payload, workboard_payload):
+        if not isinstance(payload, dict):
+            continue
+        active_cycle = payload.get("active_cycle", {})
+        if not isinstance(active_cycle, dict):
+            continue
+        batch_ids = active_cycle.get("active_batch_ids", [])
+        if not isinstance(batch_ids, list):
+            continue
+        for raw in batch_ids:
+            token = str(raw or "").strip()
+            if token and token not in ordered:
+                ordered.append(token)
+    return tuple(ordered)
+
+
+def _canonical_capability_autonomy(
+    queue_payload: dict | None,
+    workboard_payload: dict | None,
+    *,
+    role: str,
+    now_ts: float | None = None,
+) -> dict:
+    active_batches = set(_active_cycle_batch_ids(queue_payload, workboard_payload))
+    tasks = workboard_payload.get("tasks", []) if isinstance(workboard_payload, dict) else []
+    if not isinstance(tasks, list):
+        tasks = []
+    rank = {"IN_PROGRESS": 4, "REVIEW": 3, "READY_PLANNER": 2, "READY": 2, "READY_DEV": 2, "BLOCKED": 1}
+    best: dict[str, Any] | None = None
+    now_epoch = float(now_ts if now_ts is not None else time.time())
+    role_token = canonical_role(role)
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        task_role = canonical_role(task.get("owner") or task.get("assignee") or task.get("role"))
+        if task_role != role_token and canonical_role(task.get("role")) != role_token:
+            continue
+        task_id = str(task.get("id", "") or task.get("task_id", "")).strip()
+        if not task_id:
+            continue
+        batch_id = str(task.get("stream_id") or _batch_prefix(task_id)).strip()
+        if active_batches and batch_id not in active_batches:
+            continue
+        state = _task_monitor_operational_state(task)
+        if state not in {"READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS", "REVIEW", "BLOCKED"}:
+            continue
+        planner_takeover_required = bool(task.get("planner_takeover_required"))
+        next_action = str(task.get("next_action", "") or "").strip()
+        blocked_reason = str(task.get("blocked_reason", "") or "").strip() or "NONE"
+        if role_token == "admin" and not (
+            planner_takeover_required
+            or state in {"READY", "READY_PLANNER", "IN_PROGRESS", "REVIEW"}
+            or "retry_capability" in next_action.lower()
+        ):
+            continue
+        updated_at = str(task.get("updated_at", "") or "").strip()
+        age_min = -1
+        ts_epoch = _parse_ts_epoch(updated_at)
+        if ts_epoch is not None:
+            age_min = max(0, int((now_epoch - ts_epoch) // 60))
+        candidate = {
+            "active": True,
+            "trigger": "planner_owned_capability",
+            "target_role": role_token,
+            "target_task": task_id,
+            "reason_blocker": blocked_reason,
+            "last_action": "planner_owned_dispatch",
+            "last_outcome": "running" if state == "IN_PROGRESS" else "ready_for_dispatch",
+            "last_action_seq": "",
+            "since_ts": updated_at,
+            "age_min": age_min,
+            "streak_by_role": {"planner": 0, "dev": 0},
+            "needs_human_review_by_role": {"planner": False, "dev": False},
+            "source": "canonical_active_cycle",
+            "batch_id": batch_id,
+            "state": state,
+            "next_action": next_action,
+            "planner_takeover_required": planner_takeover_required,
+            "projection_secondary_only": False,
+        }
+        if best is None or rank.get(state, 0) > rank.get(str(best.get("state", "")).upper(), 0):
+            best = candidate
+    return best or {}
+
+
+def _task_monitor_operational_state(task: dict | None) -> str:
+    if not isinstance(task, dict):
+        return ""
+    status = str(task.get("status", "") or "").strip().upper()
+    state = str(task.get("state", "") or "").strip().upper()
+    if status in {"READY", "READY_PLANNER", "READY_DEV", "BLOCKED", "WAITING_DEP", "DONE", "CLOSED"}:
+        return status
+    return state or status
+
+
+def _doctor_from_snapshot_fallback(snapshot: dict | None, doctor_payload: dict | None) -> dict:
+    doctor = doctor_payload if isinstance(doctor_payload, dict) else {}
+    if str(doctor.get("status", "unknown")).strip().lower() != "unknown":
+        return doctor
+    cached = snapshot.get("doctor", {}) if isinstance(snapshot, dict) else {}
+    if not isinstance(cached, dict):
+        return doctor
+    if str(cached.get("status", "unknown")).strip().lower() == "unknown":
+        return doctor
+    merged = dict(cached)
+    meta = merged.get("meta", {}) if isinstance(merged.get("meta"), dict) else {}
+    meta = dict(meta)
+    meta.setdefault("note", "doctor_cached_from_monitor_snapshot")
+    merged["meta"] = meta
+    return merged
+
+
 def admin_dispatch_snapshot(now_ts: float | None = None) -> dict:
     now_epoch = float(now_ts if now_ts is not None else time.time())
     payload = {
@@ -3403,6 +3519,10 @@ def status(lite: int = 0):
         cached_payload = _lite_cache_get(_STATUS_LITE_CACHE)
         if cached_payload is not None:
             return cached_payload
+    else:
+        cached_payload = _lite_cache_get(_STATUS_FULL_CACHE)
+        if cached_payload is not None:
+            return cached_payload
     runtime_state = _runtime_state_snapshot()
     latest_snapshot = monitor_latest_snapshot()
     latest_roles_raw = latest_snapshot.get("roles", {})
@@ -3444,8 +3564,8 @@ def status(lite: int = 0):
     bs=defaultdict(int)
     for t in tasks: bs[t.get("state","?")] += 1
     done=bs["DONE"]+bs["CLOSED"]+bs["PASS"]
-    ready_t=[{"id":t["id"],"role":canonical_role(t.get("assignee") or t.get("role","?")),"title":t.get("title","")[:60]} for t in tasks if str(t.get("state","")).upper() in {"READY","READY_PLANNER","READY_DEV"}]
-    ip_t=[{"id":t["id"],"role":canonical_role(t.get("assignee") or t.get("role","?")),"title":t.get("title","")[:60]} for t in tasks if t.get("state")=="IN_PROGRESS"]
+    ready_t=[{"id":t["id"],"role":canonical_role(t.get("assignee") or t.get("role","?")),"title":t.get("title","")[:60]} for t in tasks if _task_monitor_operational_state(t) in {"READY","READY_PLANNER","READY_DEV"}]
+    ip_t=[{"id":t["id"],"role":canonical_role(t.get("assignee") or t.get("role","?")),"title":t.get("title","")[:60]} for t in tasks if _task_monitor_operational_state(t)=="IN_PROGRESS"]
     queue_state_counts = _state_counts(queue_items, key="state")
     workboard_state_counts = _state_counts(tasks, key="state")
     mismatches = _queue_workboard_mismatches(queue_items, tasks)
@@ -3469,10 +3589,16 @@ def status(lite: int = 0):
         admin_dispatch = admin_dispatch_snapshot()
         agent_messages = _message_bus_snapshot(now_iso)
         po_scrum_master = _po_scrum_master_snapshot(agent_messages)
+    canonical_admin_autonomy = _canonical_capability_autonomy(pq, wb, role="admin", now_ts=now.timestamp())
+    if canonical_admin_autonomy:
+        merged_admin_autonomy = dict(admin_autonomy) if isinstance(admin_autonomy, dict) else {}
+        merged_admin_autonomy.update(canonical_admin_autonomy)
+        admin_autonomy = merged_admin_autonomy
     try:
         doctor = doctor_snapshot(force_refresh=False, allow_refresh=not lite_mode)
     except TypeError:
         doctor = doctor_snapshot(force_refresh=False)
+    doctor = _doctor_from_snapshot_fallback(latest_snapshot, doctor)
     planner_contract_health = {} if lite_mode else parse_contract_fields("planner")
     planner_evidence_quality_score = _int_or_default(planner_contract_health.get("quality_score"), 0)
     alerts_overview = {} if lite_mode else _alerts_overview_snapshot(ROOT)
@@ -3527,7 +3653,7 @@ def status(lite: int = 0):
         role_token = canonical_role(t.get("assignee") or t.get("role", ""))
         if role_token != "dev":
             continue
-        state_up = str(t.get("state", "")).upper()
+        state_up = _task_monitor_operational_state(t)
         if state_up not in {"READY", "READY_DEV", "IN_PROGRESS", "REVIEW"}:
             continue
         task_id = str(t.get("id", "")).strip()
@@ -3542,7 +3668,7 @@ def status(lite: int = 0):
     dev_claimable_ready_count_runtime = len(dev_claimable_ready_task_ids_runtime)
     dev_ready_runtime = dev_ready_count_runtime > 0
     dev_in_progress_runtime = any(
-        str(t.get("state", "")).upper() == "IN_PROGRESS"
+        _task_monitor_operational_state(t) == "IN_PROGRESS"
         and canonical_role(t.get("assignee") or t.get("role", "")) == "dev"
         for t in tasks
         if isinstance(t, dict)
@@ -3766,7 +3892,12 @@ def status(lite: int = 0):
             else:
                 providers_detail = {}
             providers_status = str(providers_check.get("status", "")).strip().lower() if isinstance(providers_check, dict) else ""
-            api_now_ok = _probe_http_ok("http://127.0.0.1:8050/api/health") or bool(providers_detail.get("api_health_ok", False)) or providers_status == "ok"
+            api_now_ok = (
+                _probe_http_ok("http://127.0.0.1:8050/api/status")
+                or _probe_http_ok("http://127.0.0.1:8050/api/health")
+                or bool(providers_detail.get("api_health_ok", False))
+                or providers_status == "ok"
+            )
             # Avoid self-probing /api/status while serving /api/status.
             mon_now_ok = bool(providers_detail.get("monitor_status_ok", False)) or providers_status == "ok"
             blocker_token = str(blocker_value or "").upper()
@@ -3802,19 +3933,19 @@ def status(lite: int = 0):
                 t for t in tasks
                 if isinstance(t, dict)
                 and canonical_role(t.get("assignee") or t.get("role", "")) == role
-                and str(t.get("state", "")).strip().upper() not in {"DONE", "CLOSED"}
+                and _task_monitor_operational_state(t) not in {"DONE", "CLOSED"}
             ]
             active_role_tasks = [
                 t for t in role_tasks
-                if str(t.get("state", "")).strip().upper() in {"IN_PROGRESS", "REVIEW"}
+                if _task_monitor_operational_state(t) in {"IN_PROGRESS", "REVIEW"}
             ]
             ready_role_tasks = [
                 t for t in role_tasks
-                if str(t.get("state", "")).strip().upper() in {"READY", "READY_DEV", "READY_PLANNER"}
+                if _task_monitor_operational_state(t) in {"READY", "READY_DEV", "READY_PLANNER"}
             ]
             waiting_dep_role_tasks = [
                 t for t in role_tasks
-                if str(t.get("state", "")).strip().upper() == "WAITING_DEP"
+                if _task_monitor_operational_state(t) == "WAITING_DEP"
             ]
             if active_role_tasks:
                 current = sorted(
@@ -4053,7 +4184,7 @@ def status(lite: int = 0):
             queue_in_progress = _int_or_default(hs_queue.get("in_progress"), queue_in_progress)
 
         try:
-            doctor = doctor_snapshot(force_refresh=False, allow_refresh=not lite_mode)
+            doctor = doctor_snapshot(force_refresh=False, allow_refresh=False)
         except TypeError:
             doctor = doctor_snapshot(force_refresh=False)
 
@@ -4066,8 +4197,10 @@ def status(lite: int = 0):
             "monitor_access": _monitor_access_snapshot(ROOT),
             "runtime_state": runtime_state,
             "execution_mode": effective_execution_mode,
+            "scheduler_roles": list(CORE_ROLES),
+            "capability_roles": [role for role in agent_roles if role not in CORE_ROLES],
             "core_roles": list(CORE_ROLES),
-            "roles": list(CORE_ROLES),
+            "roles": list(agent_roles),
             "done": workboard_done,
             "ready": workboard_ready,
             "batches": {
@@ -4140,6 +4273,10 @@ def status(lite: int = 0):
             lite_payload = build_status_snapshot(ROOT, lambda: lite_payload, include_layers=False)
         except Exception:
             pass
+        primary_status = str(lite_payload.get("primary_status", "") or "").strip().lower()
+        doctor_overall_status = str(lite_payload.get("doctor_overall_status", "") or "").strip().lower()
+        if primary_status == "ok" and doctor_overall_status in {"", "ok"}:
+            lite_payload["health"] = "OK"
         return _lite_cache_set(_STATUS_LITE_CACHE, lite_payload)
 
     queue_ready_planner = _int_or_default(queue_state_counts.get("READY_PLANNER"), 0)
@@ -4254,41 +4391,19 @@ def status(lite: int = 0):
         "orchestrator_source": orchestrator_source,
         "dev_force_claim_events_60m": dev_force_claim_events_60m,
     }
-    activity_limit = min(ACTIVITY_FEED_MAX_EVENTS, 80 if lite_mode else 220)
+    activity_limit = min(ACTIVITY_FEED_MAX_EVENTS, 80 if lite_mode else 120)
     activity_bundle = _activity_bundle(ACTIVITY_FEED_WINDOW_HOURS, activity_limit)
     activity_summary = _activity_summary_from_bundle(activity_bundle)
     system_summary = activity_bundle.get("system_summary", {}) if isinstance(activity_bundle, dict) else {}
     if not isinstance(system_summary, dict):
         system_summary = {}
-    if lite_mode:
-        dynamic_workers = latest_snapshot.get("dynamic_workers", {}) if isinstance(latest_snapshot, dict) else {}
-        if not isinstance(dynamic_workers, dict):
-            dynamic_workers = {}
-        agent_activity = latest_snapshot.get("agent_activity", {}) if isinstance(latest_snapshot, dict) else {}
-        if not isinstance(agent_activity, dict):
-            agent_activity = {}
-        if not isinstance(agent_activity.get("roles"), dict):
-            agent_activity = _agent_activity_snapshot(
-                roles=tuple(agent_roles),
-                agents=agents,
-                tasks=tasks,
-                planner_subagents=planner_subagents,
-                dynamic_workers=dynamic_workers,
-            )
-        planner_dispatch = latest_snapshot.get("planner_dispatch", {}) if isinstance(latest_snapshot, dict) else {}
-        if not isinstance(planner_dispatch, dict):
-            planner_dispatch = {}
-        delivery_integrity = latest_snapshot.get("delivery_integrity", {}) if isinstance(latest_snapshot, dict) else {}
-        if not isinstance(delivery_integrity, dict):
-            delivery_integrity = {}
-        delivery_control = latest_snapshot.get("delivery_control", {}) if isinstance(latest_snapshot, dict) else {}
-        if not isinstance(delivery_control, dict):
-            delivery_control = {}
-        product_value_metrics = latest_snapshot.get("product_value_metrics", {}) if isinstance(latest_snapshot, dict) else {}
-        if not isinstance(product_value_metrics, dict):
-            product_value_metrics = {}
-    else:
+    dynamic_workers = latest_snapshot.get("dynamic_workers", {}) if isinstance(latest_snapshot, dict) else {}
+    if not isinstance(dynamic_workers, dict) or not dynamic_workers:
         dynamic_workers = _dynamic_workers_snapshot()
+    agent_activity = latest_snapshot.get("agent_activity", {}) if isinstance(latest_snapshot, dict) else {}
+    if not isinstance(agent_activity, dict):
+        agent_activity = {}
+    if not isinstance(agent_activity.get("roles"), dict):
         agent_activity = _agent_activity_snapshot(
             roles=tuple(agent_roles),
             agents=agents,
@@ -4296,6 +4411,8 @@ def status(lite: int = 0):
             planner_subagents=planner_subagents,
             dynamic_workers=dynamic_workers,
         )
+    planner_dispatch = latest_snapshot.get("planner_dispatch", {}) if isinstance(latest_snapshot, dict) else {}
+    if not isinstance(planner_dispatch, dict) or not planner_dispatch:
         planner_dispatch = _planner_dispatch_snapshot(
             runtime_state=runtime_state,
             queue_snapshot={
@@ -4307,8 +4424,14 @@ def status(lite: int = 0):
             planner_subagents=planner_subagents,
             system_summary=system_summary,
         )
+    delivery_integrity = latest_snapshot.get("delivery_integrity", {}) if isinstance(latest_snapshot, dict) else {}
+    if not isinstance(delivery_integrity, dict) or not delivery_integrity:
         delivery_integrity = _delivery_integrity_snapshot()
+    delivery_control = latest_snapshot.get("delivery_control", {}) if isinstance(latest_snapshot, dict) else {}
+    if not isinstance(delivery_control, dict) or not delivery_control:
         delivery_control = _delivery_control_snapshot()
+    product_value_metrics = latest_snapshot.get("product_value_metrics", {}) if isinstance(latest_snapshot, dict) else {}
+    if not isinstance(product_value_metrics, dict) or not product_value_metrics:
         product_value_metrics = _product_value_metrics_snapshot()
     execution_mode = _execution_mode(ROOT)
     multi_agent_policy = _multi_agent_policy_snapshot(ROOT)
@@ -4322,8 +4445,10 @@ def status(lite: int = 0):
             "runtime_state": runtime_state,
             "execution_mode": execution_mode,
             "multi_agent_policy": multi_agent_policy,
+            "scheduler_roles": list(CORE_ROLES),
+            "capability_roles": [role for role in agent_roles if role not in CORE_ROLES],
             "core_roles": list(CORE_ROLES),
-            "roles":list(CORE_ROLES),
+            "roles":list(agent_roles),
             "done": workboard_done,
             "ready": workboard_ready,
             "batches": batches_payload,
@@ -4397,7 +4522,7 @@ def status(lite: int = 0):
         payload = build_status_snapshot(ROOT, lambda: payload, include_layers=not bool(lite))
     except Exception:
         pass
-    return payload
+    return _lite_cache_set(_STATUS_FULL_CACHE, payload)
 
 
 @app.get("/api/monitor/access")
@@ -4728,7 +4853,7 @@ def runtime_diagnostics(lite: int = 0):
             return cached_payload
     try:
         try:
-            status_snapshot = status(lite=1)
+            status_snapshot = status(lite=1 if lite_mode else 0)
         except TypeError:
             status_snapshot = status()
     except Exception:
@@ -5145,6 +5270,43 @@ def runtime_diagnostics(lite: int = 0):
     queue_ready_legacy = _int_or_default(queue_state_counts.get("READY"), 0)
     queue_ready = queue_ready_planner + queue_ready_dev + queue_ready_legacy
     queue_in_progress = _int_or_default(queue_state_counts.get("IN_PROGRESS"), 0)
+    core_roles_snapshot = status_snapshot.get("core_roles", []) if isinstance(status_snapshot, dict) else []
+    if not isinstance(core_roles_snapshot, list):
+        core_roles_snapshot = []
+    planner_only_steady_state = core_roles_snapshot == ["planner"]
+    doctor_payload = status_snapshot.get("doctor", {}) if isinstance(status_snapshot, dict) else {}
+    if not isinstance(doctor_payload, dict):
+        doctor_payload = {}
+    doctor_meta = doctor_payload.get("meta", {})
+    if not isinstance(doctor_meta, dict):
+        doctor_meta = {}
+    doctor_status_lower = str(doctor_payload.get("status", "unknown") or "unknown").strip().lower()
+    doctor_refresh_note = str(doctor_meta.get("note", "") or "").strip().lower()
+    product_runtime = status_snapshot.get("product_runtime", {}) if isinstance(status_snapshot, dict) else {}
+    if not isinstance(product_runtime, dict):
+        product_runtime = {}
+    app_runtime = status_snapshot.get("app_runtime", {}) if isinstance(status_snapshot, dict) else {}
+    if not isinstance(app_runtime, dict):
+        app_runtime = {}
+    backend_api = app_runtime.get("backend_api", {})
+    if not isinstance(backend_api, dict):
+        backend_api = {}
+    product_runtime_status = str(product_runtime.get("status", "unknown") or "unknown").strip().lower()
+    backend_api_status = str(backend_api.get("status", "unknown") or "unknown").strip().lower()
+    stalled_flow_ready_planner = queue_ready_planner > 0 and queue_in_progress <= 0
+    doctor_refresh_deferred = doctor_refresh_note in {"doctor_refresh_deferred", "doctor_refresh_in_progress"}
+    independent_delivery_paused = (
+        planner_only_steady_state
+        and not admin_autonomy_active
+        and stalled_flow_ready_planner
+    )
+    independent_delivery_effective = (
+        product_runtime_status == "ok"
+        and backend_api_status == "ok"
+        and not doctor_refresh_deferred
+        and doctor_status_lower != "unknown"
+        and not independent_delivery_paused
+    )
     planner_blocker_upper = str(status_agents.get("planner", {}).get("blocker", "")).strip().upper()
     planner_delta_upper = str(status_agents.get("planner", {}).get("delta", "")).strip().upper()
     planner_evidence_text = str(planner_c.get("EVIDENCE", "") or "")
@@ -5309,6 +5471,54 @@ def runtime_diagnostics(lite: int = 0):
             ),
             "sample": "high WAITING_DEP with low READY indicates a dependency fan-in bottleneck",
         })
+    if independent_delivery_paused:
+        findings.append({
+            "id": "INDEPENDENT_DELIVERY_PAUSED_PLANNER_ONLY",
+            "severity": "critical" if backend_api_status != "ok" else "high",
+            "title": "INDEPENDENT_DELIVERY_PAUSED_PLANNER_ONLY",
+            "detail": (
+                f"core_roles={core_roles_snapshot or ['unknown']}; "
+                f"admin_autonomy_active={admin_autonomy_active}; "
+                f"queue_ready_planner={queue_ready_planner}; "
+                f"queue_in_progress={queue_in_progress}"
+            ),
+            "sample": "planner dispatch intent is present but admin execution is not self-advancing",
+        })
+    if planner_only_steady_state and not admin_autonomy_active and (queue_ready_planner > 0 or queue_waiting_dep > 0):
+        findings.append({
+            "id": "ADMIN_AUTONOMY_NOT_ACTIVE",
+            "severity": "high",
+            "title": "ADMIN_AUTONOMY_NOT_ACTIVE",
+            "detail": (
+                f"trigger={admin_autonomy_trigger}; "
+                f"target={admin_autonomy_target_role or 'none'}; "
+                f"task={admin_autonomy_target_task}; "
+                f"dispatch_status={admin_dispatch_status}"
+            ),
+            "sample": "admin capability is planner-owned but not autonomously progressing the active cycle",
+        })
+    if product_runtime_status != "ok" or backend_api_status != "ok":
+        findings.append({
+            "id": "PRODUCT_RUNTIME_DELIVERY_GATE",
+            "severity": "critical",
+            "title": "PRODUCT_RUNTIME_DELIVERY_GATE",
+            "detail": (
+                f"product_runtime.status={product_runtime_status}; "
+                f"backend_api.status={backend_api_status}"
+            ),
+            "sample": "degraded user-facing runtime means delivery is not independently effective",
+        })
+    if doctor_refresh_deferred or doctor_status_lower == "unknown":
+        findings.append({
+            "id": "DOCTOR_REFRESH_DEFERRED",
+            "severity": "high",
+            "title": "DOCTOR_REFRESH_DEFERRED",
+            "detail": (
+                f"doctor.status={doctor_status_lower}; "
+                f"note={doctor_refresh_note or 'none'}"
+            ),
+            "sample": "high-level health is deferred or unknown",
+        })
     if tshape_active and tshape_age_min >= RUNTIME_DIAG_RECENT_MINUTES:
         findings.append({
             "id": "T_SHAPE_TAKEOVER_ACTIVE",
@@ -5365,6 +5575,7 @@ def runtime_diagnostics(lite: int = 0):
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "health": status_snapshot.get("health", "unknown"),
+        "independent_delivery_effective": independent_delivery_effective,
         "doctor_status": (
             str(status_snapshot.get("doctor", {}).get("status", "unknown"))
             if isinstance(status_snapshot.get("doctor"), dict)
@@ -5435,6 +5646,14 @@ def runtime_diagnostics(lite: int = 0):
             "queue_waiting_dep": queue_waiting_dep,
             "queue_ready": queue_ready,
             "queue_in_progress": queue_in_progress,
+            "queue_ready_planner": queue_ready_planner,
+            "planner_only_steady_state": planner_only_steady_state,
+            "stalled_flow_ready_planner": stalled_flow_ready_planner,
+            "independent_delivery_paused": independent_delivery_paused,
+            "independent_delivery_effective": independent_delivery_effective,
+            "product_runtime_status": product_runtime_status,
+            "backend_api_status": backend_api_status,
+            "doctor_refresh_note": doctor_refresh_note or "none",
             "dependency_funnel_plateau": bool(
                 queue_waiting_dep >= 10
                 and queue_ready <= 1

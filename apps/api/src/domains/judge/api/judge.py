@@ -1075,6 +1075,11 @@ async def _legacy_get_judge_verdicts(
             # Filter by profile tickers if profile is loaded
             if prof and getattr(prof, "tickers", None):
                 prof_tickers = set(normalize_tickers(prof.tickers or []))
+                if (
+                    str(profile or "").strip().lower() == "rebalancing_optimizer_lite"
+                    and active_tickers
+                ):
+                    prof_tickers.update(active_tickers)
                 before = len(rows_sorted)
                 rows_sorted = [
                     r
@@ -3288,6 +3293,7 @@ async def _legacy_get_judge_verdicts(
                 for v in verdicts
                 if v.get("confidence", 0) >= min_confidence
             ]
+            used_low_confidence_rebalancing_fallback = False
             # Si filtrage vide mais des erreurs LLM existent, on renvoie quand même pour diagnostic
             if not confidence_filtered and verdicts:
                 has_error = any(
@@ -3296,6 +3302,11 @@ async def _legacy_get_judge_verdicts(
                 )
                 if has_error:
                     confidence_filtered = verdicts
+                elif (
+                    str(profile or "").strip().lower() == "rebalancing_optimizer_lite"
+                ):
+                    confidence_filtered = verdicts
+                    used_low_confidence_rebalancing_fallback = True
 
             reverse_sort = sort_order != "asc"
 
@@ -3408,6 +3419,11 @@ async def _legacy_get_judge_verdicts(
                 },
                 "generated_at": now_iso,
                 "source": ["judge_route", "forecasts_llm"],
+                "warnings": (
+                    ["returned_low_confidence_rebalancing_candidates"]
+                    if used_low_confidence_rebalancing_fallback
+                    else []
+                ),
                 "runtime": {
                     "llm_mode": judge_llm_mode,
                     "timeouts": {

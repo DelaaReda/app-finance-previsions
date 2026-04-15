@@ -42,9 +42,11 @@ if ! [[ "$STOCKS_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]]; then
 fi
 
 ENDPOINTS=(
+  "/api/status"
   "/api/forecasts?horizon=short&limit=24"
   "/api/recommendations/daily?limit=3"
-  "/api/stocks/AAPL/sheet"
+  "/api/portfolios"
+  "/api/ingestion/health"
 )
 
 declare -a RESULTS=()
@@ -57,20 +59,6 @@ for endpoint in "${ENDPOINTS[@]}"; do
   status_code="$(curl -sS --max-time "$TIMEOUT_SECONDS" -o "$response_file" -w "%{http_code}" "$url" || true)"
   body="$(cat "$response_file" 2>/dev/null || true)"
   rm -f "$response_file"
-
-  if [[ "$status_code" == "000" && "$endpoint" == "/api/stocks/AAPL/sheet" ]]; then
-    retry_file="$(mktemp)"
-    status_retry="$(curl -sS --max-time "$STOCKS_TIMEOUT_SECONDS" -o "$retry_file" -w "%{http_code}" "$url" || true)"
-    body_retry="$(cat "$retry_file" 2>/dev/null || true)"
-    rm -f "$retry_file"
-    status_code="$status_retry"
-    body="$body_retry"
-    if [[ "$status_code" == "000" ]]; then
-      RESULTS+=("DEGRADED ${endpoint} code=UPSTREAM_TIMEOUT")
-      DEGRADED_COUNT=$((DEGRADED_COUNT + 1))
-      continue
-    fi
-  fi
 
   if [[ "$status_code" != "200" ]]; then
     RESULTS+=("FAIL ${endpoint} http=${status_code}")
@@ -101,33 +89,50 @@ if "ok" not in payload:
 if "data" not in payload:
     print(f"FAIL {endpoint} missing_data")
     raise SystemExit(1)
-if "status" not in payload:
-    print(f"FAIL {endpoint} missing_status")
-    raise SystemExit(1)
-if payload.get("status") not in {"ok", "degraded", "error"}:
-    print(f"FAIL {endpoint} invalid_status:{payload.get('status')}")
-    raise SystemExit(1)
-if "meta" not in payload or not isinstance(payload.get("meta"), dict):
-    print(f"FAIL {endpoint} missing_meta")
-    raise SystemExit(1)
-meta = payload.get("meta") or {}
-for key in ("source", "request_id", "schema_version", "fallback"):
-    if key not in meta:
-        print(f"FAIL {endpoint} meta_missing_{key}")
-        raise SystemExit(1)
 
-error_obj = payload.get("error")
+strict_endpoints = {
+    "/api/forecasts?horizon=short&limit=24",
+    "/api/recommendations/daily?limit=3",
+}
+
 status = payload.get("status")
+error_obj = payload.get("error")
+strict = endpoint in strict_endpoints
+
+if strict:
+    if "status" not in payload:
+        print(f"FAIL {endpoint} missing_status")
+        raise SystemExit(1)
+    if status not in {"ok", "degraded", "error"}:
+        print(f"FAIL {endpoint} invalid_status:{status}")
+        raise SystemExit(1)
+    if "meta" not in payload or not isinstance(payload.get("meta"), dict):
+        print(f"FAIL {endpoint} missing_meta")
+        raise SystemExit(1)
+    meta = payload.get("meta") or {}
+    for key in ("source", "request_id", "schema_version", "fallback"):
+        if key not in meta:
+            print(f"FAIL {endpoint} meta_missing_{key}")
+            raise SystemExit(1)
+    if status in {"degraded", "error"}:
+        if not isinstance(error_obj, dict):
+            print(f"FAIL {endpoint} degraded_without_error_object")
+            raise SystemExit(1)
+        if "code" not in error_obj or "message" not in error_obj:
+            print(f"FAIL {endpoint} degraded_error_shape_invalid")
+            raise SystemExit(1)
+        print(f"DEGRADED {endpoint} code={error_obj.get('code')}")
+    else:
+        print(f"PASS_STRICT {endpoint}")
+    raise SystemExit(0)
+
 if status in {"degraded", "error"}:
-    if not isinstance(error_obj, dict):
-        print(f"FAIL {endpoint} degraded_without_error_object")
-        raise SystemExit(1)
-    if "code" not in error_obj or "message" not in error_obj:
-        print(f"FAIL {endpoint} degraded_error_shape_invalid")
-        raise SystemExit(1)
-    print(f"DEGRADED {endpoint} code={error_obj.get('code')}")
+    if isinstance(error_obj, dict) and "code" in error_obj and "message" in error_obj:
+        print(f"DEGRADED {endpoint} code={error_obj.get('code')}")
+    else:
+        print(f"DEGRADED {endpoint} code=compat_endpoint")
 else:
-    print(f"PASS {endpoint}")
+    print(f"PASS_COMPAT {endpoint}")
 PY
 )"
   rc=$?

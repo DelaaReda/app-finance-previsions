@@ -35,6 +35,8 @@ CONTRACT_KEYS = (
     "NEXT_ACTION_UNIQUE",
 )
 GUARDIAN_VERSION = "2026-03-03.v1"
+PROMPT_PATCHES_VERSION = "2026-04-15.v1"
+TERMINAL_TASK_STATES = {"DONE", "PASS", "CLOSED"}
 
 
 def now_utc() -> str:
@@ -104,6 +106,181 @@ def parse_runtime_context(text: str) -> Dict[str, int]:
     }
 
 
+def load_json_dict(path: Path) -> Dict[str, object]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(read_text(path))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _canonical_role(value: str) -> str:
+    token = str(value or "").strip().replace("-", "_").lower()
+    if token in {
+        "planner",
+        "analyst",
+        "architect",
+        "po",
+        "scrum_master",
+        "vision_architect_tasks_planner",
+        "vision-architect-tasks-planner",
+    }:
+        return "planner"
+    if token in {
+        "dev",
+        "backend_engineer",
+        "frontend_engineer",
+        "data_analyst",
+        "integrator",
+        "tester",
+        "qa",
+    }:
+        return "dev"
+    if token in {"admin", "clawsentinel", "infra"}:
+        return "admin"
+    return token
+
+
+def _task_batch_id(task: Dict[str, object]) -> str:
+    stream_id = str(task.get("stream_id") or task.get("batch_id") or "").strip().upper()
+    if stream_id:
+        return stream_id
+    task_id = str(task.get("id") or task.get("task_id") or "").strip().upper()
+    if task_id.startswith("BATCH-"):
+        parts = task_id.split("-")
+        if len(parts) >= 2:
+            return "-".join(parts[:2])
+    return ""
+
+
+def _workspace_root_from_latest(latest_file: Path) -> Path | None:
+    for candidate in [latest_file.parent, *latest_file.parents]:
+        if candidate.name == "orchestrator-state" and candidate.parent.name == "logs-codex-runs":
+            return candidate.parent.parent
+    return None
+
+
+def canonical_active_snapshot(latest_file: Path) -> Dict[str, object]:
+    root = _workspace_root_from_latest(latest_file)
+    if root is None:
+        return {
+            "active_batch_ids": [],
+            "active_task_id": "",
+            "active_task_state": "",
+            "active_task_role": "",
+            "active_task_owner": "",
+            "active_task_blocked_reason": "",
+            "active_task_next_action": "",
+            "projection_decision_capable": False,
+            "projection_secondary_only": True,
+        }
+
+    state_dir = root / "logs-codex-runs" / "orchestrator-state"
+    queue_payload = load_json_dict(state_dir / "priority-queue.json")
+    board_payload = load_json_dict(state_dir / "parallel-workstreams.json")
+    queue_meta = queue_payload.get("meta") if isinstance(queue_payload.get("meta"), dict) else {}
+    board_meta = board_payload.get("meta") if isinstance(board_payload.get("meta"), dict) else {}
+    active_cycle = queue_payload.get("active_cycle")
+    if not isinstance(active_cycle, dict):
+        active_cycle = board_payload.get("active_cycle")
+    if not isinstance(active_cycle, dict):
+        active_cycle = {}
+    active_batch_ids = [
+        str(value).strip().upper()
+        for value in active_cycle.get("active_batch_ids", [])
+        if str(value).strip()
+    ]
+
+    tasks = board_payload.get("tasks", [])
+    if not isinstance(tasks, list):
+        tasks = []
+
+    state_rank = {
+        "BLOCKED": 0,
+        "IN_PROGRESS": 1,
+        "REVIEW": 2,
+        "READY": 3,
+        "READY_PLANNER": 4,
+        "READY_DEV": 5,
+        "WAITING_DEP": 6,
+    }
+    candidates: list[tuple[int, str, Dict[str, object]]] = []
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        batch_id = _task_batch_id(task)
+        if active_batch_ids and batch_id not in active_batch_ids:
+            continue
+        state = str(task.get("state") or "").strip().upper()
+        if state in TERMINAL_TASK_STATES or not state:
+            continue
+        task_id = str(task.get("id") or task.get("task_id") or "").strip()
+        if not task_id:
+            continue
+        role = _canonical_role(str(task.get("role") or task.get("owner") or task.get("assignee") or ""))
+        role_rank = 0 if role not in {"", "planner"} else 1
+        candidates.append((role_rank, state_rank.get(state, 99), task_id, task))
+
+    candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+    task = candidates[0][3] if candidates else {}
+    task_id = str(task.get("id") or task.get("task_id") or "").strip()
+    task_state = str(task.get("state") or "").strip().upper()
+    task_role = _canonical_role(str(task.get("role") or task.get("assignee") or ""))
+    task_owner = _canonical_role(str(task.get("owner") or task.get("assignee") or task.get("role") or ""))
+    blocked_reason = str(task.get("blocked_reason") or "").strip()
+    next_action = str(task.get("next_action") or "").strip()
+    projection_decision_capable = board_meta.get("decision_capable")
+    if projection_decision_capable is None:
+        projection_decision_capable = queue_meta.get("workboard_decision_capable")
+    planner_hard_guard = queue_meta.get("planner_hard_guard") if isinstance(queue_meta.get("planner_hard_guard"), dict) else {}
+    stagnation_alert = queue_meta.get("stagnation_alert") if isinstance(queue_meta.get("stagnation_alert"), dict) else {}
+    novelty_target_workflow = queue_meta.get("novelty_target_workflow") if isinstance(queue_meta.get("novelty_target_workflow"), dict) else {}
+    novelty_target_audit = queue_meta.get("novelty_target_audit") if isinstance(queue_meta.get("novelty_target_audit"), dict) else {}
+    if not novelty_target_workflow and bool(isinstance(planner_hard_guard, dict) and planner_hard_guard.get("active")):
+        guard_reason = str(planner_hard_guard.get("reason") or "").strip().lower()
+        if guard_reason == "stagnation_requires_novelty_target":
+            novelty_target_workflow = {
+                "status": "required",
+                "owner_role": "planner",
+                "batch_id": str((stagnation_alert or {}).get("batch_id") or "").strip().upper(),
+                "scope_key": str((stagnation_alert or {}).get("scope_key") or "").strip().lower(),
+                "reason": guard_reason,
+                "next_action": "define_novelty_target",
+                "policy": "no_new_downstream_work",
+                "required_fields": ["novelty_target", "user_value_delta", "scope_delta", "success_metric"],
+                "clear_when": "novelty_target_present",
+                "recent_classes": [
+                    str(item).strip().lower()
+                    for item in ((stagnation_alert or {}).get("recent_classes") or [])
+                    if str(item).strip()
+                ],
+            }
+
+    return {
+        "active_batch_ids": active_batch_ids,
+        "active_task_id": task_id,
+        "active_task_state": task_state,
+        "active_task_role": task_role,
+        "active_task_owner": task_owner,
+        "active_task_blocked_reason": blocked_reason,
+        "active_task_next_action": next_action,
+        "projection_decision_capable": projection_decision_capable,
+        "projection_decision_reason": str(
+            board_meta.get("decision_capability_reason")
+            or queue_meta.get("workboard_decision_capability_reason")
+            or ""
+        ).strip(),
+        "planner_hard_guard_active": bool(isinstance(planner_hard_guard, dict) and planner_hard_guard.get("active")),
+        "planner_hard_guard_reason": str(planner_hard_guard.get("reason") or "").strip() if isinstance(planner_hard_guard, dict) else "",
+        "stagnation_alert": stagnation_alert if isinstance(stagnation_alert, dict) else {},
+        "novelty_target_workflow": novelty_target_workflow if isinstance(novelty_target_workflow, dict) else {},
+        "novelty_target_audit": novelty_target_audit if isinstance(novelty_target_audit, dict) else {},
+        "projection_secondary_only": projection_decision_capable is False,
+    }
+
+
 def truthy(value: str) -> bool:
     token = str(value or "").strip().lower()
     return token in {"1", "true", "yes", "on", "ok", "created", "done"}
@@ -113,6 +290,7 @@ def compute_score(
     contract: Dict[str, str],
     evidence: Dict[str, str],
     runtime: Dict[str, int],
+    canonical: Dict[str, object],
 ) -> Dict[str, object]:
     score = 100
     issues: List[str] = []
@@ -139,6 +317,38 @@ def compute_score(
     vision_alignment_value = str(evidence.get("vision_alignment", "")).lower()
     arch_audit_value = str(evidence.get("architecture_audit", "")).lower()
     inter_batch_dependency_detected = False
+    canonical_active_batch_ids = canonical.get("active_batch_ids", [])
+    if not isinstance(canonical_active_batch_ids, list):
+        canonical_active_batch_ids = []
+    canonical_active_task_id = str(canonical.get("active_task_id") or "").strip()
+    canonical_active_task_role = str(canonical.get("active_task_role") or "").strip()
+    canonical_active_task_state = str(canonical.get("active_task_state") or "").strip().upper()
+    canonical_active_task_blocked_reason = str(
+        canonical.get("active_task_blocked_reason") or ""
+    ).strip()
+    canonical_projection_decision_capable = canonical.get("projection_decision_capable")
+    canonical_projection_reason = str(canonical.get("projection_decision_reason") or "").strip()
+    canonical_hard_guard_active = bool(canonical.get("planner_hard_guard_active"))
+    canonical_hard_guard_reason = str(canonical.get("planner_hard_guard_reason") or "").strip()
+    canonical_novelty_target_audit = canonical.get("novelty_target_audit", {})
+    if not isinstance(canonical_novelty_target_audit, dict):
+        canonical_novelty_target_audit = {}
+    canonical_cycle_active = bool(canonical_active_batch_ids)
+    canonical_downstream_active = (
+        canonical_cycle_active
+        and bool(canonical_active_task_id)
+        and canonical_active_task_role not in {"", "planner"}
+        and canonical_active_task_state not in TERMINAL_TASK_STATES
+    )
+    if canonical_hard_guard_active:
+        score -= 40
+        issues.append(canonical_hard_guard_reason or "planner_hard_guard_active")
+    if str(canonical_novelty_target_audit.get("status") or "").strip().lower() == "overdue":
+        score -= 15
+        issues.append("novelty_target_overdue")
+    if canonical_projection_decision_capable is False:
+        score -= 15
+        issues.append("projection_not_decision_capable")
     if inter_batch_dep_raw in {"1", "true", "yes", "on"}:
         inter_batch_dependency_detected = True
     for token in (batch_depends_on, depends_on_batch):
@@ -161,7 +371,11 @@ def compute_score(
             score -= 35
             issues.append("ready_but_none_task_update")
 
-    if task_update in {"none_no_ready", "none_no_signal"} and not planner_runtime_exception:
+    if (
+        task_update in {"none_no_ready", "none_no_signal"}
+        and not planner_runtime_exception
+        and not canonical_downstream_active
+    ):
         score -= 40
         issues.append("planner_passive_forbidden_violation")
 
@@ -171,6 +385,7 @@ def compute_score(
         and runtime.get("workboard_role_has_in_progress", 0) == 0
         and task_update in {"none_no_ready", "none_no_signal"}
         and not planner_autobatch_attempted
+        and not canonical_downstream_active
     ):
         score -= 20
         issues.append("planner_autobatch_missing_when_idle")
@@ -183,9 +398,18 @@ def compute_score(
         score -= 25
         issues.append("missing_stream_task_on_delivery_update")
 
-    if runtime.get("planner_batch_runway_short", 0) == 1 and not batch_created:
+    if (
+        runtime.get("planner_batch_runway_short", 0) == 1
+        and not batch_created
+        and not canonical_cycle_active
+        and not canonical_hard_guard_active
+    ):
         score -= 15
         issues.append("runway_short_without_batch_creation")
+
+    if canonical_active_task_state == "BLOCKED" and canonical_active_task_blocked_reason:
+        score -= 10
+        issues.append("canonical_active_handoff_blocked")
 
     if inter_batch_dependency_detected:
         score -= 25
@@ -289,8 +513,63 @@ def update_streaks(
            {"_last_handoff_task": streaks.get("_last_handoff_task", "")}
 
 
-def recommendations(issues: List[str]) -> List[str]:
+def recommendations(issues: List[str], canonical: Dict[str, object] | None = None) -> List[str]:
+    canonical = canonical or {}
+    active_task_id = str(canonical.get("active_task_id") or "").strip()
+    active_task_role = str(canonical.get("active_task_role") or "").strip()
+    active_task_state = str(canonical.get("active_task_state") or "").strip().upper()
+    active_task_blocked_reason = str(canonical.get("active_task_blocked_reason") or "").strip()
+    hard_guard_active = bool(canonical.get("planner_hard_guard_active"))
+    hard_guard_reason = str(canonical.get("planner_hard_guard_reason") or "").strip()
+    projection_decision_capable = canonical.get("projection_decision_capable")
+    projection_decision_reason = str(canonical.get("projection_decision_reason") or "").strip()
+    novelty_target_workflow = canonical.get("novelty_target_workflow") if isinstance(canonical.get("novelty_target_workflow"), dict) else {}
+    novelty_target_audit = canonical.get("novelty_target_audit") if isinstance(canonical.get("novelty_target_audit"), dict) else {}
     out: List[str] = []
+    if hard_guard_active:
+        workflow_scope = str(novelty_target_workflow.get("scope_key") or "").strip()
+        required_fields = novelty_target_workflow.get("required_fields")
+        required_fields_text = ", ".join(str(item).strip() for item in required_fields if str(item).strip()) if isinstance(required_fields, list) else ""
+        missing_fields = novelty_target_audit.get("missing_fields") if isinstance(novelty_target_audit.get("missing_fields"), list) else novelty_target_workflow.get("missing_fields")
+        missing_fields_text = ", ".join(str(item).strip() for item in missing_fields if str(item).strip()) if isinstance(missing_fields, list) else ""
+        audit_status = str(novelty_target_audit.get("status") or "").strip().lower()
+        audit_age_s = str(novelty_target_audit.get("age_s") or "").strip()
+        out.append(
+            f"Hard guard canonique actif ({hard_guard_reason or 'planner_hard_guard_active'}): ne pas creer de batch ni relancer ANALYSIS tant qu'une novelty target n'est pas definie."
+        )
+        if workflow_scope or required_fields_text:
+            out.append(
+                "Workflow de sortie: "
+                f"planner doit definir novelty_target sur scope={workflow_scope or 'active_scope'} "
+                f"avec champs [{required_fields_text or 'novelty_target, user_value_delta, scope_delta, success_metric'}]."
+            )
+        if audit_status == "overdue" or missing_fields_text:
+            out.append(
+                f"Dette de stagnation {'overdue' if audit_status == 'overdue' else 'active'}: champs manquants [{missing_fields_text or 'novelty_target, user_visible_delta'}]"
+                + (f" depuis {audit_age_s}s." if audit_age_s else ".")
+            )
+        if active_task_id:
+            out.append(
+                f"Le cycle actif reste ancre sur {active_task_id} ({active_task_role}/{active_task_state or 'UNKNOWN'}); toute supervision doit suivre cette tache."
+            )
+        if projection_decision_capable is False:
+            out.append(
+                f"Projection workboard non decisionnelle ({projection_decision_reason or 'projection_missing_operational_fields'}): s'appuyer sur runtime truth/queue avant toute recommandation."
+            )
+        return out[:3]
+    if active_task_id and active_task_role and active_task_role != "planner":
+        out.append(
+            f"Cycle canonique actif sur {active_task_id} ({active_task_role}/{active_task_state or 'UNKNOWN'}): "
+            "ne pas creer de nouveau batch ni relancer ANALYSIS."
+        )
+        if active_task_blocked_reason:
+            out.append(
+                f"Traiter explicitement le blocage canonique {active_task_blocked_reason} sur {active_task_id}."
+            )
+        out.append(
+            f"Attendre une transition canonique sur {active_task_id} avant tout nouvel autobatch planner."
+        )
+        return out[:3]
     if "planner_passive_forbidden_violation" in issues:
         out.append("Planner non-passive policy violee: claim une tache planner READY ou creer un autobatch immediatement.")
     if "planner_autobatch_missing_when_idle" in issues:
@@ -318,16 +597,242 @@ def recommendations(issues: List[str]) -> List[str]:
     return out[:3]
 
 
+def planner_prompt_patches_file(latest_file: Path) -> Path:
+    return latest_file.with_name("planner-prompt-patches.json")
+
+
+def _ordered_unique(values: List[str]) -> List[str]:
+    seen: set[str] = set()
+    out: List[str] = []
+    for raw in values:
+        token = str(raw or "").strip().lower()
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        out.append(token)
+    return out
+
+
+def build_prompt_patches(
+    issues: List[str],
+    canonical: Dict[str, object] | None = None,
+    streaks: Dict[str, int] | None = None,
+) -> List[Dict[str, object]]:
+    canonical = canonical or {}
+    streaks = streaks or {}
+    ordered_issues = _ordered_unique(issues)
+    patches: List[Dict[str, object]] = []
+    active_task_id = str(canonical.get("active_task_id") or "").strip()
+    active_task_role = str(canonical.get("active_task_role") or "").strip().lower()
+    active_task_state = str(canonical.get("active_task_state") or "").strip().upper()
+    hard_guard_active = bool(canonical.get("planner_hard_guard_active"))
+    hard_guard_reason = str(canonical.get("planner_hard_guard_reason") or "").strip().lower()
+    novelty_audit = canonical.get("novelty_target_audit", {})
+    novelty_workflow = canonical.get("novelty_target_workflow", {})
+    if not isinstance(novelty_audit, dict):
+        novelty_audit = {}
+    if not isinstance(novelty_workflow, dict):
+        novelty_workflow = {}
+
+    def add_patch(
+        patch_id: str,
+        *,
+        priority: int,
+        issue_codes: List[str],
+        instruction: str,
+        why: str,
+        when_to_apply: str,
+        exit_condition: str,
+        ttl_runs: int,
+    ) -> None:
+        if any(existing.get("id") == patch_id for existing in patches):
+            return
+        patches.append(
+            {
+                "id": patch_id,
+                "priority": priority,
+                "issue_codes": _ordered_unique(issue_codes),
+                "instruction": one_line(instruction, 420),
+                "why": one_line(why, 220),
+                "when_to_apply": one_line(when_to_apply, 220),
+                "exit_condition": one_line(exit_condition, 220),
+                "ttl_runs": max(1, int(ttl_runs)),
+            }
+        )
+
+    if (
+        hard_guard_active
+        or "delivery_value_insufficient" in ordered_issues
+        or "novelty_target_overdue" in ordered_issues
+    ):
+        missing_fields = novelty_audit.get("missing_fields")
+        if not isinstance(missing_fields, list):
+            missing_fields = novelty_workflow.get("required_fields")
+        missing_fields_text = ", ".join(
+            str(item).strip() for item in missing_fields or [] if str(item).strip()
+        ) or "novelty_target, user_visible_delta"
+        add_patch(
+            "novelty_target_first",
+            priority=100,
+            issue_codes=[
+                hard_guard_reason or "planner_hard_guard_active",
+                "delivery_value_insufficient",
+                "novelty_target_overdue",
+            ],
+            instruction=(
+                "Si le hard guard ou la stagnation novelty est actif, ne relance ni ANALYSIS ni "
+                "planner-autobatch. Termine d'abord la tache planner active ou execute "
+                "planner_runtime_actions.py novelty-target avec des champs explicites "
+                f"[{missing_fields_text}] avant tout nouveau downstream work."
+            ),
+            why=(
+                "Arrete les boucles validation/reuse_only et force un delta utilisateur explicite "
+                "avant de recreer du travail."
+            ),
+            when_to_apply=(
+                "planner_hard_guard_active=1 ou issue_codes contiennent "
+                "delivery_value_insufficient/novelty_target_overdue"
+            ),
+            exit_condition=(
+                "novelty_target_workflow.status != required et le batch actif expose un "
+                "user_visible_delta clair"
+            ),
+            ttl_runs=8,
+        )
+
+    proof_issue_codes = [
+        code
+        for code in ordered_issues
+        if code
+        in {
+            "planner_quality_autofill_missing",
+            "planner_evidence_incomplete_soft",
+            "missing_architecture_plan_ref",
+            "missing_architecture_audit",
+            "missing_vision_alignment",
+            "architecture_ref_not_canonical",
+            "vision_alignment_not_traceable",
+            "architecture_audit_missing_paths",
+        }
+    ]
+    if proof_issue_codes:
+        add_patch(
+            "planner_delivery_proof_complete",
+            priority=90,
+            issue_codes=proof_issue_codes,
+            instruction=(
+                "Avant tout complete planner sur PLAN/ANALYSIS/ARCH/GOV_REVIEW, prepare une preuve "
+                "complete avec root_cause, fix_applied, architecture_check, vision_alignment, "
+                "planner_artifact et verify(before=/after=/test=). Si un subagent a rendu une "
+                "preuve incomplète, collecte/merge la preuve avant tout redispatch."
+            ),
+            why=(
+                "Empêche les clôtures incomplètes qui recyclent les mêmes tâches planner sans "
+                "apprentissage durable."
+            ),
+            when_to_apply=(
+                "issue_codes contiennent planner_quality_autofill_missing ou planner_evidence_incomplete_soft"
+            ),
+            exit_condition=(
+                "Deux ticks consécutifs sans issue de qualité de preuve planner sur la tâche active"
+            ),
+            ttl_runs=6,
+        )
+
+    follow_canonical_issue_codes = [
+        code
+        for code in ordered_issues
+        if code
+        in {
+            "planner_orchestrator_admin_route_mismatch",
+            "planner_admin_takeover_required",
+            "subagent_ack_pending",
+            "admin_dispatch_ack_pending",
+            "canonical_active_handoff_blocked",
+        }
+    ]
+    if (active_task_id and active_task_role not in {"", "planner"}) or follow_canonical_issue_codes:
+        add_patch(
+            "follow_canonical_active_task",
+            priority=80,
+            issue_codes=follow_canonical_issue_codes
+            + ([f"canonical_active_{active_task_role}"] if active_task_id and active_task_role not in {"", "planner"} else []),
+            instruction=(
+                "Priorité absolue: faire avancer la tâche canonique active "
+                f"{active_task_id or '<active_task>'} ({active_task_role or 'downstream'}/{active_task_state or 'UNKNOWN'}). "
+                "Ne recrée pas de batch et ne relance pas ANALYSIS tant que cette tâche n'a pas "
+                "transitionné. Si route mismatch ou takeover apparaît, corrige la route/collecte/ack "
+                "au lieu de redispatcher."
+            ),
+            why=(
+                "Réduit les boucles de redispatch planner quand le vrai travail utile est déjà en "
+                "cours sur une lane downstream."
+            ),
+            when_to_apply=(
+                "canonical.active_task_role != planner ou issue_codes contiennent route_mismatch/takeover/ack_pending"
+            ),
+            exit_condition=(
+                "La tâche canonique active transitionne hors de IN_PROGRESS/BLOCKED ou repasse à planner"
+            ),
+            ttl_runs=6,
+        )
+
+    if (
+        "planner_passive_forbidden_violation" in ordered_issues
+        or "planner_autobatch_missing_when_idle" in ordered_issues
+        or "ready_but_no_delta" in ordered_issues
+        or "ready_but_none_task_update" in ordered_issues
+        or int(streaks.get("ready_idle_streak", 0) or 0) >= 2
+    ):
+        add_patch(
+            "claim_or_autobatch_now",
+            priority=70,
+            issue_codes=[
+                "planner_passive_forbidden_violation",
+                "planner_autobatch_missing_when_idle",
+                "ready_but_no_delta",
+                "ready_but_none_task_update",
+            ],
+            instruction=(
+                "Interdiction de passivité planner: s'il existe un READY utile, claim-le maintenant. "
+                "Si aucun READY planner n'existe et qu'aucune lane downstream active ne porte le cycle, "
+                "exécute sync-priority puis planner-autobatch, puis claim immédiatement."
+            ),
+            why=(
+                "Remplace les ticks sans delta par un claim ou une création canonique de runway."
+            ),
+            when_to_apply=(
+                "ready_idle_streak >= 2 ou issue_codes contiennent passive/autobatch/ready_but_no_delta"
+            ),
+            exit_condition=(
+                "Un claim planner valide ou une tâche downstream active utile apparaît"
+            ),
+            ttl_runs=4,
+        )
+
+    patches.sort(key=lambda item: (-int(item.get("priority", 0)), str(item.get("id") or "")))
+    return patches[:3]
+
+
 def maybe_emit_directive(
     role: str,
     source: str,
     streaks: Dict[str, int],
     issues: List[str],
     score: int,
+    canonical: Dict[str, object],
     bus_file: Path,
     state_dir: Path,
 ) -> None:
     immediate_issues = {"planner_passive_forbidden_violation", "planner_autobatch_missing_when_idle"}
+    canonical_task_id = str(canonical.get("active_task_id") or "").strip()
+    canonical_task_role = str(canonical.get("active_task_role") or "").strip()
+    canonical_task_state = str(canonical.get("active_task_state") or "").strip().upper()
+    canonical_task_blocked_reason = str(canonical.get("active_task_blocked_reason") or "").strip()
+    canonical_downstream_active = bool(canonical_task_id and canonical_task_role and canonical_task_role != "planner")
+    if canonical_downstream_active:
+        immediate_issues.discard("planner_passive_forbidden_violation")
+        immediate_issues.discard("planner_autobatch_missing_when_idle")
     immediate_escalation = any(issue in immediate_issues for issue in issues)
     handoff_loop = streaks.get("handoff_same_task_streak", 0) >= 3
     need_directive = (
@@ -348,6 +853,17 @@ def maybe_emit_directive(
             "Si la tache est de type GOV_REVIEW ou role=planner, completer toi-meme via task_update=complete. "
             "Ne pas handoff une tache dont tu es l assignee. "
             "Verifier que tous les depends_on sont DONE, puis marquer complete."
+        )
+    elif canonical_downstream_active:
+        blocker_suffix = (
+            f" blocker={canonical_task_blocked_reason}."
+            if canonical_task_blocked_reason
+            else "."
+        )
+        message = (
+            f"planner_guardian canonical_active_task: suivre {canonical_task_id} "
+            f"({canonical_task_role}/{canonical_task_state or 'UNKNOWN'}){blocker_suffix} "
+            "Ne pas creer de nouveau batch ni relancer ANALYSIS tant que la tache canonique active n a pas transitionne."
         )
     else:
         message = (
@@ -393,6 +909,11 @@ def append_event(path: Path, payload: Dict[str, object]) -> None:
         fh.write(json.dumps(payload, ensure_ascii=True) + "\n")
 
 
+def write_prompt_patches(path: Path, payload: Dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     if len(sys.argv) != 9:
         print(
@@ -418,7 +939,8 @@ def main() -> int:
     evidence = parse_evidence_kv(contract.get("EVIDENCE", ""))
     runtime = parse_runtime_context(read_text(runtime_context_file))
 
-    score_info = compute_score(contract, evidence, runtime)
+    canonical = canonical_active_snapshot(latest_file)
+    score_info = compute_score(contract, evidence, runtime, canonical)
     score = int(score_info["score"])
     level = str(score_info["level"])
     issues = [str(item) for item in score_info["issues"]]
@@ -427,7 +949,8 @@ def main() -> int:
     state = load_state(state_file)
     streaks_result = update_streaks(state, runtime, contract, evidence, score)
     streaks, meta = streaks_result if isinstance(streaks_result, tuple) else (streaks_result, {})
-    recos = recommendations(issues)
+    recos = recommendations(issues, canonical)
+    patches = build_prompt_patches(issues, canonical, streaks)
 
     payload: Dict[str, object] = {
         "ts_utc": now_utc(),
@@ -440,6 +963,7 @@ def main() -> int:
         "recommendations": recos,
         "streaks": streaks,
         "runtime": runtime,
+        "canonical": canonical,
         "summary": {
             "status": one_line(contract.get("STATUS", "")),
             "delta": one_line(contract.get("DELTA", "")),
@@ -452,7 +976,22 @@ def main() -> int:
             "architecture_plan_ref": one_line(evidence.get("architecture_plan_ref", "")),
             "vision_alignment": one_line(evidence.get("vision_alignment", "")),
             "architecture_audit": one_line(evidence.get("architecture_audit", "")),
+            "canonical_active_task_id": one_line(str(canonical.get("active_task_id") or "")),
+            "canonical_active_task_state": one_line(str(canonical.get("active_task_state") or "")),
+            "canonical_active_task_role": one_line(str(canonical.get("active_task_role") or "")),
+            "planner_hard_guard_active": one_line(str(canonical.get("planner_hard_guard_active") or "")),
+            "planner_hard_guard_reason": one_line(str(canonical.get("planner_hard_guard_reason") or "")),
+            "projection_decision_capable": one_line(str(canonical.get("projection_decision_capable") or "")),
+            "projection_decision_reason": one_line(str(canonical.get("projection_decision_reason") or "")),
         },
+    }
+    prompt_patches_payload: Dict[str, object] = {
+        "ts_utc": payload["ts_utc"],
+        "version": PROMPT_PATCHES_VERSION,
+        "source": "planner_guardian",
+        "score": score,
+        "level": level,
+        "active": patches,
     }
 
     state["updated_at_utc"] = payload["ts_utc"]
@@ -463,6 +1002,7 @@ def main() -> int:
     save_state(state_file, state)
 
     write_latest(latest_file, payload)
+    write_prompt_patches(planner_prompt_patches_file(latest_file), prompt_patches_payload)
     append_event(events_file, payload)
     maybe_emit_directive(
         role=role,
@@ -470,6 +1010,7 @@ def main() -> int:
         streaks=streaks,
         issues=issues,
         score=score,
+        canonical=canonical,
         bus_file=directive_bus_file,
         state_dir=state_dir,
     )

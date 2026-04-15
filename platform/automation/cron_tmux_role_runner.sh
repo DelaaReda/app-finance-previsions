@@ -361,6 +361,8 @@ PLANNER_GUARDIAN_ENABLED="${TMUX_ROLE_PLANNER_GUARDIAN_ENABLED:-1}"
 PLANNER_GUARDIAN_INCLUDE_IN_PROMPT="${TMUX_ROLE_PLANNER_GUARDIAN_INCLUDE_IN_PROMPT:-1}"
 PLANNER_GUARDIAN_LATEST_FILE="${TMUX_ROLE_PLANNER_GUARDIAN_LATEST_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-guardian-latest.json}"
 PLANNER_GUARDIAN_EVENTS_FILE="${TMUX_ROLE_PLANNER_GUARDIAN_EVENTS_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-guardian-events.jsonl}"
+PLANNER_PROMPT_PATCHES_INCLUDE_IN_PROMPT="${TMUX_ROLE_PLANNER_PROMPT_PATCHES_INCLUDE_IN_PROMPT:-1}"
+PLANNER_PROMPT_PATCHES_FILE="${TMUX_ROLE_PLANNER_PROMPT_PATCHES_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-prompt-patches.json}"
 PLANNER_AUDIT_ENABLED="${TMUX_ROLE_PLANNER_AUDIT_ENABLED:-1}"
 PLANNER_AUDIT_FILE="${TMUX_ROLE_PLANNER_AUDIT_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-audit-events.jsonl}"
 PLANNER_TIMELINE_FILE="${TMUX_ROLE_PLANNER_TIMELINE_FILE:-$ORCHESTRATOR_DIR_DEFAULT/planner-timeline.log}"
@@ -377,6 +379,7 @@ mkdir -p \
   "$(dirname "$ITERATION_ISSUE_DIGEST_FILE")" \
   "$(dirname "$PLANNER_GUARDIAN_LATEST_FILE")" \
   "$(dirname "$PLANNER_GUARDIAN_EVENTS_FILE")" \
+  "$(dirname "$PLANNER_PROMPT_PATCHES_FILE")" \
   "$(dirname "$AGENT_MESSAGE_BUS_FILE")" \
   "$(dirname "$TOOL_REQUESTS_FILE")" \
   "$(dirname "$TOOL_REQUESTS_EVENTS_FILE")"
@@ -641,6 +644,9 @@ if ! [[ "$PLANNER_GUARDIAN_ENABLED" =~ ^[01]$ ]]; then
 fi
 if ! [[ "$PLANNER_GUARDIAN_INCLUDE_IN_PROMPT" =~ ^[01]$ ]]; then
   PLANNER_GUARDIAN_INCLUDE_IN_PROMPT=1
+fi
+if ! [[ "$PLANNER_PROMPT_PATCHES_INCLUDE_IN_PROMPT" =~ ^[01]$ ]]; then
+  PLANNER_PROMPT_PATCHES_INCLUDE_IN_PROMPT=1
 fi
 if ! [[ "$PLANNER_AUDIT_ENABLED" =~ ^[01]$ ]]; then
   PLANNER_AUDIT_ENABLED=1
@@ -4384,6 +4390,64 @@ print(msg[:420])
 PY
 }
 
+load_planner_prompt_patches_context() {
+  if [[ "$ROLE" != "planner" || "$PLANNER_PROMPT_PATCHES_INCLUDE_IN_PROMPT" == "0" ]]; then
+    printf 'none\n'
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1 || [[ ! -f "$PLANNER_PROMPT_PATCHES_FILE" ]]; then
+    printf 'none\n'
+    return 0
+  fi
+  python3 - "$PLANNER_PROMPT_PATCHES_FILE" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+except Exception:
+    print("none")
+    raise SystemExit(0)
+
+if not isinstance(data, dict):
+    print("none")
+    raise SystemExit(0)
+
+active = data.get("active")
+if not isinstance(active, list) or not active:
+    print("none")
+    raise SystemExit(0)
+
+lines = []
+for idx, item in enumerate(active[:3], start=1):
+    if not isinstance(item, dict):
+        continue
+    patch_id = str(item.get("id") or f"patch_{idx}").strip()
+    issue_codes = item.get("issue_codes")
+    if isinstance(issue_codes, list):
+        issues = ",".join(str(x).strip() for x in issue_codes if str(x).strip()) or "none"
+    else:
+        issues = "none"
+    instruction = re.sub(r"\s+", " ", str(item.get("instruction") or "")).strip()
+    exit_condition = re.sub(r"\s+", " ", str(item.get("exit_condition") or "")).strip() or "none"
+    if not instruction:
+        continue
+    lines.append(
+        f"{idx}) id={patch_id} | issues={issues[:120]} | instruction={instruction[:320]} | exit={exit_condition[:160]}"
+    )
+
+if not lines:
+    print("none")
+    raise SystemExit(0)
+
+print(f"patch_count={len(lines)}")
+print("\n".join(lines))
+PY
+}
+
 load_dev_adaptive_coaching_prompt() {
   if [[ "$ROLE" != "dev" ]]; then
     printf 'none\n'
@@ -4509,68 +4573,39 @@ build_prompt() {
     planner)
       cat <<'PROMPT'
 ROLE=planner.
-Mission: agir comme owner autonome du backlog et orchestrateur central des autres lanes via Codex multi-agent expérimental.
-Objectif: débloquer la livraison réelle avec une action concrète unique par tick.
+Mission: owner autonome du backlog et orchestrateur central; produire une seule action utile par tick.
 Budget strict:
 - maximum 3 commandes shell par tick, maximum 20s chacune
-- commandes autorisées:
+- outils canoniques planner uniquement:
   - python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5
-  - python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --queue logs-codex-runs/orchestrator-state/priority-queue.json
-  - python3 platform/automation/runtime/planner/planner_runtime_actions.py planner-autobatch --queue logs-codex-runs/orchestrator-state/priority-queue.json --reason <reason> --cooldown-s <seconds>
-  - python3 platform/automation/runtime/planner/planner_runtime_actions.py claim --role planner
-  - python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role planner --task <task_id> --artifact "<path>" --note "<note>" --exec-cmd "SKIP(reason)" --tests-run "SKIP(reason)" --review-ref "<ref>" --review-verdict <GO_WITH_CAUTION|PASS|BLOCKED> --change-plan "<steps>" --architecture-checks "<checks>" --idempotency-key <key>
-  - python3 platform/automation/planner_subagent_manager.py plan --role planner --target-role <dev|admin|scrum_master> --owner-task-id <task_id> --task-kind <delivery|implementation|verification|targeted_fix|runtime|reconcile|takeover|repair|flow|coordination|unblock|starvation>
-  - python3 platform/automation/planner_subagent_manager.py run --role planner --target-role <dev|admin|scrum_master> --owner-task-id <task_id> --task-kind <...> --message "<brief>"
-  - python3 platform/automation/planner_subagent_manager.py collect --role planner --subagent-id <subagent_id> --mark-merged
-  - python3 platform/automation/planner_subagent_manager.py cleanup
-- interdit: scans globaux, boucles shell, cat massive logs, exécution "exploratoire"
-Lis d'abord les sources canoniques: docs/ops/ACTIVE_DOCS_INDEX.md, docs/ops/PLANE_BACKLOG_INTEGRATION_SPEC.md et docs/product/PRODUCT_VISION.md.
-Source de vérité planning: Plane via planning sync. Source de vérité runtime: SQLite/planner graph; priority-queue.json et parallel-workstreams.json sous logs-codex-runs/orchestrator-state restent uniquement des projections compatibles de travail.
-Tu es le chef d'équipe autonome du projet. Si la livraison bloque à cause d'une config, d'un prompt, d'un script runtime, d'une spec, d'un contrat, d'un guard, d'un backend, d'un bridge ou d'un bug backend/produit, tu dois corriger le problème directement quand c'est le plus court chemin.
-Préserve le thème frontend existant: ne refonds pas apps/web, ne touche pas aux design tokens ni à la structure visuelle sauf micro-ajustement strictement nécessaire. En revanche tu peux modifier orchestration/runtime/config/specs/docs/backend/API/tests et le code hors thème frontend pour débloquer la livraison.
-Quand planner_orchestrator_enabled=1, tu es la seule lane schedulée: dev/admin/scrum_master n'attendent plus leur propre cron, ils doivent être lancés comme subagents planner-owned.
+  - python3 platform/automation/runtime/planner/planner_runtime_actions.py {sync-priority,planner-autobatch,claim,complete}
+  - python3 platform/automation/planner_subagent_manager.py {plan,run,collect,cleanup}
+- interdit: scans globaux, boucles shell, cat massive logs, exécution exploratoire
 
 Décision tick (ordre strict):
-1) planner_subagent_active != none -> collecter et merger le résultat planner_subagent prêt avant de lancer un nouveau sous-agent.
-2) workboard_role_has_in_progress=1 -> reprendre puis complete/handoff la tâche planner en cours.
-   EXCEPTION CRITIQUE: si la tâche IN_PROGRESS est de type GOV_REVIEW, PLAN, ANALYSIS, ou ARCH (task_id contient ces codes),
-   elle t'appartient — tu dois la compléter toi-même (task_update=complete) après avoir vérifié que tous les depends_on sont DONE.
-   NE PAS utiliser task_update=handoff sur ces tâches. Handoff = passer à un autre rôle. GOV_REVIEW = vérification finale planner.
-   Règle anti-faux-blocage: si workboard_context montre que la tâche planner IN_PROGRESS a depends_on=none,
-   alors des tâches aval du même stream en WAITING_DEP qui dépendent de cette tâche ne sont pas des blockers.
-   Dans ce cas, termine la tâche planner courante; n'utilise pas BLOCKED juste parce que les étapes suivantes attendent sa clôture.
-3) si queue_has_ready=1 et workboard_role_has_work=0 et workboard_role_has_in_progress=0 -> exécuter sync-priority (une fois), puis réévaluer.
-4) si une tâche planner est READY et qu'elle nécessite une exécution de delivery/runtime/flow -> claim puis lancer le subagent cible approprié:
-   - dev pour patch/test/verify
-   - admin pour runtime/reconcile/takeover
-   - scrum_master pour starvation/unblock/escalation
-5) si une tâche planner est READY mais purement stratégique -> la traiter toi-même puis complete/handoff.
-6) si aucune tâche planner READY/IN_PROGRESS après sync-priority -> créer immédiatement 1 batch top-level BATCH-XX, puis relancer sync-priority, puis claim --role planner.
-7) si claim échoue après création: conserver VERDICT=GO_WITH_CAUTION + issue=planner_claim_after_create_failed + NEXT=create_or_claim_now (interdit WAIT/MUTED).
-8) si les preuves runtime sont incomplètes -> task_update=none_no_signal + issues=runtime_context_incomplete, mais NEXT doit rester create_or_claim_now (pas de passivité planner).
-9) si tu détectes un défaut d'orchestration, de config, de spec ou de bridge qui réduit l'autonomie ou casse la livraison, traite-le comme un travail planner prioritaire et répare-le sans attendre une intervention humaine.
+1) Si planner_subagent_active != none: collecter/merger le résultat prêt avant tout nouveau dispatch.
+2) Si workboard_role_has_in_progress=1: reprendre et fermer la tâche planner courante.
+   - PLAN / ANALYSIS / ARCH / GOV_REVIEW restent planner-owned: complete toi-même, jamais handoff.
+   - Si la tâche planner active a depends_on=none, les WAITING_DEP aval ne sont pas des blockers.
+3) Si queue_has_ready=1 et aucune tâche planner active: sync-priority une fois, puis réévaluer.
+4) Si une tâche planner READY exige delivery/runtime/flow: claim puis lancer un seul subagent approprié.
+   - dev = patch/test/verify
+   - admin = runtime/reconcile/takeover
+   - scrum_master = unblock/starvation/escalation
+5) Si une tâche planner READY est stratégique: la traiter toi-même puis complete.
+6) Si aucune tâche planner READY/IN_PROGRESS après sync-priority: créer un seul batch top-level BATCH-XX, relancer sync-priority, puis claim --role planner.
+7) Si claim échoue après création ou si la preuve runtime est incomplète: rester non passif, garder NEXT=create_or_claim_now.
+8) Si un bug de prompt/config/runtime/spec/bridge bloque la livraison, le traiter comme travail planner prioritaire et le corriger directement.
 
-Création batch (si step 4/5):
-- ID unique BATCH-XX (2 chiffres, top-level uniquement).
-- Lier explicitement au target de vision: feature, endpoint, domaine, critère done.
-- Inclure architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate dans EVIDENCE.
-- Pas de sous-tâches récursives ni stream à 4 segments.
+Création batch:
+- BATCH-XX top-level uniquement, relié explicitement à une cible produit et à un done visible.
+- Inclure batch_created, architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate.
+- Pas de sous-tâches récursives ni d'IDs à 4 segments.
 
-EVIDENCE: task_update, run_note (>=5 mots), planner_artifact, root_cause, fix_applied, reuse_check, verify, vision_alignment, batch_created, acceptance_gate, stream_id+task_id si claim/complete/handoff, handoff_to si handoff.
-Pour toute clôture planner de type PLAN / ANALYSIS / ARCH / GOV_REVIEW:
-- `root_cause`, `fix_applied`, `architecture_check`, `vision_alignment` sont obligatoires et non vides.
-- `verify` doit contenir explicitement `before=...`, `after=...`, `test=...`.
-- si ces champs manquent, `planner_runtime_actions.py complete --role planner ...` échouera avec `planner_delivery_proof_missing`.
-- ne tente pas une clôture partielle: prépare d'abord la preuve complète puis exécute `complete`.
-Formats obligatoires (claim/complete/handoff):
-- reuse_check=<module/path> OU NONE(raison_courte)
-- verify=before=<etat>; after=<etat>; test=<preuve>
-- vision_alignment=batch=<BATCH-XX>; target=<objectif>; impact=<livrable>
-Ne jamais laisser root_cause/fix_applied/reuse_check/verify/vision_alignment vides.
-Si batch_created: inclure architecture_plan_ref.
-Si task_update=handoff et handoff_to est vide/placeholder (none, ?, tbd), forcer handoff_to=dev.
-Interdit planner: BLOCKER_ID=HANDOFF_TO_MISSING, BLOCKER_ID=PLANNER_BATCH_ID_INVALID, BLOCKER_ID=MODE_ANALYSE_NO_EDITS. Convertir en WAIT/PASS avec preuve.
-Réponse texte brut, sans markdown, exactement 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
+Preuve planner critique:
+- Pour toute clôture PLAN / ANALYSIS / ARCH / GOV_REVIEW, exiger root_cause, fix_applied, architecture_check, vision_alignment et verify=before=...; after=...; test=....
+- Si cette preuve manque, collecter/compléter d'abord; ne pas redispatcher ni tenter un complete partiel.
+- Si handoff_to est vide sur un handoff planner, forcer handoff_to=dev.
 PROMPT
       ;;
     admin)
@@ -4995,11 +5030,13 @@ admin_tshape_preflight_if_needed
 scrum_preflight_orchestration_if_needed
 
 PLANNER_GUARDIAN_CONTEXT="$(load_planner_guardian_context)"
+PLANNER_PROMPT_PATCHES_CONTEXT="$(load_planner_prompt_patches_context)"
 PROMPT_TEXT="$(build_prompt "$ROLE")"
 DEV_ADAPTIVE_COACHING_CONTEXT="$(load_dev_adaptive_coaching_prompt)"
 trace_event "prompt_memory_context role=${ROLE} mode=${TMUX_ROLE_CONTEXT_MODE} profile=${ROLE_MEMORY_PROFILE_EFFECTIVE} daily_lines=${ROLE_MEMORY_DAILY_LINES_EFFECTIVE} role_history_lines=${ROLE_MEMORY_ROLE_HISTORY_LINES_EFFECTIVE} bytes=${#ROLE_MEMORY_CONTEXT}"
 if [[ "$ROLE" == "planner" ]]; then
   trace_event "planner_guardian_context role=${ROLE} enabled=${PLANNER_GUARDIAN_INCLUDE_IN_PROMPT} bytes=${#PLANNER_GUARDIAN_CONTEXT}"
+  trace_event "planner_prompt_patches_context role=${ROLE} enabled=${PLANNER_PROMPT_PATCHES_INCLUDE_IN_PROMPT} bytes=${#PLANNER_PROMPT_PATCHES_CONTEXT}"
 fi
 if [[ "$ROLE" == "dev" && "$DEV_ADAPTIVE_COACHING_CONTEXT" != "none" ]]; then
   trace_event "dev_adaptive_coaching active=1 detail=$(sanitize_evidence_fragment "$DEV_ADAPTIVE_COACHING_CONTEXT")"
@@ -5010,6 +5047,16 @@ if [[ "$ROLE" == "planner" ]]; then
 PLANNER_GUARDIAN_PROMPT_SECTION="$(cat <<EOF
 PLANNER_GUARDIAN_FEEDBACK:
 ${PLANNER_GUARDIAN_CONTEXT}
+
+EOF
+)"
+fi
+
+PLANNER_PROMPT_PATCHES_PROMPT_SECTION=""
+if [[ "$ROLE" == "planner" && "$PLANNER_PROMPT_PATCHES_CONTEXT" != "none" ]]; then
+PLANNER_PROMPT_PATCHES_PROMPT_SECTION="$(cat <<EOF
+PLANNER_DYNAMIC_PATCHES_ACTIVE:
+${PLANNER_PROMPT_PATCHES_CONTEXT}
 
 EOF
 )"
@@ -5062,6 +5109,7 @@ ARCHITECTURE_CONTINUITY_3DAYS:
 ${ROLE_MEMORY_CONTEXT}
 
 ${PLANNER_GUARDIAN_PROMPT_SECTION}
+${PLANNER_PROMPT_PATCHES_PROMPT_SECTION}
 ${DEV_ADAPTIVE_COACHING_PROMPT_SECTION}
 ${AGENT_MESSAGES_PROMPT_SECTION}
 ${ADMIN_TSHAPE_PROMPT_SECTION}
@@ -5125,6 +5173,9 @@ if [[ "$FC_PLANNER_ORCHESTRATOR_ENABLED" == "1" ]]; then
   if [[ "$ROLE" == "planner" ]]; then
     SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_IS_SOLE_SCHEDULER=1: ne pas attendre une future lane dev/admin/scrum_master. Si une action delivery/runtime/flow est necessaire, lancer un planner subagent tout de suite."
     SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_MULTI_AGENT_POLICY=capability_dispatch_only: ne jamais executer litteralement worker, explorer, monitor ou SYSTEM_PROMPT comme commandes shell; utiliser uniquement les wrappers planner-owned deja branches."
+    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_VISION_AUTONOMY=1: creer de facon autonome les batches et taches canoniques a partir de la vision produit et de la verite queue/workboard; ne pas attendre qu'un humain redige le decoupage si la cible produit est deja explicite."
+    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_NOVELTY_RULE=mandatory: avant tout nouveau downstream work, classer le batch (net_new|hardening|validation|reuse_only), expliciter un delta utilisateur visible, et refuser tout duplicate-scope loop sans nouveaute explicite."
+    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_STAGNATION_EXIT=novelty_target_first: si stagnation_requires_novelty_target ou si deux batches consecutifs restent validation/reuse_only sur le meme scope, utiliser planner_runtime_actions.py novelty-target pour ecrire novelty_target + user_visible_delta avant de creer/rouvrir des taches."
   fi
 fi
 if [[ "$ROLE" == "admin" && "$ADMIN_TSHAPE_ACTIVE" == "1" ]]; then
@@ -5153,7 +5204,8 @@ PROTOCOLE_ORCHESTRATION_COMMUN:
 - WORKER_RULE: un worker ne claim/complete jamais une tache metier. Son resultat = evidence/test result/patch proposal/runtime diagnostic, puis le parent decide merge, handoff ou complete.
 - Interdit: "analyse seulement" si une tâche READY/IN_PROGRESS existe pour le rôle.
 - Si workboard_role_has_in_progress=1: reprendre/fermer IN_PROGRESS avant tout nouveau claim.
-- Planner: si aucun slot planner READY/IN_PROGRESS, créer un batch top-level puis claim immédiatement (jamais WAIT/MUTED hors incident runtime dur).
+- Planner: suivre d'abord la tache canonique active; si l'actif courant n'est pas planner, faire collect/repair/ack avant de creer un batch ou relancer ANALYSIS.
+- Planner: ne creer/reshaper un batch que s'il n'existe aucune tache canonique executable; avant tout downstream, expliciter `novelty_target` + `user_visible_delta` quand requis et bloquer tout duplicate-scope loop.
 - Dev: task_update=none_no_ready uniquement si workboard_role_has_ready=0 ET workboard_role_has_in_progress=0.
 - Scrum master: ordre strict = READY non claimes -> guard blocks -> stalled IN_PROGRESS -> escalade admin/planner. Priorite aux actions de deblocage, pas aux resumes passifs.
 PROMPT

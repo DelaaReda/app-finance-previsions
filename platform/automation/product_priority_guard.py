@@ -22,6 +22,7 @@ from orchestrator_paths import resolve_orchestrator_read_path
 
 
 DEFAULT_TIMEOUT_S = 0.6
+DEFAULT_PRODUCT_API_BASE_URL = "http://127.0.0.1:8050"
 FRESHNESS_THRESHOLDS_S = {
     "prices": 12 * 3600,
     # Keep monitor/doctor aligned with the backend ingestion health contract.
@@ -315,6 +316,32 @@ def _has_novelty_target(batch: dict[str, Any], tasks: list[dict[str, Any]]) -> b
     return False
 
 
+def _novelty_target_value(batch: dict[str, Any], tasks: list[dict[str, Any]]) -> str:
+    for payload in [batch, *tasks]:
+        for key in NOVELTY_TARGET_KEYS:
+            token = str(payload.get(key) or "").strip()
+            if token:
+                return token
+    return ""
+
+
+def _strict_novelty_target_value(batch: dict[str, Any], tasks: list[dict[str, Any]]) -> str:
+    for payload in [batch, *tasks]:
+        token = str(payload.get("novelty_target") or "").strip()
+        if token:
+            return token
+    return ""
+
+
+def _user_visible_delta_value(batch: dict[str, Any], tasks: list[dict[str, Any]]) -> str:
+    for payload in [batch, *tasks]:
+        for key in ("user_visible_delta", "user_value_delta", "value_delta", "net_new_user_value"):
+            token = str(payload.get(key) or "").strip()
+            if token:
+                return token
+    return ""
+
+
 def _has_code_change(tasks: list[dict[str, Any]]) -> bool:
     for task in tasks:
         commit_sha = str(task.get("commit_sha") or "").strip()
@@ -346,6 +373,32 @@ def _classify_batch_entry(batch: dict[str, Any], tasks: list[dict[str, Any]], *,
     if any(marker in text for marker in VALIDATION_MARKERS):
         return "validation"
     return "reuse_only"
+
+
+def _novelty_target_workflow(
+    *,
+    batch_id: str,
+    scope_key: str,
+    recent_classes: list[str],
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "status": "required",
+        "owner_role": "planner",
+        "batch_id": str(batch_id or "").strip().upper(),
+        "scope_key": str(scope_key or "").strip().lower(),
+        "reason": str(reason or "stagnation_requires_novelty_target").strip().lower(),
+        "next_action": "define_novelty_target",
+        "policy": "no_new_downstream_work",
+        "required_fields": [
+            "novelty_target",
+            "user_value_delta",
+            "scope_delta",
+            "success_metric",
+        ],
+        "clear_when": "novelty_target_present",
+        "recent_classes": [str(item or "").strip().lower() for item in recent_classes if str(item or "").strip()],
+    }
 
 
 def build_autobatch_novelty_gate(
@@ -385,6 +438,37 @@ def build_autobatch_novelty_gate(
             reverse=True,
         )
 
+    active_cycle = queue_payload.get("active_cycle")
+    if not isinstance(active_cycle, dict):
+        active_cycle = board_payload.get("active_cycle")
+    if not isinstance(active_cycle, dict):
+        active_cycle = {}
+    active_batch_ids = [
+        str(item).strip().upper()
+        for item in active_cycle.get("active_batch_ids", [])
+        if str(item).strip()
+    ]
+    active_batches = [queue_items.get(batch_id, {}) for batch_id in active_batch_ids]
+    active_tasks: list[dict[str, Any]] = []
+    for batch_id in active_batch_ids:
+        active_tasks.extend(tasks_by_batch.get(batch_id, []))
+    explicit_novelty_target = _strict_novelty_target_value(active_cycle, []) or next(
+        (
+            value
+            for value in (_strict_novelty_target_value(batch, active_tasks) for batch in active_batches)
+            if value
+        ),
+        "",
+    )
+    explicit_user_delta = _user_visible_delta_value(active_cycle, []) or next(
+        (
+            value
+            for value in (_user_visible_delta_value(batch, active_tasks) for batch in active_batches)
+            if value
+        ),
+        "",
+    )
+
     entries: list[dict[str, Any]] = []
     seen_scopes: set[str] = set()
     for batch_id in recent_ids[:6]:
@@ -419,7 +503,39 @@ def build_autobatch_novelty_gate(
         "stagnation_alert": False,
         "repeated_scope": "none",
         "recent_batches": entries[:3],
+        "novelty_target": explicit_novelty_target,
+        "user_visible_delta": explicit_user_delta,
+        "novelty_target_workflow": {},
     }
+    if explicit_novelty_target and explicit_user_delta:
+        gate.update(
+            {
+                "status": "ok",
+                "allow_autobatch": True,
+                "reason": "novelty_target_set",
+                "stagnation_alert": False,
+            }
+        )
+        return gate
+    if explicit_novelty_target and not explicit_user_delta:
+        workflow = _novelty_target_workflow(
+            batch_id=active_batch_ids[0] if active_batch_ids else str(entries[0].get("batch_id") or "none") if entries else "none",
+            scope_key=str(active_batches[0].get("scope_key") or "").strip() if active_batches else str(entries[0].get("scope_key") or "none") if entries else "none",
+            recent_classes=[str(entry.get("classification") or "").strip().lower() for entry in entries[:3]],
+            reason="stagnation_requires_novelty_target",
+        )
+        workflow["missing_fields"] = ["user_visible_delta"]
+        gate.update(
+            {
+                "status": "blocked",
+                "allow_autobatch": False,
+                "reason": "stagnation_requires_novelty_target",
+                "stagnation_alert": True,
+                "repeated_scope": str(active_batches[0].get("scope_key") or "").strip() if active_batches else str(entries[0].get("scope_key") or "none") if entries else "none",
+                "novelty_target_workflow": workflow,
+            }
+        )
+        return gate
     if len(entries) >= 2:
         first, second = entries[0], entries[1]
         if (
@@ -435,6 +551,15 @@ def build_autobatch_novelty_gate(
                     "reason": "stagnation_requires_novelty_target",
                     "stagnation_alert": True,
                     "repeated_scope": str(first.get("scope_key") or "none"),
+                    "novelty_target_workflow": _novelty_target_workflow(
+                        batch_id=str(first.get("batch_id") or ""),
+                        scope_key=str(first.get("scope_key") or ""),
+                        recent_classes=[
+                            str(first.get("classification") or ""),
+                            str(second.get("classification") or ""),
+                        ],
+                        reason="stagnation_requires_novelty_target",
+                    ),
                 }
             )
     return gate
@@ -884,6 +1009,18 @@ def build_delivery_integrity_metrics(
             continue
         recent.append(event)
 
+    deduped_recent: list[dict[str, Any]] = []
+    duplicate_completion_task_ids: list[str] = []
+    seen_recent_by_task: dict[str, dict[str, Any]] = {}
+    for event in sorted(recent, key=lambda item: str(item.get("at", ""))):
+        details = event.get("details") if isinstance(event.get("details"), dict) else {}
+        task_id = str(details.get("task_id", "")).strip() or "unknown_task"
+        if task_id in seen_recent_by_task:
+            duplicate_completion_task_ids.append(task_id)
+        seen_recent_by_task[task_id] = event
+    deduped_recent = list(seen_recent_by_task.values())
+    duplicate_completion_task_ids = list(dict.fromkeys(duplicate_completion_task_ids))
+
     total = 0
     with_manifest = 0
     with_tests = 0
@@ -903,7 +1040,7 @@ def build_delivery_integrity_metrics(
     historical_browser_missing: list[str] = []
     historical_suspicious: list[str] = []
     records: list[dict[str, Any]] = []
-    for event in recent:
+    for event in deduped_recent:
         details = event.get("details") if isinstance(event.get("details"), dict) else {}
         task_id = str(details.get("task_id", "")).strip() or "unknown_task"
         proof_manifest = str(details.get("proof_manifest", "")).strip()
@@ -953,10 +1090,10 @@ def build_delivery_integrity_metrics(
                 historical_suspicious.append(task_id)
 
     status = "ok"
-    if total and suspicious:
+    if total and (suspicious or duplicate_completion_task_ids):
         status = "degraded"
     future_status = "ok"
-    if future_total and (future_suspicious or future_browser_missing):
+    if future_total and (future_suspicious or future_browser_missing or duplicate_completion_task_ids):
         future_status = "degraded"
     historical_debt = list(dict.fromkeys(historical_browser_missing + historical_suspicious))
     return {
@@ -964,6 +1101,9 @@ def build_delivery_integrity_metrics(
         "future_rollout_at": _iso(rollout_at),
         "window_hours": int(window_hours),
         "recent_completions": total,
+        "raw_recent_completions": len(recent),
+        "duplicate_completion_count": max(0, len(recent) - total),
+        "duplicate_completion_task_ids": duplicate_completion_task_ids[:8],
         "proof_manifest_coverage": round(with_manifest / total, 3) if total else 1.0,
         "tests_evidence_coverage": round(with_tests / total, 3) if total else 1.0,
         "commit_evidence_coverage": round(with_commit_evidence / total, 3) if total else 1.0,
@@ -999,6 +1139,8 @@ def build_delivery_control_metrics(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     metrics = build_delivery_integrity_metrics(root, window_hours=window_hours, now=now)
+    app_api_base_url = os.environ.get("FC_PRODUCT_API_BASE_URL", DEFAULT_PRODUCT_API_BASE_URL).strip() or DEFAULT_PRODUCT_API_BASE_URL
+    product_value = build_product_value_metrics(root, api_base_url=app_api_base_url, timeout_s=DEFAULT_TIMEOUT_S, now=now)
     records = metrics.get("records", []) if isinstance(metrics, dict) else []
     if not isinstance(records, list):
         records = []
@@ -1045,6 +1187,8 @@ def build_delivery_control_metrics(
     qa_completed = 0
     browser_pending = 0
     delivery_ready = 0
+    duplicate_completion_count = int(metrics.get("duplicate_completion_count", 0) or 0)
+    duplicate_completion_task_ids = metrics.get("duplicate_completion_task_ids", []) if isinstance(metrics.get("duplicate_completion_task_ids", []), list) else []
 
     for record in records:
         if not isinstance(record, dict):
@@ -1085,12 +1229,45 @@ def build_delivery_control_metrics(
         if is_future:
             delivery_ready += 1
 
+    product_guard = product_value.get("priority_guard", {}) if isinstance(product_value, dict) else {}
+    copilot = product_value.get("copilot", {}) if isinstance(product_value, dict) else {}
+    forecasts = product_value.get("forecasts", {}) if isinstance(product_value, dict) else {}
+    app_runtime_gate_reasons: list[str] = []
+    if str(copilot.get("status", "unknown")).lower() != "ok":
+        app_runtime_gate_reasons.append(f"copilot_status={copilot.get('status', 'unknown')}")
+    if not bool(forecasts.get("valid", False)):
+        app_runtime_gate_reasons.append(f"forecasts_status={forecasts.get('status', 'unknown')}")
+    if bool(product_guard.get("p0_broken", False)):
+        app_runtime_gate_reasons.extend(str(item) for item in product_guard.get("blocked_reasons", []) if str(item).strip())
+    if duplicate_completion_count > 0:
+        app_runtime_gate_reasons.append("duplicate_proof_churn")
+
+    app_runtime_gate = {
+        "status": "ok" if not app_runtime_gate_reasons else "degraded",
+        "reasons": list(dict.fromkeys(app_runtime_gate_reasons))[:8],
+        "copilot_status": str(copilot.get("status", "unknown")),
+        "forecasts_status": str(forecasts.get("status", "unknown")),
+        "p0_broken": bool(product_guard.get("p0_broken", False)),
+    }
+    independent_delivery_effective = bool(
+        app_runtime_gate["status"] == "ok"
+        and str(metrics.get("future_status", "unknown")) == "ok"
+        and delivery_ready > 0
+    )
+    overall_status = "ok"
+    if app_runtime_gate["status"] != "ok" or duplicate_completion_count > 0:
+        overall_status = "degraded"
+    elif str(metrics.get("future_status", "unknown")) != "ok":
+        overall_status = "degraded"
+
     return {
         "generated_at": metrics.get("generated_at", _iso()),
-        "status": metrics.get("future_status", "unknown"),
+        "status": overall_status,
         "integrity_status": metrics.get("status", "unknown"),
-        "future_status": metrics.get("future_status", "unknown"),
+        "future_status": "degraded" if app_runtime_gate["status"] != "ok" else metrics.get("future_status", "unknown"),
         "future_rollout_at": metrics.get("future_rollout_at", "unknown"),
+        "independent_delivery_effective": independent_delivery_effective,
+        "app_runtime_gate": app_runtime_gate,
         "coverage": {
             "proof_manifest": metrics.get("proof_manifest_coverage", 1.0),
             "tests_evidence": metrics.get("tests_evidence_coverage", 1.0),
@@ -1126,8 +1303,15 @@ def build_delivery_control_metrics(
             "task_ids": [item["task_id"] for item in healthy_items[:8]],
             "items": healthy_items[:8],
         },
+        "proof_churn": {
+            "count": duplicate_completion_count,
+            "task_ids": duplicate_completion_task_ids[:8],
+            "raw_recent_completions": int(metrics.get("raw_recent_completions", 0) or 0),
+            "deduped_recent_completions": int(metrics.get("recent_completions", 0) or 0),
+        },
         "pipeline_counts": {
             "recent_completions": metrics.get("recent_completions", 0),
+            "raw_recent_completions": metrics.get("raw_recent_completions", 0),
             "future_recent_completions": metrics.get("future_recent_completions", 0),
             "qa_review_pending_count": qa_pending,
             "qa_review_completed_count": qa_completed,

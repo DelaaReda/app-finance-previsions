@@ -310,6 +310,8 @@ def snapshot(root: Path) -> dict[str, Any]:
     board_path = resolve_orchestrator_read_path(root, "parallel-workstreams.json")
     queue = _read_json(queue_path)
     board = _read_json(board_path)
+    queue_meta = queue.get("meta", {}) if isinstance(queue.get("meta"), dict) else {}
+    board_meta = board.get("meta", {}) if isinstance(board.get("meta"), dict) else {}
     runtime_truth = build_runtime_truth_snapshot(root, state_limit=64, event_limit=64)
     dispatch_snapshot = build_stable_planner_dispatch_snapshot(root, recent_limit=8)
     event_store_primary = bool(runtime_truth.get("event_store_primary", False))
@@ -326,6 +328,17 @@ def snapshot(root: Path) -> dict[str, Any]:
         board_active_cycle,
         queue_active_cycle,
     )
+    active_cycle_ids = {str(batch_id).strip().upper() for batch_id in active_cycle.get("active_batch_ids", []) if str(batch_id).strip()}
+    planner_hard_guard = queue_meta.get("planner_hard_guard", {}) if isinstance(queue_meta.get("planner_hard_guard"), dict) else {}
+    novelty_target_workflow = queue_meta.get("novelty_target_workflow", {}) if isinstance(queue_meta.get("novelty_target_workflow"), dict) else {}
+    workboard_decision_capable = board_meta.get("decision_capable")
+    if workboard_decision_capable is None:
+        workboard_decision_capable = queue_meta.get("workboard_decision_capable")
+    workboard_decision_reason = str(
+        board_meta.get("decision_capability_reason")
+        or queue_meta.get("workboard_decision_capability_reason")
+        or ""
+    ).strip()
     tasks = board.get("tasks") if isinstance(board.get("tasks"), list) else []
     index = {
         str(task.get("id") or "").strip(): task
@@ -347,6 +360,20 @@ def snapshot(root: Path) -> dict[str, Any]:
             if _detect_task_kind(task) in {"GOV_REVIEW", "PLAN", "ANALYSIS", "ARCH"}
         ),
         active_planner_tasks[0] if active_planner_tasks else None,
+    )
+    active_canonical_tasks = [
+        task for task in tasks
+        if isinstance(task, dict)
+        and not _task_done(task)
+        and (not active_cycle_ids or str(task.get("stream_id") or task.get("batch_id") or "").strip().upper() in active_cycle_ids)
+        and str(task.get("state") or "").strip().upper() in {"IN_PROGRESS", "REVIEW", "BLOCKED"}
+    ]
+    active_canonical_task = next(
+        (
+            task for task in active_canonical_tasks
+            if _canonical_role(task.get("role")) in CAPABILITY_ROLES
+        ),
+        active_canonical_tasks[0] if active_canonical_tasks else None,
     )
     ready_planner_tasks = [
         task for task in planner_tasks
@@ -382,8 +409,14 @@ def snapshot(root: Path) -> dict[str, Any]:
         runnable_task_ids.append(task_id)
 
     runtime_states = runtime_truth.get("latest_states", []) if isinstance(runtime_truth.get("latest_states"), list) else []
+    dispatch_active_rows = dispatch_snapshot.get("active", []) if isinstance(dispatch_snapshot.get("active"), list) else []
+    planner_graph_active = (
+        dispatch_snapshot.get("planner_graph_active", [])
+        if isinstance(dispatch_snapshot.get("planner_graph_active"), list)
+        else []
+    )
     active_subagent_ids = []
-    for row in runtime_states:
+    for row in dispatch_active_rows:
         if not isinstance(row, dict):
             continue
         status = str(row.get("status", "")).strip().lower()
@@ -392,19 +425,54 @@ def snapshot(root: Path) -> dict[str, Any]:
             active_subagent_ids.append(ident)
     subagent_progress_age_candidates = [
         age
-        for age in (_iso_age_s(row.get("updated_at")) for row in runtime_states if isinstance(row, dict))
+        for age in (_iso_age_s(row.get("last_update_at") or row.get("updated_at")) for row in dispatch_active_rows if isinstance(row, dict))
         if age is not None
     ]
     subagent_progress_age = min(subagent_progress_age_candidates) if subagent_progress_age_candidates else -1
 
     qa_collect_pending_compat = False
     subagent_collect_pending_compat = False
-    subagent_collect_pending_runtime = bool(dispatch_snapshot.get("planner_graph_ready_to_merge_count", 0))
+    subagent_collect_pending_runtime = any(
+        str(row.get("status", "")).strip().lower() == "ready_to_merge"
+        for row in planner_graph_active
+        if isinstance(row, dict)
+    )
     qa_collect_pending = False
     subagent_collect_pending = subagent_collect_pending_runtime
 
+    if not novelty_target_workflow and bool(planner_hard_guard.get("active")):
+        hard_guard_reason = str(planner_hard_guard.get("reason") or "").strip().lower()
+        stagnation_alert = queue_meta.get("stagnation_alert", {}) if isinstance(queue_meta.get("stagnation_alert"), dict) else {}
+        if hard_guard_reason == "stagnation_requires_novelty_target":
+            novelty_target_workflow = {
+                "status": "required",
+                "owner_role": "planner",
+                "batch_id": str(stagnation_alert.get("batch_id") or "").strip().upper(),
+                "scope_key": str(stagnation_alert.get("scope_key") or "").strip().lower(),
+                "reason": hard_guard_reason,
+                "next_action": "define_novelty_target",
+                "policy": "no_new_downstream_work",
+                "required_fields": [
+                    "novelty_target",
+                    "user_value_delta",
+                    "scope_delta",
+                    "success_metric",
+                ],
+                "clear_when": "novelty_target_present",
+                "recent_classes": [
+                    str(item).strip().lower()
+                    for item in (stagnation_alert.get("recent_classes") or [])
+                    if str(item).strip()
+                ],
+            }
+
     next_action = "none"
-    if qa_collect_pending:
+    if bool(planner_hard_guard.get("active")):
+        next_action = str(novelty_target_workflow.get("next_action") or "define_novelty_target").strip().lower() or "define_novelty_target"
+    elif isinstance(active_canonical_task, dict):
+        active_task_id = str(active_canonical_task.get("id") or "").strip()
+        next_action = (f"advance {active_task_id}" if active_task_id else "advance_active_cycle_task").lower()
+    elif qa_collect_pending:
         next_action = "collect_qa_results"
     elif subagent_collect_pending:
         next_action = "collect_subagent_results"
@@ -427,16 +495,12 @@ def snapshot(root: Path) -> dict[str, Any]:
         "compat_events_present": False if event_store_primary else bool(events_path and events_path.exists()),
         "compat_worker_registry_present": False if event_store_primary else bool(worker_registry_path and worker_registry_path.exists()),
         "active_cycle": active_cycle,
-        "delivery_scoreboard": (
-            queue.get("meta", {}).get("delivery_scoreboard", {})
-            if isinstance(queue.get("meta"), dict)
-            else {}
-        ),
-        "stagnation_alert": (
-            queue.get("meta", {}).get("stagnation_alert", {})
-            if isinstance(queue.get("meta"), dict)
-            else {}
-        ),
+        "delivery_scoreboard": (queue_meta.get("delivery_scoreboard", {}) if isinstance(queue_meta, dict) else {}),
+        "stagnation_alert": (queue_meta.get("stagnation_alert", {}) if isinstance(queue_meta, dict) else {}),
+        "planner_hard_guard": planner_hard_guard,
+        "novelty_target_workflow": novelty_target_workflow,
+        "workboard_decision_capable": workboard_decision_capable,
+        "workboard_decision_capability_reason": workboard_decision_reason or "none",
         "planning_alignment_status": planning_alignment_status,
         "planning_alignment_reason": planning_alignment_reason,
         "active_subagent_ids": active_subagent_ids,
@@ -455,6 +519,7 @@ def snapshot(root: Path) -> dict[str, Any]:
         "subagent_collect_pending_compat": subagent_collect_pending_compat,
         "runtime_actionable": bool(qa_collect_pending or subagent_collect_pending or runnable_task_ids),
         "next_action": next_action,
+        "active_canonical_task": _build_contract(board, active_canonical_task) if isinstance(active_canonical_task, dict) else {},
         "active_planner_task": _build_contract(board, active_task) if isinstance(active_task, dict) else {},
         "ready_planner_task": _build_contract(board, ready_task) if isinstance(ready_task, dict) else {},
     }

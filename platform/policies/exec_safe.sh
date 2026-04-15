@@ -28,7 +28,7 @@ CMD="$*"
 GATE_JSON="$(python3 "$GATE_SCRIPT" --cmd "$CMD" --workdir "$WORKDIR")"
 DECISION="$(printf '%s' "$GATE_JSON" | python3 -c 'import sys,json;print(json.load(sys.stdin)["decision"])')"
 
-echo "$GATE_JSON"
+echo "$GATE_JSON" >&2
 
 if [[ "$DECISION" == "BLOCK" ]]; then
   echo "[exec_safe] BLOCKED command" >&2

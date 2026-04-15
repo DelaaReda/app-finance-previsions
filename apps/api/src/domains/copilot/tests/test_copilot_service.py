@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import types
 import urllib.request
 from typing import Any, Dict, List, Optional
 
@@ -664,6 +665,79 @@ def test_build_context_payload_uses_saved_portfolio_scope_when_tickers_are_missi
     ]
     assert drift_alerts.get("alerts", [])[0].get("threshold_pct") == 20.0
     assert drift_alerts.get("alerts", [])[1].get("threshold_pct") == 5.0
+
+
+def test_saved_portfolio_context_skips_live_risk_for_default_scope(monkeypatch):
+    calls = {"risk_profile": 0}
+
+    class _FakePortfolioService:
+        def list_portfolios(self):
+            return [
+                {
+                    "id": "portfolio-123",
+                    "name": "Core",
+                    "tickers": ["AAPL", "MSFT"],
+                    "metadata": {
+                        "weights": {
+                            "AAPL": 0.7,
+                            "MSFT": 0.3,
+                        },
+                        "horizon": "1y",
+                    },
+                }
+            ]
+
+        def get_risk_profile(self, _portfolio_id: str):
+            calls["risk_profile"] += 1
+            return {
+                "risk_profile": "balanced",
+            }
+
+    fake_module = types.SimpleNamespace(
+        get_portfolio_service=lambda: _FakePortfolioService(),
+        _resolve_portfolio_weights=lambda tickers, metadata: (
+            {"AAPL": 0.7, "MSFT": 0.3},
+            "portfolio_metadata",
+            [],
+        ),
+    )
+
+    def fake_import_module(module_path: str):
+        if module_path in {
+            "domains.market_data.application.portfolio_service",
+            "services.portfolio_service",
+        }:
+            return fake_module
+        raise ImportError(module_path)
+
+    monkeypatch.setattr(copilot_service, "import_module", fake_import_module)
+
+    context = copilot_service._resolve_saved_portfolio_context({})
+
+    assert calls["risk_profile"] == 0
+    assert context == {
+        "portfolio": {
+            "id": "portfolio-123",
+            "name": "Core",
+            "tickers": ["AAPL", "MSFT"],
+            "tickers_count": 2,
+            "state": {
+                "horizon": "1y",
+            },
+        },
+        "risk_profile": "",
+        "risk_level": "",
+        "benchmark": "",
+        "why": [],
+        "warnings": [],
+        "weights": {
+            "AAPL": 0.7,
+            "MSFT": 0.3,
+        },
+        "confidence": None,
+        "freshness": "",
+        "source": ["copilot_saved_portfolio"],
+    }
 
 
 def test_build_context_payload_fallback_keeps_daily_brief_contract(monkeypatch):

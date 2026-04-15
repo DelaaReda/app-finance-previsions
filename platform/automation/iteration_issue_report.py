@@ -26,6 +26,7 @@ CONTRACT_KEYS = (
 
 SEVERITY_ORDER = {"INFO": 0, "WARN": 1, "ERROR": 2, "CRITICAL": 3}
 SEVERITY_NAMES = ["INFO", "WARN", "ERROR", "CRITICAL"]
+TERMINAL_TASK_STATES = {"DONE", "PASS", "CLOSED"}
 
 
 def read_text(path: Path) -> str:
@@ -87,6 +88,183 @@ def parse_ts_utc(raw: str) -> datetime | None:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+
+def load_json_dict(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(read_text(path))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _workspace_root_from_latest(latest_path: Path) -> Path | None:
+    for candidate in [latest_path.parent, *latest_path.parents]:
+        if candidate.name == "orchestrator-state" and candidate.parent.name == "logs-codex-runs":
+            return candidate.parent.parent
+    return None
+
+
+def _canonical_role(value: str) -> str:
+    token = str(value or "").strip().replace("-", "_").lower()
+    if token in {
+        "planner",
+        "analyst",
+        "architect",
+        "po",
+        "scrum_master",
+        "vision_architect_tasks_planner",
+        "vision-architect-tasks-planner",
+    }:
+        return "planner"
+    if token in {
+        "dev",
+        "backend_engineer",
+        "frontend_engineer",
+        "data_analyst",
+        "integrator",
+        "tester",
+        "qa",
+    }:
+        return "dev"
+    if token in {"admin", "clawsentinel", "infra"}:
+        return "admin"
+    return token
+
+
+def _task_batch_id(task: dict[str, Any]) -> str:
+    stream_id = str(task.get("stream_id") or task.get("batch_id") or "").strip().upper()
+    if stream_id:
+        return stream_id
+    task_id = str(task.get("id") or task.get("task_id") or "").strip().upper()
+    if task_id.startswith("BATCH-"):
+        parts = task_id.split("-")
+        if len(parts) >= 2:
+            return "-".join(parts[:2])
+    return ""
+
+
+def _select_role_task(tasks: list[dict[str, Any]], active_ids: list[str], role: str) -> dict[str, Any]:
+    state_rank = {
+        "IN_PROGRESS": 0,
+        "REVIEW": 1,
+        "BLOCKED": 2,
+        "READY": 3,
+        "READY_PLANNER": 4,
+        "READY_DEV": 5,
+        "WAITING_DEP": 6,
+    }
+    candidates: list[tuple[int, str, dict[str, Any]]] = []
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        if active_ids and _task_batch_id(task) not in active_ids:
+            continue
+        state = str(task.get("state") or "").strip().upper()
+        if state in TERMINAL_TASK_STATES or not state:
+            continue
+        task_role = _canonical_role(task.get("role", ""))
+        task_assignee = _canonical_role(task.get("assignee", ""))
+        task_owner = _canonical_role(task.get("owner", ""))
+        if role not in {task_role, task_assignee, task_owner}:
+            continue
+        task_id = str(task.get("id") or task.get("task_id") or "").strip()
+        if not task_id:
+            continue
+        candidates.append((state_rank.get(state, 99), task_id, task))
+    candidates.sort(key=lambda item: (item[0], item[1]))
+    return candidates[0][2] if candidates else {}
+
+
+def build_canonical_supervision_records(latest_path: Path, now_ts: str) -> dict[str, dict[str, Any]]:
+    root = _workspace_root_from_latest(latest_path)
+    if root is None:
+        return {}
+
+    state_dir = root / "logs-codex-runs" / "orchestrator-state"
+    queue_payload = load_json_dict(state_dir / "priority-queue.json")
+    board_payload = load_json_dict(state_dir / "parallel-workstreams.json")
+    active_cycle = queue_payload.get("active_cycle")
+    if not isinstance(active_cycle, dict):
+        active_cycle = board_payload.get("active_cycle")
+    if not isinstance(active_cycle, dict):
+        active_cycle = {}
+
+    active_batch_ids = [
+        str(value).strip().upper()
+        for value in active_cycle.get("active_batch_ids", [])
+        if str(value).strip()
+    ]
+    tasks = board_payload.get("tasks", [])
+    if not isinstance(tasks, list):
+        tasks = []
+
+    records: dict[str, dict[str, Any]] = {}
+    for role in ("dev", "admin"):
+        task = _select_role_task(tasks, active_batch_ids, role)
+        if task:
+            task_id = str(task.get("id") or task.get("task_id") or "").strip() or "none"
+            state = str(task.get("state") or "UNKNOWN").strip().upper() or "UNKNOWN"
+            blocked_reason = one_line(task.get("blocked_reason", ""), 160)
+            next_action = one_line(
+                task.get("next_action", "") or blocked_reason or f"follow_{task_id}",
+                240,
+            )
+            issue_status = "has_issues" if state == "BLOCKED" or bool(blocked_reason) else "none"
+            max_severity = "WARN" if issue_status == "has_issues" else "INFO"
+            issues = [blocked_reason] if blocked_reason else []
+            projection_capable = bool(
+                task_id
+                and state
+                and (
+                    task.get("owner")
+                    or task.get("role")
+                    or task.get("assignee")
+                    or task.get("next_action")
+                    or task.get("blocked_reason")
+                )
+            )
+            records[role] = {
+                "ts_utc": now_ts,
+                "role": role,
+                "source": "planner_active_cycle_check",
+                "status": state,
+                "issue_status": issue_status,
+                "issue_count": len(issues),
+                "max_severity": max_severity,
+                "issues": issues,
+                "next_action": next_action or "continue_next_tick",
+                "canonical_active_batch_ids": active_batch_ids,
+                "canonical_task_id": task_id,
+                "canonical_task_state": state,
+                "canonical_task_role": one_line(task.get("role", ""), 60),
+                "projection_secondary_only": not projection_capable,
+            }
+            continue
+
+        records[role] = {
+            "ts_utc": now_ts,
+            "role": role,
+            "source": "planner_active_cycle_check",
+            "status": "PASS",
+            "issue_status": "none",
+            "issue_count": 0,
+            "max_severity": "INFO",
+            "issues": [],
+            "next_action": (
+                f"wait_for_{role}_task_on_active_cycle"
+                if active_batch_ids
+                else "wait_for_active_cycle"
+            ),
+            "canonical_active_batch_ids": active_batch_ids,
+            "canonical_task_id": "none",
+            "canonical_task_state": "none",
+            "canonical_task_role": role,
+            "projection_secondary_only": True,
+        }
+    return records
 
 
 def _severity_to_impact(severity: str, issue_count: int = 1) -> str:
@@ -590,6 +768,11 @@ def update_latest(latest_path: Path, role: str, record: dict[str, Any]) -> None:
     if not isinstance(roles, dict):
         roles = {}
     roles[role] = record
+    if role == "planner":
+        for role_name, canonical_record in build_canonical_supervision_records(
+            latest_path, str(record.get("ts_utc") or "")
+        ).items():
+            roles[role_name] = canonical_record
     data["roles"] = roles
     data["updated_at_utc"] = record.get("ts_utc", "")
 
@@ -601,10 +784,75 @@ def update_latest(latest_path: Path, role: str, record: dict[str, Any]) -> None:
         and rec.get("issue_status") == "has_issues"
         and str(rec.get("max_severity", "INFO")).upper() == "CRITICAL"
     ]
+    orch_dir = latest_path.parent
+    queue_payload: dict[str, Any] = {}
+    board_payload: dict[str, Any] = {}
+    try:
+        queue_loaded = json.loads(read_text(orch_dir / "priority-queue.json"))
+        if isinstance(queue_loaded, dict):
+            queue_payload = queue_loaded
+    except Exception:
+        queue_payload = {}
+    try:
+        board_loaded = json.loads(read_text(orch_dir / "parallel-workstreams.json"))
+        if isinstance(board_loaded, dict):
+            board_payload = board_loaded
+    except Exception:
+        board_payload = {}
+    active_cycle = {}
+    if isinstance(queue_payload.get("active_cycle"), dict):
+        active_cycle = queue_payload.get("active_cycle") or {}
+    elif isinstance(board_payload.get("active_cycle"), dict):
+        active_cycle = board_payload.get("active_cycle") or {}
+    active_batch_ids = [
+        str(item).strip().upper()
+        for item in (active_cycle.get("active_batch_ids") if isinstance(active_cycle.get("active_batch_ids"), list) else [])
+        if str(item).strip()
+    ]
+    active_roles: list[str] = []
+    closed_states = {"DONE", "CLOSED", "CANCELLED", "ARCHIVED"}
+    for task in (board_payload.get("tasks") if isinstance(board_payload.get("tasks"), list) else []):
+        if not isinstance(task, dict):
+            continue
+        stream_id = str(task.get("stream_id") or task.get("batch_id") or "").strip().upper()
+        if active_batch_ids and stream_id not in active_batch_ids:
+            continue
+        state = str(task.get("state") or "").strip().upper()
+        if state in closed_states:
+            continue
+        task_role = str(task.get("role") or task.get("owner") or task.get("assignee") or "").strip()
+        if task_role and task_role not in active_roles:
+            active_roles.append(task_role)
+    freshness_window_s = 1800
+    stale_active_roles: list[str] = []
+    now_utc = datetime.now(timezone.utc)
+    for active_role in active_roles:
+        active_record = roles.get(active_role)
+        if not isinstance(active_record, dict):
+            stale_active_roles.append(active_role)
+            continue
+        ts_raw = str(active_record.get("ts_utc") or "").strip()
+        if not ts_raw:
+            stale_active_roles.append(active_role)
+            continue
+        try:
+            parsed = datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
+        except Exception:
+            stale_active_roles.append(active_role)
+            continue
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        age_s = max(0, int((now_utc - parsed.astimezone(timezone.utc)).total_seconds()))
+        if age_s > freshness_window_s:
+            stale_active_roles.append(active_role)
     data["summary"] = {
         "roles_total": len(roles),
         "has_issues_roles": sorted(has_issues_roles),
         "critical_open_count": len(critical_open),
+        "active_cycle_batch_ids": active_batch_ids,
+        "active_cycle_roles": active_roles,
+        "stale_active_roles": stale_active_roles,
+        "freshness_window_s": freshness_window_s,
     }
 
     latest_path.write_text(json.dumps(data, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")

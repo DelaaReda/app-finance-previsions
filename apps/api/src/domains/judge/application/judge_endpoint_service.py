@@ -2484,7 +2484,11 @@ def _persist_decision_journal_entries(
 
     try:
         existing_payload = load_json(DECISION_JOURNAL_STORAGE_KEY) or {}
-        existing_entries_raw = existing_payload.get("entries") if isinstance(existing_payload, dict) else []
+        existing_entries_raw = (
+            existing_payload.get("entries") if isinstance(existing_payload, dict) else []
+        )
+        if not isinstance(existing_entries_raw, list):
+            existing_entries_raw = []
         existing_entries = [
             entry
             for entry in existing_entries_raw
@@ -2685,6 +2689,75 @@ async def get_judge_verdicts_payload(
         return response
 
     verdicts = data.get("verdicts")
+    if isinstance(verdicts, list):
+        for verdict in verdicts:
+            if not isinstance(verdict, dict):
+                continue
+            why_items = verdict.get("why")
+            normalized_why: List[str] = []
+            if isinstance(why_items, list):
+                normalized_why = [
+                    str(item).strip()
+                    for item in why_items
+                    if str(item).strip()
+                ]
+            elif str(why_items or "").strip():
+                normalized_why = [str(why_items).strip()]
+
+            if not normalized_why:
+                reasoning = verdict.get("reasoning")
+                if isinstance(reasoning, list):
+                    normalized_why.extend(
+                        str(item).strip()
+                        for item in reasoning
+                        if str(item).strip()
+                    )
+                elif str(reasoning or "").strip():
+                    normalized_why.append(str(reasoning).strip())
+
+            if not normalized_why:
+                go_no_go = verdict.get("go_no_go")
+                if isinstance(go_no_go, dict):
+                    reasons = go_no_go.get("reasons")
+                    if isinstance(reasons, list):
+                        reason_line = ", ".join(
+                            str(item).strip()
+                            for item in reasons
+                            if str(item).strip()
+                        )
+                        if reason_line:
+                            normalized_why.append(f"Gate assessment: {reason_line}.")
+
+            if not normalized_why:
+                expected_return = verdict.get("expected_return")
+                try:
+                    expected_return_value = float(expected_return)
+                except (TypeError, ValueError):
+                    expected_return_value = None
+                if expected_return_value is not None:
+                    normalized_why.append(
+                        f"Expected return over horizon: {expected_return_value * 100.0:.2f}%."
+                    )
+
+            risk_level = str(
+                verdict.get("risk_level")
+                or (verdict.get("risk") or {}).get("level")
+                or ""
+            ).strip()
+            if risk_level and all(
+                risk_level.lower() not in item.lower() for item in normalized_why
+            ):
+                normalized_why.append(f"Risk level assessed as {risk_level}.")
+
+            if not normalized_why:
+                normalized_why = [
+                    "Decision derived from judge forecast, policy guardrails, and available market context."
+                ]
+
+            verdict["why"] = normalized_why[:3]
+            if not verdict.get("reasoning"):
+                verdict["reasoning"] = list(verdict["why"])
+
     _apply_personal_policy_guardrails(
         data,
         freshness=response.get("freshness") or data.get("generated_at"),

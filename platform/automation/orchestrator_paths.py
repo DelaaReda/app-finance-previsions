@@ -57,6 +57,10 @@ def canonical_docs_root(root: Path) -> Path:
     return _normalized_root(root) / CANONICAL_DOCS_DIR
 
 
+def legacy_docs_root(root: Path) -> Path:
+    return canonical_docs_root(root)
+
+
 def _runtime_relative_path(relative_path: str) -> Path:
     rel = Path(str(relative_path or "").strip().lstrip("/"))
     rel_posix = rel.as_posix()

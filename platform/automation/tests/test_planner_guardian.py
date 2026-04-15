@@ -20,6 +20,7 @@ SPEC.loader.exec_module(MODULE)
 
 
 compute_score = MODULE.compute_score
+build_prompt_patches = MODULE.build_prompt_patches
 
 
 class PlannerGuardianTests(unittest.TestCase):
@@ -31,8 +32,10 @@ class PlannerGuardianTests(unittest.TestCase):
                 "planner_artifact": "artifact://planner",
                 "stream_id": "VB-04",
                 "task_id": "VB-04-PLAN",
+                "batch_dependency_policy": "single_batch",
             },
             {"queue_has_ready": 0, "workboard_role_has_work": 1, "workboard_role_has_in_progress": 0, "planner_batch_runway_short": 0},
+            {},
         )
         self.assertNotIn("dependency_policy_not_enforced", outcome["issues"])
 
@@ -47,9 +50,36 @@ class PlannerGuardianTests(unittest.TestCase):
                 "batch_depends_on": "VB-03",
             },
             {"queue_has_ready": 0, "workboard_role_has_work": 1, "workboard_role_has_in_progress": 0, "planner_batch_runway_short": 0},
+            {},
         )
         self.assertIn("inter_batch_dependency_detected", outcome["issues"])
         self.assertIn("dependency_policy_not_enforced", outcome["issues"])
+
+    def test_build_prompt_patches_emits_novelty_target_patch_for_hard_guard(self) -> None:
+        patches = build_prompt_patches(
+            ["delivery_value_insufficient"],
+            {
+                "planner_hard_guard_active": True,
+                "planner_hard_guard_reason": "stagnation_requires_novelty_target",
+                "novelty_target_workflow": {"required_fields": ["novelty_target", "user_visible_delta"]},
+            },
+            {},
+        )
+        patch_ids = [patch["id"] for patch in patches]
+        self.assertIn("novelty_target_first", patch_ids)
+
+    def test_build_prompt_patches_emits_follow_active_task_patch(self) -> None:
+        patches = build_prompt_patches(
+            ["planner_orchestrator_admin_route_mismatch"],
+            {
+                "active_task_id": "BATCH-84-ADMIN-01",
+                "active_task_role": "admin",
+                "active_task_state": "IN_PROGRESS",
+            },
+            {},
+        )
+        patch_ids = [patch["id"] for patch in patches]
+        self.assertIn("follow_canonical_active_task", patch_ids)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 {
-  "updated_at_utc": "2026-03-24T22:38:01Z",
+  "updated_at_utc": "2026-04-15T04:38:02Z",
   "roles": {
     "dev": {
-      "ts_utc": "2026-03-24T22:38:01Z",
+      "ts_utc": "2026-04-15T04:38:02Z",
       "role": "dev",
       "source": "health_snapshot",
       "status": "PASS",
@@ -34,13 +34,13 @@
       "workboard_version": ""
     },
     "planner": {
-      "ts_utc": "2026-03-24T22:38:01Z",
+      "ts_utc": "2026-04-15T04:38:02Z",
       "role": "planner",
       "source": "health_snapshot",
-      "status": "IN_PROGRESS",
-      "delta": "PLANNER_DISPATCH_ACTIVE",
-      "verdict": "GO_WITH_CAUTION",
-      "blocker_id": "NONE",
+      "status": "BLOCKED",
+      "delta": "PLANNER_RUNTIME_ACTIONS_FAILED",
+      "verdict": "BLOCKED",
+      "blocker_id": "PLANNER_RUNTIME_ACTIONS_FAILED",
       "next_action_unique": "PLANNER_ORCHESTRATOR_BRIDGE_FAILED",
       "next": "owner=planner; action=repair planner capability bridge now",
       "action_summary": "inspect_bridge_stdout_and_stderr",
@@ -74,7 +74,7 @@
       "workboard_version": ""
     },
     "admin": {
-      "ts_utc": "2026-03-24T22:38:01Z",
+      "ts_utc": "2026-04-15T04:38:02Z",
       "role": "admin",
       "source": "health_snapshot",
       "status": "PASS",
@@ -176,9 +176,9 @@
       "workboard_version": "workboard_1773424900_884e6aaf148b"
     }
   },
-  "updated_at": "2026-03-24T22:38:01Z",
+  "updated_at": "2026-04-15T04:38:02Z",
   "health_snapshot": {
-    "ts_utc": "2026-03-24T22:38:01Z",
+    "ts_utc": "2026-04-15T04:38:02Z",
     "health": "DEGRADED",
     "execution_mode": "planner_experimental",
     "scheduled_roles": [
@@ -186,27 +186,27 @@
     ],
     "capability_roles": [],
     "workboard": {
-      "total": 547,
-      "done": 544,
+      "total": 554,
+      "done": 548,
       "ready": 0,
       "in_progress": 2
     },
     "velocity": {
-      "done_24h": 38,
-      "done_7d": 158,
-      "proofs": 104
+      "done_24h": 545,
+      "done_7d": 545,
+      "proofs": 106
     },
     "queue": {
-      "total": 82,
+      "total": 83,
       "ready": 0,
-      "closed": 81
+      "closed": 82
     },
     "agents": {
       "planner": {
-        "verdict": "GO_WITH_CAUTION",
-        "status": "IN_PROGRESS",
-        "blocker": "NONE",
-        "delta": "PLANNER_DISPATCH_ACTIVE"
+        "verdict": "BLOCKED",
+        "status": "BLOCKED",
+        "blocker": "PLANNER_RUNTIME_ACTIONS_FAILED",
+        "delta": "PLANNER_RUNTIME_ACTIONS_FAILED"
       },
       "dev": {
         "verdict": "PASS",
@@ -221,46 +221,48 @@
         "delta": "NO_DELTA"
       }
     },
-    "blocked_agents": [],
+    "blocked_agents": [
+      "planner"
+    ],
     "rate_limited_agents": [],
     "stale_agents": [],
     "rate_limits": [],
     "tick_age_min": {
-      "planner": 0,
-      "dev": 26131,
-      "admin": 26117
+      "planner": 5,
+      "dev": 56732,
+      "admin": 56718
     },
     "critical_widget_health": {
-      "ts_utc": "2026-03-24T22:38:01Z",
-      "state": "error",
+      "ts_utc": "2026-04-15T04:38:02Z",
+      "state": "unknown",
       "monitor_base_url": "http://127.0.0.1:7779",
       "api_base_url": "http://127.0.0.1:8050",
       "widgets": {
         "hero": {
-          "state": "error",
-          "monitor_health": "OK",
-          "recommendations_status": "unknown"
+          "state": "unknown",
+          "monitor_health": "unknown",
+          "recommendations_status": "ok"
         },
         "news": {
-          "state": "stale",
-          "freshness": "warm",
-          "updated_at": "2026-03-24T22:00:19.008115"
+          "state": "unknown",
+          "freshness": "unknown",
+          "updated_at": ""
         },
         "forecasts": {
-          "state": "error",
+          "state": "unknown",
           "status": "ok",
-          "freshness": "fresh",
-          "updated_at": "2026-03-24T04:28:23.266979Z"
+          "freshness": "unknown",
+          "updated_at": ""
         },
         "judge": {
-          "state": "error",
-          "monitor_health": "OK",
-          "recommendations_status": "unknown"
+          "state": "unknown",
+          "monitor_health": "unknown",
+          "recommendations_status": "ok"
         },
         "deep-dive": {
-          "state": "error",
-          "monitor_health": "OK",
-          "recommendations_status": "unknown",
+          "state": "unknown",
+          "monitor_health": "unknown",
+          "recommendations_status": "ok",
           "forecasts_status": "ok"
         }
       }
@@ -268,43 +270,43 @@
   },
   "health": "DEGRADED",
   "velocity": {
-    "done_24h": 38,
-    "done_7d": 158,
-    "proofs": 104
+    "done_24h": 545,
+    "done_7d": 545,
+    "proofs": 106
   },
   "_cleanup_ts": "2026-03-04T11:59:09.835863+00:00",
   "_cleanup_note": "Removed 12 phantom roles (not in active topology): ['frontend_engineer', 'infra_engineer', 'backend_engineer', 'integrator', 'analyst', 'architect', 'data_analyst', 'tester', 'qa', 'scrum_master', 'clawsentinel', 'po']",
   "critical_widget_health": {
-    "ts_utc": "2026-03-24T22:38:01Z",
-    "state": "error",
+    "ts_utc": "2026-04-15T04:38:02Z",
+    "state": "unknown",
     "monitor_base_url": "http://127.0.0.1:7779",
     "api_base_url": "http://127.0.0.1:8050",
     "widgets": {
       "hero": {
-        "state": "error",
-        "monitor_health": "OK",
-        "recommendations_status": "unknown"
+        "state": "unknown",
+        "monitor_health": "unknown",
+        "recommendations_status": "ok"
       },
       "news": {
-        "state": "stale",
-        "freshness": "warm",
-        "updated_at": "2026-03-24T22:00:19.008115"
+        "state": "unknown",
+        "freshness": "unknown",
+        "updated_at": ""
       },
       "forecasts": {
-        "state": "error",
+        "state": "unknown",
         "status": "ok",
-        "freshness": "fresh",
-        "updated_at": "2026-03-24T04:28:23.266979Z"
+        "freshness": "unknown",
+        "updated_at": ""
       },
       "judge": {
-        "state": "error",
-        "monitor_health": "OK",
-        "recommendations_status": "unknown"
+        "state": "unknown",
+        "monitor_health": "unknown",
+        "recommendations_status": "ok"
       },
       "deep-dive": {
-        "state": "error",
-        "monitor_health": "OK",
-        "recommendations_status": "unknown",
+        "state": "unknown",
+        "monitor_health": "unknown",
+        "recommendations_status": "ok",
         "forecasts_status": "ok"
       }
     }

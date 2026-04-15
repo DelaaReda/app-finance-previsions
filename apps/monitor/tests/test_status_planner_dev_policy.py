@@ -396,11 +396,13 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertEqual(payload.get("planner_dispatch", {}).get("lifecycle"), "running")
 
         self.assertEqual(payload.get("execution_mode"), "planner_experimental")
-        self.assertEqual(payload.get("roles"), ["planner"])
+        self.assertEqual(payload.get("scheduler_roles"), ["planner"])
+        self.assertEqual(payload.get("roles"), ["planner", "dev", "admin", "scrum_master"])
+        self.assertEqual(payload.get("capability_roles"), ["dev", "admin", "scrum_master"])
         self.assertEqual(payload.get("health_breakdown", {}).get("core_roles"), ["planner"])
         self.assertEqual(payload.get("agents_incomplete"), [])
         self.assertNotIn("dev", payload.get("health_breakdown", {}).get("by_role", {}))
-        self.assertNotIn("scrum_master", payload.get("roles", []))
+        self.assertIn("scrum_master", payload.get("roles", []))
 
     def test_planner_only_status_ignores_legacy_discovered_admin_role(self) -> None:
         cfg_dir = self.root / "platform" / "config" / "runner"

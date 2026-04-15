@@ -201,14 +201,14 @@ extract_evidence_value() {
 
 lane_in_progress_count() {
   local role="$1"
-  jq -r --arg role "$role" '[.tasks[]? | select((.role // "") == $role and (.state // "") == "IN_PROGRESS")] | length' "$BOARD_FILE" 2>/dev/null || echo 0
+  jq -r --arg role "$role" '[.tasks[]? | select(((.role // .assigned_to // .assignee // "") == $role) and (.state // "") == "IN_PROGRESS")] | length' "$BOARD_FILE" 2>/dev/null || echo 0
 }
 
 lane_in_progress_task() {
   local role="$1"
   jq -r --arg role "$role" '
     [.tasks[]?
-      | select((.role // "") == $role and (.state // "") == "IN_PROGRESS")
+      | select(((.role // .assigned_to // .assignee // "") == $role) and (.state // "") == "IN_PROGRESS")
       | (.id // "")
     ] | map(select(length>0)) | .[0] // ""
   ' "$BOARD_FILE" 2>/dev/null || true
@@ -216,10 +216,22 @@ lane_in_progress_task() {
 
 lane_ready_task() {
   local role="$1"
-  jq -r --arg role "$role" '
+  local ready_states_json='["READY"]'
+  case "$role" in
+    admin)
+      ready_states_json='["READY","READY_PLANNER","READY_ADMIN"]'
+      ;;
+    dev)
+      ready_states_json='["READY","READY_DEV"]'
+      ;;
+    planner)
+      ready_states_json='["READY","READY_PLANNER"]'
+      ;;
+  esac
+  jq -r --arg role "$role" --argjson ready_states "$ready_states_json" '
     [.tasks[]?
-      | select((.role // "") == $role)
-      | select((.state // "") == "READY")
+      | select(((.role // .assigned_to // .assignee // "") == $role))
+      | select((.state // "") as $state | ($ready_states | index($state)) != null)
       | select(((.assignee // "") | length) == 0 or .assignee == $role)
       | (.id // "")
     ] | map(select(length>0)) | .[0] // ""
@@ -603,7 +615,7 @@ if [[ -n "$blocked_roles_all_csv" ]]; then
       printf '%s\n' "$blocked_roles_all_csv" \
         | tr ',' '\n' \
         | sed '/^$/d' \
-        | rg '^(planner|dev)$' \
+        | rg '^(planner|dev|admin)$' \
         | paste -sd ',' -;
     } || true
   )"
@@ -627,6 +639,7 @@ queue_waiting_dep_count="$(jq '[.items[]? | select((.state // "")=="WAITING_DEP"
 queue_in_progress_count="$(jq '[.items[]? | select((.state // "")=="IN_PROGRESS")] | length' "$QUEUE_FILE" 2>/dev/null || echo 0)"
 planner_in_progress_count="$(jq '[.tasks[]? | select((.role // "")=="planner" and (.state // "")=="IN_PROGRESS")] | length' "$BOARD_FILE" 2>/dev/null || echo 0)"
 dev_in_progress_count="$(jq '[.tasks[]? | select((.role // "")=="dev" and (.state // "")=="IN_PROGRESS")] | length' "$BOARD_FILE" 2>/dev/null || echo 0)"
+admin_in_progress_count="$(jq '[.tasks[]? | select((.role // "")=="admin" and (.state // "")=="IN_PROGRESS")] | length' "$BOARD_FILE" 2>/dev/null || echo 0)"
 board_waiting_dep_count="$(jq '[.tasks[]? | select((.state // "")=="WAITING_DEP")] | length' "$BOARD_FILE" 2>/dev/null || echo 0)"
 board_in_progress_count="$(jq '[.tasks[]? | select((.state // "")=="IN_PROGRESS")] | length' "$BOARD_FILE" 2>/dev/null || echo 0)"
 planner_in_progress_tasks_csv="$(
@@ -645,7 +658,7 @@ fi
 
 declare -a explicit_blocked_roles_arr=() virtual_blocked_roles_arr=() takeover_roles_arr=()
 virtual_blocked_roles_csv=""
-for role in planner dev; do
+for role in planner dev admin; do
   lane_count="$(lane_in_progress_count "$role")"
   [[ "$lane_count" =~ ^[0-9]+$ ]] || lane_count=0
   lane_active=0
@@ -697,7 +710,7 @@ declare -a actionable_blocked_roles_arr=()
 if (( ${#explicit_blocked_roles_arr[@]} > 0 )); then
   for role in "${explicit_blocked_roles_arr[@]}"; do
     role="$(printf '%s' "$role" | tr -d '[:space:]')"
-    [[ "$role" == "planner" || "$role" == "dev" ]] || continue
+    [[ "$role" == "planner" || "$role" == "dev" || "$role" == "admin" ]] || continue
     actionable_blocked_roles_arr+=("$role")
   done
   if (( ${#actionable_blocked_roles_arr[@]} > 0 )); then
@@ -716,7 +729,7 @@ if [[ "$FC_ADMIN_AUTONOMY_ENABLED" == "1" ]]; then
     AUTONOMY_REASON_CODE="ACTIONABLE_BLOCKED_ROLES"
     for role in "${actionable_blocked_roles_arr[@]}"; do
       role="$(printf '%s' "$role" | tr -d '[:space:]')"
-      [[ "$role" == "planner" || "$role" == "dev" ]] || continue
+      [[ "$role" == "planner" || "$role" == "dev" || "$role" == "admin" ]] || continue
       AUTO_TARGET_ROLE="$role"
       AUTO_REASON_BLOCKER="BLOCKED_RUNTIME"
       break
@@ -750,7 +763,7 @@ elif (( ${#actionable_blocked_roles_arr[@]} > 0 )); then
   AUTONOMY_REASON_CODE="ACTIONABLE_BLOCKED_ROLES"
   for role in "${actionable_blocked_roles_arr[@]}"; do
     role="$(printf '%s' "$role" | tr -d '[:space:]')"
-    [[ "$role" == "planner" || "$role" == "dev" ]] || continue
+    [[ "$role" == "planner" || "$role" == "dev" || "$role" == "admin" ]] || continue
     AUTO_TARGET_ROLE="$role"
     AUTO_REASON_BLOCKER="BLOCKED_RUNTIME"
     break
@@ -776,7 +789,7 @@ if [[ "$AUTO_TRIGGER" != "none" ]]; then
   if [[ "$AUTO_TRIGGER" == "blocked_explicit" && ${#actionable_blocked_roles_arr[@]} -gt 0 ]]; then
     for role in "${actionable_blocked_roles_arr[@]}"; do
       role="$(printf '%s' "$role" | tr -d '[:space:]')"
-      [[ "$role" == "planner" || "$role" == "dev" ]] || continue
+      [[ "$role" == "planner" || "$role" == "dev" || "$role" == "admin" ]] || continue
       takeover_roles_arr+=("$role")
     done
   fi
@@ -802,7 +815,7 @@ else
   rm -f "$TAKEOVER_ROLES_FILE" >/dev/null 2>&1 || true
 fi
 
-decision "ready_queue=${ready_queue_count} queue_waiting_dep=${queue_waiting_dep_count} queue_in_progress=${queue_in_progress_count} board_waiting_dep=${board_waiting_dep_count} board_in_progress=${board_in_progress_count} planner_in_progress=${planner_in_progress_count} dev_in_progress=${dev_in_progress_count} open_handoffs=${open_handoff_count} blocked_roles=${blocked_roles_csv:-none} actionable_blocked_roles=${actionable_blocked_roles_csv:-none} blocked_roles_all=${blocked_roles_all_csv:-none} virtual_blocked_roles=${virtual_blocked_roles_csv:-none} autonomy_trigger=${AUTO_TRIGGER} autonomy_reason_code=${AUTONOMY_REASON_CODE} autonomy_target=${AUTO_TARGET_ROLE:-none} autonomy_task=${AUTO_TARGET_TASK:-none} takeover_active=${takeover_active} dependency_funnel_plateau=${plateau_detected} tshape_mode=${TSHAPE_MODE} cooldown_left_s=${cooldown_left} max_actions=${DISPATCH_MAX_ACTIONS} dry_run=${DISPATCH_DRY_RUN}"
+decision "ready_queue=${ready_queue_count} queue_waiting_dep=${queue_waiting_dep_count} queue_in_progress=${queue_in_progress_count} board_waiting_dep=${board_waiting_dep_count} board_in_progress=${board_in_progress_count} planner_in_progress=${planner_in_progress_count} dev_in_progress=${dev_in_progress_count} admin_in_progress=${admin_in_progress_count} open_handoffs=${open_handoff_count} blocked_roles=${blocked_roles_csv:-none} actionable_blocked_roles=${actionable_blocked_roles_csv:-none} blocked_roles_all=${blocked_roles_all_csv:-none} virtual_blocked_roles=${virtual_blocked_roles_csv:-none} autonomy_trigger=${AUTO_TRIGGER} autonomy_reason_code=${AUTONOMY_REASON_CODE} autonomy_target=${AUTO_TARGET_ROLE:-none} autonomy_task=${AUTO_TARGET_TASK:-none} takeover_active=${takeover_active} dependency_funnel_plateau=${plateau_detected} tshape_mode=${TSHAPE_MODE} cooldown_left_s=${cooldown_left} max_actions=${DISPATCH_MAX_ACTIONS} dry_run=${DISPATCH_DRY_RUN}"
 
 if (( cooldown_left > 0 )) && [[ "$takeover_active" != "1" ]] && ! { [[ "$DISPATCH_BYPASS_COOLDOWN_ON_HANDOFF" == "1" ]] && (( open_handoff_count > 0 )); } && ! { [[ "$DISPATCH_BYPASS_COOLDOWN_ON_PLATEAU" == "1" ]] && (( plateau_detected == 1 )); }; then
   AUTO_LAST_ACTION="cooldown"
@@ -826,7 +839,7 @@ if [[ "$TSHAPE_MODE" == "full_takeover" && "$takeover_active" == "1" && "$blocke
   for blocked_role in "${blocked_roles_arr[@]}"; do
     blocked_role="$(printf '%s' "$blocked_role" | tr -d '[:space:]')"
     [[ -z "$blocked_role" ]] && continue
-    [[ "$blocked_role" == "planner" || "$blocked_role" == "dev" ]] || continue
+    [[ "$blocked_role" == "planner" || "$blocked_role" == "dev" || "$blocked_role" == "admin" ]] || continue
     AUTO_TARGET_ROLE="$blocked_role"
     if (( actions_taken >= DISPATCH_MAX_ACTIONS )); then
       break
@@ -1152,7 +1165,32 @@ if (( actions_taken < DISPATCH_MAX_ACTIONS )) && (( ready_queue_count > 0 )) && 
   fi
 fi
 
-# 3) Queue READY + planner lane empty => sync-priority + planner claim.
+# 3) Admin READY + lane empty => claim one admin task so planner->admin dispatch becomes execution.
+if [[ "$FC_ADMIN_AUTONOMY_ENABLED" == "1" ]] && (( actions_taken < DISPATCH_MAX_ACTIONS )) && (( admin_in_progress_count == 0 )); then
+  admin_ready_task="$(lane_ready_task "admin")"
+  if [[ -n "$admin_ready_task" ]] && autonomy_action_allowed "admin" "$admin_ready_task" "claim"; then
+    if [[ "$DISPATCH_DRY_RUN" == "1" ]]; then
+      action "name=admin_claim_ready dry_run=1 task=${admin_ready_task} dispatch_reason_code=ADMIN_READY_LANE_EMPTY stream_fairness_slot=1"
+      actions_taken=$((actions_taken + 1))
+      DISPATCH_REASON_CODE="ADMIN_READY_LANE_EMPTY"
+      DISPATCH_FAIRNESS_SLOT=1
+    else
+      if run_cmd "admin_claim_ready" \
+        python3 platform/automation/runtime/planner/planner_runtime_actions.py claim --board "$BOARD_FILE" \
+          --role admin \
+          --task "$admin_ready_task" \
+          --change-plan "$CHANGE_PLAN" \
+          --architecture-checks "$ARCH_CHECKS"; then
+        action "name=admin_claim_ready_result role=admin task=${admin_ready_task} dispatch_reason_code=ADMIN_READY_LANE_EMPTY stream_fairness_slot=1"
+        actions_taken=$((actions_taken + 1))
+        DISPATCH_REASON_CODE="ADMIN_READY_LANE_EMPTY"
+        DISPATCH_FAIRNESS_SLOT=1
+      fi
+    fi
+  fi
+fi
+
+# 4) Queue READY + planner lane empty => sync-priority + planner claim.
 if (( actions_taken < DISPATCH_MAX_ACTIONS )) && (( ready_queue_count > 0 )) && (( planner_in_progress_count == 0 )); then
   ready_ids_csv="$(jq -r '[.items[]? | select((.state // "")=="READY") | (.id // "")] | map(select(length>0)) | sort | join(",")' "$QUEUE_FILE" 2>/dev/null || true)"
   planner_ready_ids_csv="$(jq -r '[.tasks[]? | select((.role // "")=="planner" and (.state // "")=="READY") | (.id // "")] | map(select(length>0)) | sort | join(",")' "$BOARD_FILE" 2>/dev/null || true)"

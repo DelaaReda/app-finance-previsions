@@ -150,6 +150,88 @@ def _workboard_task_index(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any
     return index
 
 
+def _active_cycle_batch_ids(queue_payload: dict[str, Any], workboard_payload: dict[str, Any]) -> tuple[str, ...]:
+    ordered: list[str] = []
+    for payload in (queue_payload, workboard_payload):
+        active_cycle = payload.get("active_cycle") if isinstance(payload, dict) else {}
+        if not isinstance(active_cycle, dict):
+            continue
+        batch_ids = active_cycle.get("active_batch_ids")
+        if not isinstance(batch_ids, list):
+            continue
+        for raw in batch_ids:
+            token = str(raw or "").strip().upper()
+            if token and token not in ordered:
+                ordered.append(token)
+    return tuple(ordered)
+
+
+def _task_batch_id(task: dict[str, Any] | None) -> str:
+    if not isinstance(task, dict):
+        return ""
+    for key in ("stream_id", "batch_id"):
+        token = str(task.get(key, "") or "").strip().upper()
+        if token:
+            return token
+    task_id = str(task.get("id", "") or task.get("task_id", "")).strip().upper()
+    if task_id.startswith("BATCH-"):
+        parts = task_id.split("-")
+        if len(parts) >= 2:
+            return "-".join(parts[:2])
+    return ""
+
+
+def _row_batch_id(row: dict[str, Any], task_index: dict[str, dict[str, Any]]) -> str:
+    owner_task_id = str(row.get("owner_task_id", "")).strip()
+    if owner_task_id:
+        owner_task = task_index.get(owner_task_id)
+        batch_id = _task_batch_id(owner_task)
+        if batch_id:
+            return batch_id
+    for key in ("batch_id", "stream_id"):
+        token = str(row.get(key, "") or "").strip().upper()
+        if token:
+            return token
+    graph_state = row.get("planner_graph_state")
+    if isinstance(graph_state, dict):
+        token = str(graph_state.get("batch_id", "") or "").strip().upper()
+        if token:
+            return token
+    owner_task_id = str(row.get("owner_task_id", "")).strip().upper()
+    if owner_task_id.startswith("BATCH-"):
+        parts = owner_task_id.split("-")
+        if len(parts) >= 2:
+            return "-".join(parts[:2])
+    return ""
+
+
+def _row_matches_active_cycle(
+    row: dict[str, Any],
+    active_cycle_batch_ids: set[str],
+    task_index: dict[str, dict[str, Any]],
+) -> bool:
+    if not active_cycle_batch_ids:
+        return True
+    batch_id = _row_batch_id(row, task_index)
+    return bool(batch_id) and batch_id in active_cycle_batch_ids
+
+
+def _event_matches_active_cycle(
+    event: dict[str, Any],
+    payload: dict[str, Any],
+    active_cycle_batch_ids: set[str],
+    task_index: dict[str, dict[str, Any]],
+) -> bool:
+    if not active_cycle_batch_ids:
+        return True
+    batch_id = str(event.get("batch_id", "") or payload.get("batch_id", "")).strip().upper()
+    if not batch_id:
+        task_id = str(event.get("task_id", "") or payload.get("task_id", "")).strip()
+        if task_id:
+            batch_id = _task_batch_id(task_index.get(task_id))
+    return bool(batch_id) and batch_id in active_cycle_batch_ids
+
+
 def _quarantine_runtime_inconsistent_active(
     row: dict[str, Any], task_index: dict[str, dict[str, Any]]
 ) -> dict[str, Any] | None:
@@ -177,6 +259,44 @@ def _quarantine_runtime_inconsistent_active(
     quarantined["blocking_issue"] = ";".join(reasons)
     quarantined["quarantined_runtime_inconsistent_active"] = True
     quarantined["quarantine_reason"] = "runtime_truth_owner_task_conflict"
+    return quarantined
+
+
+def _quarantine_retryable_residue(
+    row: dict[str, Any], task_index: dict[str, dict[str, Any]]
+) -> dict[str, Any] | None:
+    owner_task_id = str(row.get("owner_task_id", "")).strip()
+    if not owner_task_id:
+        return None
+    task = task_index.get(owner_task_id)
+    if not isinstance(task, dict):
+        return None
+
+    task_state = str(task.get("state", task.get("status", "")) or "").strip().lower()
+    if task_state not in {"ready", "ready_dev", "ready_planner", "done", "closed"}:
+        return None
+
+    status = str(row.get("status", "")).strip().lower()
+    if status not in {"retryable", "failed", "blocked"}:
+        return None
+
+    failure_mode = _failure_mode(row)
+    issue_bits = " | ".join(
+        [
+            str(row.get("blocking_issue", "")),
+            str(row.get("summary", "")),
+        ]
+    ).strip().lower()
+    if failure_mode != "invalid_result" and "start_banner_only" not in issue_bits:
+        return None
+
+    quarantined = dict(row)
+    quarantined["status"] = "quarantined"
+    quarantined["blocking_issue"] = f"quarantined_retryable_residue:{task_state}"
+    quarantined["quarantined_retryable_residue"] = True
+    quarantined["quarantine_reason"] = "owner_task_ready_runtime_residue"
+    quarantined["decision_capable"] = False
+    quarantined["secondary_compat_only"] = True
     return quarantined
 
 
@@ -270,6 +390,7 @@ def _normalize_graph_state(state: dict[str, Any]) -> dict[str, Any]:
         "subagent_id": str(metadata.get("subagent_id", "") or f"graph-{task_id}").strip(),
         "role": _canonical_role(state.get("target_role", "") or result.get("target_role", "") or request.get("target_role", "")),
         "owner_task_id": task_id,
+        "batch_id": str(state.get("batch_id", "") or "").strip().upper(),
         "parent_role": _canonical_role(state.get("owner_role", "") or result.get("owner_role", "") or request.get("owner_role", "") or "planner"),
         "task_kind": str(state.get("task_kind", "") or request.get("task_kind", "")).strip().lower(),
         "purpose": str(state.get("task_kind", "") or request.get("task_kind", "") or "delivery").strip().lower(),
@@ -301,6 +422,7 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
     queue_payload, queue_rows = _load_queue_snapshot(root)
     workboard_payload, workboard_rows = _load_workboard_snapshot(root)
     workboard_task_index = _workboard_task_index(workboard_rows)
+    active_cycle_batch_ids = set(_active_cycle_batch_ids(queue_payload, workboard_payload))
     queue = _queue_counts(queue_rows)
     workboard = _workboard_counts(workboard_rows)
     runtime_truth = build_runtime_truth_snapshot(root, state_limit=max(24, recent_limit * 2), event_limit=max(50, recent_limit * 4))
@@ -335,22 +457,36 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
 
     active: list[dict[str, Any]] = []
     quarantined_active: list[dict[str, Any]] = []
+    quarantined_retryable_residue: list[dict[str, Any]] = []
     runtime_inconsistent_active_count = 0
     non_active: list[dict[str, Any]] = []
+    ignored_historical_rows: list[dict[str, Any]] = []
     for row in normalized:
+        in_active_cycle = _row_matches_active_cycle(row, active_cycle_batch_ids, workboard_task_index)
         status = str(row.get("status", "")).strip().lower()
         if status in ACTIVE_GRAPH_STATUSES:
             quarantined = _quarantine_runtime_inconsistent_active(row, workboard_task_index) if event_store_primary else None
             if quarantined is None:
                 quarantined = _quarantine_stale_active(row, now) if event_store_primary else None
             if quarantined is not None:
-                quarantined_active.append(quarantined)
+                if in_active_cycle:
+                    quarantined_active.append(quarantined)
+                else:
+                    ignored_historical_rows.append(quarantined)
                 if bool(quarantined.get("quarantined_runtime_inconsistent_active")):
                     runtime_inconsistent_active_count += 1
-            else:
+            elif in_active_cycle:
                 active.append(row)
+            else:
+                ignored_historical_rows.append(row)
         else:
-            non_active.append(row)
+            quarantined = _quarantine_retryable_residue(row, workboard_task_index) if event_store_primary else None
+            if quarantined is not None:
+                quarantined_retryable_residue.append(quarantined)
+            elif in_active_cycle:
+                non_active.append(row)
+            else:
+                ignored_historical_rows.append(row)
     recent = (quarantined_active + non_active)[: max(1, recent_limit)]
 
     recent_success_count = sum(1 for row in recent if str(row.get("status", "")).strip().lower() in SUCCESS_STATUSES)
@@ -379,6 +515,8 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
         status = str(payload.get("status", "") or payload.get("result_status", "")).strip().lower()
         task_id = str(event.get("task_id", "") or payload.get("task_id", "")).strip()
         if not task_id:
+            continue
+        if not _event_matches_active_cycle(event, payload, active_cycle_batch_ids, workboard_task_index):
             continue
         if event_type in {"graph.close_or_requeue", "model.collect", "graph.validate_contract_and_proof"} or status in SUCCESS_STATUSES:
             progressed_task_ids.add(task_id)
@@ -486,6 +624,8 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
         "recent_invalid_result_count": recent_invalid_result_count,
         "recent_timeout_like_count": recent_timeout_like_count,
         "quarantined_stale_active_count": len(quarantined_active),
+        "quarantined_retryable_residue_count": len(quarantined_retryable_residue),
+        "quarantined_retryable_residue": quarantined_retryable_residue[:8],
         "runtime_inconsistent_active_count": runtime_inconsistent_active_count,
         "recovering": recovering,
         "events_path": str(resolve_orchestrator_read_path(root, "planner-graph-events.jsonl")),
@@ -523,5 +663,10 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
         "planner_graph_ready_to_merge_count": sum(1 for row in graph_states if str(row.get("status", "")).strip().lower() == "ready_to_merge"),
         "planner_graph_retryable_count": sum(1 for row in graph_states if str(row.get("status", "")).strip().lower() == "retryable"),
         "planner_graph_blocked_count": sum(1 for row in graph_states if str(row.get("status", "")).strip().lower() == "blocked"),
-        "planner_graph_active": graph_states[:8],
+        "planner_graph_active": [
+            row
+            for row in graph_states
+            if _row_matches_active_cycle(_normalize_graph_state(row), active_cycle_batch_ids, workboard_task_index)
+        ][:8],
+        "historical_rows_ignored_count": len(ignored_historical_rows),
     }

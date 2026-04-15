@@ -33,6 +33,7 @@ from orchestrator_paths import (
     resolve_orchestrator_read_path,
     runtime_state_root,
 )
+from lane_validity import build_lane_validity_summary
 from planning.plane.plane_planning import build_plane_planning_snapshot
 from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
 from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
@@ -460,6 +461,12 @@ def check_sessions(root: Path) -> CheckResult:
     expected_session_set = set(expected_sessions)
     orphans = [name for name in sessions if name.startswith("codex_") and name not in expected_session_set]
     quarantined_jobs = [] if runtime_paused else _quarantined_jobs(root)
+    lane_validity = build_lane_validity_summary(root, roles=list(expected))
+    invalid_core = [] if runtime_paused else [
+        role
+        for role in expected
+        if bool((lane_validity.get("roles", {}).get(role, {}) or {}).get("needs_recovery"))
+    ]
     probe_blocked = _probe_blocked_message(err)
     if probe_blocked and not runtime_paused:
         tick_fallback = {role: _read_recent_tick(root, role) for role in expected}
@@ -477,7 +484,7 @@ def check_sessions(root: Path) -> CheckResult:
                     found_by_role[role] = f"planner_dispatch:{planner_dispatch_fallback.get('last_ts', '')}"
                     continue
             missing.append(role)
-        status = "ok" if not missing else "degraded"
+        status = "ok" if (not missing and not invalid_core) else "degraded"
         return CheckResult(
             status=status,
             detail={
@@ -488,7 +495,10 @@ def check_sessions(root: Path) -> CheckResult:
                 "expected_core": list(expected),
                 "missing_core": missing,
                 "missing_core_raw": list(expected),
+                "invalid_core": invalid_core,
                 "found_core": found_by_role,
+                "lane_validity": lane_validity,
+                "canonical_active_batches": lane_validity.get("active_batches", []),
                 "orphans": orphans[:60],
                 "quarantined_jobs": quarantined_jobs[:60],
                 "scheduler_inventory_mode": "quarantine" if _planner_only_mode(root) else "legacy_compatible",
@@ -515,7 +525,7 @@ def check_sessions(root: Path) -> CheckResult:
         missing = []
     matched_sessions = set(found_by_role.values())
     orphans = [name for name in sessions if name not in matched_sessions and name not in expected_session_set]
-    status = "ok" if (runtime_paused or (rc == 0 and not missing)) else "degraded"
+    status = "ok" if (runtime_paused or (rc == 0 and not missing and not invalid_core)) else "degraded"
     return CheckResult(
         status=status,
         detail={
@@ -526,7 +536,10 @@ def check_sessions(root: Path) -> CheckResult:
             "expected_core": list(expected),
             "missing_core": missing,
             "missing_core_raw": raw_missing,
+            "invalid_core": invalid_core,
             "found_core": found_by_role,
+            "lane_validity": lane_validity,
+            "canonical_active_batches": lane_validity.get("active_batches", []),
             "orphans": orphans[:60],
             "quarantined_jobs": quarantined_jobs[:60],
             "scheduler_inventory_mode": "quarantine" if _planner_only_mode(root) else "legacy_compatible",
@@ -637,10 +650,21 @@ def check_queue_workboard(root: Path, runtime_truth_snapshot: dict[str, Any] | N
     workboard_file = resolve_orchestrator_read_path(root, "parallel-workstreams.json")
     queue_obj = _read_json(queue_file) or {}
     wb_obj = _read_json(workboard_file) or {}
+    queue_meta = queue_obj.get("meta", {}) if isinstance(queue_obj, dict) and isinstance(queue_obj.get("meta"), dict) else {}
+    wb_meta = wb_obj.get("meta", {}) if isinstance(wb_obj, dict) and isinstance(wb_obj.get("meta"), dict) else {}
     queue_items = queue_obj.get("items", []) if isinstance(queue_obj, dict) else []
     wb_tasks = wb_obj.get("tasks", []) if isinstance(wb_obj, dict) else []
     queue_states = _count_states(queue_items, "state")
     wb_states = _count_states(wb_tasks, "state")
+    projection_decision_capable = wb_meta.get("decision_capable")
+    if projection_decision_capable is None:
+        projection_decision_capable = queue_meta.get("workboard_decision_capable")
+    projection_decision_reason = str(
+        wb_meta.get("decision_capability_reason")
+        or queue_meta.get("workboard_decision_capability_reason")
+        or ""
+    ).strip()
+    projection_decision_missing_fields = wb_meta.get("decision_capability_missing_fields")
 
     mismatch: list[str] = []
     queue_batches: dict[str, str] = {}
@@ -725,6 +749,9 @@ def check_queue_workboard(root: Path, runtime_truth_snapshot: dict[str, Any] | N
     elif mismatch_count > 0:
         projection_status = "degraded"
         status = "ok" if event_store_primary else "degraded"
+    elif projection_decision_capable is False:
+        projection_status = "degraded"
+        status = "ok" if event_store_primary else "degraded"
     return CheckResult(
         status=status,
         detail={
@@ -742,6 +769,9 @@ def check_queue_workboard(root: Path, runtime_truth_snapshot: dict[str, Any] | N
             "workboard_total": len(wb_tasks),
             "queue_states": queue_states,
             "workboard_states": wb_states,
+            "projection_decision_capable": projection_decision_capable,
+            "projection_decision_reason": projection_decision_reason or "none",
+            "projection_decision_missing_fields": projection_decision_missing_fields,
             "mismatch_count": mismatch_count,
             "queue_only": queue_only[:80],
             "workboard_only": workboard_only[:80],
@@ -801,7 +831,19 @@ def _listening_ports() -> set[int]:
 
 
 def check_providers(root: Path, api_base: str, monitor_base: str, state_dir: Path) -> CheckResult:
-    ok_api, api_status, api_body = _probe_json(f"{api_base.rstrip('/')}/api/health", timeout_s=2.5)
+    api_probe_candidates = (
+        f"{api_base.rstrip('/')}/api/status",
+        f"{api_base.rstrip('/')}/api/health",
+    )
+    ok_api = False
+    api_status = 0
+    api_body: Any = ""
+    api_probe_url = api_probe_candidates[0]
+    for candidate in api_probe_candidates:
+        api_probe_url = candidate
+        ok_api, api_status, api_body = _probe_json(candidate, timeout_s=2.5)
+        if ok_api:
+            break
     # Avoid recursive self-probe deadlocks: /api/status runs doctor_snapshot.
     ok_monitor, mon_status, mon_body = _probe_json(f"{monitor_base.rstrip('/')}/", timeout_s=2.5)
     listening_ports = _listening_ports()
@@ -823,6 +865,7 @@ def check_providers(root: Path, api_base: str, monitor_base: str, state_dir: Pat
         status=status,
         detail={
             "api_base": api_base,
+            "api_probe_url": api_probe_url,
             "monitor_base": monitor_base,
             "api_health_ok": ok_api,
             "api_reachable_effective": api_ok_effective,
@@ -1017,7 +1060,7 @@ def _app_runtime_surface(checks: dict[str, CheckResult]) -> dict[str, Any]:
     backend_status = "ok" if bool(detail.get("api_reachable_effective") or detail.get("api_health_ok")) else "degraded"
     monitor_status = "ok" if bool(detail.get("monitor_reachable_effective") or detail.get("monitor_status_ok")) else "degraded"
     return {
-        "status": _aggregate_status(backend_status, monitor_status),
+        "status": backend_status,
         "backend_api": {
             "status": backend_status,
             "base_url": str(detail.get("api_base", "")),
@@ -1025,6 +1068,8 @@ def _app_runtime_surface(checks: dict[str, CheckResult]) -> dict[str, Any]:
         "monitor": {
             "status": monitor_status,
             "base_url": str(detail.get("monitor_base", "")),
+            "advisory_only": True,
+            "note": "Monitor reachability is not a product runtime outage signal when backend_api is healthy.",
         },
         "frontend": {
             "status": "unknown",
@@ -1493,7 +1538,7 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
             "source": "app_runtime",
             "app_first": True,
             "agentic_optional": True,
-            "note": "Primary user-facing runtime status. Agentic or planning degradation must not be read as an app outage.",
+            "note": "Primary user-facing runtime status. Monitor, agentic, or planning degradation must not be read as an app outage when backend runtime is healthy.",
         },
         "primary_status": app_runtime.get("status", "unknown"),
         "primary_status_source": "product_runtime",
@@ -1518,6 +1563,37 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
             "schema_version": "doctor.v1",
             "duration_ms": int((time.time() - start) * 1000),
         },
+    }
+    payload["status_semantics"] = {
+        "overall_status": {
+            "field": "status",
+            "status": status,
+            "meaning": "doctor_overall_control_plane",
+        },
+        "product_runtime": {
+            "field": "product_runtime.status",
+            "status": payload["product_runtime"]["status"],
+            "meaning": "user_facing_runtime",
+        },
+        "backend_runtime": {
+            "field": "app_runtime.backend_api.status",
+            "status": payload["app_runtime"]["backend_api"]["status"],
+            "meaning": "backend_api_runtime",
+        },
+        "agentic_runtime": {
+            "field": "agentic_runtime.status",
+            "status": payload["agentic_runtime"]["status"],
+            "meaning": "delivery_control_plane",
+        },
+        "planning_plane": {
+            "field": "planning_plane.status",
+            "status": payload["planning_plane"]["status"],
+            "meaning": "planner_governance_plane",
+        },
+        "note": (
+            "doctor.status is overall control-plane health; product_runtime.status is user-facing runtime health. "
+            "A degraded doctor.status with product_runtime.status=ok means orchestration debt, not app outage."
+        ),
     }
     return payload, code
 

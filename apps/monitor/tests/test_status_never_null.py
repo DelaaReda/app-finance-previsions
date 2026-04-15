@@ -210,6 +210,26 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
         self.assertEqual(alerts_overview["suppression_reasons"], {"fatigue_window_duplicate": 1})
         self.assertEqual(alerts_overview["pipeline"]["suppression_window_minutes"], 15)
 
+    def test_status_lite_keeps_queue_summary_when_runtime_is_degraded(self) -> None:
+        orch = self.root / "docs" / "operations" / "orchestrator"
+        (orch / "priority-queue.json").write_text(
+            json.dumps(
+                {
+                    "active_cycle": {"active_batch_ids": ["BATCH-84"]},
+                    "items": [
+                        {"id": "BATCH-84", "state": "WAITING_DEP"},
+                        {"id": "BATCH-84-PLAN", "state": "READY_PLANNER"},
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        lite_payload = self.module.status(lite=1)
+        self.assertEqual(lite_payload["active_batch"], "BATCH-84")
+        self.assertEqual(lite_payload["queue"]["counts"]["WAITING_DEP"], 1)
+        self.assertEqual(lite_payload["queue"]["counts"]["READY_PLANNER"], 1)
+        self.assertEqual(lite_payload["queue"]["active_cycle"]["active_batch_ids"], ["BATCH-84"])
+
     def test_runtime_diagnostics_keeps_agents_non_null(self) -> None:
         payload = self.module.runtime_diagnostics()
         self.assertIsInstance(payload, dict)

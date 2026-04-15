@@ -44,6 +44,13 @@ def _safe_pct(value: Optional[float]) -> Optional[float]:
   return round(v, 2)
 
 
+def _first_non_none(*values: Any) -> Any:
+  for value in values:
+    if value is not None:
+      return value
+  return None
+
+
 def _load_backtest_summary(key: str = "backtests") -> Dict[str, Any]:
   """
   Load a compact backtest summary used by the UI.
@@ -56,27 +63,74 @@ def _load_backtest_summary(key: str = "backtests") -> Dict[str, Any]:
 
   # Some jobs store everything under "results", others at top level.
   results = data.get("results") or data
-  metrics = results.get("metrics") or results.get("summary") or {}
-  summary = results.get("summary") or {}
-  params = results.get("params") or {}
+  overall_metrics = data.get("overall_metrics") or {}
+  metrics = results.get("metrics") or results.get("summary") or overall_metrics or {}
+  summary = results.get("summary") or overall_metrics or {}
+  params = results.get("params") or data.get("params") or {}
 
-  initial_capital = params.get("initial_capital")
-  final_capital = results.get("final_capital") or metrics.get("final_portfolio_value")
+  initial_capital = _first_non_none(
+    params.get("initial_capital"),
+    results.get("initial_capital"),
+    data.get("initial_capital"),
+  )
+  final_capital = _first_non_none(
+    results.get("final_capital"),
+    metrics.get("final_portfolio_value"),
+    summary.get("final_portfolio_value"),
+  )
 
   # Compute final capital from total_return_pct if needed.
-  total_ret_pct = metrics.get("total_return_pct") or summary.get("total_return_pct")
+  total_ret_pct = _first_non_none(
+    metrics.get("total_return_pct"),
+    summary.get("total_return_pct"),
+    results.get("total_return_pct"),
+    overall_metrics.get("total_return_pct"),
+  )
+  avg_return = _first_non_none(
+    results.get("avg_return"),
+    overall_metrics.get("avg_return"),
+  )
+  total_trades = _first_non_none(
+    metrics.get("total_trades"),
+    summary.get("total_trades"),
+    results.get("total_trades"),
+    overall_metrics.get("total_trades"),
+    overall_metrics.get("n_trades"),
+  )
+  if total_ret_pct is None and total_trades == 0 and avg_return is not None:
+    try:
+      total_ret_pct = round(float(avg_return) * 100.0, 2)
+    except (TypeError, ValueError):
+      total_ret_pct = None
   if final_capital is None and initial_capital is not None and total_ret_pct is not None:
     try:
       final_capital = float(initial_capital) * (1.0 + float(total_ret_pct) / 100.0)
     except Exception:
       final_capital = None
 
-  win_rate = metrics.get("win_rate") or summary.get("win_rate")
+  win_rate = _first_non_none(
+    metrics.get("win_rate"),
+    summary.get("win_rate"),
+    results.get("hit_rate"),
+    overall_metrics.get("hit_rate"),
+  )
   win_rate_pct = _safe_pct(win_rate)
 
-  total_trades = metrics.get("total_trades") or summary.get("total_trades")
-  winning_trades = metrics.get("total_winning_trades") or summary.get("winning_trades")
-  losing_trades = metrics.get("total_losing_trades") or summary.get("losing_trades")
+  winning_trades = _first_non_none(
+    metrics.get("total_winning_trades"),
+    summary.get("winning_trades"),
+    results.get("hits"),
+    overall_metrics.get("hits"),
+  )
+  losing_trades = _first_non_none(
+    metrics.get("total_losing_trades"),
+    summary.get("losing_trades"),
+  )
+  if losing_trades is None and total_trades is not None and winning_trades is not None:
+    try:
+      losing_trades = max(int(total_trades) - int(winning_trades), 0)
+    except (TypeError, ValueError):
+      losing_trades = None
 
   return {
     "initial_capital": initial_capital,
@@ -141,13 +195,29 @@ def _load_backtest_metrics(key: str = "backtests") -> Dict[str, Any]:
   data = load_json(key) or {}
 
   results = data.get("results") or data
-  metrics = results.get("metrics") or results.get("summary") or {}
-  summary = results.get("summary") or {}
+  overall_metrics = data.get("overall_metrics") or {}
+  metrics = results.get("metrics") or results.get("summary") or overall_metrics or {}
+  summary = results.get("summary") or overall_metrics or {}
 
-  sharpe = metrics.get("sharpe_ratio")
-  win_rate = metrics.get("win_rate") or summary.get("win_rate")
-  max_dd = metrics.get("max_drawdown") or summary.get("max_drawdown")
-  total_ret_pct = metrics.get("total_return_pct") or summary.get("total_return_pct")
+  sharpe = metrics.get("sharpe_ratio") or results.get("sharpe_ratio")
+  win_rate = (
+    metrics.get("win_rate")
+    or summary.get("win_rate")
+    or results.get("hit_rate")
+    or overall_metrics.get("hit_rate")
+  )
+  max_dd = (
+    metrics.get("max_drawdown")
+    or summary.get("max_drawdown")
+    or results.get("max_drawdown")
+    or overall_metrics.get("max_drawdown")
+  )
+  total_ret_pct = (
+    metrics.get("total_return_pct")
+    or summary.get("total_return_pct")
+    or results.get("total_return_pct")
+    or overall_metrics.get("total_return_pct")
+  )
 
   return {
     "sharpe_ratio": float(sharpe) if isinstance(sharpe, (int, float)) else None,
