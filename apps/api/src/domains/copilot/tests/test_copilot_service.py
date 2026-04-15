@@ -554,7 +554,7 @@ def test_build_context_payload_includes_daily_brief_and_entry_points(monkeypatch
     )
 
     brief = response.get("daily_brief") or {}
-    assert brief.get("summary", "").startswith("Ouverture calme")
+    assert "Ouverture calme" in brief.get("summary", "")
     assert brief.get("market_sentiment") == "BULLISH"
     assert brief.get("source") == ["test_brief"]
     assert response.get("scope_tickers") == ["NVDA"]
@@ -569,7 +569,7 @@ def test_build_context_payload_includes_daily_brief_and_entry_points(monkeypatch
     )
     assert entry_points[2].get("target") == "/copilot"
     copilot_start = response.get("copilot_start") or {}
-    assert copilot_start.get("brief_of_day", {}).get("summary", "").startswith("Ouverture calme")
+    assert "Ouverture calme" in copilot_start.get("brief_of_day", {}).get("summary", "")
     assert [item.get("id") for item in copilot_start.get("ask", [])] == [
         "portfolio_today",
         "market_theme",

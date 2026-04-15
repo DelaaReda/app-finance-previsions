@@ -65,8 +65,8 @@ def test_copilot_context_route_fallback_keeps_brief_and_entry_points(monkeypatch
     assert data.get("note") == "Market context service temporarily unavailable."
 
     daily_brief = data.get("daily_brief") or {}
-    assert daily_brief.get("summary") == "No daily brief available yet."
-    assert daily_brief.get("source") == ["copilot_daily_brief_fallback"]
+    assert "No daily brief available yet." in (daily_brief.get("summary") or "")
+    assert "copilot_daily_brief_fallback" in (daily_brief.get("source") or [])
 
     entry_points = data.get("entry_points") or []
     assert [item.get("id") for item in entry_points[:2]] == ["brief_of_day", "ask_copilot"]

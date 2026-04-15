@@ -237,34 +237,69 @@
     function rewriteNamespaceTargets(data, namespace) {
       if (!namespace || !data) return data;
 
+      const toNormalizedTarget = (value) => {
+        if (!value || typeof value !== 'string') {
+          return value;
+        }
+        return value.trim().replace(/[?#].*$/, '').replace(/\/+$/, '');
+      };
+
+      const normalizedNamespace = `/${String(namespace).trim().replace(/^\/+|\/+$/g, '')}`;
+      const dedupeNamespaceTarget = (target) => {
+        const trimmed = String(target || '').trim();
+        const ns = normalizedNamespace || '';
+        if (!ns || !trimmed.startsWith(`${ns}/${ns.replace(/^\//, '')}`)) {
+          return trimmed;
+        }
+        return trimmed.replace(`${ns}/${ns.replace(/^\//, '')}/`, `${ns}/`);
+      };
+
       const rewritten = JSON.parse(JSON.stringify(data));
 
       // Rewrite ask targets
       if (Array.isArray(rewritten.ask)) {
         rewritten.ask = rewritten.ask.map(action => {
-          if (action.target && action.target.startsWith('/copilot')) {
+          const rawTarget = toNormalizedTarget(action.target);
+          if (typeof rawTarget === 'string' && rawTarget.startsWith('/copilot')) {
+            const rewrittenTarget = dedupeNamespaceTarget(rawTarget.replace('/copilot', normalizedNamespace));
             return {
               ...action,
-              target: action.target.replace('/copilot', `/${namespace}`)
+              target: rewrittenTarget === `${normalizedNamespace}/${normalizedNamespace.replace(/^\//, '')}`
+                ? `${normalizedNamespace}/ask`
+                : rewrittenTarget
             };
           }
-          return action;
+          return {
+            ...action,
+            target: rawTarget
+          };
         });
       }
 
       // Rewrite open targets
       if (Array.isArray(rewritten.open)) {
         rewritten.open = rewritten.open.map(action => {
-          if (action.target && action.target.startsWith('/copilot')) {
-            const rewrittenTarget = action.target.replace('/copilot', `/${namespace}`);
+          const rawTarget = toNormalizedTarget(action.target);
+          if (typeof rawTarget === 'string' && rawTarget.startsWith('/copilot')) {
+            const rewrittenTarget = dedupeNamespaceTarget(rawTarget.replace('/copilot', normalizedNamespace));
             return {
               ...action,
-              target: rewrittenTarget.startsWith(`/${namespace}/`)
+              target: rewrittenTarget.startsWith(normalizedNamespace)
                 ? `/${namespace}`
                 : rewrittenTarget,
             };
           }
-          return action;
+          const normalizedTarget = String(rawTarget || '');
+          if (normalizedTarget.startsWith(normalizedNamespace)) {
+            return {
+              ...action,
+              target: normalizedNamespace
+            };
+          }
+          return {
+            ...action,
+            target: rawTarget
+          };
         });
       }
 

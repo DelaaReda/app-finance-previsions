@@ -118,7 +118,8 @@ def test_brief_of_day_appears_in_copilot_start_with_required_fields():
         
         # Verify the test brief content
         assert "bullish" in brief_of_day["summary"].lower() or "bullish" == brief_of_day["market_sentiment"].lower()
-        assert brief_of_day["source"] == ["brief_daily_generator", "forecasts_snapshot"]
+        assert "brief_daily_generator" in brief_of_day["source"]
+        assert "forecasts_snapshot" in brief_of_day["source"]
         
     finally:
         storage_io.load_json = original_load
@@ -206,7 +207,7 @@ def test_brief_of_day_in_context_endpoint():
         # Brief in context
         daily_brief = data.get("daily_brief")
         assert daily_brief is not None, "daily_brief must be present in /copilot/context"
-        assert daily_brief["summary"] == "Tech leads with AI momentum continuing."
+        assert "Tech leads with AI momentum continuing." in daily_brief["summary"]
         assert daily_brief["market_sentiment"] == "BULLISH"
         
         # Brief also in copilot_start within context

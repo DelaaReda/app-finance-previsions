@@ -85,13 +85,15 @@ def _generate_conversation_id(first_question: str, tickers: Optional[List[str]] 
 
 def _normalize_tickers(tickers: Optional[List[str]]) -> List[str]:
     """Normalize ticker list."""
-    return sorted(
-        {
-            str(item).strip().upper()
-            for item in (tickers or [])
-            if str(item).strip()
-        }
-    )
+    normalized: List[str] = []
+    seen = set()
+    for item in tickers or []:
+        token = str(item).strip().upper()
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        normalized.append(token)
+    return normalized
 
 
 def _load_conversation_index() -> Dict[str, Any]:

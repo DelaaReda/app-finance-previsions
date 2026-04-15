@@ -135,10 +135,16 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
           ok: true,
           async json() {
             return {
-              data: {
-                freshness: '2026-03-23T20:00:00Z',
-                ask: [{ label: 'Ask', target: '/copilot/ask' }],
-                open: [{ label: 'Open', target: '/copilot/open' }],
+                data: {
+              freshness: '2026-03-23T20:00:00Z',
+                ask: [
+                  { label: 'Ask', target: '/copilot/ask' },
+                  { label: 'Ask portfolio', target: '/copilot/personal-finance/ask' },
+                ],
+                open: [
+                  { label: 'Open', target: '/copilot/open' },
+                  { label: 'Open portfolio', target: '/copilot/personal-finance/open' },
+                ],
               },
             };
           },
@@ -218,8 +224,10 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
   assert.equal(sandbox.initCalls, 1, 'widget init should run after scripts activate');
   assert.equal(sandbox.bootstrapCalls, 0, 'init path should be preferred when available');
   assert.equal(sandbox.renderActionsCalls, 1, 'actions should render after data load');
-  assert.equal(sandbox.brief.ask[0].target, '/personal-finance/ask');
-  assert.equal(sandbox.brief.open[0].target, '/personal-finance');
+    assert.equal(sandbox.brief.ask[0].target, '/personal-finance/ask');
+    assert.equal(sandbox.brief.ask[1].target, '/personal-finance/ask');
+    assert.equal(sandbox.brief.open[0].target, '/personal-finance');
+    assert.equal(sandbox.brief.open[1].target, '/personal-finance');
   assert.deepEqual(sandbox.loadingStates, [true, false]);
   assert.deepEqual(sandbox.errorStates, [false]);
 });
