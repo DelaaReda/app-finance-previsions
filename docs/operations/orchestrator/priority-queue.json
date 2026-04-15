@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-04-15T04:32:18Z",
+  "updated_at": "2026-04-15T04:43:01Z",
   "active_cycle": {
     "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
     "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
@@ -2306,7 +2306,7 @@
     {
       "id": "BATCH-85",
       "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open ",
-      "state": "IN_PROGRESS",
+      "state": "WAITING_DEP",
       "priority": "P2",
       "owner_role": "planner",
       "created_by": "planner_autonomy",
@@ -2315,11 +2315,11 @@
       "novelty_class": "reuse_only",
       "delivery_kind": "reuse_only",
       "user_value_delta_visible": 0,
-      "next_action": "compl\u00e9ter BATCH-85-ANALYSIS (READY_PLANNER pour planner)",
+      "next_action": "attendre completion de BATCH-85-DEV-01 puis claim BATCH-85-DEV-02 (role=dev)",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-04-15T03:46:32Z",
-      "updated_at": "2026-04-15T04:32:18Z",
+      "updated_at": "2026-04-15T04:43:01Z",
       "novelty_target": "fiabiliser le slice app independamment du churn admin",
       "stagnation_alert": false,
       "dispatch_authorized": true,

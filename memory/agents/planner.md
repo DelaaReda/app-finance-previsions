@@ -864,6 +864,247 @@ Decision
 - next_action: finish BATCH-85 on the current code surfaces, validate it on the VM, then fix any leftover Plane/runtime metadata only if that still blocks canonical closure.
 - [2026-04-15 00:32:59 EDT] role=planner source=primary_structured status=BLOCKED verdict=BLOCKED delta=PLANNER_RUNTIME_ACTIONS_FAILED blocker=PLANNER_RUNTIME_ACTIONS_FAILED stream_id=none task_id=none next_action_unique=PLANNER_RUNTIME_ACTIONS_FAILED directive=none/none message=none/none exec_report=none issues=none suggestions=none
 
+## 2026-04-15T04:40:36Z endpoint-architecture-steward
+
+Target endpoint
+- endpoint: `/api/copilot/context`
+- why_this_endpoint: active reliability work is already landing here, and this endpoint sits upstream of the brief/action/memo starter flow while still lacking a real shared contract.
+- current_product_role: backend-first context bootstrap for brief of day, starter entry points, portfolio-aware fallback, and the `/api/personal-finance/context` alias.
+
+Judge reference mapping
+- contract_reference: `/Users/venom/Documents/analyse-financiere/packages/contracts/judge_v1.py`
+- route_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/api/judge.py`
+- application_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_pipeline.py`
+- service_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_endpoint_service.py`
+- intelligence_or_context_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/intelligence_service.py`
+- invariants_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/INVARIANTS.md`
+
+Current state
+- current_contract: ad hoc dict payload from `apps/api/src/domains/copilot/application/copilot_service.py:build_context_payload`, with keys like `regime`, `confidence`, `daily_brief`, `entry_points`, `copilot_start`, `portfolio_context`, `context_influence`, `regime_detection`, and `allocation_drift_alerts`; `packages/contracts/copilot_v1.py` is still a placeholder.
+- route_thin_or_fat: medium-fat; `apps/api/src/domains/copilot/api/copilot.py` still owns cache keying, in-memory cache storage, singleflight, namespace rewriting, and fallback response assembly.
+- application_logic_present: yes; core aggregation and fallback building live in `apps/api/src/domains/copilot/application/copilot_service.py`.
+- service_layer_present: partial; there is domain application code, but no Judge-like endpoint facade dedicated to public response normalization.
+- metadata_present: partial; nested payloads expose `generated_at`, `freshness`, and `source`, but the top-level endpoint contract is not standardized.
+- never_empty_present: yes; route and service both fall back to snapshot/local payloads rather than raising a hard 500 in the nominal product path.
+- fallback_present: yes; explicit snapshot/local fallback exists for market context and starter payloads.
+- tests_present: yes for route fallback/cache and service behavior, but no shared typed contract enforcement tied to `packages/contracts/copilot_v1.py`.
+
+Gap vs Judge
+- contract_gap: Judge has a real typed shared contract in `packages/contracts/judge_v1.py`; copilot context still has no typed public DTO.
+- route_gap: Judge’s target pattern is orchestration-only routing, while copilot context still embeds cache, singleflight, namespace rewrite, and fallback shaping directly in the route.
+- application_gap: copilot aggregation exists, but public response normalization is still split between route helpers and application code instead of being isolated behind one endpoint-facing service.
+- service_gap: there is no reusable `copilot_endpoint_service` equivalent to `judge_endpoint_service.py`.
+- metadata_gap: metadata is nested and inconsistent rather than exposed as a stable top-level standard payload with explicit warnings/fallback flags.
+- never_empty_gap: behavior is already never-empty, but the degraded-mode contract is implicit and not typed.
+- fallback_gap: fallback is real but not standardized; frontend freshness/provenance/degradation still depend on nested conventions instead of one stable contract.
+- testing_gap: route/service tests exist, but there is no typed contract test matrix comparable to Judge’s contract/orchestration/fallback coverage.
+
+Target architecture
+- target_contract: implement a real `CopilotContextResponse` family in `packages/contracts/copilot_v1.py` covering `daily_brief`, `entry_points`, `copilot_start`, `portfolio_context`, `context_influence`, `regime_detection`, `allocation_drift_alerts`, and explicit degraded metadata.
+- target_route_design: keep `apps/api/src/domains/copilot/api/copilot.py` limited to input normalization, cache/singleflight, alias namespace rewrite, and service invocation.
+- target_application_design: keep `build_context_payload` as the domain aggregation layer for market context, portfolio enrichment, playbook context, and brief generation.
+- target_service_design: add a dedicated endpoint facade in `apps/api/src/domains/copilot/application/copilot_endpoint_service.py` to normalize metadata, fallback flags, warnings, and public shape before the route returns.
+- target_metadata: expose stable top-level metadata fields such as `generated_at`, `freshness`, `source`, `warnings`, `filters_applied`, `stats`, `fallback_used`, and `cache`.
+- target_fallback_model: preserve `ok=true` with snapshot-backed degraded payloads, but make degradation explicit and typed instead of route-specific.
+- target_test_matrix: shared contract tests for `copilot_v1`, route orchestration/cache tests, fallback/degraded-mode tests, alias parity tests for `/api/personal-finance/context`, and endpoint-service normalization tests.
+
+Implementation plan
+- files_or_modules_to_create: `packages/contracts/copilot_v1.py` real DTOs; `apps/api/src/domains/copilot/application/copilot_endpoint_service.py`; one new copilot context contract test module.
+- files_or_modules_to_modify: `apps/api/src/domains/copilot/api/copilot.py`; `apps/api/src/domains/copilot/application/copilot_service.py`; `apps/api/src/domains/copilot/tests/test_copilot_context_route_fallback.py`; `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`; any existing copilot contract tests that should validate the shared DTO.
+- files_or_modules_not_to_touch: Judge route/service implementation, frontend theme/shell files, monitor status logic, queue/workboard/docs as planning truth, and any new custom wrapper around Plane/runtime truth.
+- compatibility_notes: keep `/api/copilot/context` and `/api/personal-finance/context` stable; keep existing keys additive-compatible, especially `daily_brief`, `entry_points`, `copilot_start`, `portfolio_context`, `context_influence`, `regime_detection`, and `allocation_drift_alerts`.
+- implementation_order: 1. define typed shared contract, 2. extract endpoint facade for normalization and metadata, 3. slim the route to orchestration-only concerns, 4. wire tests to the shared contract, 5. prove alias/cache/fallback parity.
+- risks: extracting response normalization out of the route can regress namespace rewriting or cache semantics; hardening the contract can surface nested payload inconsistencies already tolerated by current consumers.
+- non_goals: no new route family, no frontend redesign, no duplication of Judge monolith internals, no movement of product logic into the frontend, no global refactor of the full copilot domain.
+
+Decision
+- patch_now: no
+- if_no_reason: this gap spans shared contract + new endpoint facade + route reshaping, while the current batch already contains a shippable reliability slice; host-only analysis is enough to define the next backend step, not to bundle a broader refactor blindly.
+- next_owner: backend_engineer
+- next_action: implement `packages/contracts/copilot_v1.py` and `copilot_endpoint_service.py`, then move `/api/copilot/context` response normalization out of the route and add shared contract coverage.
+
+## 2026-04-15T04:38:43Z vision-batch-architect
+
+Continuity
+- previous_verdict: no new batch created; BATCH-85 remains the sole valid scope.
+- previous_top_priority: finish BATCH-85 and publish VM proof on the brief/action/memo slice.
+- previous_next_delivery: complete the active copilot/portfolio/monitor hardening and validate `/api/copilot/context`, `/api/personal-finance/start`, `/api/personal-finance/ask`, `/api/status?lite=1`, and `fc_doctor` on the VM.
+- changed_since_last_run: the accessible runtime snapshot regressed to projection-only truth again (`priority-queue.json` still says `BATCH-85` should reopen ANALYSIS, `user_value_delta_visible=0`, and work items still lack `runtime_role`/`runtime_kind`), the local SQLite snapshot has no `events` or `planner_graph` tables at all, the dirty worktree is still concentrated on the active copilot/portfolio/monitor hardening slice, and SSH to `dev-vm-utm` is still sandbox-blocked before the remote safety gate can run.
+
+Reality check
+- vision_alignment: mixed
+- priority_clarity: clear
+- active_batch_usefulness: strong
+- delivered_value_now: moderate
+
+Top priorities
+1. Finish BATCH-85 on the existing product slice: low-cost starter/context, portfolio-aware fallback, explainable ask/memo, and truthful monitor health.
+2. Re-establish canonical proof for BATCH-85 after product hardening: VM runtime checks first, then Plane/runtime metadata convergence if still needed.
+3. Keep new backlog creation frozen until the current slice is either VM-proven or clearly shown to be the wrong scope.
+
+Rejected batch ideas
+- New Judge-parity batch for `/api/copilot/start`: rejected because the endpoint gap is real but it sits inside the active BATCH-85 hardening slice and is not independent enough to justify a sibling module now.
+- New watchlist/top-action batch: rejected as premature because the current starter payload, portfolio fallback, and memo contract are still the bottleneck before extra decision surfaces.
+- New planner/runtime cleanup batch: rejected as too orchestration-heavy right now; any necessary reconciliation belongs as tail work inside BATCH-85 after product proof.
+
+Selected batch
+- title: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
+- why_now: It remains the only scope with visible user value already under implementation on canonical product surfaces, and no independent candidate beats finishing it.
+- user_visible_delta: `/api/copilot/start` and `/api/copilot/context` stay fast and non-empty on repeated calls, `/api/personal-finance/start` stays actionable without forced live-risk fetches, `/api/personal-finance/ask` keeps an explainable memo contract, and monitor/status stop overstating runtime health.
+- novelty_target: reliable low-cost brief + ask/open + memo path with portfolio-aware fallback and truthful degraded status
+- independence_from_active_batch: no
+- create_now: no
+- batch_class: hardening
+
+Architecture fit
+- aligned_with_backend_first: yes
+- preserves_frontend_theme: yes
+- adds_new_custom_plumbing: no
+- canonical_paths_respected: yes
+- comments: the code changes stay inside `apps/api/src/domains/*`, `apps/monitor/*`, and minimal runtime truth readers. The blocker is not missing architecture detail; it is lack of canonical convergence and VM proof.
+
+Implementation architecture
+- product slice: personal-first starter flow: brief of the day -> ask/open -> explainable memo -> portfolio-aware fallback -> honest degraded mode.
+- current reality: `apps/api/src/domains/copilot/api/copilot.py` already exposes the main starter/context/ask routes; `apps/api/src/domains/copilot/application/copilot_service.py` already assembles daily brief, entry points, portfolio context, playbook context, regime detection, and memo normalization; `apps/web/src/domains/forecasts/pages/app.js` already consumes the existing contracts; the active diffs remain concentrated on those surfaces plus `apps/monitor`.
+- backend changes: finish the in-flight hardening in `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/judge/api/judge.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/market_data/application/dashboard_ui_service.py`, `apps/api/src/domains/market_data/application/portfolio_service.py`, `apps/api/src/domains/market_data/application/portfolio_performance_service.py`, and `apps/api/src/platform/run_api.py`.
+- frontend changes: no new frontend batch. Preserve existing shell/theme and only keep contract compatibility with `apps/web/src/domains/forecasts/pages/app.js` and its tests.
+- monitor/observability changes: keep the active work constrained to `apps/monitor/server.py`, `apps/monitor/services/status_service.py`, and status fallback tests so the monitor reflects app/runtime truth without becoming a planning engine.
+- runtime/orchestration changes: only after product proof if closure is still blocked; then the smallest justified surfaces are `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/truth/dispatch_snapshot.py`, and `platform/automation/runtime/truth/runtime_truth_reader.py`.
+- existing code to reuse: `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/services/brief_generator.py`, `apps/api/src/domains/judge/application/intelligence_service.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/market_data/tests/test_endpoint_cache_contracts.py`, `apps/monitor/tests/test_status_event_store_fallback.py`, and `scripts/delivery_value_smoke.sh`.
+- files_or_modules_to_touch: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/judge/api/judge.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/market_data/application/dashboard_ui_service.py`, `apps/api/src/domains/market_data/application/portfolio_service.py`, `apps/api/src/domains/market_data/application/portfolio_performance_service.py`, `apps/api/src/platform/run_api.py`, `apps/monitor/server.py`, `apps/monitor/services/status_service.py`, `apps/monitor/tests/test_status_event_store_fallback.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/runtime/truth/dispatch_snapshot.py`, `platform/automation/runtime/truth/runtime_truth_reader.py`, and `scripts/delivery_value_smoke.sh`.
+- files_or_modules_not_to_touch: `apps/web/src/platform/*`, theme/shell styling, `apps/api/runtime/*` for product behavior, `docs/product/planning/*`, `memory/*` as backlog truth, `logs-codex-runs/orchestrator-state/*.json`, and any new custom wrapper around Plane/runtime truth.
+- api_or_contract_changes: no new route family. Keep `/api/copilot/start`, `/api/copilot/context`, `/api/personal-finance/start`, `/api/personal-finance/ask`, and the memo keys stable, with only additive cache/fallback/degraded metadata.
+- migration_or_compat_notes: accessible local snapshots are still non-canonical for proof: `priority-queue.json` and `parallel-workstreams.json` miss required metadata, and the local SQLite snapshot lacks runtime tables. Plane MCP is unavailable here and VM SSH is sandbox-blocked, so this run cannot create or reconcile canonically.
+- proof_requirements: targeted route/service tests for copilot start/context and status fallback; smoke `scripts/delivery_value_smoke.sh`; canonical VM proofs for `/api/copilot/context`, `/api/personal-finance/start`, `/api/personal-finance/ask`, `/api/status?lite=1`, and `bash scripts/fc_doctor.sh --json`.
+- acceptance_criteria: starter/context responses are non-empty and cache-backed; ask returns verdict/horizon/why/risks/confidence/freshness/sources; saved portfolio/watchlist fallback remains useful without forced expensive fetches; monitor exposes truthful degraded health; no theme changes; no sibling batch created for the same slice.
+- implementation_order: 1. finish backend contract/cache/fallback hardening, 2. finish portfolio low-cost composition and cache behavior, 3. finish monitor truthfulness, 4. run targeted local tests where possible, 5. run canonical VM proof, 6. only then repair Plane/runtime metadata if it still blocks closure.
+- risks: cache signature drift can hide freshness regressions; low-cost defaults can silently reduce richness if live enrichments disappear; projection-only planning state can overstate progress; sandboxed SSH prevents final VM validation in this session.
+- non_goals: no new frontend redesign, no sibling batch, no manual queue/workboard edits, no backlog padding, no pure orchestration batch detached from user value.
+
+Decision
+- create_in_plane_now: no
+- if_no_reason: current batch should keep priority. The strongest remaining gap is finishing and proving the existing slice, not creating another module.
+- next_owner: planner
+- next_action: finish BATCH-85 on the existing code surfaces, validate it on the VM, then repair Plane/runtime metadata only if canonical closure is still blocked.
+
+## 2026-04-15T04:38:43Z endpoint-architecture-steward
+
+Target endpoint
+- endpoint: GET `/api/copilot/start` (alias GET `/api/personal-finance/start`)
+- why_this_endpoint: it is the closest backend entrypoint to the target experience (`brief du jour` -> `ask/open` in 2-3 clicks) and it still carries route-level cache/fallback/orchestration logic that should converge toward Judge-style thin routing.
+- current_product_role: deliver the starter payload used by the personal finance home flow: brief of the day, immediate ask/open actions, portfolio-aware context, and degraded mode without breaking the frontend.
+
+Judge reference mapping
+- contract_reference: `packages/contracts/judge_v1.py`
+- route_reference: `apps/api/src/domains/judge/api/judge.py`
+- application_reference: `apps/api/src/domains/judge/application/judge_pipeline.py`
+- service_reference: `apps/api/src/domains/judge/application/judge_endpoint_service.py`
+- intelligence_or_context_reference: `apps/api/src/domains/judge/application/intelligence_service.py`
+- invariants_reference: `apps/api/src/domains/judge/INVARIANTS.md`
+
+Current state
+- current_contract: implicit route/service contract returning `ok/data` with `brief_of_day`, `ask`, `open`, `generated_at`, `freshness`, `source`, `sources`, `filters_applied`, `stats`, `warnings`, `cache`, and optional `note`, `context_influence`, `portfolio_context`, `regime_detection`, `allocation_drift_alerts`; no shared `packages/contracts/*` schema exists for this endpoint.
+- route_thin_or_fat: fat
+- application_logic_present: yes
+- service_layer_present: partial
+- metadata_present: yes
+- never_empty_present: yes
+- fallback_present: yes
+- tests_present: yes
+
+Gap vs Judge
+- contract_gap: no canonical shared contract file; frontend and tests rely on an implicit shape owned by route + service helpers.
+- route_gap: the route owns cache keys, cache storage, singleflight, namespace rewriting, fallback assembly, effective-scope resolution, and final response shaping instead of delegating most of it to an application/service facade.
+- application_gap: `copilot_service.build_context_payload()` exists, but starter-specific normalization (`_build_start_response`, namespace rewrites, effective-scope handling) still lives in the API layer.
+- service_gap: there is no dedicated reusable start endpoint service equivalent to `judge_endpoint_service.py`; reuse is partial and spread across route-private helpers.
+- metadata_gap: metadata is present but not standardized through a typed contract or a single service-level builder.
+- never_empty_gap: nominally solved, but the never-empty guarantee depends on route-local fallback assembly instead of a reusable service boundary.
+- fallback_gap: explicit fallback exists, but the degraded note/source/cache behavior is split across route-private helpers rather than one service decision point.
+- testing_gap: route cache tests and service tests exist, but there is no shared contract test matrix anchored to a typed starter schema and no explicit thin-route regression test.
+
+Target architecture
+- target_contract: add a canonical shared starter contract in `packages/contracts/` (for example `copilot_start_v1.py`) covering `brief_of_day`, `ask`, `open`, `freshness`, `source(s)`, `warnings`, `filters_applied`, `stats`, `cache`, and additive degraded metadata.
+- target_route_design: keep the FastAPI route as a thin adapter: parse `tickers/namespace/debug`, invoke a public service method, and return `{\"ok\": True, \"data\": ...}`. Cache/singleflight may stay at route boundary only if they wrap a single service call and do not own fallback logic.
+- target_application_design: move starter-specific shaping into the application layer: build effective scope, rewrite namespace targets, assemble response metadata, and decide degraded note/source in one public function.
+- target_service_design: expose a reusable facade (either a new `apps/api/src/domains/copilot/application/copilot_start_service.py` or a new public `build_start_payload(...)` entrypoint in `copilot_service.py`) that returns the final typed starter payload and keeps route helpers private-free.
+- target_metadata: standardized `freshness/generated_at`, `source(s)`, `warnings`, `filters_applied`, `stats`, and `cache`, plus explicit degraded note/context metadata when fallback is used.
+- target_fallback_model: service-level never-empty fallback using local brief + entry points + saved portfolio scope when context service is unavailable, preserving the public contract and making degradation explicit instead of inferred.
+- target_test_matrix: 1. typed contract validation test, 2. route orchestration test for thin adapter behavior, 3. cache/singleflight hit + debug bypass test, 4. degraded fallback test, 5. namespace alias parity test for `/personal-finance/start`.
+
+Implementation plan
+- files_or_modules_to_create: `packages/contracts/copilot_start_v1.py` (or equivalent canonical contract module), optionally `apps/api/src/domains/copilot/application/copilot_start_service.py` if the existing `copilot_service.py` would stay too monolithic.
+- files_or_modules_to_modify: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py` or the new `copilot_start_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, and `apps/api/src/domains/market_data/tests/test_endpoint_cache_contracts.py`.
+- files_or_modules_not_to_touch: `apps/web/src/platform/*`, theme/shell assets, `apps/api/runtime/*`, `apps/monitor/*`, and `platform/automation/*` for this endpoint-specific convergence.
+- compatibility_notes: keep `/api/copilot/start` and `/api/personal-finance/start` unchanged; preserve additive-only response evolution so existing frontend consumers keep working.
+- implementation_order: 1. freeze the public contract in `packages/contracts`, 2. introduce the reusable starter service/facade, 3. slim the route to parse/cache/delegate only, 4. harden tests for contract/fallback/cache/alias behavior.
+- risks: careless extraction can duplicate logic already inside `build_context_payload()`, break cache semantics, or regress namespace rewriting for `/personal-finance/start`.
+- non_goals: no new route family, no frontend redesign, no ask/memo behavior rewrite, no new custom runtime plumbing.
+
+Decision
+- patch_now: no
+- if_no_reason: the endpoint gap is real but still belongs to the active BATCH-85 hardening slice; patching it from this run would overlap in-flight work rather than clarify an independent next move.
+- next_owner: dev
+- next_action: fold `/api/copilot/start` Judge-parity convergence into BATCH-85 after the current hardening lands, starting with a shared contract and a dedicated service facade before any further frontend changes.
+
+## 2026-04-15T04:38:31Z endpoint-architecture-steward
+
+Target endpoint
+- endpoint: /api/copilot/context
+- why_this_endpoint: active BATCH-85 explicitly depends on the brief -> ask/open -> memo starter path, and `/api/copilot/context` is the backend-first entry surface that feeds both `/api/copilot/start` and the personal-finance aliases.
+- current_product_role: expose the brief of day, entry points, portfolio-aware fallback context, and starter payload in one low-cost response.
+
+Judge reference mapping
+- contract_reference: `/Users/venom/Documents/analyse-financiere/packages/contracts/judge_v1.py`
+- route_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/api/judge.py`
+- application_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_pipeline.py`
+- service_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_endpoint_service.py`
+- intelligence_or_context_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/intelligence_service.py`
+- invariants_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/INVARIANTS.md`
+
+Current state
+- current_contract: stable `ok/data` payload with `daily_brief`, `entry_points`, `copilot_start`, `scope_tickers`, `context_influence`, optional `playbook_context`, and allocation-drift context.
+- route_thin_or_fat: medium; the route is not a pure business blob, but it still owns cache, singleflight, namespace target rewriting, and some payload shaping.
+- application_logic_present: yes; `apps/api/src/domains/copilot/application/copilot_service.py::build_context_payload` centralizes fallback context, saved-portfolio resolution, regime/playbook enrichment, brief loading, and starter entry-point composition.
+- service_layer_present: partial; a reusable application service exists, but there is no Judge-style dedicated endpoint facade equivalent to `judge_endpoint_service.py`.
+- metadata_present: partial; payload fragments expose `source`, `generated_at`, `freshness`, and warnings, but there is no shared typed metadata contract for the endpoint family.
+- never_empty_present: yes; fallback tests confirm the route keeps a usable brief and entry points when context resolution fails.
+- fallback_present: yes; exceptions in the context service degrade to brief + starter payload instead of a 500.
+- tests_present: yes; route contract, alias, and fallback tests exist under `apps/api/src/domains/copilot/tests/`.
+
+Gap vs Judge
+- contract_gap: no shared typed contract in `packages/contracts/*` and no explicit stable response model comparable to `judge_v1.py`.
+- route_gap: cache, alias rewriting, and endpoint-specific response shaping still live in the route layer.
+- application_gap: business assembly exists, but endpoint-level normalization is not isolated into a typed builder/facade pair.
+- service_gap: missing Judge-style endpoint service that owns final metadata normalization, namespace alias policy, and contract guarantees.
+- metadata_gap: metadata is present but not standardized enough across `/copilot/context`, `/copilot/start`, and `/personal-finance/*`.
+- never_empty_gap: degraded mode works, but explicit `fallback_used` / standardized warnings could be clearer.
+- fallback_gap: provenance and freshness of fallback mode are visible only through mixed fragment fields, not a canonical endpoint-level contract.
+- testing_gap: route tests are good, but explicit shared-contract and metadata-parity tests versus the Judge standard are missing.
+
+Target architecture
+- target_contract: introduce a shared typed contract for the copilot starter/context family under `packages/contracts/*`, preserving the current public shape and adding explicit metadata/fallback semantics.
+- target_route_design: keep the FastAPI route focused on input parsing, cache/singleflight, and delegation only.
+- target_application_design: keep `build_context_payload` as the business assembler for brief, portfolio fallback, playbook, and entry points.
+- target_service_design: add a small Judge-style endpoint facade that normalizes metadata, namespace alias rewriting, and never-empty guarantees for `/copilot/context` and `/copilot/start`.
+- target_metadata: consistent `generated_at`, `freshness/last_update`, `source`, `warnings`, `filters_applied`, `stats`, and explicit degraded/fallback markers at endpoint level.
+- target_fallback_model: preserve current never-empty fallback, but surface a canonical endpoint-level degraded marker and provenance instead of relying on mixed nested fields.
+- target_test_matrix: route contract test, shared-contract serialization test, fallback/degraded metadata test, namespace alias test, and cache/singleflight orchestration test.
+
+Implementation plan
+- files_or_modules_to_create: none now; the next justified addition would be a minimal endpoint-service/contract module pair only after runtime recovery.
+- files_or_modules_to_modify: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_domain_router.py`, `apps/api/src/domains/copilot/tests/test_copilot_context_route_fallback.py`, and a shared contracts location under `packages/contracts/*` if the runtime blocker is cleared.
+- files_or_modules_not_to_touch: `apps/web/src/platform/*`, frontend theme/shell assets, Plane/backlog docs, and compatibility projections under `logs-codex-runs/orchestrator-state/*`.
+- compatibility_notes: keep `/api/copilot/context`, `/api/copilot/start`, `/api/personal-finance/start`, and `/api/personal-finance/ask` stable; only additive metadata is acceptable.
+- implementation_order: 1. recover VM runtime and prove BATCH-85, 2. if the endpoint still needs hardening, extract a minimal endpoint-service/typed-contract layer, 3. add contract/metadata tests, 4. re-run VM proof.
+- risks: doing architecture cleanup before VM recovery risks optimizing a non-blocking code path while the real blocker is runtime execution health.
+- non_goals: no new route family, no frontend redesign, no backlog mutation, no broad copilot refactor outside the active endpoint slice.
+
+Decision
+- patch_now: no
+- if_no_reason: runtime degradation on the VM is the primary blocker; an architecture patch here would improve structure but would not restore delivery without canonical runtime recovery and proof.
+- next_owner: admin
+- next_action: recover VM runtime first, then resume BATCH-85 proof and only apply the `/api/copilot/context` Judge-parity cleanup if the endpoint remains the limiting factor.
+
 ## 2026-04-15T04:37:41Z role-prompt-engineer
 
 Continuity
@@ -914,3 +1155,188 @@ Decision
 Target endpoint
 - endpoint: GET /api/copilot/start
 - why_this_endpoint: surface d\entrée produit principale après judge
+## ${TS} endpoint-architecture-steward
+
+Target endpoint
+- endpoint: GET /api/copilot/start
+- why_this_endpoint: surface d\entrée produit principale après judge
+## 2026-04-15T04:42:36Z vision-batch-architect
+
+Continuity
+- previous_verdict: no new batch; BATCH-85 should remain the sole priority until VM proof exists
+- previous_top_priority: finish the active brief/action/memo hardening slice and validate it on the VM
+- previous_next_delivery: close the BATCH-85 delivery chain instead of opening parallel backlog
+- changed_since_last_run: synced queue/workboard still show BATCH-85 as the only active batch, proofs now include BATCH-85 ANALYSIS/ARCH completion plus DEV-01 delivery proof, and local code changes remain concentrated on the same copilot/portfolio/judge/monitor hardening slice
+
+Reality check
+- vision_alignment: mixed
+- priority_clarity: clear
+- active_batch_usefulness: strong
+- delivered_value_now: moderate
+
+Top priorities
+1. Finish BATCH-85 on the existing brief/action/memo slice and get canonical VM proof for `/api/personal-finance/start`, `/api/copilot/context`, and `/api/status`.
+2. Keep the backend-first hardening on `apps/api/src/domains/copilot/*`, `apps/api/src/domains/market_data/*`, and `apps/monitor/*` coherent so the brief, top action context, and memo path stay reliable without extra plumbing.
+3. After BATCH-85 proof only, converge `GET /api/copilot/start` toward Judge-parity with a shared contract and thinner route if the gap still blocks product reliability.
+
+Rejected batch ideas
+- New batch for `/api/copilot/start` Judge-parity now: rejected as too dependent on BATCH-85 because the active lot already modifies the same route, service, portfolio fallback, and monitor surfaces.
+- New batch for conversation history/follow-up UX: rejected as already implicitly delivered per `docs/operations/orchestrator/proofs/BATCH-85/BATCH-85-DEV-01/delivery-proof.json`.
+- New runtime/planner cleanup batch: rejected as too orchestration-heavy for this role and not a better product priority than finishing the active user-visible slice.
+
+Selected batch
+- title: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
+- why_now: it is already the active batch, it targets the primary product entry path, and opening new backlog now would only fragment delivery before VM validation exists
+- user_visible_delta: more reliable brief-of-day entry, clearer ask/open starters, steadier portfolio-aware context, and fewer nominal-path failures on the existing personal-finance flow
+- novelty_target: harden the current backend-first slice so the existing product entry path becomes dependable without redesign or new orchestration surfaces
+- independence_from_active_batch: no
+- create_now: no
+- batch_class: hardening
+
+Architecture fit
+- aligned_with_backend_first: yes
+- preserves_frontend_theme: yes
+- adds_new_custom_plumbing: no
+- canonical_paths_respected: yes
+- comments: the useful work stays in `apps/api/src/domains/copilot/*`, `apps/api/src/domains/market_data/*`, and `apps/monitor/*`; no backlog JSON, runtime projection, or frontend shell invention is justified now
+
+Implementation architecture
+- product slice: personal finance copilot entry flow from brief-of-day to ask/open to memo, plus the supporting portfolio/watchlist context and monitor health visibility
+- current reality: `GET /api/copilot/start` and `/api/personal-finance/start` already exist and return starter payloads; local code changes are actively hardening context fallback, saved-portfolio defaulting, Judge reuse, and monitor status, while synced runtime projections show BATCH-85 as the only active batch
+- backend changes: continue hardening `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/judge/api/judge.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, and portfolio services so the starter and memo flows stay never-empty, low-cost, and provenance-aware
+- frontend changes: no structural redesign; only consume existing starter payloads and aliases already present in `apps/web/src/domains/forecasts/pages/app.js` and `personal-finance-start.html` if backend proof exposes a real rendering gap
+- monitor/observability changes: keep `apps/monitor/server.py` and `apps/monitor/services/status_service.py` aligned with runtime truth so `/api/status` reflects the same reliability slice and degraded states instead of stale planner/admin residue
+- runtime/orchestration changes: none as a new batch; runtime work remains validation/support for BATCH-85 and must not create new wrappers or backlog projections
+- existing code to reuse: `packages/contracts/judge_v1.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/copilot/application/copilot_service.py::build_context_payload`, namespace alias routes in `apps/api/src/domains/copilot/api/copilot.py`, and existing copilot/monitor tests
+- files_or_modules_to_touch: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/judge/api/judge.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/market_data/application/dashboard_ui_service.py`, `apps/api/src/domains/market_data/application/portfolio_performance_service.py`, `apps/api/src/domains/market_data/application/portfolio_service.py`, `apps/monitor/server.py`, `apps/monitor/services/status_service.py`
+- files_or_modules_not_to_touch: `apps/web/src/platform/*`, theme/shell assets, `platform/automation/*` as a new product batch surface, Plane/runtime JSON projections, and memory/docs as planning truth substitutes
+- api_or_contract_changes: additive only; keep `/api/copilot/start`, `/api/personal-finance/start`, `/api/copilot/context`, and `/api/personal-finance/ask` stable while improving metadata consistency (`source`, `freshness`, `warnings`, `cache`, degraded notes)
+- migration_or_compat_notes: preserve personal-finance namespace rewriting and current frontend payload expectations; if a shared starter contract is introduced later, it must wrap the existing shape rather than break it
+- proof_requirements: canonical VM proof for `/api/personal-finance/start`, `/api/copilot/context`, and `/api/status`; route/service test proof for cache hit + debug bypass + never-empty fallback; evidence that portfolio defaulting does not force live risk fetch in nominal flow
+- acceptance_criteria: active BATCH-85 surfaces return stable starter/context payloads with explicit freshness and source metadata; nominal errors degrade instead of 500ing; monitor status stays non-null and aligned with runtime truth; no new duplicate batch is required
+- implementation_order: 1. finish active backend/service hardening in copilot + portfolio + judge, 2. finish monitor/status hardening, 3. run/collect tests locally, 4. validate on the VM, 5. only then decide whether shared-contract extraction is still needed
+- risks: local projections can overstate readiness because VM runtime proof is unavailable from this sandbox; route/service cleanup on `copilot/start` can duplicate active BATCH-85 work if started as a separate batch too early
+- non_goals: no new backlog stream, no frontend redesign, no new operator/runtime plumbing, no manual edits to queue/workboard/priority projections
+
+Decision
+- create_in_plane_now: no
+- if_no_reason: current batch should keep priority because it already covers the same product slice and code surfaces, and Plane creation is not justified without an independent user-visible delta
+- next_owner: dev
+- next_action: finish BATCH-85 and obtain canonical VM proof before reconsidering any new batch
+
+## 2026-04-15T04:42:36Z endpoint-architecture-steward
+
+Target endpoint
+- endpoint: GET /api/copilot/start
+- why_this_endpoint: it is the main starter endpoint for the brief -> ask/open -> memo journey and it still carries route-owned orchestration that Judge has already factored better
+- current_product_role: deliver the brief of the day, starter ask/open actions, and portfolio-aware degraded entry into the personal finance copilot in 2-3 clicks
+
+Judge reference mapping
+- contract_reference: `/Users/venom/Documents/analyse-financiere/packages/contracts/judge_v1.py`
+- route_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/api/judge.py`
+- application_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_pipeline.py`
+- service_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_endpoint_service.py`
+- intelligence_or_context_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/intelligence_service.py`
+- invariants_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/INVARIANTS.md`
+
+Current state
+- current_contract: implicit but fairly stable `ok/data` response built by `_build_start_response(...)` around `brief_of_day`, `ask`, `open`, `generated_at`, `freshness`, `source`, `warnings`, `stats`, `filters_applied`, optional note, and portfolio/context fragments
+- route_thin_or_fat: fat relative to Judge; the route still owns cache lookup/store, singleflight, fallback branching, namespace rewriting, and response assembly
+- application_logic_present: yes; `apps/api/src/domains/copilot/application/copilot_service.py::build_context_payload` builds daily brief, entry points, saved-portfolio context, playbook context, regime detection, and `copilot_start`
+- service_layer_present: partial; there is a reusable application service, but no Judge-style dedicated endpoint facade comparable to `judge_endpoint_service.py`
+- metadata_present: partial; `generated_at`, `freshness`, `source`, `warnings`, `cache`, and `stats` exist, but there is no shared typed contract guaranteeing starter metadata parity
+- never_empty_present: yes; the route explicitly falls back to local brief + entry points instead of failing hard
+- fallback_present: yes; both service-level context fallback and route-level fallback exist, but provenance is spread across route helpers and service builders
+- tests_present: yes; cache/debug tests and service tests exist under `apps/api/src/domains/copilot/tests/`, but not a shared typed contract test
+
+Gap vs Judge
+- contract_gap: no canonical shared starter contract in `packages/contracts/*`; frontend and aliases still depend on a route-built shape rather than a typed public model
+- route_gap: `apps/api/src/domains/copilot/api/copilot.py:1007-1110` still mixes adapter work with business fallback and payload shaping
+- application_gap: application logic exists but starter-specific normalization remains split between the route and `_build_copilot_start_payload`
+- service_gap: missing endpoint facade to own final payload normalization, metadata standardization, and alias-safe degraded behavior
+- metadata_gap: metadata is present but not standardized enough across `/copilot/start`, `/copilot/context`, and `/personal-finance/start`
+- never_empty_gap: degraded mode works, but explicit `fallback_used` or clearer canonical degraded markers are still absent
+- fallback_gap: fallback policy is duplicated between route and service instead of being encapsulated in one reusable layer
+- testing_gap: no shared contract validation anchored to a typed starter schema and no thin-route regression test that proves route/business separation
+
+Target architecture
+- target_contract: introduce a shared typed starter contract under `packages/contracts/*` for `brief_of_day`, `ask`, `open`, `generated_at`, `freshness`, `source`, `warnings`, `filters_applied`, `stats`, `cache`, and explicit degraded metadata
+- target_route_design: keep `GET /api/copilot/start` as a thin FastAPI adapter that parses `tickers/namespace/debug`, handles cache/singleflight, delegates once, and returns `{\"ok\": true, \"data\": ...}`
+- target_application_design: keep `build_context_payload(...)` as the broad business assembler for scope, saved portfolio, regime, and brief creation without route-only namespace concerns
+- target_service_design: add a Judge-style endpoint facade for starter payload construction and degraded policy, either as `apps/api/src/domains/copilot/application/copilot_start_service.py` or a public facade extracted from `copilot_service.py`
+- target_metadata: canonical endpoint-level `generated_at`, `freshness`, `source`, `warnings`, `filters_applied`, `stats`, `cache`, and explicit degraded/fallback markers
+- target_fallback_model: one service-owned never-empty fallback that preserves the public contract and rewrites namespace targets consistently for `/personal-finance/start`
+- target_test_matrix: shared contract serialization test, route orchestration/thinness test, cache hit + debug bypass test, degraded fallback test, and namespace alias parity test
+
+Implementation plan
+- files_or_modules_to_create: `packages/contracts/copilot_start_v1.py` and optionally `apps/api/src/domains/copilot/application/copilot_start_service.py` if extraction from `copilot_service.py` remains cleanly scoped
+- files_or_modules_to_modify: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, and any focused contract test file under `apps/api/src/domains/copilot/tests/`
+- files_or_modules_not_to_touch: `apps/web/src/platform/*`, frontend theme/shell assets, `apps/api/runtime/*`, `apps/monitor/*`, and `platform/automation/*` for this endpoint-specific convergence
+- compatibility_notes: keep `/api/copilot/start` and `/api/personal-finance/start` stable; only additive metadata evolution is acceptable
+- implementation_order: 1. freeze the starter contract, 2. extract a dedicated endpoint facade, 3. slim the route to parse/cache/delegate only, 4. add contract/fallback/cache/alias tests, 5. revalidate on VM
+- risks: doing this now would overlap BATCH-85 work already in progress on the same files and could create duplicate partial abstractions before runtime proof exists
+- non_goals: no new route family, no frontend redesign, no conversation-history work, no orchestration/runtime refactor disguised as endpoint work
+
+Decision
+- patch_now: no
+- if_no_reason: the gap is real but not independent; it belongs inside the active BATCH-85 hardening path and should not become a separate patch from this run
+- next_owner: dev
+- next_action: finish BATCH-85, then extract the starter contract/facade only if `/api/copilot/start` still remains the limiting reliability point after VM proof
+## 2026-04-15T04:49:00Z endpoint-architecture-steward
+
+Target endpoint
+- endpoint: GET /api/copilot/start
+- why_this_endpoint: surface d'entrée produit principale après judge; elle sert le brief du jour et les actions ask/open en 2-3 clics.
+- current_product_role: point d'entrée backend-first réutilisé par copilot et personal-finance pour lancer le parcours nominal utilisateur.
+
+Judge reference mapping
+- contract_reference: /home/venom/analyse-financiere/packages/contracts/judge_v1.py
+- route_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/api/judge.py
+- application_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/judge_pipeline.py
+- service_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/judge_endpoint_service.py
+- intelligence_or_context_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/intelligence_service.py
+- invariants_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/INVARIANTS.md
+
+Current state
+- current_contract: contrat public stable de fait avec `ok`, `data`, `generated_at`, `freshness`, `source`, `warnings`, `filters_applied`, `stats`, `cache`, `ask`, `open`, `brief_of_day`, mais il n'existe pas comme contrat partagé canonique.
+- route_thin_or_fat: fat; la route gère parsing, cache TTL, singleflight, bypass debug, normalisation de namespace, fallback et assemblage de la réponse.
+- application_logic_present: yes; l'agrégation métier vit surtout dans `/home/venom/analyse-financiere/apps/api/src/domains/copilot/application/copilot_service.py`.
+- service_layer_present: partial; il existe de la logique métier réutilisable mais pas de façade endpoint dédiée équivalente à `judge_endpoint_service.py`.
+- metadata_present: yes; les métadonnées utiles sont déjà exposées et exploitables côté frontend.
+- never_empty_present: yes; la route préserve un payload utile avec `ask/open` et brief fallback au lieu d'un vide structurel.
+- fallback_present: yes; snapshot-first et route fallback existent, mais la responsabilité est partagée entre route et service.
+- tests_present: yes; tests de route, cache, alias et fallback existent déjà.
+
+Gap vs Judge
+- contract_gap: absence de contrat partagé sous `packages/contracts/*`; le frontend dépend d'une shape implicite garantie seulement par la route et les tests.
+- route_gap: la route est trop chargée par rapport au modèle Judge; elle porte encore de la logique de cache/orchestration/fallback qui devrait être encapsulée.
+- application_gap: la logique métier n'est pas perdue, mais l'orchestration endpoint est répartie entre la route et le service au lieu d'être stabilisée dans une couche dédiée.
+- service_gap: absence d'une façade réutilisable `copilot_endpoint_service` responsable du payload final, de la metadata standard et du degraded mode.
+- metadata_gap: bonne base existante, mais pas de standardisation canonique de `fallback_used`, `source`, `freshness` et `warnings` via un builder/service unique.
+- never_empty_gap: le comportement never-empty existe mais n'est pas garanti par un contrat typé partagé ni centralisé dans une façade endpoint.
+- fallback_gap: fallback explicite mais distribué; il faut une chaîne unique snapshot-first -> degraded payload -> warning/source canonique.
+- testing_gap: couverture route correcte, mais pas encore de tests de contrat partagé ni de tests dédiés de façade service équivalents à Judge.
+
+Target architecture
+- target_contract: créer `/home/venom/analyse-financiere/packages/contracts/copilot_start_v1.py` avec contrat public typé pour `ok`, `data`, `generated_at`, `freshness`, `source`, `warnings`, `filters_applied`, `stats`, `cache`, `fallback_used`.
+- target_route_design: garder `/home/venom/analyse-financiere/apps/api/src/domains/copilot/api/copilot.py` comme adaptateur mince: parsing input, debug bypass simple, appel façade endpoint, enveloppe HTTP.
+- target_application_design: conserver `/home/venom/analyse-financiere/apps/api/src/domains/copilot/application/copilot_service.py` comme couche d'agrégation métier pour brief, entry points, enrichissement et contexte.
+- target_service_design: créer `/home/venom/analyse-financiere/apps/api/src/domains/copilot/application/copilot_endpoint_service.py` pour encapsuler cache/singleflight, payload final, fallback canonicalisé, normalisation metadata et compat alias.
+- target_metadata: standardiser `generated_at`, `freshness`, `source[]`, `warnings[]`, `filters_applied`, `stats`, `cache`, `fallback_used` avec provenance explicite lisible par le frontend.
+- target_fallback_model: une seule chaîne explicite snapshot-first; en cas de source partielle, retour `ok=true` dégradé avec provenance/warnings/fallback_used, sans 500 sur le parcours nominal.
+- target_test_matrix: ajouter test de contrat partagé, test de façade endpoint, test orchestration route, test degraded fallback, test metadata standard, test alias parity `/api/personal-finance/start`.
+
+Implementation plan
+- files_or_modules_to_create: `/home/venom/analyse-financiere/packages/contracts/copilot_start_v1.py`, `/home/venom/analyse-financiere/apps/api/src/domains/copilot/application/copilot_endpoint_service.py`, `/home/venom/analyse-financiere/apps/api/src/domains/copilot/tests/test_copilot_start_endpoint_service.py`.
+- files_or_modules_to_modify: `/home/venom/analyse-financiere/apps/api/src/domains/copilot/api/copilot.py`, `/home/venom/analyse-financiere/apps/api/src/domains/copilot/application/copilot_service.py`, `/home/venom/analyse-financiere/apps/api/src/domains/copilot/tests/test_copilot_domain_router.py`, `/home/venom/analyse-financiere/apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`.
+- files_or_modules_not_to_touch: `/home/venom/analyse-financiere/apps/api/src/domains/judge/api/intelligence.py`, `/home/venom/analyse-financiere/apps/api/src/domains/judge/api/quality.py`, couches runtime/planner/operator, frontend theme/shell.
+- compatibility_notes: préserver strictement les routes publiques `/api/copilot/start` et `/api/personal-finance/start` ainsi que la shape actuelle pendant la migration.
+- implementation_order: 1. contrat partagé 2. façade endpoint 3. migration de la route vers la façade 4. alignement des tests 5. nettoyage des helpers route-locaux.
+- risks: casser l'alias `personal-finance/start`, perdre des champs implicites existants, introduire une divergence entre cache route et fallback métier si la migration est partielle.
+- non_goals: réécriture complète du domaine copilot, redesign frontend, clonage monolithique de Judge, ajout de plomberie runtime.
+
+Decision
+- patch_now: no
+- if_no_reason: le gain clair est structurel et nécessite un contrat partagé + une façade endpoint dédiée; ce n'est pas un patch local sans risque sur une route déjà en service.
+- next_owner: dev
+- next_action: implémenter `copilot_start_v1` et `copilot_endpoint_service`, puis migrer `/api/copilot/start` vers une route mince avec metadata/fallback standardisés.

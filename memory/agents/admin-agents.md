@@ -251,6 +251,47 @@ Actions taken
 - create_now: no
 - next_action: complete `apps/api` + `apps/monitor` hardening, prove `/api/copilot/context` and `/api/personal-finance/ask` on VM, then fix Plane metadata only if closure is blocked.
 
+## 2026-04-15T04:38:31Z admin-unblock
+
+Continuity
+- previous_verdict: prior runs treated the local synced state as mostly clear and were blocked mainly on missing VM proof.
+- previous_main_blocker: inability to validate and repair the live VM runtime from this sandboxed environment.
+- previous_top_priority: finish and prove the BATCH-85 brief/action/memo slice on the VM.
+- changed_since_last_run: synced state now clearly shows an active BATCH-85 chain; planner guardian points to `BATCH-85-DEV-01`, while executors monitoring still reports planner-only scheduling, stale dev/admin ticks, and unreachable backend/frontend/monitor surfaces.
+
+Verdict
+- blocker: runtime is effectively planner-only and degraded in the synced canonical health snapshots; dev/admin execution is stale and app services are reported unreachable, but live VM recovery cannot be executed from this sandbox.
+- blocker_class: runtime/config/bootstrap
+- fix_needed: no safe code patch from mac-side static state; the next useful action is VM-side runtime recovery and revalidation of planner/dev/admin scheduling plus app health.
+- runtime_can_resume: no
+
+Actions taken
+- read continuity files (`SOUL.md`, `USER.md`, `MEMORY.md`, `memory/agents/admin-agents.md`, daily memories).
+- attempted VM host/runtime access through the mandatory safety gate and SSH runtime host check; sandbox denied SSH to `dev-vm-utm`.
+- inspected synced canonical state (`priority-queue.json`, `parallel-workstreams.json`, `planner-guardian-latest.json`, `executors-monitoring-latest.json`, `state-reconcile-report.json`) to separate a real runtime blocker from stale retry churn.
+
+Validation
+- command_or_check: safety-gated SSH runtime host check plus static inspection of synced orchestrator-state snapshots.
+- observed_result: SSH failed with `Operation not permitted`; synced state shows `BATCH-85` open with `BATCH-85-DEV-01` as active task, planner blocked on `PLANNER_RUNTIME_ACTIONS_FAILED`, admin reporting `backend_api_unreachable/frontend_unreachable/monitor_contract_down`, `scheduled_roles=["planner"]`, and dev/admin tick ages around 56k minutes.
+- canonical_signal_after_fix: no runtime fix applied; blocker remains unresolved until a VM-capable run restores or revalidates runtime services and non-planner role scheduling.
+
+Decision
+- next_owner: admin
+- next_action: run VM-side doctor/status/recovery on `dev-vm-utm`, restore non-planner runtime scheduling and app reachability, then recheck BATCH-85 handoff state.
+- escalation_needed: yes
+
+Notes
+- false_progress_detected: yes — queue/workboard show BATCH-85 moving, but monitor still reports a planner-only degraded runtime with stale downstream roles.
+- legacy_influence: low — this run did not find a dominant legacy retry loop; the blocker is runtime reachability and bootstrap health.
+- value_impact: high — the brief/ask/memo slice cannot be treated as resumable while the canonical runtime remains degraded and unreachable.
+
+## 2026-04-15T04:38:31Z endpoint-architecture-steward signal
+- endpoint: /api/copilot/context
+- main_gap: missing Judge-style shared typed contract and endpoint-service layer; runtime proof is blocked upstream by degraded VM execution.
+- target: keep the brief/context starter path stable and Judge-parity-ready without adding new plumbing before VM recovery.
+- patch_now: no
+- next_action: recover VM runtime first, then finish BATCH-85 proof on `/api/copilot/context` and related personal-finance aliases.
+
 Validation
 - command_or_check: attempted VM host/runtime access via ssh runtime_host_check, then statically inspected logs-codex-runs/orchestrator-state/{priority-queue.json,parallel-workstreams.json,state-reconcile-report.json}
 - observed_result: ssh to dev-vm-utm is blocked by the sandbox; synced canonical state shows BATCH-84 closed, BATCH-84-ADMIN-01 done, and no open or flagged tasks
@@ -1208,9 +1249,92 @@ Architecture note
 - Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still mix compat collection, stale mirrors, and fallback control into live orchestration.
 - Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py` from any active planner decision path, plus the remaining OpenClaw/operator-plane metadata and message-bus-style legacy cues once monitor/status no longer need them.
 
+## 2026-04-15T04:40:36Z orchestration-architect
+
+Verdict
+- app_progress: yes
+- orchestration_efficiency: poor
+- delivered_value_now: moderate
+
+What changed since previous run
+- Changed: `logs-codex-runs/orchestrator-state/priority-queue.json` now marks `BATCH-85` `IN_PROGRESS` instead of `READY`, but still keeps `next_action="compléter BATCH-85-ANALYSIS (READY_PLANNER pour planner)"`.
+- Changed: `logs-codex-runs/orchestrator-state/parallel-workstreams.json` advanced to `2026-04-15T04:39:03Z`, but the `BATCH-85` stream still carries no task list, so the newer workboard snapshot still does not expose a real executable chain.
+- Unchanged: `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` still materializes only `1` `BATCH-85` graph row and `1` `BATCH-85` event, both on `BATCH-85-DEV-01`; there is still no broader `BATCH-85` runtime truth.
+- Unchanged: `logs-codex-runs/orchestrator-state/executors-monitoring-latest.json` still reports planner `BLOCKED`, `done_24h=544`, and `proofs=105`, while its admin/dev snapshots are stale relative to the live runtime task.
+- Worse: queue/workboard drift is now larger, because both projection surfaces still tell planner to finish `ANALYSIS` while the canonical active runtime task is already `BATCH-85-DEV-01`.
+- Real progress: the current `apps/api` + `apps/monitor` lot still carries a real user-facing slice worth shipping independently: copilot context/start caching, lower-cost saved-portfolio behavior, judge/portfolio fallback hardening, and runtime-truth-first monitor fixes.
+
+Top priorities
+1. Ship the current `apps/api` + `apps/monitor` reliability lot independently of orchestration cleanup.
+2. Make queue/workboard/monitor converge on runtime truth for `BATCH-85-DEV-01`: stop advertising `compléter BATCH-85-ANALYSIS` once SQLite has the live dispatch.
+3. Quarantine or purge `BATCH-84` retryable residue and remove compat/OpenClaw leftovers from active planner control paths in `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py`.
+
+Main blocker
+- `BATCH-85` still fails convergence: `priority-queue.json` and `parallel-workstreams.json` frame the batch as unfinished `ANALYSIS`, while SQLite/runtime truth only knows `BATCH-85-DEV-01`; `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py` still let compat collection and stale planner-subagent state shape control flow.
+
+False progress detected
+- `priority-queue.json` and `parallel-workstreams.json` both moved timestamps/state on `BATCH-85`, but `user_value_delta_visible` is still `0` and the workboard stream exposes no task list.
+- `docs/operations/orchestrator/proofs/BATCH-84-ADMIN-01/` still contains `1270` takeover proof files, including `22` dated `2026-04-15`; this is churn residue, not new delivery.
+- `executors-monitoring-latest.json` still claims `done_24h=544` and `proofs=105` while planner remains blocked and the active batch is not fully materialized in SQLite.
+- Legacy secondary surfaces still exist and can still look alive: `planner-subagents-registry.json`, `dynamic-workers-registry.json`, `agent-message-bus.jsonl`, and `intent-registry.json`.
+
+Next useful delivery
+- Release the current brief/action/memo reliability slice: cached `/api/copilot/context`, stable `/api/copilot/start`, lower-cost saved-portfolio fallback, composition-only/cached portfolio performance fallback, and monitor health/status that prefer runtime truth over stale compat projections.
+
+Architecture note
+- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py` and `platform/automation/runtime/truth/dispatch_snapshot.py` as the SQLite-first primary read boundary.
+- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still carry active compat/projection/OpenClaw logic.
+- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py` from any active planner decision path; legacy registries, message bus, and intent registry must stay passive mirrors only.
+
+## 2026-04-15T04:40:36Z endpoint-architecture-steward signal
+- endpoint: /api/copilot/context
+- main_gap: shared contract is still missing and the route still owns cache/fallback response normalization
+- target: typed copilot contract + endpoint facade, with route limited to parsing/cache/namespace rewrite
+- patch_now: no
+- next_action: implement `packages/contracts/copilot_v1.py` plus a copilot endpoint service after the current reliability lot ships
+
+## 2026-04-15T04:38:43Z vision-batch-architect signal
+- verdict: no new batch; BATCH-85 still has to finish and get VM proof
+- top_priority: complete the active brief/action/memo hardening and then converge runtime metadata
+- selected_batch: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
+- create_now: no
+- next_action: finish BATCH-85 on current code surfaces and validate on the VM
+
+## 2026-04-15T04:38:43Z endpoint-architecture-steward signal
+- endpoint: GET `/api/copilot/start`
+- main_gap: route still owns cache/fallback/response shaping and no shared typed contract exists
+- target: move starter shaping to a reusable application service with a canonical contract
+- patch_now: no
+- next_action: fold the endpoint convergence into BATCH-85 after current hardening lands
+
 ## 2026-04-15T04:37:41Z role-prompt-engineer signal
 - role: planner
 - prompt_issue: planner base prompt was duplicating system/shared/guardian rules and diluting collect-before-redispatch behavior
 - patch_type: shorten
 - create_now: yes
 - expected_gain: less redispatch churn and clearer planner next action on canonical active work
+## ${TS} endpoint-architecture-steward signal
+- endpoint: GET /api/copilot/start
+- main_gap: route trop chargée et absence de contrat partagé canonique pour une surface produit critique.
+- target: contrat `copilot_start_v1` + façade `copilot_endpoint_service` + route mince avec fallback/métadonnées standardisés.
+- patch_now: no
+- next_action: préparer la refactorisation structurée de `copilot/start` vers Judge-parity sans casser l\'alias personal-finance.
+## 2026-04-15T04:42:36Z vision-batch-architect signal
+- verdict: no new batch; BATCH-85 remains the only valid priority
+- top_priority: finish the active brief/action/memo hardening and prove it on the VM
+- selected_batch: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
+- create_now: no
+- next_action: complete BATCH-85 and postpone any new batch until canonical VM proof exists
+
+## 2026-04-15T04:42:36Z endpoint-architecture-steward signal
+- endpoint: GET /api/copilot/start
+- main_gap: route still owns cache, fallback, namespace rewriting, and final payload shaping without a shared starter contract
+- target: shared `copilot_start_v1` contract plus a reusable endpoint facade so the route becomes thin
+- patch_now: no
+- next_action: fold Judge-parity cleanup into BATCH-85 after active hardening and VM proof
+## 2026-04-15T04:49:00Z endpoint-architecture-steward signal
+- endpoint: GET /api/copilot/start
+- main_gap: route trop chargée et absence de contrat partagé canonique pour une surface produit critique.
+- target: contrat `copilot_start_v1` + façade `copilot_endpoint_service` + route mince avec fallback/métadonnées standardisés.
+- patch_now: no
+- next_action: préparer la refactorisation structurée de `copilot/start` vers Judge-parity sans casser l'alias personal-finance.

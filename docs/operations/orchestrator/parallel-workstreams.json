@@ -1,6 +1,6 @@
 {
   "version": "workboard_1773198383_vb_runtime_bridge",
-  "updated_at": "2026-04-15T04:39:03Z",
+  "updated_at": "2026-04-15T04:44:06Z",
   "active_cycle": {
     "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
     "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
@@ -1471,15 +1471,15 @@
       "id": "BATCH-85",
       "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open",
       "priority": "P2",
-      "source_state": "IN_PROGRESS",
-      "state": "IN_PROGRESS",
+      "source_state": "READY_PLANNER",
+      "state": "BLOCKED",
       "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
       "novelty_class": "reuse_only",
       "user_value_delta_visible": 0,
       "created_at": "2026-04-15T03:46:32Z",
-      "updated_at": "2026-04-15T04:39:03Z",
+      "updated_at": "2026-04-15T04:44:06Z",
       "novelty_target": "fiabiliser le slice app independamment du churn admin",
-      "next_action": "compl\u00e9ter BATCH-85-ANALYSIS (READY_PLANNER pour planner)"
+      "next_action": "attendre completion de BATCH-85-DEV-01 puis claim BATCH-85-DEV-02 (role=dev)"
     }
   ],
   "tasks": [
@@ -2872,7 +2872,7 @@
       "depends_on": [],
       "assignee": "dev",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-04-15T04:39:03Z",
+      "updated_at": "2026-04-15T04:44:06Z",
       "started_at": "2026-03-03T14:37:05Z",
       "completed_at": "2026-03-03T15:28:08Z",
       "notes": [
@@ -3016,7 +3016,7 @@
       "depends_on": [],
       "assignee": "dev",
       "created_at": "2026-02-28T20:43:30Z",
-      "updated_at": "2026-04-15T04:39:03Z",
+      "updated_at": "2026-04-15T04:44:06Z",
       "started_at": "2026-03-03T16:50:27Z",
       "completed_at": "2026-03-03T16:51:41Z",
       "notes": [
@@ -38759,7 +38759,7 @@
       "code": "ANALYSIS",
       "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open [ANALYSIS]",
       "role": "planner",
-      "state": "IN_PROGRESS",
+      "state": "DONE",
       "priority": "P2",
       "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day-lets-the-user-ask-or-open",
       "novelty_class": "reuse_only",
@@ -38777,10 +38777,10 @@
       ],
       "handoff_to": "",
       "created_at": "2026-04-15T03:46:32Z",
-      "updated_at": "2026-04-15T04:32:18Z",
+      "updated_at": "2026-04-15T04:43:01Z",
       "started_at": "2026-04-15T04:32:18Z",
       "completed_at": "",
-      "status": "IN_PROGRESS",
+      "status": "DONE",
       "last_idempotency_key": "",
       "owner": "planner",
       "proof_count": 0,
@@ -38885,23 +38885,23 @@
       "code": "DEV-01",
       "title": "Build a personal finance copilot that starts with a brief of the day, lets the user ask or open [DEV-01]",
       "role": "dev",
-      "state": "IN_PROGRESS",
+      "state": "BLOCKED",
       "priority": "P2",
       "depends_on": [
         "BATCH-85-ARCH"
       ],
       "assignee": "dev",
-      "blocked_reason": "",
+      "blocked_reason": "planner_dev_capability_failed:subagent_status_failed",
       "artifacts": [],
       "notes": [
         "INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: reuse Judge endpoint stack (apps/api/src/domains/judge/api/judge.py, apps/api/src/domains/judge/application/judge_pipeline.py, apps/api/src/domains/judge/application/g4f_client.py) + follow docs/ops/API_ENDPOINT_BEST_PRACTICES.md, docs/ops/REUSE_MODULES_CATALOG.md, and docs/ops/INTEGRATION_APP_ENGINEER_RECOMMENDATIONS.md."
       ],
       "handoff_to": "",
       "created_at": "2026-04-15T03:49:05Z",
-      "updated_at": "2026-04-15T04:32:55Z",
+      "updated_at": "2026-04-15T04:43:01Z",
       "started_at": "2026-04-15T04:30:28Z",
       "completed_at": "",
-      "status": "IN_PROGRESS",
+      "status": "BLOCKED",
       "owner": "dev",
       "proof_count": 0,
       "next_action": "wait_for_dependencies",
@@ -565506,6 +565506,50 @@
         "active_cycle_synced": "0",
         "novelty_synced": "0",
         "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:43:01Z",
+      "kind": "block",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "reason": "planner_dev_capability_failed:subagent_status_failed"
+      }
+    },
+    {
+      "at": "2026-04-15T04:43:01Z",
+      "kind": "planner_orchestrator_dev_dispatch_failed",
+      "details": {
+        "task_id": "BATCH-85-DEV-01",
+        "source": "planner_subagent_manager",
+        "subagent_id": "planner_dev_18d83dcc5d"
+      }
+    },
+    {
+      "at": "2026-04-15T04:43:01Z",
+      "kind": "reconcile_state",
+      "details": {
+        "queue": "/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "queue_synced": "1",
+        "waiting_dep_reclassified": "0",
+        "active_cycle_synced": "0",
+        "novelty_synced": "0",
+        "non_destructive": "1"
+      }
+    },
+    {
+      "at": "2026-04-15T04:44:06Z",
+      "kind": "auto_advance_queue",
+      "details": {
+        "queue": "/home/venom/shared/analyse-financiere/logs-codex-runs/orchestrator-state/priority-queue.json",
+        "closed_streams": "0",
+        "opened_batch": "BATCH-85",
+        "synced_queue_items": "0",
+        "decoupled_batches": "0",
+        "decoupled_total": "0",
+        "decoupled_closed": "0",
+        "decoupled_open": "0",
+        "waiting_dep_reclassified": "0"
       }
     }
   ],

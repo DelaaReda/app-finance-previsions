@@ -1021,6 +1021,111 @@ class QueueSyncTests(unittest.TestCase):
             self.assertIn("AUTOBATCH_SKIP", cp.stdout)
             self.assertIn("reason=cooldown", cp.stdout)
 
+    def test_sync_priority_closes_stale_upstream_task_when_downstream_is_active(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            board_path = Path(td) / "parallel-workstreams.json"
+            queue_path = Path(td) / "priority-queue.json"
+
+            board = {
+                "version": 1,
+                "updated_at": "2026-04-15T04:30:29Z",
+                "roles": {},
+                "streams": [
+                    {
+                        "id": "BATCH-85",
+                        "state": "IN_PROGRESS",
+                        "next_action": "compléter BATCH-85-ANALYSIS (READY_PLANNER pour planner)",
+                    }
+                ],
+                "tasks": [
+                    {
+                        "id": "BATCH-85-ANALYSIS",
+                        "stream_id": "BATCH-85",
+                        "code": "ANALYSIS",
+                        "role": "planner",
+                        "state": "IN_PROGRESS",
+                        "status": "IN_PROGRESS",
+                        "depends_on": [],
+                        "started_at": "2026-04-15T04:13:51Z",
+                        "completed_at": "",
+                        "created_at": "2026-04-15T03:46:32Z",
+                        "updated_at": "2026-04-15T04:32:18Z",
+                    },
+                    {
+                        "id": "BATCH-85-ARCH",
+                        "stream_id": "BATCH-85",
+                        "code": "ARCH",
+                        "role": "planner",
+                        "state": "DONE",
+                        "status": "DONE",
+                        "depends_on": ["BATCH-85-ANALYSIS"],
+                        "started_at": "2026-04-15T04:20:00Z",
+                        "completed_at": "2026-04-15T04:24:00Z",
+                        "created_at": "2026-04-15T03:46:32Z",
+                        "updated_at": "2026-04-15T04:24:00Z",
+                    },
+                    {
+                        "id": "BATCH-85-DEV-01",
+                        "stream_id": "BATCH-85",
+                        "code": "DEV-01",
+                        "role": "dev",
+                        "state": "IN_PROGRESS",
+                        "status": "IN_PROGRESS",
+                        "depends_on": ["BATCH-85-ARCH"],
+                        "started_at": "2026-04-15T04:30:29Z",
+                        "completed_at": "",
+                        "created_at": "2026-04-15T03:46:32Z",
+                        "updated_at": "2026-04-15T04:30:29Z",
+                    },
+                ],
+                "handoffs": [],
+                "events": [],
+            }
+            queue = {
+                "version": 1,
+                "updated_at": "2026-04-15T04:32:18Z",
+                "items": [
+                    {
+                        "id": "BATCH-85",
+                        "title": "BATCH-85",
+                        "state": "IN_PROGRESS",
+                        "priority": "P2",
+                        "next_action": "compléter BATCH-85-ANALYSIS (READY_PLANNER pour planner)",
+                        "depends_on": [],
+                    }
+                ],
+                "meta": {},
+            }
+            board_path.write_text(json.dumps(board, ensure_ascii=True) + "\n", encoding="utf-8")
+            queue_path.write_text(json.dumps(queue, ensure_ascii=True) + "\n", encoding="utf-8")
+
+            cp = subprocess.run(
+                [
+                    sys.executable,
+                    str(WORKSTREAM),
+                    "--board",
+                    str(board_path),
+                    "sync-priority",
+                    "--queue",
+                    str(queue_path),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+
+            board_after = json.loads(board_path.read_text(encoding="utf-8"))
+            analysis = next(task for task in board_after["tasks"] if task["id"] == "BATCH-85-ANALYSIS")
+            stream = next(item for item in board_after["streams"] if item["id"] == "BATCH-85")
+            queue_after = json.loads(queue_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(analysis["state"], "DONE")
+            self.assertTrue(analysis["completed_at"])
+            self.assertEqual(stream["next_action"], "compléter BATCH-85-DEV-01 (READY_PLANNER pour dev)")
+            self.assertEqual(queue_after["items"][0]["next_action"], "compléter BATCH-85-DEV-01 (READY_PLANNER pour dev)")
+
 
 if __name__ == "__main__":
     unittest.main()

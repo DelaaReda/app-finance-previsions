@@ -1500,8 +1500,54 @@ def _update_queue_next_action_from_streams(queue_obj: dict, board: dict) -> bool
     return changed
 
 
+def _heal_upstream_progress_conflicts(board: dict) -> None:
+    """Collapse impossible upstream states once a downstream step is already active.
+
+    The workboard is a projection. If a later template step is already started or
+    completed, every earlier step in the same stream must be treated as done or the
+    queue can keep advertising a stale planner action that no longer matches runtime.
+    """
+    tasks_by_stream: Dict[str, List[dict]] = {}
+    for task in board.get("tasks", []):
+        stream_id = str(task.get("stream_id", "")).strip()
+        if stream_id:
+            tasks_by_stream.setdefault(stream_id, []).append(task)
+
+    now = now_iso()
+    for stream_tasks in tasks_by_stream.values():
+        progress_orders: List[int] = []
+        for task in stream_tasks:
+            code = str(task.get("code", "")).strip().upper()
+            order = STREAM_TEMPLATE_ORDER.get(code)
+            if order is None:
+                continue
+            state = _normalize_state_token(task.get("state", ""))
+            started_at = str(task.get("started_at", "")).strip()
+            completed_at = str(task.get("completed_at", "")).strip()
+            if state in {STATE_IN_PROGRESS, STATE_REVIEW, STATE_DONE} or started_at or completed_at:
+                progress_orders.append(order)
+        if not progress_orders:
+            continue
+
+        max_progress_order = max(progress_orders)
+        for task in stream_tasks:
+            code = str(task.get("code", "")).strip().upper()
+            order = STREAM_TEMPLATE_ORDER.get(code)
+            if order is None or order >= max_progress_order:
+                continue
+            state = _normalize_state_token(task.get("state", ""))
+            if state == STATE_DONE:
+                continue
+            task["state"] = STATE_DONE
+            task["status"] = STATE_DONE
+            task.setdefault("completed_at", now)
+            task["updated_at"] = now
+            task["blocked_reason"] = ""
+
+
 def recompute_states(board: dict, queue_states: Dict[str, str] | None = None) -> None:
     _sanitize_task_dependencies(board)
+    _heal_upstream_progress_conflicts(board)
     tasks_by_id = task_index(board)
     tasks_by_norm: Dict[str, dict] = {}
     for _task_id, _task in tasks_by_id.items():
