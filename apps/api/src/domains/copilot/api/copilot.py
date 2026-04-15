@@ -264,6 +264,20 @@ def _rewrite_namespace_targets(payload: Any, namespace: Optional[str]) -> Any:
                 item["target"] = mapped
             updated_items.append(item)
         rewritten[key] = updated_items
+
+    ranked_action = rewritten.get("ranked_action")
+    if isinstance(ranked_action, dict):
+        resolved_kind = str(ranked_action.get("kind") or "").strip().lower()
+        target = ranked_action.get("target")
+        mapped = _normalized_action_target(
+            str(target if target is not None else ""),
+            resolved_kind,
+            namespace,
+        )
+        if mapped:
+            updated_ranked_action = dict(ranked_action)
+            updated_ranked_action["target"] = mapped
+            rewritten["ranked_action"] = updated_ranked_action
     return rewritten
 
 
@@ -647,6 +661,16 @@ def _copilot_start_response_from_context(
                 "target": f"/{namespace}" if namespace else "/copilot",
             }
         ]
+
+    ranked_action = response.get("ranked_action")
+    if not (isinstance(ranked_action, dict) and ranked_action.get("id") and ranked_action.get("target")):
+        for item in list(response.get("ask") or []) + list(response.get("open") or []):
+            if not isinstance(item, dict):
+                continue
+            if not item.get("id") or not item.get("target"):
+                continue
+            response["ranked_action"] = dict(item)
+            break
 
     brief_of_day = dict(response.get("brief_of_day", {})) if isinstance(response.get("brief_of_day"), dict) else {}
     generated_at = (

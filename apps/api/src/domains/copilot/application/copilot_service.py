@@ -1513,6 +1513,23 @@ def _contract_dump(model: BaseModel) -> Dict[str, Any]:
     return dict(getattr(model, "__dict__", {}))
 
 
+def _pick_ranked_action(
+    ranked_action: Any,
+    ask_items: List[Dict[str, Any]],
+    open_items: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    if isinstance(ranked_action, dict) and ranked_action.get("id") and ranked_action.get("target"):
+        return dict(ranked_action)
+
+    for item in ask_items + open_items:
+        if not isinstance(item, dict):
+            continue
+        if not item.get("id") or not item.get("target"):
+            continue
+        return dict(item)
+    return None
+
+
 def _resolve_start_effective_scope(
     requested_scope: Optional[Dict[str, Any]],
     payload: Optional[Dict[str, Any]],
@@ -1585,6 +1602,12 @@ def build_copilot_start_response(
             }
         ]
 
+    ranked_action = _pick_ranked_action(
+        resolved_start.get("ranked_action"),
+        ask_items,
+        open_items,
+    )
+
     generated_at = (
         _safe_text(brief_of_day.get("freshness") or brief_of_day.get("generated_at"))
         or utc_now_iso()
@@ -1610,6 +1633,7 @@ def build_copilot_start_response(
 
     contract = CopilotStartPayloadContract(
         brief_of_day=brief_of_day,
+        ranked_action=ranked_action,
         ask=ask_items,
         open=open_items,
         generated_at=generated_at,

@@ -343,11 +343,58 @@ def test_copilot_start_route_matches_shared_contract(monkeypatch):
 
     contract = CopilotStartPayload(**(payload.get("data") or {}))
     assert contract.scope_tickers == ["NVDA"]
+    assert contract.ranked_action is not None
+    assert contract.ranked_action.id == "portfolio_today"
+    assert contract.ranked_action.target == "/copilot/ask"
     assert contract.regime_detection == {"label": "RISK_ON", "confidence": 0.81}
     assert contract.allocation_drift_alerts == {
         "active": True,
         "alerts": [{"id": "largest_position_concentration"}],
     }
+
+
+def test_personal_finance_start_rewrites_ranked_action_target(monkeypatch):
+    async def fake_build_context_payload(**_kwargs):
+        return {
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "Rank the next move.",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-04-15T10:00:00Z",
+                    "freshness": "2026-04-15T10:00:00Z",
+                    "source": ["copilot_ranked_action_test"],
+                },
+                "ranked_action": {
+                    "id": "ask_ranked",
+                    "kind": "ask",
+                    "label": "Ask the copilot",
+                    "target": "/copilot/ask",
+                },
+                "ask": [
+                    {"id": "ask_ranked", "kind": "ask", "target": "/copilot/ask"},
+                ],
+                "open": [
+                    {"id": "open_copilot", "kind": "open", "target": "/copilot"},
+                ],
+                "source": ["copilot_ranked_action_test"],
+            },
+        }
+
+    monkeypatch.setattr(
+        copilot_route.copilot_service,
+        "build_context_payload",
+        fake_build_context_payload,
+    )
+
+    client = _client()
+    response = client.get("/api/personal-finance/start?tickers=nvda")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    contract = CopilotStartPayload(**data)
+    assert contract.ranked_action is not None
+    assert contract.ranked_action.id == "ask_ranked"
+    assert contract.ranked_action.target == "/personal-finance/ask"
 
 
 def test_copilot_start_route_fallback_keeps_brief_and_actions(monkeypatch):
