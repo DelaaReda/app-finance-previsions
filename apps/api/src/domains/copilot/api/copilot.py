@@ -626,15 +626,36 @@ def _copilot_start_response_from_context(
     if not isinstance(start_payload, dict):
         start_payload = {}
 
-    resolved_scope_tickers = list((effective_scope or {}).get("tickers") or [])
-    safe_text = getattr(
-        copilot_service,
-        "_safe_text",
-        lambda value, fallback="": str(value).strip() or str(fallback).strip(),
-    )
-    if not isinstance(start_payload, dict):
-        start_payload = {}
+    build_start_response = getattr(copilot_service, "build_copilot_start_response", None)
+    if callable(build_start_response):
+        return build_start_response(
+            start_payload,
+            scope=effective_scope,
+            note=note,
+            context_influence=(
+                dict(normalized_payload.get("context_influence"))
+                if isinstance(normalized_payload.get("context_influence"), dict)
+                else None
+            ),
+            portfolio_context=(
+                dict(normalized_payload.get("portfolio_context"))
+                if isinstance(normalized_payload.get("portfolio_context"), dict)
+                else None
+            ),
+            regime_detection=(
+                dict(normalized_payload.get("regime_detection"))
+                if isinstance(normalized_payload.get("regime_detection"), dict)
+                else None
+            ),
+            allocation_drift_alerts=(
+                dict(normalized_payload.get("allocation_drift_alerts"))
+                if isinstance(normalized_payload.get("allocation_drift_alerts"), dict)
+                else None
+            ),
+            fallback_used=fallback_used,
+        )
 
+    resolved_scope_tickers = list((effective_scope or {}).get("tickers") or [])
     response = dict(start_payload)
     response.setdefault("ask", [])
     response.setdefault("open", [])
@@ -663,63 +684,10 @@ def _copilot_start_response_from_context(
                 "target": open_fallback_target,
             }
         ]
-
-    ranked_action = response.get("ranked_action")
-    if not (isinstance(ranked_action, dict) and ranked_action.get("id") and ranked_action.get("target")):
-        for item in list(response.get("ask") or []) + list(response.get("open") or []):
-            if not isinstance(item, dict):
-                continue
-            if not item.get("id") or not item.get("target"):
-                continue
-            response["ranked_action"] = dict(item)
-            break
-
-    brief_of_day = dict(response.get("brief_of_day", {})) if isinstance(response.get("brief_of_day"), dict) else {}
-    generated_at = (
-        safe_text(
-            brief_of_day.get("freshness") or brief_of_day.get("generated_at"),
-        )
-        or _utc_now_iso()
-    )
-    response["brief_of_day"] = brief_of_day
-    response.setdefault("generated_at", generated_at)
-    response.setdefault("freshness", generated_at)
-
-    source = response.get("sources")
-    if not isinstance(source, list):
-        source = brief_of_day.get("source")
-    normalized_source = [
-        safe_text(item)
-        for item in (source if isinstance(source, list) else [])
-        if safe_text(item)
-    ]
-    if "copilot_start_route" not in normalized_source:
-        normalized_source.append("copilot_start_route")
-    response["source"] = normalized_source
-    response["sources"] = list(normalized_source)
-    response["filters_applied"] = {"tickers": list(resolved_scope_tickers)}
-    response["stats"] = {
-        "ask_count": len(response.get("ask") or []),
-        "open_count": len(response.get("open") or []),
-    }
-    if note:
-        warnings = response.get("warnings")
-        if not isinstance(warnings, list):
-            warnings = []
-        warnings.append(note)
-        response["warnings"] = warnings
-    if resolved_scope_tickers and not response.get("scope_tickers"):
-        response["scope_tickers"] = list(resolved_scope_tickers)
     if fallback_used:
         response["fallback_used"] = fallback_used
-    if context_influence := normalized_payload.get("context_influence"):
-        response["context_influence"] = dict(context_influence)
-    if portfolio_context := normalized_payload.get("portfolio_context"):
-        response["portfolio_context"] = dict(portfolio_context)
-    if regime_detection := normalized_payload.get("regime_detection"):
-        response["regime_detection"] = dict(regime_detection)
-    if allocation_drift_alerts := normalized_payload.get("allocation_drift_alerts"):
-        response["allocation_drift_alerts"] = dict(allocation_drift_alerts)
+    if note:
+        response["warnings"] = [note]
     return response
 
 

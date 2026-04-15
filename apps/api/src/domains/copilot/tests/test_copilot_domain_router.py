@@ -400,6 +400,82 @@ def test_personal_finance_start_rewrites_ranked_action_target(monkeypatch):
     assert contract.ranked_action.target == "/personal-finance/ask"
 
 
+def test_personal_finance_start_reuses_shared_start_response_builder(monkeypatch):
+    captured = {}
+
+    async def fake_build_context_payload(**_kwargs):
+        return {
+            "daily_brief": {
+                "summary": "Legacy context brief.",
+                "market_sentiment": "NEUTRAL",
+                "generated_at": "2026-04-15T10:00:00Z",
+                "freshness": "2026-04-15T10:00:00Z",
+                "source": ["copilot_route_reuse_test"],
+            },
+            "entry_points": [
+                {"id": "ask_copilot", "kind": "ask", "target": "/copilot/ask"},
+                {"id": "open_copilot", "kind": "open", "target": "/copilot"},
+            ],
+            "context_influence": {"score": 0.7},
+        }
+
+    def fake_build_copilot_start_response(
+        start_payload,
+        *,
+        scope=None,
+        note=None,
+        context_influence=None,
+        portfolio_context=None,
+        regime_detection=None,
+        allocation_drift_alerts=None,
+        fallback_used=None,
+    ):
+        captured["start_payload"] = start_payload
+        captured["scope"] = scope
+        captured["note"] = note
+        captured["context_influence"] = context_influence
+        captured["portfolio_context"] = portfolio_context
+        captured["regime_detection"] = regime_detection
+        captured["allocation_drift_alerts"] = allocation_drift_alerts
+        captured["fallback_used"] = fallback_used
+        return {
+            "brief_of_day": dict(start_payload.get("brief_of_day") or {}),
+            "ask": [dict(item) for item in start_payload.get("ask", [])],
+            "open": [dict(item) for item in start_payload.get("open", [])],
+            "context_influence": context_influence,
+            "filters_applied": {"tickers": list((scope or {}).get("tickers") or [])},
+            "source": ["copilot_route_reuse_test"],
+            "generated_at": "2026-04-15T10:00:00Z",
+            "freshness": "2026-04-15T10:00:00Z",
+        }
+
+    monkeypatch.setattr(copilot_service, "build_context_payload", fake_build_context_payload)
+    monkeypatch.setattr(
+        copilot_service,
+        "build_copilot_start_response",
+        fake_build_copilot_start_response,
+    )
+
+    client = _client()
+    response = client.get("/api/personal-finance/start?tickers=nvda")
+
+    assert response.status_code == 200
+    assert captured["scope"] == {"tickers": ["NVDA"]}
+    assert captured["note"] is None
+    assert captured["context_influence"] == {"score": 0.7}
+    assert captured["portfolio_context"] is None
+    assert captured["regime_detection"] is None
+    assert captured["allocation_drift_alerts"] is None
+    assert captured["fallback_used"] == "copilot_start_rebuilt"
+    assert all(
+        item.get("target") == "/personal-finance/ask"
+        for item in captured["start_payload"]["ask"]
+    )
+    open_targets = [item.get("target") for item in captured["start_payload"]["open"]]
+    assert "/personal-finance" in open_targets
+    assert "/copilot" not in open_targets
+
+
 def test_copilot_start_route_fallback_keeps_brief_and_actions(monkeypatch):
     async def _raise_context_error(*_args, **_kwargs):
         raise RuntimeError("copilot context unavailable")
