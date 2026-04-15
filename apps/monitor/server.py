@@ -4146,9 +4146,58 @@ def status(lite: int = 0):
     unknown_core_agents = all(str(a.get("source", "unknown")) == "unknown" for a in core_agents)
     force_degraded = bool(incomplete_roles) or data_source == "unknown" or unknown_core_agents
     summary = latest_snapshot.get("summary", {}) if isinstance(latest_snapshot, dict) else {}
-    blocker_roles = summary.get("blocker_roles", []) if isinstance(summary, dict) else []
-    blocker_roles = blocker_roles if isinstance(blocker_roles, list) else []
-    stale_context_open = _int_or_default(summary.get("stale_context_open"), 0) if isinstance(summary, dict) else 0
+    if not isinstance(summary, dict):
+        summary = {}
+    blocker_roles_raw = summary.get("blocker_roles", [])
+    if not isinstance(blocker_roles_raw, list):
+        blocker_roles_raw = []
+    blocker_roles = [str(role).strip() for role in blocker_roles_raw if str(role).strip()]
+    stale_context_roles_raw = summary.get("stale_context_roles", [])
+    if not isinstance(stale_context_roles_raw, list):
+        stale_context_roles_raw = []
+    stale_context_open = _int_or_default(summary.get("stale_context_open"), 0)
+    if planner_only_runtime or planner_live_cron_only:
+        relevant_runtime_roles = {
+            str(role).strip()
+            for role in agent_roles
+            if str(role).strip()
+        }
+        blocker_roles = []
+        for role in blocker_roles_raw:
+            role_token = str(role).strip()
+            if not role_token or role_token not in relevant_runtime_roles:
+                continue
+            agent = agents.get(role_token, {})
+            if not isinstance(agent, dict):
+                continue
+            if bool(agent.get("soft_blocker")):
+                continue
+            if is_rate_limit_marker(
+                agent.get("verdict", ""),
+                agent.get("status", ""),
+                agent.get("delta", ""),
+                agent.get("blocker", "NONE"),
+            ):
+                continue
+            blocker_value = str(agent.get("blocker", "NONE") or "NONE").strip().upper()
+            if blocker_value in {"", "NONE"}:
+                continue
+            blocker_roles.append(role_token)
+        stale_context_roles: list[str] = []
+        for role in stale_context_roles_raw:
+            role_token = str(role).strip()
+            if not role_token or role_token not in relevant_runtime_roles:
+                continue
+            agent = agents.get(role_token, {})
+            if not isinstance(agent, dict):
+                continue
+            if str(agent.get("source", "") or "").strip().lower() == "planner_capability":
+                continue
+            age_min = _int_or_default(agent.get("tick_age_min"), -1)
+            if 0 <= age_min <= 45:
+                continue
+            stale_context_roles.append(role_token)
+        stale_context_open = len(stale_context_roles)
     health = monitor_compute_health(
         force_degraded=force_degraded,
         hard_blocked=hard_blocked,

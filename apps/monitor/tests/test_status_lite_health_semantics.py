@@ -74,6 +74,8 @@ class MonitorStatusLiteHealthSemanticsTests(unittest.TestCase):
         self.module._STATUS_LITE_CACHE["expires_at"] = 0.0
         with mock.patch.object(self.module, "active_roles", lambda: ("planner", "dev", "admin")), mock.patch.object(
             self.module, "contract", lambda role: contracts.get(role, {})
+        ), mock.patch.object(
+            self.module, "_runtime_state_snapshot", lambda: {"execution_mode": "parallel_roles"}
         ), mock.patch.object(self.module, "tick_age", lambda role: 1), mock.patch.object(
             self.module, "monitor_latest_snapshot", lambda: latest_snapshot
         ), mock.patch.object(self.module, "rate_limits", lambda: []), mock.patch(
@@ -84,6 +86,48 @@ class MonitorStatusLiteHealthSemanticsTests(unittest.TestCase):
         self.assertEqual(payload.get("primary_status"), "ok")
         self.assertEqual(payload.get("doctor_overall_status"), "ok")
         self.assertEqual(payload.get("health"), "STALE")
+
+    def test_lite_status_ignores_stale_summary_flags_when_current_agent_truth_is_clean(self) -> None:
+        contracts = {
+            "planner": {"STATUS": "PASS", "VERDICT": "PASS", "DELTA": "NO_DELTA", "BLOCKER_ID": "NONE"},
+            "dev": {"STATUS": "PASS", "VERDICT": "PASS", "DELTA": "NO_DELTA", "BLOCKER_ID": "NONE"},
+            "admin": {"STATUS": "PASS", "VERDICT": "PASS", "DELTA": "NO_DELTA", "BLOCKER_ID": "NONE"},
+        }
+        latest_snapshot = {
+            "roles": {},
+            "velocity": {},
+            "summary": {
+                "stale_context_open": 2,
+                "stale_context_roles": ["admin", "scrum_master"],
+                "blocker_roles": ["planner"],
+            },
+            "health_snapshot": {"health": "DEGRADED"},
+            "critical_widget_health": {"state": "ok"},
+        }
+
+        def _fake_status_service(root: Path, status_builder, *, include_layers: bool = True):
+            payload = status_builder()
+            payload["primary_status"] = "ok"
+            payload["doctor_overall_status"] = "ok"
+            payload["layers"] = {"service": "status_service.v3", "mode": "lite", "collectors_omitted": True}
+            return payload
+
+        self.module._STATUS_LITE_CACHE["payload"] = None
+        self.module._STATUS_LITE_CACHE["expires_at"] = 0.0
+        with mock.patch.object(self.module, "active_roles", lambda: ("planner", "dev", "admin")), mock.patch.object(
+            self.module, "contract", lambda role: contracts.get(role, {})
+        ), mock.patch.object(
+            self.module, "_runtime_state_snapshot", lambda: {"execution_mode": "planner_experimental"}
+        ), mock.patch.object(self.module, "tick_age", lambda role: 1), mock.patch.object(
+            self.module, "monitor_latest_snapshot", lambda: latest_snapshot
+        ), mock.patch.object(self.module, "rate_limits", lambda: []), mock.patch(
+            "apps.monitor.services.status_service.build_status_snapshot", _fake_status_service
+        ):
+            payload = self.module.status(lite=1)
+
+        self.assertEqual(payload.get("primary_status"), "ok")
+        self.assertEqual(payload.get("doctor_overall_status"), "ok")
+        self.assertEqual(payload.get("health"), "OK")
 
 
 if __name__ == "__main__":
