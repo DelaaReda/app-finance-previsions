@@ -4,7 +4,9 @@
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 WORKSPACE_HELPER="${SCRIPT_DIR}/../platform/automation/lib/workspace_paths.sh"
-if [[ -f "$WORKSPACE_HELPER" ]]; then
+if [[ -n "${FC_WORKSPACE_ROOT:-}" ]]; then
+  ROOT="${FC_WORKSPACE_ROOT}"
+elif [[ -f "$WORKSPACE_HELPER" ]]; then
   # shellcheck source=/dev/null
   source "$WORKSPACE_HELPER"
   ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
@@ -20,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from collections import defaultdict
 import os
+import sys
 import urllib.request
 
 ts_now = datetime.now(timezone.utc)
@@ -27,6 +30,9 @@ ts_str = ts_now.strftime('%Y-%m-%dT%H:%M:%SZ')
 now_ep = ts_now.timestamp()
 STATE_DIR = Path(os.environ.get('FC_ROLE_STATE_DIR', '/home/venom/.openclaw/cron/role-state'))
 ROOT = Path(os.environ.get('FC_WORKSPACE_ROOT', '.')).resolve()
+AUTOMATION_ROOT = ROOT / 'platform' / 'automation'
+if str(AUTOMATION_ROOT) not in sys.path:
+    sys.path.insert(0, str(AUTOMATION_ROOT))
 MONITOR_BASE_URL = os.environ.get('FC_MONITOR_BASE_URL', 'http://127.0.0.1:7779').rstrip('/')
 API_BASE_URL = os.environ.get('FC_GATE_API_BASE_URL', 'http://127.0.0.1:8050').rstrip('/')
 try:
@@ -46,6 +52,14 @@ def _json_dict(path: Path) -> dict:
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
+
+def _source_version(prefix: str, path: Path) -> str:
+    try:
+        stat = path.stat()
+        digest = __import__('hashlib').sha1(path.read_bytes()).hexdigest()[:12]
+        return f"{prefix}_{int(stat.st_mtime)}_{digest}"
+    except Exception:
+        return ""
 
 def _http_json(url: str) -> dict:
     try:
@@ -121,9 +135,27 @@ for d in WRITE_ORCH_ROOTS:
 def load_json(p):
     return _json_dict(resolve_orchestrator_json_path(str(p)))
 
+def iteration_issue_roles() -> dict:
+    candidates = [
+        runtime_state_orch / 'agent-iteration-issues-latest.json',
+        canonical_orch / 'agent-iteration-issues-latest.json',
+        legacy_orch / 'agent-iteration-issues-latest.json',
+    ]
+    seen = set()
+    for path in candidates:
+        key = str(path)
+        if key in seen or not path.exists():
+            continue
+        seen.add(key)
+        data = _json_dict(path)
+        roles = data.get('roles', {}) if isinstance(data, dict) else {}
+        if isinstance(roles, dict) and roles:
+            return roles
+    return {}
+
 def active_planner_subagent_roles() -> list[str]:
     try:
-        from platform.automation.runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
+        from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
 
         snapshot = build_stable_planner_dispatch_snapshot(ROOT, recent_limit=24)
         roles = []
@@ -136,6 +168,15 @@ def active_planner_subagent_roles() -> list[str]:
         return roles
     except Exception:
         return []
+
+def runtime_truth_snapshot() -> dict:
+    try:
+        from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+
+        snapshot = build_runtime_truth_snapshot(ROOT, state_limit=12, event_limit=24)
+        return snapshot if isinstance(snapshot, dict) else {}
+    except Exception:
+        return {}
 
 def normalize_widget_state(token) -> str:
     value = str(token or '').strip().lower()
@@ -164,28 +205,25 @@ def combine_widget_states(*states: str) -> str:
     return winner
 
 def build_critical_widget_health() -> dict:
-    monitor_status = _http_json(f'{MONITOR_BASE_URL}/api/status')
+    monitor_status = _http_json(f'{MONITOR_BASE_URL}/api/status?lite=1')
+    api_health = _http_json(f'{API_BASE_URL}/api/health')
     recommendations = _http_json(f'{API_BASE_URL}/api/recommendations/daily?limit=3')
     forecasts = _http_json(f'{API_BASE_URL}/api/forecasts?horizon=short&limit=24')
-    product_value = monitor_status.get('product_value_metrics', {}) if isinstance(monitor_status, dict) else {}
-    product_value = product_value if isinstance(product_value, dict) else {}
-    freshness = product_value.get('data_freshness', {}) if isinstance(product_value, dict) else {}
-    freshness = freshness if isinstance(freshness, dict) else {}
-    news_meta = freshness.get('news', {}) if isinstance(freshness, dict) else {}
-    news_meta = news_meta if isinstance(news_meta, dict) else {}
-    forecasts_meta = product_value.get('forecasts', {}) if isinstance(product_value, dict) else {}
-    forecasts_meta = forecasts_meta if isinstance(forecasts_meta, dict) else {}
+    api_health_data = api_health.get('data', {}) if isinstance(api_health, dict) else {}
+    api_health_data = api_health_data if isinstance(api_health_data, dict) else {}
+    last_updates = api_health_data.get('last_updates', {}) if isinstance(api_health_data, dict) else {}
+    last_updates = last_updates if isinstance(last_updates, dict) else {}
 
     monitor_state = normalize_widget_state(monitor_status.get('health'))
     recommendations_state = endpoint_state(recommendations)
     forecasts_state = combine_widget_states(
         endpoint_state(forecasts),
-        normalize_widget_state(forecasts_meta.get('status')),
-        normalize_widget_state(forecasts_meta.get('freshness_status')),
+        normalize_widget_state(api_health_data.get('status') or 'ok'),
+        normalize_widget_state('fresh' if last_updates.get('forecasts') else 'unknown'),
     )
     news_state = combine_widget_states(
         monitor_state,
-        normalize_widget_state(news_meta.get('state')),
+        normalize_widget_state('fresh' if last_updates.get('news') else 'unknown'),
     )
     hero_state = combine_widget_states(monitor_state, recommendations_state)
     judge_state = combine_widget_states(monitor_state, recommendations_state)
@@ -198,14 +236,14 @@ def build_critical_widget_health() -> dict:
         },
         'news': {
             'state': news_state,
-            'freshness': str(news_meta.get('state') or 'unknown'),
-            'updated_at': str(news_meta.get('updated_at') or ''),
+            'freshness': 'fresh' if last_updates.get('news') else 'unknown',
+            'updated_at': str(last_updates.get('news') or ''),
         },
         'forecasts': {
             'state': forecasts_state,
-            'status': str(forecasts_meta.get('status') or forecasts.get('status') or 'unknown'),
-            'freshness': str(forecasts_meta.get('freshness_status') or 'unknown'),
-            'updated_at': str(forecasts_meta.get('updated_at') or ''),
+            'status': str(forecasts.get('status') or api_health_data.get('status') or 'unknown'),
+            'freshness': 'fresh' if last_updates.get('forecasts') else 'unknown',
+            'updated_at': str(last_updates.get('forecasts') or ''),
         },
         'judge': {
             'state': judge_state,
@@ -216,7 +254,7 @@ def build_critical_widget_health() -> dict:
             'state': deep_dive_state,
             'monitor_health': str(monitor_status.get('health') or 'unknown'),
             'recommendations_status': str(recommendations.get('status') or 'unknown'),
-            'forecasts_status': str(forecasts_meta.get('status') or forecasts.get('status') or 'unknown'),
+            'forecasts_status': str(forecasts.get('status') or api_health_data.get('status') or 'unknown'),
         },
     }
     overall_state = 'ok'
@@ -265,6 +303,7 @@ q_total  = len(queue_rows)
 execution_mode = str(RUNTIME_STATE.get('execution_mode') or '').strip().lower()
 scheduled_roles = ['planner'] if execution_mode == 'planner_experimental' else ['planner', 'dev', 'admin']
 capability_roles = [role for role in active_planner_subagent_roles() if role not in scheduled_roles]
+iteration_roles = iteration_issue_roles()
 agent_states = {}
 for role in ['planner', 'dev', 'admin']:
     cf = STATE_DIR / f'{role}.last_contract'
@@ -275,6 +314,41 @@ for role in ['planner', 'dev', 'admin']:
     blocker  = next((l.split(':',1)[-1].strip() for l in lines if l.startswith('BLOCKER_ID:')),'NONE')
     delta    = next((l.split(':',1)[-1].strip() for l in lines if l.startswith('DELTA:')),    '?')
     agent_states[role] = {'verdict': verdict, 'status': status, 'blocker': blocker, 'delta': delta}
+
+if execution_mode == 'planner_experimental':
+    for role in ('dev', 'admin', 'scrum_master'):
+        payload = iteration_roles.get(role, {}) if isinstance(iteration_roles, dict) else {}
+        if not isinstance(payload, dict):
+            continue
+        if str(payload.get('source') or '').strip() != 'planner_active_cycle_check':
+            continue
+        status = str(payload.get('status') or '').strip().upper()
+        if not status:
+            continue
+        if status == 'IN_PROGRESS':
+            verdict = 'GO_WITH_CAUTION'
+            delta = 'CAPABILITY_ACTIVE'
+        elif status in {'READY', 'READY_DEV', 'READY_PLANNER'}:
+            verdict = 'GO_WITH_CAUTION'
+            delta = 'CAPABILITY_READY'
+        elif status == 'WAITING_DEP':
+            verdict = 'WAIT'
+            delta = 'DEPENDENCY_WAIT'
+        elif status == 'PASS':
+            verdict = 'PASS'
+            delta = 'NO_DELTA'
+        elif status == 'BLOCKED':
+            verdict = 'BLOCKED'
+            delta = 'BLOCKED'
+        else:
+            verdict = status
+            delta = status
+        agent_states[role] = {
+            'verdict': verdict,
+            'status': status,
+            'blocker': 'NONE',
+            'delta': delta,
+        }
 
 planner_state = agent_states.get('planner')
 if isinstance(planner_state, dict):
@@ -297,6 +371,18 @@ if isinstance(planner_state, dict):
             'DELIVERY_VALUE_INSUFFICIENT',
         }:
             planner_state['delta'] = 'PLANNER_DISPATCH_ACTIVE'
+    planner_residue_only = planner_blocker in {'SQLITE_RUNTIME_RESIDUE_ACTIVE', 'RUNTIME_TRUTH_RESIDUE_ACTIVE'}
+    if planner_residue_only:
+        runtime_truth = runtime_truth_snapshot()
+        graph_state_count = int(runtime_truth.get('graph_state_count', 0) or 0)
+        recent_event_count = int(runtime_truth.get('recent_event_count', 0) or 0)
+        event_store_primary = bool(runtime_truth.get('event_store_primary', False))
+        no_active_runtime_work = q_ready == 0 and ip_n == 0
+        if event_store_primary and no_active_runtime_work and graph_state_count == 0 and recent_event_count == 0:
+            planner_state['status'] = 'PASS'
+            planner_state['verdict'] = 'PASS'
+            planner_state['blocker'] = 'NONE'
+            planner_state['delta'] = 'NO_DELTA'
 
 def is_rate_limit_state(state):
     blocker = (state.get('blocker') or '').upper()
@@ -360,6 +446,27 @@ if not proofs_dir.exists():
 proofs_count = len(list(proofs_dir.iterdir())) if proofs_dir.exists() else 0
 
 # ── Health global ─────────────────────────────────────────────────────────────
+latest_summary_stale_context_open = 0
+latest_summary_stale_context_roles = []
+try:
+    existing_mon = json.loads((canonical_orch / 'executors-monitoring-latest.json').read_text(encoding='utf-8', errors='ignore'))
+    existing_summary = existing_mon.get('summary', {}) if isinstance(existing_mon, dict) else {}
+    if isinstance(existing_summary, dict):
+        latest_summary_stale_context_open = int(existing_summary.get('stale_context_open') or 0)
+        roles_raw = existing_summary.get('stale_context_roles', [])
+        if isinstance(roles_raw, list):
+            latest_summary_stale_context_roles = [str(role).strip() for role in roles_raw if str(role).strip()]
+except Exception:
+    latest_summary_stale_context_open = 0
+    latest_summary_stale_context_roles = []
+
+relevant_runtime_roles = set(scheduled_roles) | set(capability_roles)
+relevant_stale_context_roles = [
+    role
+    for role in latest_summary_stale_context_roles
+    if role in relevant_runtime_roles and tick_age_min.get(role, -1) not in range(0, 46)
+]
+
 health = 'OK'
 if blocked_agents:
     health = 'DEGRADED'
@@ -367,6 +474,10 @@ elif rl_active or rate_limited_agents:
     # Rate-limit is a temporary WAIT state, not a hard block.
     health = 'STALE'
 if stale_agents and health == 'OK':
+    health = 'STALE'
+if latest_summary_stale_context_open > 0 and health == 'OK' and relevant_stale_context_roles:
+    # Preserve stale-context protection only for roles that are still part of the
+    # current runtime perimeter and still stale now, not for legacy unscheduled roles.
     health = 'STALE'
 critical_widget_health = build_critical_widget_health()
 critical_widget_state = str(critical_widget_health.get('state') or 'unknown').lower()
@@ -428,13 +539,48 @@ for orch_dir in WRITE_ORCH_ROOTS:
         roles_map = {}
         mon['roles'] = roles_map
 
+    cleared_health_snapshot_fields = {
+        'next_action_unique': 'none',
+        'next': 'owner=none; action=none',
+        'action_summary': 'none',
+        'task_update': 'none_no_signal',
+        'exec_report': 'none',
+        'run_note': 'none',
+        'root_cause': 'none',
+        'fix_applied': 'none',
+        'verify': 'none',
+        'issues': 'none',
+        'issue_count': 0,
+        'issue_severity': 'none',
+        'issue_codes': [],
+        'issue_reporting_ok': True,
+        'issue_reporting_errors': [],
+        'suggestions': 'none',
+        'stream_id': 'none',
+        'task_id': 'none',
+        'tool_request': 'none',
+        'skill_request': 'none',
+        'tools_used': '',
+        'channels_read': '',
+        'impact_assessment': '',
+        'impact_action': '',
+    }
+
     for role, state in agent_states.items():
         entry = roles_map.get(role, {})
         if not isinstance(entry, dict):
             entry = {}
-        entry.update({'verdict': state['verdict'], 'status': state['status'],
-                      'blocker_id': state['blocker'], 'delta': state['delta'],
-                      'ts_utc': ts_str, 'source': 'health_snapshot'})
+        entry.update(cleared_health_snapshot_fields)
+        entry.update({
+            'verdict': state['verdict'],
+            'status': state['status'],
+            'blocker_id': state['blocker'],
+            'delta': state['delta'],
+            'ts_utc': ts_str,
+            'source': 'health_snapshot',
+            'queue_version': _source_version('queue', resolve_orchestrator_json_path('priority-queue.json')),
+            'workboard_version': _source_version('workboard', resolve_orchestrator_json_path('parallel-workstreams.json')),
+        })
         roles_map[role] = entry
 
     mon['updated_at'] = ts_str
