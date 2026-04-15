@@ -5,8 +5,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 SRC_PATH = Path(__file__).resolve().parents[3]
-if str(SRC_PATH) not in sys.path:
-    sys.path.insert(0, str(SRC_PATH))
+ROOT_PATH = Path(__file__).resolve().parents[6]
+for candidate in (ROOT_PATH, SRC_PATH):
+    candidate_str = str(candidate)
+    if candidate_str not in sys.path:
+        sys.path.insert(0, candidate_str)
 
 from domains.copilot.api import copilot as copilot_route
 from domains.copilot.api.copilot import router
