@@ -234,6 +234,50 @@ test('renderCopilotPortfolio shows alert severity styling', () => {
   assert.ok(alertList.innerHTML.includes('AAPL'), 'Should show symbol');
 });
 
+test('renderCopilotActions uses prompt fallback for ask prefill', () => {
+  const askListEl = { innerHTML: '', style: { display: 'block' } };
+  const openListEl = { innerHTML: '', style: { display: 'block' } };
+
+  const sandbox = {
+    document: {
+      getElementById(id) {
+        return id === 'copilotAskList'
+          ? askListEl
+          : id === 'copilotOpenList'
+            ? openListEl
+            : null;
+      },
+    },
+    copilotState: {
+      askActions: [
+        {
+          kind: 'ask',
+          label: 'NVDA memo',
+          prompt: 'Give me a 1-week memo on NVDA.',
+        },
+      ],
+      openActions: [],
+    },
+    escapeHtml(text) {
+      return String(text || '');
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    extractFunction('renderCopilotActions', 'renderCopilotSuggestions'),
+    sandbox,
+    { filename: 'copilot-panel.html' },
+  );
+
+  sandbox.renderCopilotActions();
+
+  assert.ok(
+    askListEl.innerHTML.includes("executeCopilotAction('ask', '', 'Give me a 1-week memo on NVDA.')"),
+    'Prompt fallback should be passed to action handler when prefill is absent'
+  );
+});
+
 test('executeCopilotAction navigates open route targets with location.assign', () => {
   const calls = [];
   const sandbox = {

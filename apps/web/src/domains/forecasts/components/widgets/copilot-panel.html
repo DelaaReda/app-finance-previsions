@@ -509,11 +509,19 @@ function renderCopilotActions() {
     // Render ask actions
     const askListEl = document.getElementById('copilotAskList');
     if (askListEl && copilotState.askActions.length > 0) {
-        askListEl.innerHTML = copilotState.askActions.map(action => `
-            <button class="copilot-action-btn" onclick="executeCopilotAction('${escapeHtml(action.kind || 'ask')}', '${escapeHtml(action.target || '')}', '${escapeHtml(action.prefill?.question || '')}')">
-                ${escapeHtml(action.label || action.question || 'Ask')}
-            </button>
-        `).join('');
+        askListEl.innerHTML = copilotState.askActions.map((action) => {
+            const kind = action && action.kind ? action.kind : 'ask';
+            const target = action && action.target ? action.target : '';
+            const prefillQuestion = action?.prefill?.question || action?.prompt || action?.question || '';
+            const escapedQuestion = escapeHtml(prefillQuestion);
+            const label = escapeHtml(action?.label || action?.question || 'Ask');
+
+            return `
+                <button class="copilot-action-btn" onclick="executeCopilotAction('${escapeHtml(kind)}', '${escapeHtml(target)}', '${escapedQuestion}')">
+                    ${label}
+                </button>
+            `;
+        }).join('');
     } else if (askListEl) {
         askListEl.innerHTML = `
             <button class="copilot-action-btn" onclick="focusCopilotInput()">
