@@ -329,3 +329,33 @@ test('executeCopilotAction preserves hash navigation for in-page targets', () =>
   assert.equal(location.hash, '#copilot');
   assert.deepEqual(calls, [{ message: 'open #copilot', level: 'info' }]);
 });
+
+test('executeCopilotAction resolves namespace open shortcuts to namespace root', () => {
+  const calls = [];
+  const sandbox = {
+    window: {
+      location: {
+        assign(target) {
+          calls.push({ type: 'assign', target });
+        },
+      },
+      COPILOT_NAMESPACE: 'personal-finance',
+    },
+    getCopilotNamespace: () => 'personal-finance',
+    showToast(message, level) {
+      calls.push({ type: 'toast', message, level });
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    extractFunction('executeCopilotAction', 'setCopilotQuestion'),
+    sandbox,
+    { filename: 'copilot-panel.html' },
+  );
+
+  sandbox.executeCopilotAction('open', '/personal-finance/open');
+
+  assert.deepEqual(calls[0], { type: 'assign', target: '/personal-finance' });
+  assert.deepEqual(calls[1], { type: 'toast', message: 'open /personal-finance', level: 'info' });
+});

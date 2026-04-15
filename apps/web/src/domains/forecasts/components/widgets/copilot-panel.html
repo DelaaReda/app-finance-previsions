@@ -704,6 +704,27 @@ function executeCopilotAction(kind, target, prefillQuestion) {
         setCopilotQuestion(prefillQuestion);
         focusCopilotInput();
     } else if (kind === 'open' && target) {
+        const namespace = (typeof getCopilotNamespace === 'function'
+            ? getCopilotNamespace()
+            : (typeof COPILOT_NAMESPACE !== 'undefined' ? COPILOT_NAMESPACE : 'copilot'));
+        let resolvedTarget = target;
+
+        if (typeof resolvedTarget !== 'string') {
+            resolvedTarget = String(resolvedTarget || '');
+        }
+
+        if (typeof resolvedTarget === 'string') {
+            const stripped = resolvedTarget.trim();
+            const namespaceOpenTarget = namespace ? ('/' + namespace + '/open') : '';
+            if (stripped === '/copilot/open') {
+                resolvedTarget = namespace ? ('/' + namespace) : '/copilot';
+            } else if (namespaceOpenTarget && stripped === namespaceOpenTarget) {
+                resolvedTarget = '/' + namespace;
+            }
+        }
+
+        target = resolvedTarget;
+
         if (typeof target === 'string' && target.startsWith('#')) {
             window.location.hash = target;
         } else if (typeof target === 'string' && target.startsWith('/')) {
