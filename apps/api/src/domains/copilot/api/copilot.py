@@ -199,6 +199,9 @@ def _normalized_action_target(
             return f"{namespace_path}/ask"
         return namespace_path
 
+    if normalized_target in {"/copilot/open", "copilot/open", "/copilot/open/", "copilot/open/"}:
+        return namespace_path
+
     if normalized_target.startswith("/copilot/") or normalized_target.startswith("copilot/"):
         normalized = normalized_target.lstrip("/")
         tail = normalized[len("copilot/") :].strip("/")

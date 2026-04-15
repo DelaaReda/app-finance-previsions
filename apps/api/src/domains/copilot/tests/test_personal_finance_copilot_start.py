@@ -119,7 +119,7 @@ class TestPersonalFinanceCopilotStart:
         
         payload = {
             "ask": [{"kind": "ask", "target": "/copilot/ask"}],
-            "open": [{"kind": "open", "target": "/copilot"}],
+            "open": [{"kind": "open", "target": "/copilot/open"}],
         }
         
         rewritten = _rewrite_namespace_targets(payload, namespace="personal-finance")
