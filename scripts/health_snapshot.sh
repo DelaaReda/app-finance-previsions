@@ -61,6 +61,79 @@ def _source_version(prefix: str, path: Path) -> str:
     except Exception:
         return ""
 
+
+def _none_like(value) -> bool:
+    token = re.sub(r'[\s_/\-]+', '', str(value or '').strip().lower())
+    return token in {'', 'none', 'na', 'null'}
+
+
+def _stale_context_record(record: dict, queue_version: str, workboard_version: str) -> bool:
+    record_queue = str(record.get('queue_version', '')).strip()
+    record_workboard = str(record.get('workboard_version', '')).strip()
+    queue_mismatch = bool(queue_version and record_queue and record_queue != queue_version)
+    workboard_mismatch = bool(workboard_version and record_workboard and record_workboard != workboard_version)
+    return queue_mismatch or workboard_mismatch
+
+
+def _rebuild_monitor_summary(roles_map: dict, queue_version: str, workboard_version: str) -> dict:
+    stale_context_roles = sorted(
+        name
+        for name, data in roles_map.items()
+        if isinstance(data, dict) and _stale_context_record(data, queue_version, workboard_version)
+    )
+    stale_context_set = set(stale_context_roles)
+    active_roles = {
+        name: data for name, data in roles_map.items() if isinstance(data, dict) and name not in stale_context_set
+    }
+    issue_roles = sorted(
+        name for name, data in active_roles.items() if int(data.get('issue_count', 0) or 0) > 0
+    )
+    issue_reporting_missing_roles = sorted(
+        name for name, data in active_roles.items() if not bool(data.get('issue_reporting_ok', False))
+    )
+    critical_issue_roles = sorted(
+        name
+        for name, data in active_roles.items()
+        if str(data.get('issue_severity', '')).strip().lower() == 'critical'
+    )
+    blocker_roles = sorted(
+        name for name, data in active_roles.items() if not _none_like(str(data.get('blocker_id', '')))
+    )
+    request_roles = sorted(
+        name
+        for name, data in active_roles.items()
+        if not _none_like(str(data.get('tool_request', ''))) or not _none_like(str(data.get('skill_request', '')))
+    )
+    return {
+        'roles_total': len(roles_map),
+        'fresh_roles_total': len(active_roles),
+        'stale_context_open': len(stale_context_roles),
+        'issues_open': len(issue_roles),
+        'issue_reports_open': len(issue_roles),
+        'issue_reporting_missing_count': len(issue_reporting_missing_roles),
+        'issue_reporting_missing_roles': issue_reporting_missing_roles[:8],
+        'critical_count': len(critical_issue_roles),
+        'critical_issue_roles': critical_issue_roles[:8],
+        'process_issues_open': 0,
+        'delivery_gaps_open': len(issue_roles),
+        'delivery_probe_loops_open': 0,
+        'flow_gaps_open': 0,
+        'blockers_open': len(blocker_roles),
+        'tool_skill_requests_open': len(request_roles),
+        'issue_roles': issue_roles[:8],
+        'process_issue_roles': [],
+        'delivery_probe_roles': [],
+        'flow_gap_roles': [],
+        'delivery_gap_roles': issue_roles[:8],
+        'blocker_roles': blocker_roles[:8],
+        'tool_skill_request_roles': request_roles[:8],
+        'stale_context_roles': stale_context_roles[:8],
+        'context_versions': {
+            'queue_version': queue_version or 'unknown',
+            'workboard_version': workboard_version or 'unknown',
+        },
+    }
+
 def _http_json(url: str) -> dict:
     try:
         with urllib.request.urlopen(url, timeout=HEALTH_HTTP_TIMEOUT) as response:
@@ -538,6 +611,8 @@ for orch_dir in WRITE_ORCH_ROOTS:
     if not isinstance(roles_map, dict):
         roles_map = {}
         mon['roles'] = roles_map
+    queue_version = _source_version('queue', resolve_orchestrator_json_path('priority-queue.json'))
+    workboard_version = _source_version('workboard', resolve_orchestrator_json_path('parallel-workstreams.json'))
 
     cleared_health_snapshot_fields = {
         'next_action_unique': 'none',
@@ -578,14 +653,16 @@ for orch_dir in WRITE_ORCH_ROOTS:
             'delta': state['delta'],
             'ts_utc': ts_str,
             'source': 'health_snapshot',
-            'queue_version': _source_version('queue', resolve_orchestrator_json_path('priority-queue.json')),
-            'workboard_version': _source_version('workboard', resolve_orchestrator_json_path('parallel-workstreams.json')),
+            'queue_version': queue_version,
+            'workboard_version': workboard_version,
         })
         roles_map[role] = entry
 
+    mon['generated_at'] = ts_str
     mon['updated_at'] = ts_str
     mon['updated_at_utc'] = ts_str
     mon['health'] = health
+    mon['summary'] = _rebuild_monitor_summary(roles_map, queue_version, workboard_version)
     mon['velocity'] = snapshot['velocity']
     mon['health_snapshot'] = snapshot
     mon['critical_widget_health'] = critical_widget_health
