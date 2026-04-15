@@ -91,6 +91,16 @@
     </main>
   </div>
 
+  <script type="module">
+    try {
+      const { loadComponent } = await import('../platform/js/utils/componentLoader.js');
+      window.PlatformComponentLoader = { loadComponent };
+    } catch (error) {
+      // Optional shared loader is intentionally best-effort to preserve page resilience.
+      console.debug('[Personal Finance] Shared component loader unavailable:', error?.message || error);
+    }
+  </script>
+
   <!-- Load Copilot Panel Widget -->
   <script>
     /**
@@ -130,17 +140,32 @@
      */
     async function loadCopilotWidget() {
       try {
-        const response = await fetch('../components/widgets/copilot-panel.html');
-        if (!response.ok) {
-          throw new Error(`Failed to load widget: ${response.status}`);
-        }
-        const html = await response.text();
         const container = document.getElementById('copilot-panel-container');
-        if (container) {
-          injectWidgetMarkup(container, html);
+        const panelPath = '../components/widgets/copilot-panel.html';
 
+        if (!container) {
+          throw new Error('Copilot panel container not found');
+        }
+
+        let loaded = false;
+
+        if (window.PlatformComponentLoader?.loadComponent) {
+          loaded = await window.PlatformComponentLoader.loadComponent(panelPath, '#copilot-panel-container');
+        } else if (window.ComponentLoader?.loadComponent) {
+          loaded = await window.ComponentLoader.loadComponent(panelPath, '#copilot-panel-container');
+        }
+
+        if (!loaded) {
+          const response = await fetch('../components/widgets/copilot-panel.html');
+          if (!response.ok) {
+            throw new Error(`Failed to load widget: ${response.status}`);
+          }
+          const html = await response.text();
+          injectWidgetMarkup(container, html);
+        }
+
+        if (container) {
           // Override the loadCopilotStart function to use personal-finance endpoint
-          const originalLoadCopilotStart = window.loadCopilotStart;
           window.loadCopilotStart = async function() {
             if (window.copilotState?.isLoading) return;
 
