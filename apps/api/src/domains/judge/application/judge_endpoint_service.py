@@ -3410,6 +3410,21 @@ async def get_judge_personal_finance_start_payload(
         else:
             payload = {}
 
+        effective_scope = scope
+        resolve_effective_scope = getattr(
+            copilot_service,
+            "_resolve_start_effective_scope",
+            None,
+        )
+        if callable(resolve_effective_scope):
+            try:
+                effective_scope = resolve_effective_scope(scope, payload)  # type: ignore[misc]
+            except Exception:
+                effective_scope = scope
+        effective_tickers = normalize_tickers(
+            (effective_scope or {}).get("tickers") or normalized_tickers
+        )
+
         copilot_start = (
             payload.get("copilot_start")
             if isinstance(payload, dict)
@@ -3425,12 +3440,12 @@ async def get_judge_personal_finance_start_payload(
                 copilot_start = build_start_payload(
                     daily_brief=payload.get("daily_brief") if isinstance(payload, dict) else None,
                     entry_points=payload.get("entry_points") if isinstance(payload, dict) else None,
-                    scope=scope,
+                    scope=effective_scope,
                 )
             else:
                 copilot_start = _default_personal_finance_start_payload(
                     now_iso=now_iso,
-                    tickers=normalized_tickers,
+                    tickers=effective_tickers,
                     source=["judge_personal_finance_start_service", "copilot_route_fallback"],
                 )
 
@@ -3448,7 +3463,7 @@ async def get_judge_personal_finance_start_payload(
             ask_items, open_items = enrich_scope_actions(
                 ask_items,
                 open_items,
-                scope_tickers=normalized_tickers,
+                scope_tickers=effective_tickers,
             )
 
         # Ensure the start screen always exposes at least one actionable ask/open entry.
@@ -3463,7 +3478,7 @@ async def get_judge_personal_finance_start_payload(
                 fallback_start = build_start_payload(
                     daily_brief=payload.get("daily_brief") if isinstance(payload, dict) else None,
                     entry_points=payload.get("entry_points") if isinstance(payload, dict) else None,
-                    scope=scope,
+                    scope=effective_scope,
                 )
                 fallback_items = (
                     dict(fallback_start)
@@ -3487,7 +3502,7 @@ async def get_judge_personal_finance_start_payload(
         ranked_action = _pick_ranked_action(
             ask_items,
             open_items,
-            scope_tickers=normalized_tickers,
+            scope_tickers=effective_tickers,
         )
         result: Dict[str, Any] = {
             "brief_of_day": brief,
@@ -3504,13 +3519,15 @@ async def get_judge_personal_finance_start_payload(
                 (payload.get("sources") if isinstance(payload, dict) else None),
                 default_source="judge_personal_finance_start_service",
             ),
-            "filters_applied": {"tickers": list(normalized_tickers)},
+            "filters_applied": {"tickers": list(effective_tickers)},
             "stats": {
                 "ask_count": len(ask_items),
                 "open_count": len(open_items),
             },
             "warnings": [],
         }
+        if effective_tickers:
+            result["scope_tickers"] = list(effective_tickers)
 
         if (payload or {}).get("context_influence") is not None:
             result["context_influence"] = payload.get("context_influence")

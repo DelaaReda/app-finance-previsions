@@ -1534,6 +1534,74 @@ def test_judge_personal_finance_start_service_promotes_scope_ticker_open(monkeyp
     assert data["ask"][0]["target"] == "/personal-finance/ask"
 
 
+def test_judge_personal_finance_start_service_uses_effective_scope_from_payload(monkeypatch):
+    async def fake_build_context_payload(**_kwargs):
+        return {
+            "scope_tickers": ["nvda", "msft"],
+            "portfolio_context": {
+                "portfolio": {
+                    "id": "portfolio-123",
+                    "tickers": ["NVDA", "MSFT"],
+                }
+            },
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "Saved portfolio scope should drive the starter.",
+                    "generated_at": "2026-03-30T11:00:00Z",
+                    "freshness": "2026-03-30T11:00:00Z",
+                    "source": ["copilot_context_test"],
+                },
+                "ranked_action": {
+                    "id": "market",
+                    "kind": "open",
+                    "label": "Open market view",
+                    "target": "market",
+                },
+                "ask": [
+                    {
+                        "id": "ask_ranked",
+                        "kind": "ask",
+                        "label": "Top ranked ask",
+                        "target": "/copilot/ask",
+                    }
+                ],
+                "open": [
+                    {
+                        "id": "open_ranked",
+                        "kind": "open",
+                        "label": "Open ranked",
+                        "target": "/copilot/overview",
+                    }
+                ],
+            },
+            "source": ["judge_personal_finance_start_service", "copilot_route"],
+            "sources": ["judge_personal_finance_start_service", "copilot_route"],
+        }
+
+    class CopilotService:
+        build_context_payload = fake_build_context_payload
+        _resolve_start_effective_scope = staticmethod(copilot_service._resolve_start_effective_scope)
+        _enrich_scope_start_actions = staticmethod(copilot_service._enrich_scope_start_actions)
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_resolve_copilot_services",
+        lambda: (CopilotService, None),
+    )
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_personal_finance_start_payload()
+    )
+
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["scope_tickers"] == ["MSFT", "NVDA"]
+    assert data["filters_applied"] == {"tickers": ["MSFT", "NVDA"]}
+    assert data["ranked_action"]["target"] == "ticker:MSFT"
+    assert data["open"][0]["target"] == "ticker:MSFT"
+    assert data["ask"][0]["target"] == "/personal-finance/ask"
+
+
 def test_judge_personal_finance_start_service_critical_fallback_keeps_actions(monkeypatch):
     monkeypatch.setattr(
         judge_endpoint_service,
