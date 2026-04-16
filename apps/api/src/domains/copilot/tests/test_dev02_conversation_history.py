@@ -50,6 +50,22 @@ def _client() -> TestClient:
     return TestClient(app)
 
 
+async def _fake_build_ask_payload(**_kwargs):
+    """Keep ask-route tests local to conversation behavior."""
+    return {
+        "answer": "Hold size steady into the next catalyst.",
+        "action": "hold",
+        "horizon": "1w",
+        "confidence": 0.62,
+        "reasoning": ["Conversation follow-up stays within saved context."],
+        "freshness": "2026-04-15T16:00:00Z",
+        "generated_at": "2026-04-15T16:00:00Z",
+        "sources": [{"type": "conversation_test", "label": "stub"}],
+        "quality_status": "sufficient_sources",
+        "requirements_met": {"min_sources_2": True, "quality_threshold": True},
+    }
+
+
 def setup_function():
     """Setup before each test."""
     test_dir = _setup_test_dir()
@@ -367,8 +383,9 @@ def test_copilot_conversations_list_endpoint():
     assert payload["data"]["returned_count"] >= 1
 
 
-def test_copilot_ask_with_conversation_id():
+def test_copilot_ask_with_conversation_id(monkeypatch):
     """Test /api/copilot/ask with conversation_id for follow-up."""
+    monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", _fake_build_ask_payload)
     client = _client()
     
     # Create conversation
@@ -406,8 +423,65 @@ def test_copilot_ask_with_conversation_id():
     assert data["follow_up_context"]["conversation_id"] == conv_id
 
 
-def test_copilot_ask_follow_up_inherits_tickers():
+def test_copilot_ask_auto_creates_conversation(monkeypatch):
+    """Test /api/copilot/ask creates a conversation thread on the first question."""
+    monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", _fake_build_ask_payload)
+    client = _client()
+
+    response = client.post(
+        "/api/copilot/ask",
+        json={
+            "question": "What changed in my portfolio today?",
+            "tickers": ["AAPL"],
+            "scope": {"portfolio_id": "portfolio-123"},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+
+    data = payload["data"]
+    conversation = data.get("conversation") or {}
+    conv_id = conversation.get("conversation_id")
+
+    assert conv_id
+    assert conversation.get("created") is True
+    assert conversation.get("message_count") == 2
+
+    followup = client.get(f"/api/copilot/conversation/{conv_id}")
+    assert followup.status_code == 200
+    thread = followup.json()["data"]
+    assert thread["status"] == "ok"
+    assert thread["message_count"] == 2
+    assert thread["context"]["tickers"] == ["AAPL"]
+    assert thread["context"]["portfolio_id"] == "portfolio-123"
+    assert thread["messages"][0]["role"] == "user"
+    assert thread["messages"][0]["content"] == "What changed in my portfolio today?"
+    assert thread["messages"][1]["role"] == "assistant"
+
+
+def test_personal_finance_ask_auto_creates_conversation(monkeypatch):
+    """Test /api/personal-finance/ask exposes the same first-question conversation contract."""
+    monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", _fake_build_ask_payload)
+    client = _client()
+
+    response = client.post(
+        "/api/personal-finance/ask",
+        json={"question": "Should I trim my tech exposure today?"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    conversation = payload["data"].get("conversation") or {}
+    assert conversation.get("conversation_id")
+    assert conversation.get("created") is True
+    assert conversation.get("message_count") == 2
+
+
+def test_copilot_ask_follow_up_inherits_tickers(monkeypatch):
     """Test that follow-up questions inherit tickers from conversation context."""
+    monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", _fake_build_ask_payload)
     client = _client()
     
     # Create conversation with specific tickers
@@ -438,8 +512,9 @@ def test_copilot_ask_follow_up_inherits_tickers():
     assert data["follow_up_context"]["tickers"] == ["AAPL", "MSFT"]
 
 
-def test_copilot_conversation_followup_context_endpoint():
+def test_copilot_conversation_followup_context_endpoint(monkeypatch):
     """Test /api/copilot/conversation/{id}/followup endpoint."""
+    monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", _fake_build_ask_payload)
     client = _client()
     
     # Create conversation
@@ -529,8 +604,9 @@ def test_personal_finance_conversation_endpoints():
 # ============================================================================
 
 
-def test_full_conversation_flow():
+def test_full_conversation_flow(monkeypatch):
     """Test complete conversation flow: create -> ask -> follow-up -> retrieve."""
+    monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", _fake_build_ask_payload)
     client = _client()
     
     # Step 1: Create conversation

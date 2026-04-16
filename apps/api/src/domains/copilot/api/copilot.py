@@ -926,11 +926,14 @@ async def copilot_ask(req: CopilotAskRequest):
     """
     from domains.copilot.application.conversation_history import (
         append_message,
+        create_conversation,
         get_follow_up_context,
     )
 
     conversation_id = req.conversation_id
     follow_up_context = None
+    conversation_response_data = None
+    created_conversation = False
 
     # BATCH-73-DEV-02: Get follow-up context if conversation_id provided
     if conversation_id:
@@ -943,6 +946,27 @@ async def copilot_ask(req: CopilotAskRequest):
                     req.tickers = ctx_result["context"]["tickers"]
         except Exception:
             # Non-blocking: conversation context failure should not break ask
+            pass
+    else:
+        try:
+            create_result = create_conversation(
+                first_question=req.question,
+                tickers=req.tickers,
+                scope=req.scope,
+                portfolio_id=(req.scope or {}).get("portfolio_id"),
+                metadata={"entrypoint": "copilot_ask"},
+            )
+            candidate_id = str(create_result.get("conversation_id") or "").strip()
+            if candidate_id:
+                conversation_id = candidate_id
+                created_conversation = True
+                conversation_response_data = {
+                    "conversation_id": conversation_id,
+                    "message_count": create_result.get("message_count", 1),
+                    "created": True,
+                }
+        except Exception:
+            # Non-blocking: initial conversation creation should not break ask
             pass
 
     try:
@@ -962,16 +986,15 @@ async def copilot_ask(req: CopilotAskRequest):
             pass
 
         # BATCH-73-DEV-02: Log conversation messages if conversation_id provided
-        conversation_response_data = None
         if conversation_id:
             try:
-                # Log user question
-                append_message(
-                    conversation_id=conversation_id,
-                    role="user",
-                    content=req.question,
-                    metadata={"tickers": req.tickers, "scope": req.scope},
-                )
+                if not created_conversation:
+                    append_message(
+                        conversation_id=conversation_id,
+                        role="user",
+                        content=req.question,
+                        metadata={"tickers": req.tickers, "scope": req.scope},
+                    )
                 # Log assistant response
                 append_result = append_message(
                     conversation_id=conversation_id,
@@ -988,6 +1011,7 @@ async def copilot_ask(req: CopilotAskRequest):
                     "conversation_id": conversation_id,
                     "message_id": append_result.get("message_id"),
                     "message_count": append_result.get("message_count"),
+                    "created": created_conversation,
                 }
             except Exception:
                 # Non-blocking: conversation logging failure should not break response
