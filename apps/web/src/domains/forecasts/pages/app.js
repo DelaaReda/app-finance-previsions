@@ -6225,6 +6225,8 @@ function resolveCopilotStartOpenDestination(target) {
     : null;
 }
 
+const COPILOT_PENDING_START_OPEN_STORAGE_KEY = 'financeCopilot.pendingStartOpen';
+
 function runCopilotStartOpen(target) {
   const destination = (typeof resolveCopilotStartOpenDestination === 'function'
     ? resolveCopilotStartOpenDestination(target)
@@ -6341,6 +6343,29 @@ function runCopilotStartOpen(target) {
       }, 30);
     }
   }, 30);
+}
+
+function consumePendingCopilotStartOpen() {
+  let target = '';
+
+  try {
+    target = typeof window !== 'undefined' && window.sessionStorage
+      ? String(window.sessionStorage.getItem(COPILOT_PENDING_START_OPEN_STORAGE_KEY) || '')
+      : '';
+    if (target && typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.removeItem(COPILOT_PENDING_START_OPEN_STORAGE_KEY);
+    }
+  } catch (error) {
+    console.debug('[Finance Copilot] pending starter open replay unavailable:', error?.message || error);
+    return '';
+  }
+
+  if (!target) {
+    return '';
+  }
+
+  runCopilotStartOpen(target);
+  return target;
 }
 
 function resolveCopilotStartState(state) {
@@ -9251,7 +9276,8 @@ function loadMoreNews() {
  * This is the minimal vertical slice for the personal finance copilot.
  */
 async function loadAndRenderHeroBrief() {
-  const API_BASE = window.API_BASE_URL || 'http://localhost:8050/api';
+  const API_BASE = window.API_BASE_URL
+    || (window.location?.origin ? `${window.location.origin.replace(/\/$/, '')}/api` : 'http://3.98.20.77/api');
   
   const summaryEl = document.getElementById('heroBriefSummary');
   const signalsEl = document.getElementById('heroBriefSignals');
@@ -9725,6 +9751,10 @@ window.addEventListener('DOMContentLoaded', () => {
     console.error('Initialization error:', error);
     alert('Dashboard initialization failed. Please refresh the page.');
   }
+
+  setTimeout(() => {
+    consumePendingCopilotStartOpen();
+  }, 150);
 });
 
 // Expose functions globally

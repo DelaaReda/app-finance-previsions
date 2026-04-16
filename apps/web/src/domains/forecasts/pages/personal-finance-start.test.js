@@ -92,6 +92,96 @@ test('injectWidgetMarkup activates embedded widget scripts after HTML injection'
   assert.equal(replacedScripts[0].textContent, 'window.bootstrapCopilotPanel = function() {};');
 });
 
+test('runCopilotStartOpen stores dashboard targets and redirects to the main app shell', () => {
+  const calls = [];
+  const sandbox = {
+    window: {
+      sessionStorage: {
+        setItem(key, value) {
+          calls.push({ type: 'setItem', key, value });
+        },
+      },
+      location: {
+        assign(target) {
+          calls.push({ type: 'assign', target });
+        },
+      },
+    },
+    document: {
+      getElementById() {
+        return null;
+      },
+    },
+    console,
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    [
+      "const PERSONAL_FINANCE_PENDING_OPEN_KEY = 'financeCopilot.pendingStartOpen';",
+      extractFunction('normalizePersonalFinanceStartOpenTarget', 'runCopilotStartOpen'),
+      extractFunction('runCopilotStartOpen', 'cloneInlineScript'),
+      'this.runCopilotStartOpen = runCopilotStartOpen;',
+    ].join('\n\n'),
+    sandbox,
+    { filename: 'personal-finance-start.html' },
+  );
+
+  sandbox.runCopilotStartOpen('market');
+
+  assert.deepEqual(calls, [
+    { type: 'setItem', key: 'financeCopilot.pendingStartOpen', value: 'market' },
+    { type: 'assign', target: 'index.html' },
+  ]);
+});
+
+test('runCopilotStartOpen focuses the inline copilot input for copilot targets', () => {
+  const calls = [];
+  const input = {
+    focus() {
+      calls.push({ type: 'focus' });
+    },
+  };
+  const sandbox = {
+    window: {
+      location: {
+        assign(target) {
+          calls.push({ type: 'assign', target });
+        },
+      },
+      sessionStorage: {
+        setItem(key, value) {
+          calls.push({ type: 'setItem', key, value });
+        },
+      },
+    },
+    document: {
+      getElementById(id) {
+        return id === 'copilotQuestionInput' ? input : null;
+      },
+    },
+    console,
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    [
+      "const PERSONAL_FINANCE_PENDING_OPEN_KEY = 'financeCopilot.pendingStartOpen';",
+      extractFunction('normalizePersonalFinanceStartOpenTarget', 'runCopilotStartOpen'),
+      extractFunction('runCopilotStartOpen', 'cloneInlineScript'),
+      'this.runCopilotStartOpen = runCopilotStartOpen;',
+    ].join('\n\n'),
+    sandbox,
+    { filename: 'personal-finance-start.html' },
+  );
+
+  sandbox.runCopilotStartOpen('/personal-finance');
+
+  assert.deepEqual(calls, [{ type: 'focus' }]);
+});
+
 test('loadCopilotWidget rewires the start endpoint after widget scripts are activated', async () => {
   const fetchCalls = [];
   const container = {

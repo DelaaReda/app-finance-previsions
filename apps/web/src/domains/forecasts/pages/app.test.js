@@ -3695,6 +3695,57 @@ test('runCopilotStartOpen reports unsupported landing actions instead of opening
   assert.deepEqual(calls.toasts, ['Open /not-a-real-target is unavailable']);
 });
 
+test('consumePendingCopilotStartOpen replays and clears the pending starter navigation target', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = [
+    "const COPILOT_PENDING_START_OPEN_STORAGE_KEY = 'financeCopilot.pendingStartOpen';",
+    extractSection(
+      source,
+      'function consumePendingCopilotStartOpen(',
+      '\n\nfunction resolveCopilotStartState('
+    ),
+  ].join('\n\n');
+  const calls = [];
+  const sessionStorage = {
+    stored: {
+      'financeCopilot.pendingStartOpen': 'opportunities',
+    },
+    getItem(key) {
+      calls.push({ type: 'getItem', key });
+      return this.stored[key] || null;
+    },
+    removeItem(key) {
+      calls.push({ type: 'removeItem', key });
+      delete this.stored[key];
+    },
+  };
+  const sandbox = {
+    console,
+    window: {
+      sessionStorage,
+    },
+    runCopilotStartOpen(target) {
+      calls.push({ type: 'runOpen', target });
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(`${functionSource}\nthis.consumePendingCopilotStartOpen = consumePendingCopilotStartOpen;`, sandbox, {
+    filename: 'app.js',
+  });
+
+  const result = sandbox.consumePendingCopilotStartOpen();
+
+  assert.equal(result, 'opportunities');
+  assert.deepEqual(calls, [
+    { type: 'getItem', key: 'financeCopilot.pendingStartOpen' },
+    { type: 'removeItem', key: 'financeCopilot.pendingStartOpen' },
+    { type: 'runOpen', target: 'opportunities' },
+  ]);
+  assert.equal(sessionStorage.stored['financeCopilot.pendingStartOpen'], undefined);
+});
+
 test('hydrateCopilotOverlayStart falls back to getCopilotContext and persists the shared starter payload', async () => {
   const legacyPayload = {
     data: {

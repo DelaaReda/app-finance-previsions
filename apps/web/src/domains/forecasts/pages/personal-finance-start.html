@@ -110,8 +110,86 @@
      */
 
     // Override COPILOT_API_BASE to use personal-finance namespace
-    window.COPILOT_API_BASE = window.FinanceAPI?.BASE_URL || 'http://localhost:8050/api';
+    window.COPILOT_API_BASE = window.FinanceAPI?.BASE_URL
+      || (window.location?.origin ? `${window.location.origin.replace(/\/$/, '')}/api` : 'http://3.98.20.77/api');
     window.COPILOT_NAMESPACE = 'personal-finance';
+    const PERSONAL_FINANCE_PENDING_OPEN_KEY = 'financeCopilot.pendingStartOpen';
+
+    function normalizePersonalFinanceStartOpenTarget(target) {
+      const normalizedTarget = String(target || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[?#].*$/, '')
+        .replace(/\/+$/, '');
+
+      if (!normalizedTarget) {
+        return '';
+      }
+
+      if (
+        normalizedTarget === '/brief/daily'
+        || normalizedTarget === 'brief'
+        || normalizedTarget === 'brief_of_day'
+        || normalizedTarget === 'daily_brief'
+      ) {
+        return 'market';
+      }
+
+      if (
+        normalizedTarget === '/copilot'
+        || normalizedTarget.startsWith('/copilot/')
+        || normalizedTarget === 'copilot'
+        || normalizedTarget.startsWith('copilot/')
+        || normalizedTarget === '/personal-finance'
+        || normalizedTarget.startsWith('/personal-finance/')
+        || normalizedTarget === 'personal-finance'
+        || normalizedTarget.startsWith('personal-finance/')
+      ) {
+        return 'copilot';
+      }
+
+      if (['market', 'overview', 'calendar', 'opportunities', 'performance', 'ailab'].includes(normalizedTarget)) {
+        return normalizedTarget;
+      }
+
+      if (normalizedTarget.startsWith('ticker:')) {
+        const ticker = normalizedTarget.slice('ticker:'.length).trim().toUpperCase();
+        return ticker ? `ticker:${ticker}` : '';
+      }
+
+      return '';
+    }
+
+    function runCopilotStartOpen(target) {
+      const normalizedTarget = normalizePersonalFinanceStartOpenTarget(target);
+      if (!normalizedTarget) {
+        return false;
+      }
+
+      if (normalizedTarget === 'copilot') {
+        if (typeof window.focusCopilotInput === 'function') {
+          window.focusCopilotInput();
+        } else {
+          document.getElementById('copilotQuestionInput')?.focus();
+        }
+        return true;
+      }
+
+      try {
+        window.sessionStorage?.setItem(PERSONAL_FINANCE_PENDING_OPEN_KEY, normalizedTarget);
+      } catch (error) {
+        console.debug('[Personal Finance] Pending open target storage unavailable:', error?.message || error);
+      }
+
+      if (window.location && typeof window.location.assign === 'function') {
+        window.location.assign('index.html');
+      } else if (window.location) {
+        window.location.href = 'index.html';
+      }
+      return true;
+    }
+
+    window.runCopilotStartOpen = runCopilotStartOpen;
 
     function cloneInlineScript(script) {
       const nextScript = document.createElement('script');

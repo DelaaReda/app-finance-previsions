@@ -294,7 +294,10 @@ let copilotState = {
 };
 
 // API Base URL (reuse existing FinanceAPI pattern)
-const COPILOT_API_BASE = window.COPILOT_API_BASE || window.FinanceAPI?.BASE_URL || 'http://localhost:8050/api';
+const COPILOT_DEFAULT_BASE = window.location?.origin
+    ? `${window.location.origin.replace(/\/$/, '')}/api`
+    : 'http://3.98.20.77/api';
+const COPILOT_API_BASE = window.COPILOT_API_BASE || window.FinanceAPI?.BASE_URL || COPILOT_DEFAULT_BASE;
 const COPILOT_NAMESPACE = window.COPILOT_NAMESPACE || 'copilot';
 
 function getCopilotApiBase() {
@@ -506,14 +509,14 @@ function renderCopilotPortfolio(data) {
  * Render ask/open actions
  */
 function renderCopilotActions() {
-    const rankedAction = copilotState.briefData && typeof copilotState.briefData === 'object'
-        ? copilotState.briefData.ranked_action
-        : null;
     const serializeActionArg = (value) => JSON.stringify(String(value || ''))
         .replace(/&/g, '&amp;')
         .replace(/"/g, '&quot;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+    const rankedAction = copilotState.briefData && typeof copilotState.briefData === 'object'
+        ? copilotState.briefData.ranked_action
+        : null;
     const askActions = Array.isArray(copilotState.askActions) ? [...copilotState.askActions] : [];
     const openActions = Array.isArray(copilotState.openActions) ? [...copilotState.openActions] : [];
     const rankedActionId = rankedAction && rankedAction.id ? String(rankedAction.id) : '';
@@ -745,6 +748,21 @@ function executeCopilotAction(kind, target, prefillQuestion) {
             const normalizedNamespace = typeof namespaceValue === 'string'
                 ? namespaceValue.trim().toLowerCase()
                 : '';
+            if (
+                normalized === '/brief/daily'
+                || normalized === 'brief'
+                || normalized === 'brief_of_day'
+                || normalized === 'daily_brief'
+                || normalized === 'market'
+                || normalized === 'overview'
+                || normalized === 'calendar'
+                || normalized === 'opportunities'
+                || normalized === 'performance'
+                || normalized === 'ailab'
+                || normalized.startsWith('ticker:')
+            ) {
+                return true;
+            }
             if (normalized === 'copilot' || normalized === '/copilot' || normalized === '/copilot/' || normalized === 'copilot/') {
                 return true;
             }

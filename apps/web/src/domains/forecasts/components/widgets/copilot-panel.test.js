@@ -502,3 +502,35 @@ test('executeCopilotAction routes nested copilot target to copilot start flow', 
   assert.deepEqual(calls[0], { type: 'runOpen', target: '/copilot/overview' });
   assert.deepEqual(calls[1], { type: 'toast', message: 'open /copilot/overview', level: 'info' });
 });
+
+test('executeCopilotAction routes market-style open targets through copilot start flow', () => {
+  const calls = [];
+  const sandbox = {
+    window: {
+      location: {
+        assign(target) {
+          calls.push({ type: 'assign', target });
+        },
+      },
+    },
+    getCopilotNamespace: () => 'personal-finance',
+    runCopilotStartOpen(target) {
+      calls.push({ type: 'runOpen', target });
+    },
+    showToast(message, level) {
+      calls.push({ type: 'toast', message, level });
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    extractFunction('executeCopilotAction', 'setCopilotQuestion'),
+    sandbox,
+    { filename: 'copilot-panel.html' },
+  );
+
+  sandbox.executeCopilotAction('open', 'market');
+
+  assert.deepEqual(calls[0], { type: 'runOpen', target: 'market' });
+  assert.deepEqual(calls[1], { type: 'toast', message: 'open market', level: 'info' });
+});
