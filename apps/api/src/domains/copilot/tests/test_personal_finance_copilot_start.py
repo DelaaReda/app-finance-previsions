@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from domains.copilot.api import copilot as copilot_route
+from packages.contracts.copilot_v1 import CopilotStartPayload
 
 
 def _client() -> TestClient:
@@ -132,6 +133,97 @@ class TestPersonalFinanceCopilotStart:
 
 class TestPersonalFinanceCopilotIntegration:
     """Integration tests for the alias routes."""
+
+    def test_personal_finance_start_adds_story_lines_to_brief(self, monkeypatch):
+        async def fake_build_context_payload(**_kwargs):
+            return {
+                "copilot_start": {
+                    "brief_of_day": {
+                        "summary": "NVDA leads a semiconductor rebound while CPI risk stays close.",
+                        "market_sentiment": "BULLISH",
+                        "top_signals": [
+                            {"name": "NVDA", "value": "+5%"},
+                        ],
+                        "top_risks": [
+                            {"name": "CPI release", "value": "tomorrow"},
+                        ],
+                        "sector_rotation": {
+                            "top": ["Semiconductors", "Tech"],
+                            "bottom": ["Utilities"],
+                        },
+                        "generated_at": "2026-04-16T12:00:00Z",
+                        "freshness": "2026-04-16T12:00:00Z",
+                        "source": ["personal_finance_start_route_contract"],
+                    },
+                    "ask": [
+                        {
+                            "id": "portfolio_today",
+                            "kind": "ask",
+                            "target": "/copilot/ask",
+                            "prefill": {"question": "What should I do with NVDA today?"},
+                        }
+                    ],
+                    "open": [{"id": "open_copilot", "kind": "open", "target": "/copilot"}],
+                }
+            }
+
+        copilot_route._COPILOT_START_CACHE.clear()
+        monkeypatch.setattr(
+            copilot_route.copilot_service,
+            "build_context_payload",
+            fake_build_context_payload,
+        )
+
+        client = _client()
+        response = client.get("/api/personal-finance/start?tickers=nvda")
+
+        assert response.status_code == 200
+        contract = CopilotStartPayload(**response.json()["data"])
+        assert contract.brief_of_day.what_changed_today == [
+            "NVDA: +5%",
+            "Leadership: Semiconductors, Tech",
+        ]
+        assert contract.brief_of_day.what_matters_now == ["CPI release: tomorrow"]
+
+    def test_personal_finance_start_backfills_story_lines_from_summary(self, monkeypatch):
+        async def fake_build_context_payload(**_kwargs):
+            return {
+                "copilot_start": {
+                    "brief_of_day": {
+                        "summary": "No fresh market movers are available yet.",
+                        "market_sentiment": "UNKNOWN",
+                        "top_signals": [],
+                        "top_risks": [],
+                        "generated_at": "2026-04-16T12:30:00Z",
+                        "freshness": "2026-04-16T12:30:00Z",
+                        "source": ["personal_finance_start_route_contract"],
+                    },
+                    "ask": [
+                        {
+                            "id": "ask_copilot",
+                            "kind": "ask",
+                            "target": "/copilot/ask",
+                            "prefill": {"question": "What changed today?"},
+                        }
+                    ],
+                    "open": [{"id": "open_copilot", "kind": "open", "target": "/copilot"}],
+                }
+            }
+
+        copilot_route._COPILOT_START_CACHE.clear()
+        monkeypatch.setattr(
+            copilot_route.copilot_service,
+            "build_context_payload",
+            fake_build_context_payload,
+        )
+
+        client = _client()
+        response = client.get("/api/personal-finance/start")
+
+        assert response.status_code == 200
+        brief = response.json()["data"]["brief_of_day"]
+        assert brief["what_changed_today"] == ["No fresh market movers are available yet."]
+        assert brief["what_matters_now"] == ["No fresh market movers are available yet."]
 
     def test_personal_finance_start_prefers_shared_endpoint_builder(self, monkeypatch):
         calls = {"endpoint": 0, "context": 0}

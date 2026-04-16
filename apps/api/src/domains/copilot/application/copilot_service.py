@@ -299,6 +299,94 @@ def _normalize_string_list(value: Any) -> List[str]:
     return [token] if token else []
 
 
+def _append_unique_story_line(lines: List[str], candidate: Any, *, limit: int = 3) -> None:
+    text = _safe_text(candidate)
+    if not text:
+        return
+    lowered = text.lower()
+    if any(existing.lower() == lowered for existing in lines):
+        return
+    if len(lines) < limit:
+        lines.append(text)
+
+
+def _brief_story_line(value: Any) -> str:
+    if isinstance(value, dict):
+        label = _safe_text(
+            value.get("name")
+            or value.get("label")
+            or value.get("title")
+            or value.get("ticker")
+            or value.get("theme")
+            or value.get("sector")
+            or value.get("event_type")
+        )
+        detail = _safe_text(
+            value.get("value")
+            or value.get("summary")
+            or value.get("interpretation")
+            or value.get("signal")
+            or value.get("window")
+            or value.get("dominant_horizon")
+        )
+        if label and detail and detail.lower() != label.lower():
+            return f"{label}: {detail}"
+        return label or detail
+    return _safe_text(value)
+
+
+def _normalize_brief_story_lines(value: Any, *, limit: int = 3) -> List[str]:
+    lines: List[str] = []
+    if isinstance(value, list):
+        for item in value:
+            _append_unique_story_line(lines, _brief_story_line(item), limit=limit)
+        return lines
+    if isinstance(value, dict):
+        _append_unique_story_line(lines, _brief_story_line(value), limit=limit)
+        return lines
+    _append_unique_story_line(lines, value, limit=limit)
+    return lines
+
+
+def _ensure_brief_story_lines(brief: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    normalized = dict(brief) if isinstance(brief, dict) else {}
+
+    what_changed_today = _normalize_brief_story_lines(normalized.get("what_changed_today"))
+    if not what_changed_today:
+        what_changed_today = _normalize_brief_story_lines(normalized.get("top_signals"))
+        sector_rotation = normalized.get("sector_rotation") if isinstance(normalized.get("sector_rotation"), dict) else {}
+        leading_sectors = [
+            _safe_text(item)
+            for item in (sector_rotation.get("top") if isinstance(sector_rotation.get("top"), list) else [])
+            if _safe_text(item)
+        ][:2]
+        if leading_sectors:
+            _append_unique_story_line(
+                what_changed_today,
+                f"Leadership: {', '.join(leading_sectors)}",
+            )
+
+    what_matters_now = _normalize_brief_story_lines(normalized.get("what_matters_now"))
+    if not what_matters_now:
+        what_matters_now = _normalize_brief_story_lines(normalized.get("top_risks"))
+        event_timing = _normalize_brief_event_timing(normalized)
+        if isinstance(event_timing, dict):
+            _append_unique_story_line(what_matters_now, event_timing.get("summary"))
+
+    fallback_line = _trim_words(
+        normalized.get("summary"),
+        limit=20,
+    ) or "No daily brief available yet."
+    if not what_changed_today:
+        what_changed_today = [fallback_line]
+    if not what_matters_now:
+        what_matters_now = [fallback_line]
+
+    normalized["what_changed_today"] = what_changed_today[:3]
+    normalized["what_matters_now"] = what_matters_now[:3]
+    return normalized
+
+
 def _brief_topic_label(value: Any) -> str:
     if isinstance(value, dict):
         for key in ("ticker", "label", "name", "title", "sector", "theme", "value"):
@@ -1317,16 +1405,16 @@ def _load_daily_brief_payload() -> Dict[str, Any]:
     }
 
     if storage_io is None:
-        return fallback_payload
+        return _ensure_brief_story_lines(fallback_payload)
 
     snapshot = storage_io.load_json("brief_daily") or storage_io.load_json("brief_weekly")
     if not isinstance(snapshot, dict) or not snapshot:
-        return fallback_payload
+        return _ensure_brief_story_lines(fallback_payload)
 
     raw_payload = snapshot.get("data") if isinstance(snapshot.get("data"), dict) else snapshot
     brief = raw_payload.get("daily") if isinstance(raw_payload, dict) and isinstance(raw_payload.get("daily"), dict) else raw_payload
     if not isinstance(brief, dict) or not brief:
-        return fallback_payload
+        return _ensure_brief_story_lines(fallback_payload)
 
     normalized = dict(brief)
     normalized["summary"] = _trim_words(normalized.get("summary"), limit=200) or fallback_payload["summary"]
@@ -1364,8 +1452,8 @@ def _load_daily_brief_payload() -> Dict[str, Any]:
     except Exception:
         # Silently continue with snapshot-only brief if live data fails
         pass
-    
-    return normalized
+
+    return _ensure_brief_story_lines(normalized)
 
 
 def _build_copilot_entry_points(
@@ -1676,6 +1764,7 @@ def build_copilot_start_response(
     if isinstance(allocation_drift_alerts, dict) and allocation_drift_alerts:
         brief_of_day = dict(brief_of_day)
         brief_of_day["allocation_drift_alerts"] = dict(allocation_drift_alerts)
+    brief_of_day = _ensure_brief_story_lines(brief_of_day)
 
     source = brief_of_day.get("sources")
     if not isinstance(source, list):

@@ -54,6 +54,8 @@ class CopilotBriefDto(BaseModel):
     top_risks: List[Any] = Field(default_factory=list)
     macro_signals: List[Any] = Field(default_factory=list)
     sector_rotation: Dict[str, List[Any]] = Field(default_factory=lambda: {"top": [], "bottom": []})
+    what_changed_today: List[str] = Field(default_factory=list)
+    what_matters_now: List[str] = Field(default_factory=list)
     source: List[str] = Field(default_factory=list)
     sources: List[str] = Field(default_factory=list)
     generated_at: str = ""
