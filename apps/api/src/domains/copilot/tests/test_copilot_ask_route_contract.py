@@ -237,6 +237,47 @@ def test_copilot_ask_route_preserves_event_timing_contract(monkeypatch):
     ]
 
 
+def test_copilot_ask_route_strips_follow_up_noise_from_answer_and_memo(monkeypatch):
+    async def fake_build_ask_payload(**_kwargs):
+        return {
+            "answer": "Buy NVDA on 1w momentum. Need proxies cheaper than the market? https://op.wtf",
+            "action": "buy",
+            "confidence": 0.67,
+            "reasoning": [
+                "Buy NVDA on 1w momentum.",
+                "Need proxies cheaper than the market?",
+                "https://op.wtf",
+            ],
+            "freshness": "2026-03-11T10:00:00Z",
+            "generated_at": "2026-03-11T10:00:00Z",
+            "sources": [
+                {"type": "news", "ticker": "NVDA"},
+                {"type": "market_context", "ticker": "NVDA"},
+            ],
+            "sources_count": 2,
+            "quality_status": "sufficient_sources",
+            "requirements_met": {"min_sources_2": True, "quality_threshold": True},
+        }
+
+    monkeypatch.setattr(copilot_route.copilot_service, "build_ask_payload", fake_build_ask_payload)
+
+    client = _client()
+    response = client.post(
+        "/api/copilot/ask",
+        json={"question": "What should I watch about NVDA today?", "tickers": ["NVDA"]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+
+    data = payload["data"]
+    assert data["answer"] == "Buy NVDA on 1w momentum."
+    assert data["why"] == ["Buy NVDA on 1w momentum."]
+    assert data["reasoning"] == ["Buy NVDA on 1w momentum."]
+    assert data["memo"]["why"] == ["Buy NVDA on 1w momentum."]
+
+
 def test_copilot_ask_route_preserves_portfolio_context_markers(monkeypatch):
     async def fake_build_ask_payload(**_kwargs):
         return {

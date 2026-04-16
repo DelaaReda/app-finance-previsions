@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 from datetime import datetime, timezone
 from importlib import import_module
 from annotated_types import Ge, Gt
@@ -168,8 +169,58 @@ def _normalize_memo_sources(payload: Dict[str, Any]) -> List[Any]:
     return [token] if token else []
 
 
+def _is_follow_up_noise_item(value: Any) -> bool:
+    token = str(value or "").strip()
+    if not token:
+        return True
+    if re.fullmatch(r"https?://\S+", token, flags=re.IGNORECASE):
+        return True
+    if token.endswith("?") and len(token.rstrip("?").split()) <= 12:
+        return True
+    return False
+
+
+def _sanitize_explanatory_items(value: Any) -> List[str]:
+    return [
+        item
+        for item in _normalize_string_list(value)
+        if not _is_follow_up_noise_item(item)
+    ]
+
+
+def _sanitize_ask_answer(answer: Any, why_items: List[str]) -> str:
+    text = str(answer or "").strip()
+    if not text:
+        return " ".join(why_items) if why_items else ""
+
+    segments = [
+        segment.strip()
+        for segment in re.split(r"(?:\n+|(?<=[.!?])\s+)", text)
+        if segment.strip()
+    ]
+    cleaned_segments = [
+        segment
+        for segment in segments
+        if not _is_follow_up_noise_item(segment)
+    ]
+    if cleaned_segments and len(cleaned_segments) != len(segments):
+        return " ".join(cleaned_segments)
+    if re.search(r"https?://\S+", text, flags=re.IGNORECASE) and why_items:
+        return " ".join(why_items)
+    return text
+
+
 def _normalize_ask_payload(payload: Any) -> Dict[str, Any]:
-    return copilot_service.normalize_ask_payload_contract(payload)
+    normalized = copilot_service.normalize_ask_payload_contract(payload)
+    why_items = _sanitize_explanatory_items(normalized.get("why"))
+    if why_items:
+        normalized["why"] = why_items
+        normalized["reasoning"] = why_items
+        memo = normalized.get("memo") if isinstance(normalized.get("memo"), dict) else {}
+        if memo:
+            normalized["memo"] = {**memo, "why": why_items}
+    normalized["answer"] = _sanitize_ask_answer(normalized.get("answer"), why_items)
+    return normalized
 
 
 def _normalized_action_target(
