@@ -1387,6 +1387,11 @@ def _finalize_copilot_start_contract(
                 brief_of_day = {**loaded, **brief_of_day}
         if not str(brief_of_day.get("summary") or "").strip():
             brief_of_day["summary"] = "No daily brief available yet."
+    ensure_story_lines = getattr(copilot_service, "_ensure_brief_story_lines", None)
+    if callable(ensure_story_lines):
+        ensured_brief = ensure_story_lines(brief_of_day)
+        if isinstance(ensured_brief, dict):
+            brief_of_day = ensured_brief
 
     ask_items = [dict(item) for item in response.get("ask", []) if isinstance(item, dict)]
     open_items = [dict(item) for item in response.get("open", []) if isinstance(item, dict)]

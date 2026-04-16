@@ -225,6 +225,30 @@ class TestPersonalFinanceCopilotIntegration:
         assert brief["what_changed_today"] == ["No fresh market movers are available yet."]
         assert brief["what_matters_now"] == ["No fresh market movers are available yet."]
 
+    def test_finalize_copilot_start_contract_adds_story_lines(self):
+        payload = {
+            "brief_of_day": {
+                "summary": "NVDA leads while CPI risk stays close.",
+                "top_signals": [{"name": "NVDA", "value": "+5%"}],
+                "top_risks": [{"name": "CPI release", "value": "tomorrow"}],
+                "sector_rotation": {"top": ["Semiconductors", "Tech"], "bottom": []},
+                "generated_at": "2026-04-16T13:00:00Z",
+                "freshness": "2026-04-16T13:00:00Z",
+                "source": ["personal_finance_start_route_contract"],
+            },
+            "ask": [{"id": "ask_copilot", "kind": "ask", "target": "/copilot/ask"}],
+            "open": [{"id": "open_copilot", "kind": "open", "target": "/copilot"}],
+            "source": ["personal_finance_start_route_contract"],
+        }
+
+        finalized = copilot_route._finalize_copilot_start_contract(payload)
+
+        assert finalized["brief_of_day"]["what_changed_today"] == [
+            "NVDA: +5%",
+            "Leadership: Semiconductors, Tech",
+        ]
+        assert finalized["brief_of_day"]["what_matters_now"] == ["CPI release: tomorrow"]
+
     def test_personal_finance_start_prefers_shared_endpoint_builder(self, monkeypatch):
         calls = {"endpoint": 0, "context": 0}
 
