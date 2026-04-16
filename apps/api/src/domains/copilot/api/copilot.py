@@ -1436,7 +1436,51 @@ async def personal_finance_start(
     debug: bool = Query(False, description="Bypass route cache and return fresh payload"),
 ):
     """Alias entrypoint for the personal finance copilot starter."""
-    return await copilot_start(tickers=tickers, namespace="personal-finance", debug=debug)
+    response = await copilot_start(tickers=tickers, namespace="personal-finance", debug=debug)
+    data = response.get("data") if isinstance(response, dict) else None
+    if _copilot_start_has_value(data) and not _copilot_start_should_retry_from_context(data):
+        return response
+
+    scope = _normalize_scope(tickers)
+    normalized_tickers = list((scope or {}).get("tickers") or [])
+    try:
+        judge_endpoint_service = import_module("services.judge_endpoint_service")
+    except Exception:
+        try:
+            judge_endpoint_service = import_module("domains.judge.application.judge_endpoint_service")
+        except Exception:
+            return response
+
+    rescue_payload_fn = getattr(
+        judge_endpoint_service,
+        "get_judge_personal_finance_start_payload",
+        None,
+    )
+    if not callable(rescue_payload_fn):
+        return response
+
+    try:
+        rescue_response = await rescue_payload_fn(tickers=normalized_tickers)
+    except Exception:
+        return response
+
+    rescue_payload = rescue_response.get("data") if isinstance(rescue_response, dict) else None
+    if not _copilot_start_has_value(rescue_payload):
+        return response
+
+    cache_key = None if debug else _copilot_start_cache_key(
+        tickers=normalized_tickers,
+        namespace="personal-finance",
+    )
+    return {
+        "ok": True,
+        "data": _copilot_start_store_payload(
+            cache_key,
+            rescue_payload,
+            scope=scope,
+            namespace="personal-finance",
+        ),
+    }
 
 
 @router.get("/personal-finance/context")
