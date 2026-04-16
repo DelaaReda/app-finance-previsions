@@ -133,6 +133,124 @@ class TestPersonalFinanceCopilotStart:
 class TestPersonalFinanceCopilotIntegration:
     """Integration tests for the alias routes."""
 
+    def test_personal_finance_start_prefers_shared_endpoint_builder(self, monkeypatch):
+        calls = {"endpoint": 0, "context": 0}
+
+        async def fake_build_copilot_start_endpoint_payload(**_kwargs):
+            calls["endpoint"] += 1
+            assert _kwargs.get("namespace") == "personal-finance"
+            payload = {
+                "brief_of_day": {
+                    "summary": "Namespaced shared contract payload.",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-03-14T02:00:00Z",
+                    "freshness": "2026-03-14T02:00:00Z",
+                    "source": ["personal_finance_start_route_contract"],
+                },
+                "ask": [{"id": "ask_copilot", "kind": "ask", "target": "/copilot/ask"}],
+                "open": [{"id": "open_copilot", "kind": "open", "target": "/copilot"}],
+                "generated_at": "2026-03-14T02:00:00Z",
+                "freshness": "2026-03-14T02:00:00Z",
+                "source": ["personal_finance_start_route_contract"],
+                "filters_applied": {"tickers": ["NVDA"]},
+                "stats": {"ask_count": 1, "open_count": 1},
+                "warnings": [],
+            }
+            namespace_rewriter = _kwargs.get("namespace_rewriter")
+            if callable(namespace_rewriter):
+                payload = namespace_rewriter(payload, "personal-finance")
+            return payload
+
+        async def fake_build_context_payload(**_kwargs):
+            calls["context"] += 1
+            return {
+                "daily_brief": {
+                    "summary": "Legacy context payload.",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-03-14T02:00:00Z",
+                    "freshness": "2026-03-14T02:00:00Z",
+                    "source": ["personal_finance_start_route_contract"],
+                },
+                "entry_points": [
+                    {"id": "brief_of_day", "kind": "open", "target": "/brief/daily"},
+                    {"id": "ask_copilot", "kind": "ask", "target": "/copilot/ask"},
+                    {"id": "open_copilot", "kind": "open", "target": "/copilot"},
+                ],
+            }
+
+        monkeypatch.setattr(
+            copilot_route.copilot_service,
+            "build_copilot_start_endpoint_payload",
+            fake_build_copilot_start_endpoint_payload,
+        )
+        monkeypatch.setattr(
+            copilot_route.copilot_service,
+            "build_context_payload",
+            fake_build_context_payload,
+        )
+
+        client = _client()
+        response = client.get("/api/personal-finance/start?tickers=nvda")
+
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["brief_of_day"]["summary"] == "Namespaced shared contract payload."
+        assert data["ask"][0]["target"] == "/personal-finance/ask"
+        assert data["open"][0]["target"] == "/personal-finance"
+        assert calls == {"endpoint": 1, "context": 0}
+
+    def test_personal_finance_start_rewrites_brief_focus_asks_to_scope_tickers(self, monkeypatch):
+        async def fake_build_copilot_start_endpoint_payload(**_kwargs):
+            payload = {
+                "brief_of_day": {
+                    "summary": "Namespaced shared contract payload.",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-03-14T02:00:00Z",
+                    "freshness": "2026-03-14T02:00:00Z",
+                    "source": ["personal_finance_start_route_contract"],
+                },
+                "ask": [
+                    {"id": "portfolio_today", "kind": "ask", "target": "/copilot/ask"},
+                    {
+                        "id": "brief_risk_1",
+                        "kind": "ask",
+                        "label": "AAPL",
+                        "prompt": "What matters most about AAPL today?",
+                        "target": "/copilot/ask",
+                    },
+                ],
+                "open": [{"id": "open_copilot", "kind": "open", "target": "/copilot"}],
+                "generated_at": "2026-03-14T02:00:00Z",
+                "freshness": "2026-03-14T02:00:00Z",
+                "source": ["personal_finance_start_route_contract"],
+                "filters_applied": {"tickers": ["NVDA"]},
+                "stats": {"ask_count": 2, "open_count": 1},
+                "warnings": [],
+            }
+            namespace_rewriter = _kwargs.get("namespace_rewriter")
+            if callable(namespace_rewriter):
+                payload = namespace_rewriter(payload, "personal-finance")
+            return payload
+
+        monkeypatch.setattr(
+            copilot_route.copilot_service,
+            "build_copilot_start_endpoint_payload",
+            fake_build_copilot_start_endpoint_payload,
+        )
+
+        client = _client()
+        response = client.get("/api/personal-finance/start?tickers=nvda")
+
+        assert response.status_code == 200
+        data = response.json()["data"]
+        focus_ask = next(item for item in data["ask"] if item["id"] == "brief_risk_1")
+
+        assert focus_ask["label"] == "NVDA"
+        assert focus_ask["prompt"] == "What matters most about NVDA today?"
+        assert focus_ask["prefill"]["question"] == "What matters most about NVDA today?"
+        assert focus_ask["prefill"]["tickers"] == ["NVDA"]
+        assert focus_ask["target"] == "/personal-finance/ask"
+
     def test_personal_finance_start_endpoint_route_contract(self, monkeypatch):
         async def fake_build_context_payload(**_kwargs):
             return {

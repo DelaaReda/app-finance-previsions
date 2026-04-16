@@ -1449,6 +1449,43 @@ def _finalize_copilot_start_contract(
             normalized_scope.append(token)
     if normalized_scope:
         response["scope_tickers"] = normalized_scope
+        aligned_ask_items: List[Dict[str, Any]] = []
+        focus_index = 0
+        scope_set = {ticker.upper() for ticker in normalized_scope}
+        for item in ask_items:
+            normalized_item = dict(item)
+            item_id = str(normalized_item.get("id") or "").strip().lower()
+            if item_id.startswith(("brief_risk_", "brief_signal_")):
+                scope_ticker = normalized_scope[min(focus_index, len(normalized_scope) - 1)]
+                focus_index += 1
+                existing_prompt = str(
+                    normalized_item.get("prompt")
+                    or (
+                        normalized_item.get("prefill", {}).get("question")
+                        if isinstance(normalized_item.get("prefill"), dict)
+                        else ""
+                    )
+                    or ""
+                ).strip()
+                existing_tokens = {
+                    token.upper()
+                    for token in re.findall(r"\b[A-Z]{1,5}\b", existing_prompt)
+                }
+                if not existing_tokens.intersection(scope_set):
+                    rewritten_prompt = f"What matters most about {scope_ticker} today?"
+                    normalized_item["label"] = scope_ticker
+                    normalized_item["prompt"] = rewritten_prompt
+                    prefill = (
+                        dict(normalized_item.get("prefill"))
+                        if isinstance(normalized_item.get("prefill"), dict)
+                        else {}
+                    )
+                    prefill["question"] = rewritten_prompt
+                    prefill["tickers"] = list(normalized_scope)
+                    normalized_item["prefill"] = prefill
+            aligned_ask_items.append(normalized_item)
+        ask_items = aligned_ask_items
+        response["ask"] = aligned_ask_items
 
     filters_applied = dict(response.get("filters_applied")) if isinstance(response.get("filters_applied"), dict) else {}
     filters_applied.setdefault("tickers", list(normalized_scope))
