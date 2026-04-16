@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from datetime import datetime, timezone
+from importlib import import_module
 from annotated_types import Ge, Gt
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
@@ -45,20 +46,20 @@ except Exception:  # pragma: no cover
         stable_cache_key = None  # type: ignore
 
 try:
-    from domains.copilot.application.context_service import ContextService
+    ContextService = import_module("domains.copilot.application.context_service").ContextService
 except Exception:  # pragma: no cover
     try:
-        from services.context_service import ContextService  # type: ignore
+        ContextService = import_module("services.context_service").ContextService  # type: ignore[attr-defined]
     except Exception:
         ContextService = None  # type: ignore
 
 try:
-    from domains.copilot.application import copilot_service
+    copilot_service = import_module("domains.copilot.application.copilot_service")
 except Exception:  # pragma: no cover
     try:
-        from services import copilot_service  # type: ignore
+        copilot_service = import_module("services.copilot_service")  # type: ignore[assignment]
     except Exception:
-        from src.services import copilot_service  # type: ignore
+        copilot_service = import_module("src.services.copilot_service")  # type: ignore[assignment]
 
 try:
     from storage import io as storage_io
@@ -393,13 +394,16 @@ def _copilot_start_cache_key(
 
     if not callable(stable_cache_key):
         return None
-    return stable_cache_key(
+        return stable_cache_key(
         "copilot_start_v2",
         {
             "brief_signature": payload_signature,
             "tickers": list(tickers or []),
             "namespace": str(namespace or "").strip(),
             "context_builder": _callable_cache_token(getattr(copilot_service, "build_context_payload", None)),
+            "endpoint_builder": _callable_cache_token(
+                getattr(copilot_service, "build_copilot_start_endpoint_payload", None)
+            ),
         },
     )
 
@@ -526,8 +530,11 @@ async def _copilot_context_compute_singleflight(
 def _copilot_start_store_payload(
     cache_key: Optional[str],
     payload: Dict[str, Any],
+    *,
+    scope: Optional[Dict[str, List[str]]] = None,
+    namespace: Optional[str] = None,
 ) -> Dict[str, Any]:
-    response = _normalize_cached_start_payload_shape(payload)
+    response = _finalize_copilot_start_contract(payload, scope=scope)
     if not response and isinstance(payload, dict):
         fallback: Dict[str, Any] = {}
         if isinstance(payload.get("copilot_start"), dict):
@@ -538,13 +545,88 @@ def _copilot_start_store_payload(
             fallback["ask"] = list(payload["ask"])
         if not fallback.get("open") and isinstance(payload.get("open"), list):
             fallback["open"] = list(payload["open"])
-        response = _normalize_cached_start_payload_shape(fallback)
+        response = _finalize_copilot_start_contract(fallback, scope=scope)
+    brief_of_day = response.get("brief_of_day") if isinstance(response.get("brief_of_day"), dict) else {}
+    ask_items = response.get("ask") if isinstance(response.get("ask"), list) else []
+    open_items = response.get("open") if isinstance(response.get("open"), list) else []
+    brief_summary = str(brief_of_day.get("summary") or "").strip()
+    if not brief_summary or not ask_items or not open_items:
+        effective_scope = scope
+        if not effective_scope:
+            payload_scope = response.get("scope_tickers") if isinstance(response.get("scope_tickers"), list) else []
+            if not payload_scope and isinstance(response.get("filters_applied"), dict):
+                payload_scope = response["filters_applied"].get("tickers") if isinstance(response["filters_applied"].get("tickers"), list) else []
+            normalized_scope: List[str] = []
+            for item in payload_scope or []:
+                token = str(item or "").strip().upper()
+                if token and token not in normalized_scope:
+                    normalized_scope.append(token)
+            if normalized_scope:
+                effective_scope = {"tickers": normalized_scope}
+        fallback_brief_loader = getattr(copilot_service, "_load_daily_brief_payload", None)
+        fallback_entry_builder = getattr(copilot_service, "_build_copilot_entry_points", None)
+        fallback_start_builder = getattr(
+            copilot_service,
+            "_build_copilot_start_payload",
+            None,
+        ) or getattr(copilot_service, "_legacy_copilot_start_payload", None)
+        fallback_response_builder = getattr(copilot_service, "build_copilot_start_response", None)
+        fallback_brief = (
+            fallback_brief_loader()
+            if callable(fallback_brief_loader)
+            else {"summary": "No daily brief available yet.", "source": ["brief_daily_fallback"]}
+        )
+        fallback_entry_points = (
+            fallback_entry_builder(effective_scope, fallback_brief)
+            if callable(fallback_entry_builder)
+            else []
+        )
+        if callable(fallback_start_builder):
+            rebuilt_start = fallback_start_builder(
+                daily_brief=fallback_brief,
+                entry_points=fallback_entry_points,
+                scope=effective_scope,
+            )
+        else:
+            rebuilt_start = {
+                "brief_of_day": dict(fallback_brief) if isinstance(fallback_brief, dict) else {},
+                "ask": [],
+                "open": [],
+            }
+        rebuilt_start = _rewrite_namespace_targets(rebuilt_start, namespace)
+        if callable(fallback_response_builder):
+            response = fallback_response_builder(
+                rebuilt_start,
+                scope=effective_scope,
+                fallback_used="copilot_start_never_empty",
+            )
+        else:
+            response = rebuilt_start if isinstance(rebuilt_start, dict) else {}
     if not response:
         response = {
-            "brief_of_day": {"summary": "", "source": ["copilot_start_route"]},
-            "ask": [],
-            "open": [],
+            "brief_of_day": {
+                "summary": "No daily brief available yet.",
+                "source": ["brief_daily_fallback", "copilot_start_route"],
+            },
+            "ask": [
+                {
+                    "id": "ask_copilot",
+                    "kind": "ask",
+                    "label": "Ask a question",
+                    "target": _normalized_action_target("/copilot/ask", "ask", namespace) or "/copilot/ask",
+                    "prefill": {"question": "What's moving today?", "tickers": list((scope or {}).get("tickers") or [])},
+                }
+            ],
+            "open": [
+                {
+                    "id": "open_copilot",
+                    "kind": "open",
+                    "label": "Open Copilot",
+                    "target": _normalized_action_target("/copilot", "open", namespace) or "/copilot",
+                }
+            ],
             "source": ["copilot_start_route"],
+            "fallback_used": "copilot_start_never_empty",
         }
     cache_meta = response.get("cache") if isinstance(response.get("cache"), dict) else {}
     cache_meta.update({"hit": False, "age_seconds": 0.0, "ttl_seconds": COPILOT_START_CACHE_TTL_SECONDS})
@@ -1075,6 +1157,154 @@ def _normalize_cached_start_payload_shape(
     return response
 
 
+def _copilot_start_has_value(payload: Optional[Dict[str, Any]]) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    brief = payload.get("brief_of_day") if isinstance(payload.get("brief_of_day"), dict) else {}
+    summary = str(brief.get("summary") or "").strip()
+    ask_items = payload.get("ask") if isinstance(payload.get("ask"), list) else []
+    open_items = payload.get("open") if isinstance(payload.get("open"), list) else []
+    return bool(summary and ask_items and open_items)
+
+
+def _copilot_start_should_retry_from_context(
+    payload: Optional[Dict[str, Any]],
+) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    fallback_used = str(payload.get("fallback_used") or "").strip().lower()
+    if fallback_used in {
+        "copilot_context_exception",
+        "copilot_start_never_empty",
+        "copilot_start_rebuilt",
+    }:
+        return True
+    brief = payload.get("brief_of_day") if isinstance(payload.get("brief_of_day"), dict) else {}
+    summary = str(brief.get("summary") or "").strip().lower()
+    if summary == "no daily brief available yet.":
+        return True
+    source = brief.get("source") if isinstance(brief.get("source"), list) else brief.get("sources")
+    normalized_source = {
+        str(item).strip().lower()
+        for item in (source if isinstance(source, list) else [])
+        if str(item).strip()
+    }
+    return "brief_daily_fallback" in normalized_source and not _normalize_string_list(brief.get("top_signals"))
+
+
+def _finalize_copilot_start_contract(
+    payload: Optional[Dict[str, Any]],
+    *,
+    scope: Optional[Dict[str, List[str]]] = None,
+) -> Dict[str, Any]:
+    response = _normalize_cached_start_payload_shape(payload)
+    if not response:
+        return {}
+    brief_of_day = (
+        dict(response.get("brief_of_day"))
+        if isinstance(response.get("brief_of_day"), dict)
+        else {}
+    )
+    if not str(brief_of_day.get("summary") or "").strip():
+        fallback_brief = getattr(copilot_service, "_load_daily_brief_payload", None)
+        if callable(fallback_brief):
+            loaded = fallback_brief()
+            if isinstance(loaded, dict):
+                brief_of_day = {**loaded, **brief_of_day}
+        if not str(brief_of_day.get("summary") or "").strip():
+            brief_of_day["summary"] = "No daily brief available yet."
+
+    ask_items = [dict(item) for item in response.get("ask", []) if isinstance(item, dict)]
+    open_items = [dict(item) for item in response.get("open", []) if isinstance(item, dict)]
+    response["ask"] = ask_items
+    response["open"] = open_items
+
+    generated_at = (
+        str(
+            response.get("generated_at")
+            or brief_of_day.get("freshness")
+            or brief_of_day.get("generated_at")
+            or _utc_now_iso()
+        ).strip()
+        or _utc_now_iso()
+    )
+    brief_of_day.setdefault("generated_at", generated_at)
+    brief_of_day.setdefault("freshness", generated_at)
+
+    brief_source = (
+        brief_of_day.get("sources")
+        if isinstance(brief_of_day.get("sources"), list)
+        else brief_of_day.get("source")
+    )
+    normalized_brief_source = [
+        str(item).strip()
+        for item in (brief_source if isinstance(brief_source, list) else [])
+        if str(item).strip()
+    ]
+    if not normalized_brief_source:
+        normalized_brief_source = ["brief_daily_fallback"]
+    brief_of_day["source"] = list(normalized_brief_source)
+    brief_of_day["sources"] = list(normalized_brief_source)
+    response["brief_of_day"] = brief_of_day
+
+    response["generated_at"] = generated_at
+    response["freshness"] = str(response.get("freshness") or brief_of_day.get("freshness") or generated_at).strip() or generated_at
+
+    root_source = response.get("source") if isinstance(response.get("source"), list) else response.get("sources")
+    normalized_root_source = [
+        str(item).strip()
+        for item in (root_source if isinstance(root_source, list) else [])
+        if str(item).strip()
+    ]
+    if not normalized_root_source:
+        normalized_root_source = list(normalized_brief_source)
+    if "copilot_start_route" not in normalized_root_source:
+        normalized_root_source.append("copilot_start_route")
+    response["source"] = list(normalized_root_source)
+    response["sources"] = list(normalized_root_source)
+
+    scope_tickers = list(response.get("scope_tickers") or []) if isinstance(response.get("scope_tickers"), list) else []
+    if not scope_tickers and isinstance(response.get("filters_applied"), dict):
+        scope_tickers = list(response["filters_applied"].get("tickers") or [])
+    if not scope_tickers and isinstance(scope, dict):
+        scope_tickers = list(scope.get("tickers") or [])
+    normalized_scope: List[str] = []
+    for item in scope_tickers:
+        token = str(item or "").strip().upper()
+        if token and token not in normalized_scope:
+            normalized_scope.append(token)
+    if normalized_scope:
+        response["scope_tickers"] = normalized_scope
+
+    filters_applied = dict(response.get("filters_applied")) if isinstance(response.get("filters_applied"), dict) else {}
+    filters_applied.setdefault("tickers", list(normalized_scope))
+    response["filters_applied"] = filters_applied
+
+    stats = dict(response.get("stats")) if isinstance(response.get("stats"), dict) else {}
+    stats.setdefault("ask_count", len(ask_items))
+    stats.setdefault("open_count", len(open_items))
+    response["stats"] = stats
+
+    warnings = [
+        str(item).strip()
+        for item in (response.get("warnings") if isinstance(response.get("warnings"), list) else [])
+        if str(item).strip()
+    ]
+    note = str(response.get("note") or "").strip()
+    if note and note not in warnings:
+        warnings.append(note)
+    response["warnings"] = warnings
+
+    if not isinstance(response.get("ranked_action"), dict):
+        for item in ask_items + open_items:
+            if item.get("id") and item.get("target"):
+                response["ranked_action"] = dict(item)
+                break
+
+    response.setdefault("status", "ok")
+    return response
+
+
 def _copilot_start_cached_payload(
     cache_key: Optional[str],
 ) -> Optional[Dict[str, Any]]:
@@ -1092,7 +1322,7 @@ def _copilot_start_cached_payload(
             return None
         if not isinstance(payload, dict):
             return None
-        response = _normalize_cached_start_payload_shape(payload)
+        response = _finalize_copilot_start_contract(payload)
         response["cache"] = {
             "hit": True,
             "age_seconds": age_seconds,
@@ -1102,7 +1332,7 @@ def _copilot_start_cached_payload(
         response["source"] = list(source) if source else ["copilot_start_route"]
         if "copilot_start_cache_hit" not in response["source"]:
             response["source"].append("copilot_start_cache_hit")
-        return response
+        return response if _copilot_start_has_value(response) else None
     cached = response_cache_get(
         _COPILOT_START_CACHE,
         cache_key,
@@ -1112,10 +1342,10 @@ def _copilot_start_cached_payload(
     )
     if not isinstance(cached, dict):
         return None
-    normalized = _normalize_cached_start_payload_shape(cached)
+    normalized = _finalize_copilot_start_contract(cached)
     if not normalized or ("brief_of_day" not in normalized and "copilot_start" not in normalized):
         return None
-    return normalized
+    return normalized if _copilot_start_has_value(normalized) else None
 
 
 @router.get("/copilot/start")
@@ -1133,7 +1363,7 @@ async def copilot_start(
 
     if not debug:
         cached_payload = _copilot_start_cached_payload(cache_key)
-        if isinstance(cached_payload, dict) and (cached_payload.get("brief_of_day") or cached_payload.get("copilot_start")):
+        if _copilot_start_has_value(cached_payload):
             return {"ok": True, "data": cached_payload}
 
     async def _compute_payload() -> Dict[str, Any]:
@@ -1144,31 +1374,60 @@ async def copilot_start(
                 namespace=namespace,
                 namespace_rewriter=_rewrite_namespace_targets,
             )
-            if (
-                isinstance(endpoint_payload, dict)
-                and (endpoint_payload.get("brief_of_day") or endpoint_payload.get("copilot_start"))
+            if _copilot_start_has_value(endpoint_payload) and not _copilot_start_should_retry_from_context(
+                endpoint_payload
             ):
                 return endpoint_payload
         except Exception:
             pass
 
-        context_payload = await copilot_service.build_context_payload(
-            context_service_cls=ContextService,
-            scope=scope,
-        )
-        return _copilot_start_response_from_context(context_payload, scope=scope, namespace=namespace)
+        try:
+            context_payload = await copilot_service.build_context_payload(
+                context_service_cls=ContextService,
+                scope=scope,
+            )
+        except Exception:
+            context_payload = {}
+        context_response = _copilot_start_response_from_context(context_payload, scope=scope, namespace=namespace)
+        if _copilot_start_has_value(context_response):
+            return context_response
+        return context_response
 
     if debug or not cache_key:
-        return {"ok": True, "data": _copilot_start_store_payload(None if debug else cache_key, await _compute_payload())}
+        return {
+            "ok": True,
+            "data": _copilot_start_store_payload(
+                None if debug else cache_key,
+                await _compute_payload(),
+                scope=scope,
+                namespace=namespace,
+            ),
+        }
 
     payload, created = await _copilot_start_compute_singleflight(cache_key, _compute_payload)
     if created:
-        return {"ok": True, "data": _copilot_start_store_payload(cache_key, payload)}
+        return {
+            "ok": True,
+            "data": _copilot_start_store_payload(
+                cache_key,
+                payload,
+                scope=scope,
+                namespace=namespace,
+            ),
+        }
 
     cached_payload = _copilot_start_cached_payload(cache_key)
-    if isinstance(cached_payload, dict) and (cached_payload.get("brief_of_day") or cached_payload.get("copilot_start")):
+    if _copilot_start_has_value(cached_payload):
         return {"ok": True, "data": cached_payload}
-    return {"ok": True, "data": _copilot_start_store_payload(cache_key, payload)}
+    return {
+        "ok": True,
+        "data": _copilot_start_store_payload(
+            cache_key,
+            payload,
+            scope=scope,
+            namespace=namespace,
+        ),
+    }
 
 
 @router.get("/personal-finance/start")
