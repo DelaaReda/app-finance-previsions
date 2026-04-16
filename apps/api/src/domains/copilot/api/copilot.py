@@ -1181,6 +1181,105 @@ def _normalize_cached_start_payload_shape(
     return response
 
 
+def _rewrite_targets_to_copilot_namespace(payload: Any) -> Any:
+    if not isinstance(payload, dict):
+        return payload
+
+    rewritten: Dict[str, Any] = dict(payload)
+    target_map = {
+        "/personal-finance": "/copilot",
+        "personal-finance": "/copilot",
+        "/personal-finance/": "/copilot",
+        "personal-finance/": "/copilot",
+        "/personal-finance/ask": "/copilot/ask",
+        "personal-finance/ask": "/copilot/ask",
+    }
+
+    for key in ("ask", "open"):
+        items = rewritten.get(key)
+        if not isinstance(items, list):
+            continue
+        updated_items = []
+        for item in items:
+            if not isinstance(item, dict):
+                updated_items.append(item)
+                continue
+
+            normalized_target = str(item.get("target") or "").strip().lower()
+            if normalized_target.startswith("/personal-finance/") and normalized_target != "/personal-finance/ask":
+                mapped_target = "/copilot"
+            elif normalized_target.startswith("personal-finance/") and normalized_target != "personal-finance/ask":
+                mapped_target = "/copilot"
+            else:
+                mapped_target = target_map.get(normalized_target)
+            if not mapped_target:
+                updated_items.append(item)
+                continue
+
+            updated_item = dict(item)
+            updated_item["target"] = mapped_target
+            updated_items.append(updated_item)
+        rewritten[key] = updated_items
+
+    ranked_action = rewritten.get("ranked_action")
+    if isinstance(ranked_action, dict):
+        normalized_target = str(ranked_action.get("target") or "").strip().lower()
+        mapped_target = target_map.get(normalized_target)
+        if normalized_target.startswith("/personal-finance/") and normalized_target != "/personal-finance/ask":
+            mapped_target = "/copilot"
+        elif normalized_target.startswith("personal-finance/") and normalized_target != "personal-finance/ask":
+            mapped_target = "/copilot"
+        if mapped_target:
+            updated_ranked_action = dict(ranked_action)
+            updated_ranked_action["target"] = mapped_target
+            rewritten["ranked_action"] = updated_ranked_action
+
+    return rewritten
+
+
+def _normalize_judge_rescue_namespace(
+    payload: Any,
+    namespace: Optional[str],
+) -> Any:
+    normalized = _rewrite_targets_to_copilot_namespace(payload)
+    namespace_slug = str(namespace or "").strip().strip("/")
+    if namespace_slug and namespace_slug != "copilot":
+        return _rewrite_namespace_targets(normalized, namespace_slug)
+    return normalized
+
+
+async def _copilot_start_rescue_from_judge(
+    *,
+    tickers: Optional[List[str]],
+    namespace: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    try:
+        judge_endpoint_service = import_module("services.judge_endpoint_service")
+    except Exception:
+        try:
+            judge_endpoint_service = import_module("domains.judge.application.judge_endpoint_service")
+        except Exception:
+            return None
+
+    rescue_payload_fn = getattr(
+        judge_endpoint_service,
+        "get_judge_personal_finance_start_payload",
+        None,
+    )
+    if not callable(rescue_payload_fn):
+        return None
+
+    try:
+        rescue_response = await rescue_payload_fn(tickers=tickers or [])
+    except Exception:
+        return None
+
+    rescue_payload = rescue_response.get("data") if isinstance(rescue_response, dict) else None
+    if not _copilot_start_has_value(rescue_payload):
+        return None
+    return _normalize_judge_rescue_namespace(rescue_payload, namespace)
+
+
 def _copilot_start_has_value(payload: Optional[Dict[str, Any]]) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -1405,6 +1504,13 @@ async def copilot_start(
         except Exception:
             pass
 
+        rescue_payload = await _copilot_start_rescue_from_judge(
+            tickers=normalized_tickers,
+            namespace=namespace,
+        )
+        if isinstance(rescue_payload, dict) and _copilot_start_has_value(rescue_payload):
+            return rescue_payload
+
         try:
             context_payload = await copilot_service.build_context_payload(
                 context_service_cls=ContextService,
@@ -1462,33 +1568,23 @@ async def personal_finance_start(
     """Alias entrypoint for the personal finance copilot starter."""
     response = await copilot_start(tickers=tickers, namespace="personal-finance", debug=debug)
     data = response.get("data") if isinstance(response, dict) else None
-    if _copilot_start_has_value(data) and not _copilot_start_should_retry_from_context(data):
+    fallback_used = str(data.get("fallback_used") or "").strip().lower() if isinstance(data, dict) else ""
+    brief = data.get("brief_of_day") if isinstance(data, dict) and isinstance(data.get("brief_of_day"), dict) else {}
+    brief_summary = str(brief.get("summary") or "").strip().lower()
+    requires_judge_rescue = fallback_used in {
+        "copilot_context_exception",
+        "copilot_start_never_empty",
+        "copilot_start_rebuilt",
+    } or brief_summary == "no daily brief available yet."
+    if _copilot_start_has_value(data) and not requires_judge_rescue:
         return response
 
     scope = _normalize_scope(tickers)
     normalized_tickers = list((scope or {}).get("tickers") or [])
-    try:
-        judge_endpoint_service = import_module("services.judge_endpoint_service")
-    except Exception:
-        try:
-            judge_endpoint_service = import_module("domains.judge.application.judge_endpoint_service")
-        except Exception:
-            return response
-
-    rescue_payload_fn = getattr(
-        judge_endpoint_service,
-        "get_judge_personal_finance_start_payload",
-        None,
+    rescue_payload = await _copilot_start_rescue_from_judge(
+        tickers=normalized_tickers,
+        namespace="personal-finance",
     )
-    if not callable(rescue_payload_fn):
-        return response
-
-    try:
-        rescue_response = await rescue_payload_fn(tickers=normalized_tickers)
-    except Exception:
-        return response
-
-    rescue_payload = rescue_response.get("data") if isinstance(rescue_response, dict) else None
     if not _copilot_start_has_value(rescue_payload):
         return response
 
