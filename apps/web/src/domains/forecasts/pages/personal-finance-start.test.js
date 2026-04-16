@@ -220,12 +220,13 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
           },
         };
       }
-      if (url === 'http://localhost:8050/api/personal-finance/start') {
+      if (url === 'http://localhost:8050/api/personal-finance/start?tickers=NVDA&tickers=MSFT') {
         return {
           ok: true,
           async json() {
             return {
                 data: {
+              scope_tickers: ['nvda', 'MSFT'],
               freshness: '2026-03-23T20:00:00Z',
                 ranked_action: {
                   id: 'ranked_today',
@@ -270,7 +271,9 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
     window: {
       FinanceAPI: { BASE_URL: 'http://localhost:8050/api' },
       copilotState: { isLoading: false },
-      location: {},
+      location: {
+        search: '?tickers=nvda,msft&tickers=NVDA',
+      },
     },
     renderCopilotBrief(data) {
       sandbox.brief = data;
@@ -290,6 +293,7 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
     showCopilotError(flag) {
       sandbox.errorStates = [...(sandbox.errorStates || []), flag];
     },
+    URLSearchParams,
     console,
     setTimeout(fn) {
       fn();
@@ -304,6 +308,9 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
     [
       "window.COPILOT_API_BASE = window.FinanceAPI?.BASE_URL || 'http://localhost:8050/api';",
       "window.COPILOT_NAMESPACE = 'personal-finance';",
+      extractFunction('normalizePersonalFinanceScopeTickers', 'getPersonalFinanceStartScopeTickers'),
+      extractFunction('getPersonalFinanceStartScopeTickers', 'buildPersonalFinanceStartEndpoint'),
+      extractFunction('buildPersonalFinanceStartEndpoint', 'normalizePersonalFinanceStartOpenTarget'),
       extractFunction('cloneInlineScript', 'activateInlineScripts'),
       extractFunction('activateInlineScripts', 'injectWidgetMarkup'),
       extractFunction('injectWidgetMarkup', 'loadCopilotWidget'),
@@ -319,7 +326,7 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
   await sandbox.window.loadCopilotStart();
 
   assert.equal(fetchCalls[0].url, '../components/widgets/copilot-panel.html');
-  assert.equal(fetchCalls[1].url, 'http://localhost:8050/api/personal-finance/start');
+  assert.equal(fetchCalls[1].url, 'http://localhost:8050/api/personal-finance/start?tickers=NVDA&tickers=MSFT');
   assert.equal(sandbox.initCalls, 1, 'widget init should run after scripts activate');
   assert.equal(sandbox.bootstrapCalls, 0, 'init path should be preferred when available');
   assert.equal(sandbox.renderActionsCalls, 1, 'actions should render after data load');
@@ -328,6 +335,8 @@ test('loadCopilotWidget rewires the start endpoint after widget scripts are acti
     assert.equal(sandbox.brief.ask[1].target, '/personal-finance/ask');
     assert.equal(sandbox.brief.open[0].target, '/personal-finance');
     assert.equal(sandbox.brief.open[1].target, '/personal-finance');
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.COPILOT_SCOPE_TICKERS)), ['NVDA', 'MSFT']);
+  assert.deepEqual(JSON.parse(JSON.stringify(sandbox.window.copilotState.scopeTickers)), ['NVDA', 'MSFT']);
   assert.deepEqual(sandbox.loadingStates, [true, false]);
   assert.deepEqual(sandbox.errorStates, [false]);
 });

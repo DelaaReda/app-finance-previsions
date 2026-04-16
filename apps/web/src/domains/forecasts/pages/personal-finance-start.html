@@ -115,6 +115,41 @@
     window.COPILOT_NAMESPACE = 'personal-finance';
     const PERSONAL_FINANCE_PENDING_OPEN_KEY = 'financeCopilot.pendingStartOpen';
 
+    function normalizePersonalFinanceScopeTickers(value) {
+      const rawItems = Array.isArray(value)
+        ? value
+        : (typeof value === 'string' ? value.split(',') : []);
+      const seen = new Set();
+      return rawItems
+        .map((item) => String(item || '').trim().toUpperCase())
+        .filter((item) => item && !seen.has(item) && seen.add(item));
+    }
+
+    function getPersonalFinanceStartScopeTickers() {
+      if (typeof URLSearchParams === 'undefined') {
+        return normalizePersonalFinanceScopeTickers(window.COPILOT_SCOPE_TICKERS);
+      }
+      const params = new URLSearchParams(window.location?.search || '');
+      const values = [
+        ...params.getAll('tickers'),
+        ...params.getAll('ticker'),
+        ...params.getAll('symbols'),
+        ...params.getAll('symbol'),
+      ];
+      return normalizePersonalFinanceScopeTickers(values.flatMap((item) => String(item || '').split(',')));
+    }
+
+    function buildPersonalFinanceStartEndpoint() {
+      const tickers = getPersonalFinanceStartScopeTickers();
+      window.COPILOT_SCOPE_TICKERS = tickers;
+      if (tickers.length === 0 || typeof URLSearchParams === 'undefined') {
+        return `${window.COPILOT_API_BASE}/personal-finance/start`;
+      }
+      const search = new URLSearchParams();
+      tickers.forEach((ticker) => search.append('tickers', ticker));
+      return `${window.COPILOT_API_BASE}/personal-finance/start?${search.toString()}`;
+    }
+
     function normalizePersonalFinanceStartOpenTarget(target) {
       const normalizedTarget = String(target || '')
         .trim()
@@ -252,7 +287,7 @@
 
             try {
               // Use personal-finance namespace endpoint
-              const response = await fetch(`${window.COPILOT_API_BASE}/personal-finance/start`, {
+              const response = await fetch(buildPersonalFinanceStartEndpoint(), {
                 method: 'GET',
                 headers: { 'Accept': 'application/json' }
               });
@@ -266,10 +301,15 @@
 
               // Apply namespace rewriting to targets
               const rewrittenData = rewriteNamespaceTargets(data, window.COPILOT_NAMESPACE);
+              const scopedTickers = normalizePersonalFinanceScopeTickers(
+                rewrittenData.scope_tickers || rewrittenData.scopeTickers || window.COPILOT_SCOPE_TICKERS
+              );
+              window.COPILOT_SCOPE_TICKERS = scopedTickers;
 
               window.copilotState.briefData = rewrittenData;
               window.copilotState.askActions = rewrittenData.ask || [];
               window.copilotState.openActions = rewrittenData.open || [];
+              window.copilotState.scopeTickers = scopedTickers;
 
               renderCopilotBrief(rewrittenData);
               renderCopilotPortfolio(rewrittenData);

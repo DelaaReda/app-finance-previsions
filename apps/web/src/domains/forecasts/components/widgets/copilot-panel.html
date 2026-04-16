@@ -290,7 +290,8 @@ let copilotState = {
     initialized: false,
     // BATCH-80-DEV-02: Conversation history tracking
     conversationId: null,
-    messageCount: 0
+    messageCount: 0,
+    scopeTickers: []
 };
 
 // API Base URL (reuse existing FinanceAPI pattern)
@@ -307,6 +308,48 @@ function getCopilotApiBase() {
 function getCopilotNamespace() {
     const rawNamespace = window.COPILOT_NAMESPACE || COPILOT_NAMESPACE || 'copilot';
     return String(rawNamespace).trim().replace(/^\/+|\/+$/g, '') || 'copilot';
+}
+
+function normalizeCopilotTickers(value) {
+    const rawItems = Array.isArray(value)
+        ? value
+        : (typeof value === 'string'
+            ? (() => {
+                const trimmed = value.trim();
+                if (!trimmed) return [];
+                if (trimmed.startsWith('[')) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        return Array.isArray(parsed) ? parsed : [];
+                    } catch (error) {
+                        console.debug('[Copilot] Failed to parse ticker JSON:', error?.message || error);
+                    }
+                }
+                return trimmed.split(',');
+            })()
+            : []);
+    const seen = new Set();
+    return rawItems
+        .map((item) => String(item || '').trim().toUpperCase())
+        .filter((item) => item && !seen.has(item) && seen.add(item));
+}
+
+function resolveCopilotScopeTickers(data) {
+    const payloadTickers = normalizeCopilotTickers(
+        data && typeof data === 'object'
+            ? (data.scope_tickers || data.scopeTickers)
+            : []
+    );
+    if (payloadTickers.length > 0) {
+        return payloadTickers;
+    }
+    if (Array.isArray(copilotState.scopeTickers) && copilotState.scopeTickers.length > 0) {
+        return normalizeCopilotTickers(copilotState.scopeTickers);
+    }
+    if (typeof window !== 'undefined') {
+        return normalizeCopilotTickers(window.COPILOT_SCOPE_TICKERS);
+    }
+    return [];
 }
 
 /**
@@ -351,6 +394,10 @@ async function loadCopilotStart() {
         copilotState.briefData = data;
         copilotState.askActions = data.ask || [];
         copilotState.openActions = data.open || [];
+        copilotState.scopeTickers = resolveCopilotScopeTickers(data);
+        if (typeof window !== 'undefined') {
+            window.COPILOT_SCOPE_TICKERS = [...copilotState.scopeTickers];
+        }
 
         renderCopilotBrief(data);
         renderCopilotPortfolio(data);  // BATCH-71-DEV-03: Portfolio context
@@ -509,7 +556,7 @@ function renderCopilotPortfolio(data) {
  * Render ask/open actions
  */
 function renderCopilotActions() {
-    const serializeActionArg = (value) => JSON.stringify(String(value || ''))
+    const serializeActionArg = (value) => JSON.stringify(value == null ? '' : value)
         .replace(/&/g, '&amp;')
         .replace(/"/g, '&quot;')
         .replace(/</g, '&lt;')
@@ -540,6 +587,7 @@ function renderCopilotActions() {
             const kind = action && action.kind ? action.kind : 'ask';
             const target = action && action.target ? action.target : '';
             const prefillQuestion = action?.prefill?.question || action?.prompt || action?.question || '';
+            const prefillTickers = normalizeCopilotTickers(action?.tickers || action?.prefill?.tickers);
             const escapedQuestion = escapeHtml(prefillQuestion);
             const isPrimaryAction = rankedActionId && String(action?.id || '') === rankedActionId;
             const label = escapeHtml(isPrimaryAction
@@ -547,7 +595,7 @@ function renderCopilotActions() {
                 : (action?.label || action?.question || 'Ask'));
 
             return `
-                <button class="copilot-action-btn" onclick="executeCopilotAction(${serializeActionArg(kind)}, ${serializeActionArg(target)}, ${serializeActionArg(prefillQuestion)})">
+                <button class="copilot-action-btn" onclick="executeCopilotAction(${serializeActionArg(kind)}, ${serializeActionArg(target)}, ${serializeActionArg(prefillQuestion)}, ${serializeActionArg(prefillTickers)})">
                     ${label}
                 </button>
             `;
@@ -614,6 +662,12 @@ async function sendCopilotQuestion() {
             question: question,
             max_sources: 5
         };
+        const scopedTickers = normalizeCopilotTickers(inputEl?.dataset?.copilotTickers)
+            .concat(resolveCopilotScopeTickers(copilotState.briefData))
+            .filter((ticker, index, items) => items.indexOf(ticker) === index);
+        if (scopedTickers.length > 0) {
+            requestBody.tickers = scopedTickers;
+        }
         
         // BATCH-80-DEV-02: Include conversation_id for follow-up context
         if (copilotState.conversationId) {
@@ -731,9 +785,9 @@ function renderCopilotAnswer(data) {
 /**
  * Execute copilot action (ask/open)
  */
-function executeCopilotAction(kind, target, prefillQuestion) {
+function executeCopilotAction(kind, target, prefillQuestion, prefillTickers) {
     if (kind === 'ask' && prefillQuestion) {
-        setCopilotQuestion(prefillQuestion);
+        setCopilotQuestion(prefillQuestion, prefillTickers);
         focusCopilotInput();
     } else if (kind === 'open' && target) {
         const namespace = (typeof getCopilotNamespace === 'function'
@@ -842,9 +896,18 @@ function executeCopilotAction(kind, target, prefillQuestion) {
 /**
  * UI Helpers
  */
-function setCopilotQuestion(question) {
+function setCopilotQuestion(question, tickers = undefined) {
     const inputEl = document.getElementById('copilotQuestionInput');
-    if (inputEl) inputEl.value = question;
+    if (!inputEl) return;
+    inputEl.value = question;
+    if (tickers !== undefined) {
+        const normalizedTickers = normalizeCopilotTickers(tickers);
+        if (normalizedTickers.length > 0) {
+            inputEl.dataset.copilotTickers = JSON.stringify(normalizedTickers);
+        } else if (inputEl.dataset) {
+            delete inputEl.dataset.copilotTickers;
+        }
+    }
 }
 
 function focusCopilotInput() {

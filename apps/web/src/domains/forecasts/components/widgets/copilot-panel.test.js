@@ -8,9 +8,19 @@ const widgetPath = path.join(__dirname, 'copilot-panel.html');
 const source = fs.readFileSync(widgetPath, 'utf8');
 
 function extractFunction(name, nextName) {
-  const start = source.indexOf(`function ${name}(`);
+  const startMarkers = [`function ${name}(`, `async function ${name}(`];
+  const start = startMarkers
+    .map((marker) => source.indexOf(marker))
+    .filter((index) => index !== -1)
+    .sort((a, b) => a - b)[0];
   assert.notEqual(start, -1, `missing function ${name}`);
-  const end = nextName ? source.indexOf(`function ${nextName}(`, start) : source.indexOf('</script>', start);
+  const nextMarkers = nextName
+    ? [`function ${nextName}(`, `async function ${nextName}(`]
+    : ['</script>'];
+  const end = nextMarkers
+    .map((marker) => source.indexOf(marker, start + 1))
+    .filter((index) => index !== -1)
+    .sort((a, b) => a - b)[0];
   assert.notEqual(end, -1, `missing end marker after ${name}`);
   return source.slice(start, end).trim();
 }
@@ -265,7 +275,10 @@ test('renderCopilotActions uses prompt fallback for ask prefill', () => {
 
   vm.createContext(sandbox);
   vm.runInContext(
-    extractFunction('renderCopilotActions', 'renderCopilotSuggestions'),
+    [
+      extractFunction('normalizeCopilotTickers', 'resolveCopilotScopeTickers'),
+      extractFunction('renderCopilotActions', 'renderCopilotSuggestions'),
+    ].join('\n\n'),
     sandbox,
     { filename: 'copilot-panel.html' },
   );
@@ -273,7 +286,7 @@ test('renderCopilotActions uses prompt fallback for ask prefill', () => {
   sandbox.renderCopilotActions();
 
   assert.ok(
-    askListEl.innerHTML.includes('executeCopilotAction(&quot;ask&quot;, &quot;&quot;, &quot;Give me a 1-week memo on NVDA.&quot;)'),
+    askListEl.innerHTML.includes('executeCopilotAction(&quot;ask&quot;, &quot;&quot;, &quot;Give me a 1-week memo on NVDA.&quot;, [])'),
     'Prompt fallback should be passed to action handler when prefill is absent'
   );
 });
@@ -309,7 +322,10 @@ test('renderCopilotActions keeps apostrophes safe inside inline ask handlers', (
 
   vm.createContext(sandbox);
   vm.runInContext(
-    extractFunction('renderCopilotActions', 'renderCopilotSuggestions'),
+    [
+      extractFunction('normalizeCopilotTickers', 'resolveCopilotScopeTickers'),
+      extractFunction('renderCopilotActions', 'renderCopilotSuggestions'),
+    ].join('\n\n'),
     sandbox,
     { filename: 'copilot-panel.html' },
   );
@@ -317,7 +333,7 @@ test('renderCopilotActions keeps apostrophes safe inside inline ask handlers', (
   sandbox.renderCopilotActions();
 
   assert.ok(
-    askListEl.innerHTML.includes('executeCopilotAction(&quot;ask&quot;, &quot;&quot;, &quot;What\'s moving NVDA today?&quot;)'),
+    askListEl.innerHTML.includes('executeCopilotAction(&quot;ask&quot;, &quot;&quot;, &quot;What\'s moving NVDA today?&quot;, [])'),
     'Apostrophes should remain inside a quoted JS string literal instead of breaking the inline handler'
   );
   assert.ok(
@@ -369,7 +385,10 @@ test('renderCopilotActions promotes ranked ask action ahead of generic asks', ()
 
   vm.createContext(sandbox);
   vm.runInContext(
-    extractFunction('renderCopilotActions', 'renderCopilotSuggestions'),
+    [
+      extractFunction('normalizeCopilotTickers', 'resolveCopilotScopeTickers'),
+      extractFunction('renderCopilotActions', 'renderCopilotSuggestions'),
+    ].join('\n\n'),
     sandbox,
     { filename: 'copilot-panel.html' },
   );
@@ -384,6 +403,139 @@ test('renderCopilotActions promotes ranked ask action ahead of generic asks', ()
     askListEl.innerHTML.indexOf('Top action: Portfolio today') < askListEl.innerHTML.indexOf('Best theme now?'),
     'Ranked action should render before the generic ask actions'
   );
+});
+
+test('executeCopilotAction stores ask tickers on the input before focusing the copilot', () => {
+  const calls = [];
+  const input = {
+    value: '',
+    dataset: {},
+    focus() {
+      calls.push({ type: 'focus' });
+    },
+  };
+  const sandbox = {
+    document: {
+      getElementById(id) {
+        return id === 'copilotQuestionInput' ? input : null;
+      },
+    },
+    showToast(message, level) {
+      calls.push({ type: 'toast', message, level });
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    [
+      extractFunction('normalizeCopilotTickers', 'resolveCopilotScopeTickers'),
+      extractFunction('executeCopilotAction', 'setCopilotQuestion'),
+      extractFunction('setCopilotQuestion', 'focusCopilotInput'),
+      extractFunction('focusCopilotInput', 'handleCopilotQuestionKeydown'),
+      'this.executeCopilotAction = executeCopilotAction;',
+    ].join('\n\n'),
+    sandbox,
+    { filename: 'copilot-panel.html' },
+  );
+
+  sandbox.executeCopilotAction('ask', '', "What's moving NVDA today?", ['nvda', 'MSFT', 'nvda']);
+
+  assert.equal(input.value, "What's moving NVDA today?");
+  assert.equal(input.dataset.copilotTickers, '["NVDA","MSFT"]');
+  assert.deepEqual(calls, [{ type: 'focus' }, { type: 'toast', message: "ask What's moving NVDA today?", level: 'info' }]);
+});
+
+test('sendCopilotQuestion includes scoped tickers from the selected starter action', async () => {
+  const fetchCalls = [];
+  const loadingStates = [];
+  const errorStates = [];
+  const input = {
+    value: 'What should I do with NVDA today?',
+    dataset: {
+      copilotTickers: '["NVDA"]',
+    },
+  };
+  const sandbox = {
+    document: {
+      getElementById(id) {
+        return id === 'copilotQuestionInput' ? input : null;
+      },
+    },
+    copilotState: {
+      isLoading: false,
+      briefData: {
+        scope_tickers: ['msft'],
+      },
+      conversationId: null,
+    },
+    window: {
+      COPILOT_SCOPE_TICKERS: ['AAPL'],
+    },
+    fetch: async (url, options) => {
+      fetchCalls.push({ url, options });
+      return {
+        ok: true,
+        async json() {
+          return {
+            data: {
+              answer: 'Stay selective.',
+              follow_up_context: {
+                conversation_id: 'conv-123',
+              },
+            },
+          };
+        },
+      };
+    },
+    getCopilotNamespace() {
+      return 'personal-finance';
+    },
+    getCopilotApiBase() {
+      return 'http://localhost:8050/api';
+    },
+    showCopilotLoading(flag) {
+      loadingStates.push(flag);
+    },
+    hideCopilotAnswer() {},
+    renderCopilotAnswer(data) {
+      sandbox.answer = data;
+    },
+    updateConversationIndicator() {
+      sandbox.updatedConversationIndicator = true;
+    },
+    showCopilotError(flag) {
+      errorStates.push(flag);
+    },
+    console,
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    [
+      extractFunction('normalizeCopilotTickers', 'resolveCopilotScopeTickers'),
+      extractFunction('resolveCopilotScopeTickers', 'initCopilotPanel'),
+      extractFunction('sendCopilotQuestion', 'renderCopilotAnswer'),
+      'this.sendCopilotQuestion = sendCopilotQuestion;',
+    ].join('\n\n'),
+    sandbox,
+    { filename: 'copilot-panel.html' },
+  );
+
+  await sandbox.sendCopilotQuestion();
+
+  assert.equal(fetchCalls.length, 1, 'question should hit the ask endpoint once');
+  assert.equal(fetchCalls[0].url, 'http://localhost:8050/api/personal-finance/ask');
+  assert.deepEqual(JSON.parse(fetchCalls[0].options.body), {
+    question: 'What should I do with NVDA today?',
+    max_sources: 5,
+    tickers: ['NVDA', 'MSFT'],
+  });
+  assert.deepEqual(loadingStates, [true, false]);
+  assert.deepEqual(errorStates, [false]);
+  assert.equal(sandbox.answer.answer, 'Stay selective.');
+  assert.equal(sandbox.copilotState.conversationId, 'conv-123');
+  assert.equal(sandbox.updatedConversationIndicator, true);
+  assert.equal(input.value, '', 'input should reset after a successful ask');
 });
 
 test('executeCopilotAction navigates open route targets with location.assign', () => {

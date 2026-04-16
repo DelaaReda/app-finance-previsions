@@ -216,6 +216,7 @@ test('BATCH-82-DEV-02: renderCopilotBrief renders signals and risks', () => {
 
 test('BATCH-82-DEV-02: renderCopilotActions renders ask/open actions', () => {
   const widgetPath = path.join(__dirname, 'copilot-panel.html');
+  const normalizeFn = extractFunctionFromHTML(widgetPath, 'normalizeCopilotTickers');
   const renderFn = extractFunctionFromHTML(widgetPath, 'renderCopilotActions');
 
   const mockDoc = createMockDocument();
@@ -230,7 +231,7 @@ test('BATCH-82-DEV-02: renderCopilotActions renders ask/open actions', () => {
 
   const vm = require('node:vm');
   vm.createContext(sandbox);
-  vm.runInContext(renderFn, sandbox, { filename: 'copilot-panel.html' });
+  vm.runInContext(`${normalizeFn}\n${renderFn}`, sandbox, { filename: 'copilot-panel.html' });
 
   sandbox.renderCopilotActions();
 
@@ -251,6 +252,7 @@ test('BATCH-82-DEV-02: sendCopilotQuestion includes conversation_id tracking', (
   // Verify conversation_id logic exists in the function
   assert.ok(sendFn.includes('conversation_id'), 'Must include conversation_id in request');
   assert.ok(sendFn.includes('copilotState.conversationId'), 'Must track conversation ID in state');
+  assert.ok(sendFn.includes('requestBody.tickers'), 'Must preserve scoped tickers in ask requests');
 });
 
 test('BATCH-82-DEV-02: Widget has conversation indicator UI', () => {
@@ -395,6 +397,7 @@ async function runAllTests() {
     }},
     { name: 'Renders ask/open actions', fn: () => {
       const widgetPath = path.join(__dirname, 'copilot-panel.html');
+      const normalizeFn = extractFunctionFromHTML(widgetPath, 'normalizeCopilotTickers');
       const renderFn = extractFunctionFromHTML(widgetPath, 'renderCopilotActions');
       assert.ok(renderFn, 'renderCopilotActions must exist');
 
@@ -409,7 +412,7 @@ async function runAllTests() {
       };
       const vm = require('node:vm');
       vm.createContext(sandbox);
-      vm.runInContext(renderFn, sandbox);
+      vm.runInContext(`${normalizeFn}\n${renderFn}`, sandbox);
       sandbox.renderCopilotActions();
 
       const askListEl = mockDoc.getElementById('copilotAskList');
