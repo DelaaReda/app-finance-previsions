@@ -394,7 +394,7 @@ def _copilot_start_cache_key(
 
     if not callable(stable_cache_key):
         return None
-        return stable_cache_key(
+    return stable_cache_key(
         "copilot_start_v2",
         {
             "brief_signature": payload_signature,
