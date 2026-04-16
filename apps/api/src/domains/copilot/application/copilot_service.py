@@ -1410,24 +1410,64 @@ def _with_scope_tickers(
 
     normalized = dict(copilot_start)
     ask_items = normalized.get("ask")
-    if not isinstance(ask_items, list):
-        return normalized
+    open_items = normalized.get("open")
+    enriched_ask_items, enriched_open_items = _enrich_scope_start_actions(
+        ask_items if isinstance(ask_items, list) else [],
+        open_items if isinstance(open_items, list) else [],
+        scope_tickers=scope_tickers,
+    )
+    normalized["ask"] = enriched_ask_items
+    normalized["open"] = enriched_open_items
+    return normalized
 
-    enriched_items: List[Dict[str, Any]] = []
+
+def _enrich_scope_start_actions(
+    ask_items: List[Dict[str, Any]],
+    open_items: List[Dict[str, Any]],
+    *,
+    scope_tickers: Optional[List[str]] = None,
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    normalized_scope_tickers = _normalize_tickers(scope_tickers)
+
+    enriched_ask_items: List[Dict[str, Any]] = []
     for item in ask_items:
         if not isinstance(item, dict):
             continue
         enriched = dict(item)
         prefill = enriched.get("prefill") if isinstance(enriched.get("prefill"), dict) else {}
         prompt = _safe_text(prefill.get("question") or enriched.get("prompt") or enriched.get("question"))
-        prefill.setdefault("tickers", scope_tickers)
+        if normalized_scope_tickers:
+            prefill.setdefault("tickers", list(normalized_scope_tickers))
         if prompt:
             prefill.setdefault("question", prompt)
         enriched["prefill"] = prefill
-        enriched_items.append(enriched)
+        enriched_ask_items.append(enriched)
 
-    normalized["ask"] = enriched_items
-    return normalized
+    enriched_open_items = [dict(item) for item in open_items if isinstance(item, dict)]
+    if not normalized_scope_tickers:
+        return enriched_ask_items, enriched_open_items
+
+    existing_targets = {
+        _safe_text(item.get("target")).lower()
+        for item in enriched_open_items
+        if _safe_text(item.get("target"))
+    }
+    derived_open_items: List[Dict[str, Any]] = []
+    for ticker in normalized_scope_tickers[:2]:
+        target = f"ticker:{ticker}"
+        if target.lower() in existing_targets:
+            continue
+        derived_open_items.append(
+            {
+                "id": f"open_{ticker.lower()}",
+                "kind": "open",
+                "label": f"Open {ticker} deep dive",
+                "target": target,
+            }
+        )
+        existing_targets.add(target.lower())
+
+    return enriched_ask_items, derived_open_items + enriched_open_items
 
 
 def _legacy_copilot_start_payload(
@@ -1517,7 +1557,22 @@ def _pick_ranked_action(
     ranked_action: Any,
     ask_items: List[Dict[str, Any]],
     open_items: List[Dict[str, Any]],
+    *,
+    scope_tickers: Optional[List[str]] = None,
 ) -> Optional[Dict[str, Any]]:
+    normalized_scope_tickers = _normalize_tickers(scope_tickers)
+    if normalized_scope_tickers:
+        preferred_targets = {
+            f"ticker:{ticker.lower()}"
+            for ticker in normalized_scope_tickers
+        }
+        for item in open_items:
+            if not isinstance(item, dict):
+                continue
+            target = _safe_text(item.get("target")).lower()
+            if target in preferred_targets:
+                return dict(item)
+
     if isinstance(ranked_action, dict) and ranked_action.get("id") and ranked_action.get("target"):
         return dict(ranked_action)
 
@@ -1577,6 +1632,11 @@ def build_copilot_start_response(
     open_items = [
         dict(item) for item in resolved_start.get("open", []) if isinstance(item, dict)
     ]
+    ask_items, open_items = _enrich_scope_start_actions(
+        ask_items,
+        open_items,
+        scope_tickers=resolved_scope_tickers,
+    )
 
     if not ask_items:
         ask_items = [
@@ -1606,6 +1666,7 @@ def build_copilot_start_response(
         resolved_start.get("ranked_action"),
         ask_items,
         open_items,
+        scope_tickers=resolved_scope_tickers,
     )
 
     generated_at = (

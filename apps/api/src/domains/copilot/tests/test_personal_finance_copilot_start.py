@@ -291,7 +291,8 @@ class TestPersonalFinanceCopilotIntegration:
         result = payload["data"]
         assert result["brief_of_day"]["summary"] == "Markets are steady ahead of CPI."
         assert result["ask"][0]["target"] == "/personal-finance/ask"
-        assert result["open"][0]["target"] == "/personal-finance"
+        assert result["open"][0]["target"] == "ticker:NVDA"
+        assert result["ranked_action"]["target"] == "ticker:NVDA"
         assert result["scope_tickers"] == ["NVDA"]
 
     def test_personal_finance_start_splits_comma_delimited_tickers(self, monkeypatch):
@@ -331,6 +332,51 @@ class TestPersonalFinanceCopilotIntegration:
         result = response.json()["data"]
         # Tickers are normalized (uppercased + sorted alphabetically)
         assert sorted(result["scope_tickers"]) == ["AAPL", "NVDA"]
+
+    def test_personal_finance_start_promotes_scope_ticker_open(self, monkeypatch):
+        async def fake_build_context_payload(**_kwargs):
+            return {
+                "source": ["personal_finance_start_route_contract"],
+                "daily_brief": {
+                    "summary": "NVDA remains the main focus into the close.",
+                    "market_sentiment": "NEUTRAL",
+                    "generated_at": "2026-03-14T02:00:00Z",
+                    "freshness": "2026-03-14T02:00:00Z",
+                    "source": ["personal_finance_start_route_contract"],
+                },
+                "copilot_start": {
+                    "brief_of_day": {
+                        "summary": "NVDA remains the main focus into the close.",
+                        "market_sentiment": "NEUTRAL",
+                        "generated_at": "2026-03-14T02:00:00Z",
+                        "freshness": "2026-03-14T02:00:00Z",
+                        "source": ["personal_finance_start_route_contract"],
+                    },
+                    "ranked_action": {
+                        "id": "market",
+                        "kind": "open",
+                        "label": "Open market view",
+                        "target": "market",
+                    },
+                    "ask": [{"id": "ask_copilot", "kind": "ask", "target": "/copilot/ask"}],
+                    "open": [{"id": "open_copilot", "kind": "open", "target": "/copilot"}],
+                },
+            }
+
+        monkeypatch.setattr(
+            copilot_route.copilot_service,
+            "build_context_payload",
+            fake_build_context_payload,
+        )
+
+        client = _client()
+        response = client.get("/api/personal-finance/start?tickers=nvda")
+
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["ranked_action"]["target"] == "ticker:NVDA"
+        assert data["open"][0]["target"] == "ticker:NVDA"
+        assert data["open"][0]["label"] == "Open NVDA deep dive"
 
     def test_personal_finance_start_debug_bypasses_route_cache(self, monkeypatch):
         call_count = [0]

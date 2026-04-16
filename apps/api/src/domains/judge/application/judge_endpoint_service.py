@@ -214,7 +214,22 @@ def _rewrite_personal_finance_start_targets(payload: Any) -> Any:
 def _pick_ranked_action(
     ask_items: List[Dict[str, Any]],
     open_items: List[Dict[str, Any]],
+    *,
+    scope_tickers: Optional[List[str]] = None,
 ) -> Optional[Dict[str, Any]]:
+    normalized_scope_tickers = normalize_tickers(scope_tickers or [])
+    if normalized_scope_tickers:
+        preferred_targets = {
+            f"ticker:{ticker.lower()}"
+            for ticker in normalized_scope_tickers
+        }
+        for item in open_items:
+            if not isinstance(item, dict):
+                continue
+            target = str(item.get("target") or "").strip().lower()
+            if target in preferred_targets and item.get("id"):
+                return dict(item)
+
     for item in ask_items + open_items:
         if not isinstance(item, dict):
             continue
@@ -3428,6 +3443,13 @@ async def get_judge_personal_finance_start_payload(
         )
         ask_items = [dict(item) for item in resolved_start.get("ask") if isinstance(item, dict)]
         open_items = [dict(item) for item in resolved_start.get("open") if isinstance(item, dict)]
+        enrich_scope_actions = getattr(copilot_service, "_enrich_scope_start_actions", None)
+        if callable(enrich_scope_actions):
+            ask_items, open_items = enrich_scope_actions(
+                ask_items,
+                open_items,
+                scope_tickers=normalized_tickers,
+            )
 
         # Ensure the start screen always exposes at least one actionable ask/open entry.
         # This protects the UX contract when upstream copilot payloads are sparse.
@@ -3462,7 +3484,11 @@ async def get_judge_personal_finance_start_payload(
                         if isinstance(item, dict)
                     ]
 
-        ranked_action = _pick_ranked_action(ask_items, open_items)
+        ranked_action = _pick_ranked_action(
+            ask_items,
+            open_items,
+            scope_tickers=normalized_tickers,
+        )
         result: Dict[str, Any] = {
             "brief_of_day": brief,
             "ranked_action": ranked_action,

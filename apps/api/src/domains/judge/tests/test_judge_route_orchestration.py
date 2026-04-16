@@ -15,6 +15,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from domains.judge.api import judge as judge_route  # noqa: E402
+from domains.copilot.application import copilot_service  # noqa: E402
 from services import judge_endpoint_service  # noqa: E402
 from packages.contracts.copilot_v1 import CopilotStartPayload  # noqa: E402
 
@@ -1472,6 +1473,65 @@ def test_judge_personal_finance_start_service_includes_ranked_action(monkeypatch
     assert data["ranked_action"]["target"] == "/personal-finance/ask"
     assert data["ask"][0]["target"] == "/personal-finance/ask"
     assert data["open"][0]["target"] == "/personal-finance"
+
+
+def test_judge_personal_finance_start_service_promotes_scope_ticker_open(monkeypatch):
+    async def fake_build_context_payload(**_kwargs):
+        return {
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "NVDA is the only scoped name with a live catalyst.",
+                    "generated_at": "2026-03-30T11:00:00Z",
+                    "freshness": "2026-03-30T11:00:00Z",
+                    "source": ["copilot_context_test"],
+                },
+                "ranked_action": {
+                    "id": "market",
+                    "kind": "open",
+                    "label": "Open market view",
+                    "target": "market",
+                },
+                "ask": [
+                    {
+                        "id": "ask_ranked",
+                        "kind": "ask",
+                        "label": "Top ranked ask",
+                        "target": "/copilot/ask",
+                    }
+                ],
+                "open": [
+                    {
+                        "id": "open_ranked",
+                        "kind": "open",
+                        "label": "Open ranked",
+                        "target": "/copilot/overview",
+                    },
+                ],
+            },
+            "source": ["judge_personal_finance_start_service", "copilot_route"],
+            "sources": ["judge_personal_finance_start_service", "copilot_route"],
+        }
+
+    class CopilotService:
+        build_context_payload = fake_build_context_payload
+        _enrich_scope_start_actions = staticmethod(copilot_service._enrich_scope_start_actions)
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_resolve_copilot_services",
+        lambda: (CopilotService, None),
+    )
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_personal_finance_start_payload(tickers=["nvda"])
+    )
+
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["ranked_action"]["target"] == "ticker:NVDA"
+    assert data["open"][0]["target"] == "ticker:NVDA"
+    assert data["open"][0]["label"] == "Open NVDA deep dive"
+    assert data["ask"][0]["target"] == "/personal-finance/ask"
 
 
 def test_judge_personal_finance_start_service_critical_fallback_keeps_actions(monkeypatch):
