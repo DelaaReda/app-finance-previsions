@@ -509,6 +509,11 @@ function renderCopilotActions() {
     const rankedAction = copilotState.briefData && typeof copilotState.briefData === 'object'
         ? copilotState.briefData.ranked_action
         : null;
+    const serializeActionArg = (value) => JSON.stringify(String(value || ''))
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
     const askActions = Array.isArray(copilotState.askActions) ? [...copilotState.askActions] : [];
     const openActions = Array.isArray(copilotState.openActions) ? [...copilotState.openActions] : [];
     const rankedActionId = rankedAction && rankedAction.id ? String(rankedAction.id) : '';
@@ -539,7 +544,7 @@ function renderCopilotActions() {
                 : (action?.label || action?.question || 'Ask'));
 
             return `
-                <button class="copilot-action-btn" onclick="executeCopilotAction('${escapeHtml(kind)}', '${escapeHtml(target)}', '${escapedQuestion}')">
+                <button class="copilot-action-btn" onclick="executeCopilotAction(${serializeActionArg(kind)}, ${serializeActionArg(target)}, ${serializeActionArg(prefillQuestion)})">
                     ${label}
                 </button>
             `;
@@ -556,7 +561,7 @@ function renderCopilotActions() {
     const openListEl = document.getElementById('copilotOpenList');
     if (openListEl && openActions.length > 0) {
         openListEl.innerHTML = openActions.map(action => `
-            <button class="copilot-action-btn secondary" onclick="executeCopilotAction('${escapeHtml(action.kind || 'open')}', '${escapeHtml(action.target || '')}')">
+            <button class="copilot-action-btn secondary" onclick="executeCopilotAction(${serializeActionArg(action.kind || 'open')}, ${serializeActionArg(action.target || '')})">
                 ${escapeHtml(rankedActionId && String(action?.id || '') === rankedActionId
                     ? `Top action: ${action.label || 'Open'}`
                     : (action.label || 'Open'))}

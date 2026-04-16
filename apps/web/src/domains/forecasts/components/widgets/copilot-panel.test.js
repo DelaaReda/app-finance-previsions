@@ -273,8 +273,56 @@ test('renderCopilotActions uses prompt fallback for ask prefill', () => {
   sandbox.renderCopilotActions();
 
   assert.ok(
-    askListEl.innerHTML.includes("executeCopilotAction('ask', '', 'Give me a 1-week memo on NVDA.')"),
+    askListEl.innerHTML.includes('executeCopilotAction(&quot;ask&quot;, &quot;&quot;, &quot;Give me a 1-week memo on NVDA.&quot;)'),
     'Prompt fallback should be passed to action handler when prefill is absent'
+  );
+});
+
+test('renderCopilotActions keeps apostrophes safe inside inline ask handlers', () => {
+  const askListEl = { innerHTML: '', style: { display: 'block' } };
+  const openListEl = { innerHTML: '', style: { display: 'block' } };
+
+  const sandbox = {
+    document: {
+      getElementById(id) {
+        return id === 'copilotAskList'
+          ? askListEl
+          : id === 'copilotOpenList'
+            ? openListEl
+            : null;
+      },
+    },
+    copilotState: {
+      askActions: [
+        {
+          kind: 'ask',
+          label: 'NVDA catalyst',
+          prompt: "What's moving NVDA today?",
+        },
+      ],
+      openActions: [],
+    },
+    escapeHtml(text) {
+      return String(text || '');
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    extractFunction('renderCopilotActions', 'renderCopilotSuggestions'),
+    sandbox,
+    { filename: 'copilot-panel.html' },
+  );
+
+  sandbox.renderCopilotActions();
+
+  assert.ok(
+    askListEl.innerHTML.includes('executeCopilotAction(&quot;ask&quot;, &quot;&quot;, &quot;What\'s moving NVDA today?&quot;)'),
+    'Apostrophes should remain inside a quoted JS string literal instead of breaking the inline handler'
+  );
+  assert.ok(
+    !askListEl.innerHTML.includes("executeCopilotAction('ask'"),
+    'Inline handler should no longer rely on single-quoted arguments'
   );
 });
 
