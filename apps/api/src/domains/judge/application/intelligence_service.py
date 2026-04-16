@@ -27,33 +27,42 @@ CACHE_MAX_AGE_MINUTES = 30
 COPILOT_STARTER_ASK = (
     {
         "id": "portfolio_today",
+        "kind": "ask",
         "label": "Portfolio today?",
         "prompt": "What should I do with my portfolio today?",
+        "target": "/copilot/ask",
     },
     {
         "id": "market_theme",
+        "kind": "ask",
         "label": "Best theme now?",
         "prompt": "Which market theme deserves a deep dive right now?",
+        "target": "/copilot/ask",
     },
     {
         "id": "nvda_memo",
+        "kind": "ask",
         "label": "NVDA 1-week memo",
         "prompt": "Give me a 1-week investment memo on NVDA.",
+        "target": "/copilot/ask",
     },
 )
 COPILOT_STARTER_OPEN = (
     {
         "id": "market",
+        "kind": "open",
         "label": "Open market view",
         "target": "market",
     },
     {
         "id": "opportunities",
+        "kind": "open",
         "label": "Open opportunities",
         "target": "opportunities",
     },
     {
         "id": "copilot",
+        "kind": "open",
         "label": "Open copilot",
         "target": "copilot",
     },
@@ -266,8 +275,10 @@ def _build_brief_focus_asks(brief: Dict[str, Any]) -> List[Dict[str, str]]:
             suggestions.append(
                 {
                     "id": f"brief_{prefix}_{len(suggestions) + 1}",
+                    "kind": "ask",
                     "label": topic[:32],
                     "prompt": prompt,
+                    "target": "/copilot/ask",
                 }
             )
             seen_prompts.add(normalized_prompt)

@@ -54,6 +54,8 @@ class IntelligenceServiceCacheTests(unittest.TestCase):
             copilot_start = payload.get("copilot_start") or {}
             self.assertIsInstance(copilot_start.get("brief_of_day"), dict)
             self.assertEqual(copilot_start.get("ask", [])[0]["id"], "portfolio_today")
+            self.assertEqual(copilot_start.get("ask", [])[0]["target"], "/copilot/ask")
+            self.assertEqual(copilot_start.get("ask", [])[0]["kind"], "ask")
 
     def test_market_context_cache_backfills_copilot_start_for_fresh_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -105,6 +107,16 @@ class IntelligenceServiceCacheTests(unittest.TestCase):
                 [item.get("prompt") for item in copilot_start.get("ask", [])[-2:]],
                 ["What matters most about TSLA today?", "What matters most about AAPL today?"],
             )
+            self.assertTrue(
+                all(item.get("target") == "/copilot/ask" for item in copilot_start.get("ask", [])),
+            )
+            self.assertTrue(
+                all(item.get("kind") == "ask" for item in copilot_start.get("ask", [])),
+            )
+            self.assertEqual(
+                [item.get("kind") for item in copilot_start.get("open", [])],
+                ["open", "open", "open"],
+            )
 
             persisted = json.loads(cache_file.read_text(encoding="utf-8"))
             self.assertIn("copilot_start", persisted)
@@ -120,6 +132,7 @@ class IntelligenceServiceCacheTests(unittest.TestCase):
         self.assertEqual(brief_of_day.get("summary"), "No daily brief available yet.")
         self.assertEqual(brief_of_day.get("source"), ["brief_daily_fallback"])
         self.assertEqual(copilot_start.get("ask", [])[0]["prompt"], "What should I do with my portfolio today?")
+        self.assertEqual(copilot_start.get("ask", [])[0]["target"], "/copilot/ask")
         self.assertEqual(copilot_start.get("open", [])[0]["target"], "market")
 
     def test_load_brief_supports_canonical_daily_snapshot(self) -> None:
