@@ -1578,6 +1578,8 @@ async def copilot_start(
             return {"ok": True, "data": cached_payload}
 
     async def _compute_payload() -> Dict[str, Any]:
+        context_error = None
+        fallback_endpoint_payload = None
         try:
             endpoint_payload = await copilot_service.build_copilot_start_endpoint_payload(
                 context_service_cls=ContextService,
@@ -1585,12 +1587,12 @@ async def copilot_start(
                 namespace=namespace,
                 namespace_rewriter=_rewrite_namespace_targets,
             )
-            if _copilot_start_has_value(endpoint_payload) and not _copilot_start_should_retry_from_context(
-                endpoint_payload
-            ):
-                return endpoint_payload
-        except Exception:
-            pass
+            if _copilot_start_has_value(endpoint_payload):
+                if not _copilot_start_should_retry_from_context(endpoint_payload):
+                    return endpoint_payload
+                fallback_endpoint_payload = endpoint_payload
+        except Exception as exc:
+            context_error = exc
 
         rescue_payload = await _copilot_start_rescue_from_judge(
             tickers=normalized_tickers,
@@ -1604,11 +1606,18 @@ async def copilot_start(
                 context_service_cls=ContextService,
                 scope=scope,
             )
-        except Exception:
+        except Exception as exc:
+            context_error = exc
             context_payload = {}
+        if context_error is not None:
+            context_payload = dict(context_payload) if isinstance(context_payload, dict) else {}
+            context_payload.setdefault("regime", "fallback")
+            context_payload.setdefault("error", str(context_error))
         context_response = _copilot_start_response_from_context(context_payload, scope=scope, namespace=namespace)
         if _copilot_start_has_value(context_response):
             return context_response
+        if _copilot_start_has_value(fallback_endpoint_payload):
+            return fallback_endpoint_payload
         return context_response
 
     if debug or not cache_key:

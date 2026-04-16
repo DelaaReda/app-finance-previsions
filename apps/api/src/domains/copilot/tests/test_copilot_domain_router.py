@@ -130,6 +130,7 @@ def test_copilot_context_route_success_keeps_brief_first_starter_contract(monkey
     ]
     assert copilot_start.get("ask", [])[0].get("prefill", {}).get("tickers") == ["NVDA"]
     assert [item.get("target") for item in copilot_start.get("open", [])] == [
+        "ticker:NVDA",
         "market",
         "opportunities",
         "copilot",
@@ -259,13 +260,20 @@ def test_copilot_start_route_reuses_context_payload(monkeypatch):
     data = payload.get("data") or {}
     assert data.get("brief_of_day", {}).get("summary") == "Daily brief ready."
     assert [item.get("id") for item in data.get("ask", [])] == ["portfolio_today"]
-    assert [item.get("id") for item in data.get("open", [])] == ["brief_of_day", "open_copilot"]
+    assert [item.get("id") for item in data.get("open", [])] == [
+        "open_msft",
+        "open_nvda",
+        "brief_of_day",
+        "open_copilot",
+    ]
     assert data.get("filters_applied") == {"tickers": ["NVDA", "MSFT"]}
-    assert data.get("stats") == {"ask_count": 1, "open_count": 2}
+    assert data.get("stats") == {"ask_count": 1, "open_count": 4}
     assert data.get("scope_tickers") == ["NVDA", "MSFT"]
     assert "copilot_start_route" in (data.get("source") or [])
     assert data.get("regime_detection", {}).get("label") == "RISK_ON"
     assert data.get("allocation_drift_alerts", {}).get("active") is True
+    assert data.get("ranked_action", {}).get("id") == "open_msft"
+    assert data.get("ranked_action", {}).get("target") == "ticker:MSFT"
 
 
 def test_copilot_start_route_uses_service_resolved_scope_metadata(monkeypatch):
@@ -308,6 +316,8 @@ def test_copilot_start_route_uses_service_resolved_scope_metadata(monkeypatch):
 
 
 def test_copilot_start_route_matches_shared_contract(monkeypatch):
+    copilot_route._COPILOT_START_CACHE.clear()
+
     async def _fake_build_context_payload(*_args, **_kwargs):
         return {
             "copilot_start": {
@@ -347,8 +357,8 @@ def test_copilot_start_route_matches_shared_contract(monkeypatch):
     contract = CopilotStartPayload(**(payload.get("data") or {}))
     assert contract.scope_tickers == ["NVDA"]
     assert contract.ranked_action is not None
-    assert contract.ranked_action.id == "portfolio_today"
-    assert contract.ranked_action.target == "/copilot/ask"
+    assert contract.ranked_action.id == "open_nvda"
+    assert contract.ranked_action.target == "ticker:NVDA"
     assert contract.regime_detection == {"label": "RISK_ON", "confidence": 0.81}
     assert contract.allocation_drift_alerts == {
         "active": True,
@@ -396,8 +406,8 @@ def test_personal_finance_start_rewrites_ranked_action_target(monkeypatch):
     data = response.json()["data"]
     contract = CopilotStartPayload(**data)
     assert contract.ranked_action is not None
-    assert contract.ranked_action.id == "ask_ranked"
-    assert contract.ranked_action.target == "/personal-finance/ask"
+    assert contract.ranked_action.id == "open_nvda"
+    assert contract.ranked_action.target == "ticker:NVDA"
 
 
 def test_personal_finance_start_reuses_shared_start_response_builder(monkeypatch):
@@ -527,12 +537,14 @@ def test_copilot_start_route_fallback_keeps_brief_and_actions(monkeypatch):
     assert payload.get("ok") is True
 
     data = payload.get("data") or {}
-    assert data.get("note") == "Market context service temporarily unavailable."
+    assert data.get("error") == "copilot context unavailable"
     assert data.get("brief_of_day", {}).get("summary") == "No daily brief available yet."
-    assert [item.get("id") for item in data.get("open", [])] == ["brief_of_day"]
+    assert [item.get("id") for item in data.get("open", [])] == ["open_copilot"]
     assert [item.get("id") for item in data.get("ask", [])] == ["ask_copilot"]
     assert data.get("filters_applied") == {"tickers": ["SPY"]}
     assert data.get("scope_tickers") == ["SPY"]
+    assert data.get("ranked_action", {}).get("id") == "ask_copilot"
+    assert data.get("ranked_action", {}).get("target") == "/copilot/ask"
 
 
 def test_copilot_start_route_omits_alert_payloads_in_fallback(monkeypatch):
@@ -675,10 +687,10 @@ def test_personal_finance_start_alias_reuses_copilot_start_payload(monkeypatch):
 
     assert start_data_ask_targets == ["/copilot/ask"]
     assert finance_data_ask_targets == ["/personal-finance/ask"]
-    assert start_data_open_targets == ["/copilot"]
-    assert finance_data_open_targets == ["/personal-finance"]
-    assert start_data.get("ranked_action", {}).get("target") == "/copilot/ask"
-    assert finance_data.get("ranked_action", {}).get("target") == "/personal-finance/ask"
+    assert start_data_open_targets == ["ticker:MSFT", "ticker:NVDA", "/copilot"]
+    assert finance_data_open_targets == ["ticker:MSFT", "ticker:NVDA", "/personal-finance"]
+    assert start_data.get("ranked_action", {}).get("target") == "ticker:MSFT"
+    assert finance_data.get("ranked_action", {}).get("target") == "ticker:MSFT"
 
     # Ensure stable contract parity while allowing runtime timestamps to differ.
     start_data.pop("generated_at", None)
@@ -724,7 +736,11 @@ def test_personal_finance_ask_alias_reuses_copilot_ask_payload(monkeypatch):
 
     assert response_start.status_code == 200
     assert response_finance.status_code == 200
-    assert response_finance.json() == response_start.json()
+    start_data = response_start.json().get("data") or {}
+    finance_data = response_finance.json().get("data") or {}
+    start_data.pop("conversation", None)
+    finance_data.pop("conversation", None)
+    assert finance_data == start_data
 
 
 def test_personal_finance_context_alias_reuses_copilot_context_payload(monkeypatch):

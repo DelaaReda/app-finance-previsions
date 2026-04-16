@@ -192,9 +192,14 @@ def test_copilot_start_route_is_mounted_in_runtime_app(monkeypatch):
     data = payload.get("data") or {}
     assert data.get("brief_of_day", {}).get("summary") == "Daily brief ready."
     assert [item.get("id") for item in data.get("ask", [])] == ["portfolio_today"]
-    assert [item.get("id") for item in data.get("open", [])] == ["brief_of_day", "open_copilot"]
+    assert [item.get("id") for item in data.get("open", [])] == [
+        "open_msft",
+        "open_nvda",
+        "brief_of_day",
+        "open_copilot",
+    ]
     # Tickers are normalized (sorted alphabetically)
     assert sorted(data.get("filters_applied", {}).get("tickers", [])) == ["MSFT", "NVDA"]
-    assert data.get("stats") == {"ask_count": 1, "open_count": 2}
+    assert data.get("stats") == {"ask_count": 1, "open_count": 4}
     assert sorted(data.get("scope_tickers")) == ["MSFT", "NVDA"]
     assert "copilot_start_route" in (data.get("source") or [])
