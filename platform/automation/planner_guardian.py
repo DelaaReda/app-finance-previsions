@@ -131,6 +131,17 @@ def load_json_dict(path: Path) -> Dict[str, object]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _api_wave_payload(canonical: Dict[str, object] | None) -> Dict[str, object]:
+    canonical = canonical or {}
+    product_delivery_state = canonical.get("product_delivery_state")
+    if isinstance(product_delivery_state, dict):
+        api_wave = product_delivery_state.get("api_wave")
+        if isinstance(api_wave, dict):
+            return api_wave
+    api_wave = canonical.get("api_wave_state")
+    return api_wave if isinstance(api_wave, dict) else {}
+
+
 def _canonical_role(value: str) -> str:
     token = str(value or "").strip().replace("-", "_").lower()
     if token in {
@@ -239,6 +250,40 @@ def canonical_active_snapshot(latest_file: Path) -> Dict[str, object]:
             and recent_event_count == 0
         )
     ):
+        api_wave = product_delivery_state.get("api_wave") if isinstance(product_delivery_state.get("api_wave"), dict) else {}
+        current_endpoint = api_wave.get("current_endpoint") if isinstance(api_wave.get("current_endpoint"), dict) else None
+        next_endpoint = api_wave.get("next_endpoint") if isinstance(api_wave.get("next_endpoint"), dict) else None
+        if bool(api_wave.get("enabled")) and (current_endpoint or next_endpoint):
+            endpoint = current_endpoint or next_endpoint or {}
+            current_status = str(api_wave.get("current_status") or "").strip().lower()
+            if current_status == "running":
+                task_state = "IN_PROGRESS"
+            elif current_status == "blocked":
+                task_state = "BLOCKED"
+            else:
+                task_state = "READY_DEV" if bool(api_wave.get("dispatch_ready")) else "READY"
+            active_task_id = (
+                str(api_wave.get("current_task_id") or "").strip()
+                or str((endpoint or {}).get("owner_task_id") or "").strip()
+            )
+            return {
+                "active_batch_ids": [],
+                "active_task_id": active_task_id,
+                "active_task_state": task_state,
+                "active_task_role": "dev",
+                "active_task_owner": "planner",
+                "active_task_blocked_reason": "",
+                "active_task_next_action": "api_wave_dispatch",
+                "projection_decision_capable": True,
+                "projection_decision_reason": "api_wave_autonomy",
+                "product_delivery_state": product_delivery_state,
+                "planner_hard_guard_active": bool(isinstance(queue_meta.get("planner_hard_guard"), dict) and queue_meta.get("planner_hard_guard", {}).get("active")),
+                "planner_hard_guard_reason": str(queue_meta.get("planner_hard_guard", {}).get("reason") or "").strip() if isinstance(queue_meta.get("planner_hard_guard"), dict) else "",
+                "stagnation_alert": queue_meta.get("stagnation_alert") if isinstance(queue_meta.get("stagnation_alert"), dict) else {},
+                "novelty_target_workflow": queue_meta.get("novelty_target_workflow") if isinstance(queue_meta.get("novelty_target_workflow"), dict) else {},
+                "novelty_target_audit": queue_meta.get("novelty_target_audit") if isinstance(queue_meta.get("novelty_target_audit"), dict) else {},
+                "projection_secondary_only": False,
+            }
         return {
             "active_batch_ids": [],
             "active_task_id": "",
@@ -700,8 +745,18 @@ def recommendations(issues: List[str], canonical: Dict[str, object] | None = Non
     product_delivery_state = canonical.get("product_delivery_state") if isinstance(canonical.get("product_delivery_state"), dict) else {}
     delivery_phase = str(product_delivery_state.get("phase") or "").strip()
     next_batch_eligible = bool(product_delivery_state.get("next_batch_eligible", False))
+    api_wave = _api_wave_payload(canonical)
+    api_wave_target = api_wave.get("current_endpoint") if isinstance(api_wave.get("current_endpoint"), dict) else None
+    if api_wave_target is None:
+        api_wave_target = api_wave.get("next_endpoint") if isinstance(api_wave.get("next_endpoint"), dict) else None
     out: List[str] = []
     if not active_batch_ids and not active_task_id:
+        if bool(api_wave.get("enabled")) and isinstance(api_wave_target, dict) and bool(api_wave.get("dispatch_ready")):
+            out.append(
+                "Aucun batch canonique actif: lancer l'API wave maintenant via planner_runtime_actions.py api-wave-dispatch "
+                f"sur {str(api_wave_target.get('endpoint_id') or 'endpoint').strip()}."
+            )
+            return out
         if delivery_phase in {"product_done_ops_dirty", "idle_ready_for_next_batch"} and next_batch_eligible:
             out.append("Aucun batch canonique actif: ouvrir le prochain batch eligible maintenant via sync-priority + planner-autobatch + claim.")
         elif "residue_detected" in issues and projection_decision_reason == "runtime_idle_no_active_cycle":
@@ -752,9 +807,15 @@ def recommendations(issues: List[str], canonical: Dict[str, object] | None = Non
         )
         return out[:3]
     if "planner_passive_forbidden_violation" in issues:
-        out.append("Planner non-passive policy violee: claim une tache planner READY ou creer un autobatch immediatement.")
+        if bool(api_wave.get("enabled")) and isinstance(api_wave_target, dict):
+            out.append("Planner non-passive policy violee: utiliser api-wave-dispatch maintenant au lieu d'un planner-autobatch.")
+        else:
+            out.append("Planner non-passive policy violee: claim une tache planner READY ou creer un autobatch immediatement.")
     if "planner_autobatch_missing_when_idle" in issues:
-        out.append("Lane planner idle sans READY: executer planner-autobatch puis claim la tache ANALYSIS.")
+        if bool(api_wave.get("enabled")) and isinstance(api_wave_target, dict):
+            out.append("Lane planner idle sans READY batch: passer par api-wave-dispatch et continuer la migration Judge-parity de l'endpoint courant.")
+        else:
+            out.append("Lane planner idle sans READY: executer planner-autobatch puis claim la tache ANALYSIS.")
     if "ready_but_no_delta" in issues or "ready_but_none_task_update" in issues:
         out.append("Claim une tache READY et fournir un dispatch concret vers role delivery.")
     if "missing_architecture_plan_ref" in issues or "missing_architecture_audit" in issues:
@@ -804,6 +865,13 @@ def _no_canonical_work(runtime: Dict[str, object] | None, canonical: Dict[str, o
     projection_decision_reason = str(canonical.get("projection_decision_reason") or "").strip()
     product_delivery_state = canonical.get("product_delivery_state") if isinstance(canonical.get("product_delivery_state"), dict) else {}
     delivery_phase = str(product_delivery_state.get("phase") or "").strip()
+    api_wave = _api_wave_payload(canonical)
+    if bool(api_wave.get("enabled")) and (
+        isinstance(api_wave.get("current_endpoint"), dict)
+        or isinstance(api_wave.get("next_endpoint"), dict)
+        or str(api_wave.get("current_task_id") or "").strip()
+    ):
+        return False
     if (
         not canonical_active_batch_ids
         and not canonical_active_task_id
@@ -859,6 +927,12 @@ def build_prompt_patches(
     product_delivery_state = canonical.get("product_delivery_state") if isinstance(canonical.get("product_delivery_state"), dict) else {}
     delivery_phase = str(product_delivery_state.get("phase") or "").strip()
     next_batch_eligible = bool(product_delivery_state.get("next_batch_eligible", False))
+    api_wave = _api_wave_payload(canonical)
+    api_wave_target = api_wave.get("current_endpoint") if isinstance(api_wave.get("current_endpoint"), dict) else None
+    if api_wave_target is None:
+        api_wave_target = api_wave.get("next_endpoint") if isinstance(api_wave.get("next_endpoint"), dict) else None
+    api_wave_enabled = bool(api_wave.get("enabled"))
+    api_wave_dispatch_ready = bool(api_wave.get("dispatch_ready"))
     hard_guard_active = bool(canonical.get("planner_hard_guard_active"))
     hard_guard_reason = str(canonical.get("planner_hard_guard_reason") or "").strip().lower()
     novelty_audit = canonical.get("novelty_target_audit", {})
@@ -914,7 +988,7 @@ def build_prompt_patches(
                 "novelty_target_overdue",
             ],
             instruction=(
-                "Hard guard/stagnation novelty actif: pas de relance ANALYSIS ni planner-autobatch. "
+                "Hard guard/stagnation novelty actif: pas de relance ANALYSIS, planner-autobatch, ni api-wave-dispatch. "
                 "Termine la tache planner en cours ou execute planner_runtime_actions.py "
                 f"novelty-target avec [{missing_fields_text}] avant tout nouveau downstream work."
             ),
@@ -1059,62 +1133,115 @@ def build_prompt_patches(
         or int(streaks.get("ready_idle_streak", 0) or 0) >= 2
         )
     ):
-        add_patch(
-            "claim_or_autobatch_now",
-            priority=70,
-            issue_codes=[
-                "planner_passive_forbidden_violation",
-                "planner_autobatch_missing_when_idle",
-                "ready_but_no_delta",
-                "ready_but_none_task_update",
-            ],
-            instruction=(
-                "Pas de passivite planner: si un READY utile existe, claim-le maintenant. "
-                "Choisis d'abord le slice le plus proche d'un delta visible ou d'un contrat/API livrable "
-                "sur l'app publique EC2. Sinon execute sync-priority, planner-autobatch, puis claim "
-                "immediatement; pas de tick analysis_only ni de maintenance sans impact user."
-            ),
-            why=(
-                "Remplace les ticks sans delta par une livraison utile ou une création canonique de runway."
-            ),
-            when_to_apply=(
-                "ready_idle_streak >= 2 ou issue_codes contiennent passive/autobatch/ready_but_no_delta"
-            ),
-            exit_condition=(
-                "Un claim planner valide ou une tâche downstream active utile apparaît"
-            ),
-            ttl_runs=4,
-        )
+        if api_wave_enabled and api_wave_dispatch_ready and isinstance(api_wave_target, dict):
+            add_patch(
+                "dispatch_api_wave_now",
+                priority=70,
+                issue_codes=[
+                    "planner_passive_forbidden_violation",
+                    "planner_autobatch_missing_when_idle",
+                    "ready_but_no_delta",
+                    "ready_but_none_task_update",
+                ],
+                instruction=(
+                    "Pas de passivite planner: execute planner_runtime_actions.py api-wave-dispatch maintenant pour "
+                    f"{str(api_wave_target.get('endpoint_id') or 'endpoint').strip()}, puis laisse app-dev livrer "
+                    "le slice endpoint complet Judge-parity. Pas de planner-autobatch ni tick analysis_only."
+                ),
+                why=(
+                    "Remplace le churn batch-first par une progression directe sur l'endpoint produit prioritaire."
+                ),
+                when_to_apply=(
+                    "api_autonomy_mode=1 et issue_codes contiennent passive/autobatch/ready_but_no_delta"
+                ),
+                exit_condition=(
+                    "Une lane API wave active utile apparaît ou l'endpoint courant est différé"
+                ),
+                ttl_runs=4,
+            )
+        else:
+            add_patch(
+                "claim_or_autobatch_now",
+                priority=70,
+                issue_codes=[
+                    "planner_passive_forbidden_violation",
+                    "planner_autobatch_missing_when_idle",
+                    "ready_but_no_delta",
+                    "ready_but_none_task_update",
+                ],
+                instruction=(
+                    "Pas de passivite planner: si un READY utile existe, claim-le maintenant. "
+                    "Choisis d'abord le slice le plus proche d'un delta visible ou d'un contrat/API livrable "
+                    "sur l'app publique EC2. Sinon execute sync-priority, planner-autobatch, puis claim "
+                    "immediatement; pas de tick analysis_only ni de maintenance sans impact user."
+                ),
+                why=(
+                    "Remplace les ticks sans delta par une livraison utile ou une création canonique de runway."
+                ),
+                when_to_apply=(
+                    "ready_idle_streak >= 2 ou issue_codes contiennent passive/autobatch/ready_but_no_delta"
+                ),
+                exit_condition=(
+                    "Un claim planner valide ou une tâche downstream active utile apparaît"
+                ),
+                ttl_runs=4,
+            )
 
     if (
         no_canonical_work
         and delivery_phase in {"product_done_ops_dirty", "idle_ready_for_next_batch"}
         and next_batch_eligible
     ):
-        add_patch(
-            "open_next_batch_now",
-            priority=75,
-            issue_codes=[
-                "delivery_phase_product_done_ops_dirty"
-                if delivery_phase == "product_done_ops_dirty"
-                else "delivery_phase_idle_ready_for_next_batch"
-            ],
-            instruction=(
-                "Runtime canonique idle mais batch suivant eligible: execute sync-priority, "
-                "planner-autobatch, puis claim immediatement le prochain batch dans ce meme cycle. "
-                "Ne reste pas en wait tant que l'app publique EC2 est joignable."
-            ),
-            why=(
-                "Evite l'arret a vide apres une livraison publique validee et force la reprise delivery-first."
-            ),
-            when_to_apply=(
-                "product_delivery_state.phase=idle_ready_for_next_batch et next_batch_eligible=true"
-            ),
-            exit_condition=(
-                "Un nouveau batch canonique actif apparait ou l'EC2 publique passe en outage"
-            ),
-            ttl_runs=4,
-        )
+        if api_wave_enabled and isinstance(api_wave_target, dict):
+            add_patch(
+                "continue_api_wave_now",
+                priority=75,
+                issue_codes=[
+                    "delivery_phase_product_done_ops_dirty"
+                    if delivery_phase == "product_done_ops_dirty"
+                    else "delivery_phase_idle_ready_for_next_batch"
+                ],
+                instruction=(
+                    "Runtime canonique idle mais l'API wave est eligible: execute planner_runtime_actions.py "
+                    f"api-wave-dispatch pour {str(api_wave_target.get('endpoint_id') or 'endpoint').strip()} "
+                    "au lieu d'ouvrir un nouveau batch. Ne reste pas en wait tant que l'app publique EC2 est joignable."
+                ),
+                why=(
+                    "Maintient la continuité delivery en mode API autonomy sans recréer de chaîne ANALYSIS/ARCH/DEV."
+                ),
+                when_to_apply=(
+                    "product_delivery_state.phase=idle_ready_for_next_batch et api_autonomy_mode=1"
+                ),
+                exit_condition=(
+                    "Une lane API wave active apparaît ou l'EC2 publique passe en outage"
+                ),
+                ttl_runs=4,
+            )
+        else:
+            add_patch(
+                "open_next_batch_now",
+                priority=75,
+                issue_codes=[
+                    "delivery_phase_product_done_ops_dirty"
+                    if delivery_phase == "product_done_ops_dirty"
+                    else "delivery_phase_idle_ready_for_next_batch"
+                ],
+                instruction=(
+                    "Runtime canonique idle mais batch suivant eligible: execute sync-priority, "
+                    "planner-autobatch, puis claim immediatement le prochain batch dans ce meme cycle. "
+                    "Ne reste pas en wait tant que l'app publique EC2 est joignable."
+                ),
+                why=(
+                    "Evite l'arret a vide apres une livraison publique validee et force la reprise delivery-first."
+                ),
+                when_to_apply=(
+                    "product_delivery_state.phase=idle_ready_for_next_batch et next_batch_eligible=true"
+                ),
+                exit_condition=(
+                    "Un nouveau batch canonique actif apparait ou l'EC2 publique passe en outage"
+                ),
+                ttl_runs=4,
+            )
 
     patches.sort(key=lambda item: (-int(item.get("priority", 0)), str(item.get("id") or "")))
     return patches[:3]

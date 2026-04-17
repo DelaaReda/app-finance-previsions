@@ -155,7 +155,7 @@ def _planner_only_mode(root: Path) -> bool:
 def _expected_core_roles(root: Path) -> tuple[str, ...]:
     if _planner_only_mode(root):
         return ("planner",)
-    return ("planner", "dev", "admin")
+    return ("planner", "dev")
 
 
 def _expected_tmux_sessions(root: Path) -> list[str]:

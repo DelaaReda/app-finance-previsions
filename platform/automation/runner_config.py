@@ -27,7 +27,7 @@ REQUIRED_TOP_KEYS = (
     "retries",
     "telemetry",
 )
-REQUIRED_ROLES = ("planner", "dev", "admin", "scrum_master")
+REQUIRED_ROLES = ("planner", "app-dev", "verifier", "admin", "scrum_master")
 DEFAULT_CONFIG_FILE = Path(__file__).resolve().parents[1] / "config" / "runner" / "runner.v1.yaml"
 if not DEFAULT_CONFIG_FILE.exists():
     fallback_default = Path(__file__).resolve().parents[1] / "config" / "runner" / "runner_config.v1.yaml"
@@ -105,17 +105,29 @@ def _as_text(value: Any, default: str = "") -> str:
 def _role_prefix(role: str) -> str:
     mapping = {
         "planner": "FC_PLANNER",
+        "app-dev": "FC_DEV",
         "dev": "FC_DEV",
+        "verifier": "FC_VERIFIER",
         "admin": "FC_ADMIN",
         "scrum_master": "FC_SCRUM_MASTER",
     }
-    return mapping.get(role, f"FC_{role.upper()}")
+    return mapping.get(role, f"FC_{str(role).upper().replace('-', '_')}")
 
 
 def _canonical_role(role: str) -> str:
     token = str(role or "").strip()
     if token == "planner_architect_orchestrator":
         return "planner"
+    if token in {"vision-architect-tasks-planner", "vision_architect_tasks_planner", "analyst", "architect", "po"}:
+        return "planner"
+    if token in {"app_dev", "app-dev"}:
+        return "app-dev"
+    if token in {"dev", "backend_engineer", "frontend_engineer", "data_analyst", "integrator"}:
+        return "app-dev"
+    if token in {"tester", "qa"}:
+        return "verifier"
+    if token in {"infra_engineer", "clawsentinel"}:
+        return "admin"
     return token
 
 
@@ -165,7 +177,7 @@ def _flatten(cfg: dict[str, Any], role: str) -> tuple[dict[str, str], list[str]]
     )
     out[f"{prefix}_CODEX_EXEC_RESUME"] = str(_as_int01(role_cfg.get("resume", 1), 1))
     out[f"{prefix}_RATE_LIMIT_PRECHECK"] = str(_as_int01(role_cfg.get("rate_limit_precheck", 0), 0))
-    if role == "dev":
+    if role in {"dev", "app-dev"}:
         autonomy = role_cfg.get("autonomy", {}) if isinstance(role_cfg.get("autonomy"), dict) else {}
         out["FC_DEV_AUTONOMY_STALL_THRESHOLD_TICKS"] = str(
             _as_int(autonomy.get("stall_threshold_ticks", 2), 2)
@@ -318,9 +330,9 @@ def _flatten(cfg: dict[str, Any], role: str) -> tuple[dict[str, str], list[str]]
         if isinstance(features.get("planner_orchestrator"), dict)
         else {}
     )
-    raw_managed_roles = planner_orchestrator.get("managed_roles", ["dev", "admin", "scrum_master"])
+    raw_managed_roles = planner_orchestrator.get("managed_roles", ["dev", "admin"])
     if not isinstance(raw_managed_roles, list):
-        raw_managed_roles = ["dev", "admin", "scrum_master"]
+        raw_managed_roles = ["dev", "admin"]
     out["FC_PLANNER_ORCHESTRATOR_ENABLED"] = str(
         _as_int01(planner_orchestrator.get("enabled", 0), 0)
     )

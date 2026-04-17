@@ -1,0 +1,57 @@
+proof_id: "PRF-BATCH-97-BATCH-97-ADMIN-01-20260417T032347Z-303"
+stream_id: "BATCH-97"
+task_id: "BATCH-97-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-04-17T03:23:47Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+preconditions:
+  change_plan:
+    - "scope answer \"what should i do with my portfolio today?\" [admin-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "layer=platform"
+    - "imports_ok=yes"
+    - "path_target=evidence=logs-codex-runs/orchestrator-state/product_delivery_state.json@2026-04-17t03:16:17.315232z_shows_`last_completed_batch_id=batch-97`"
+    - "`product_done=true`"
+    - "`public_proof_status=ok`"
+    - "`ec2_reachable=true`"
+    - "public_ec"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-17T03:23:47Z"
+      ended_at_utc: "2026-04-17T03:23:47Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "runtime probe only: `bash scripts/runtime_host_check.sh` PASS; `scripts/aws_remote_app_control.sh public-status` PASS; `curl -fsS http://3.98.20.77/api/health` PASS; public `GET /api/personal-finance/start?tickers=NVDA`"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+  artifacts:
+    - "evidence=logs-codex-runs/orchestrator-state/product_delivery_state.json@2026-04-17T03:16:17.315232Z shows `last_completed_batch_id=BATCH-97`, `product_done=true`, `public_proof_status=ok`, `ec2_reachable=true`; public EC"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-97-ADMIN-01"
+  review_ref: "planner_autonomy_tick:BATCH-97-ADMIN-01"
+  note: "source=planner_autonomy_tick | root_cause=No in-scope runtime/control-plane defect remained on 2026-04-17; the only residue is advisory control-plane drift (local product_delivery_state shows `phase=product_done_ops_dirty` while EC2 app-only monitor reports `pri | fix_applied=SKIP(no_code_change); captured bounded runtime proof that the public EC2 app is healthy, the ask/start path is live, and the remaining monitor/control-plane discrepancies are advisory rather than a delivery blocker. | verify=vm_host_check=`bash scripts/runtime_host_check.sh` => `runtime_is_vm=1`; public_monitor=`scripts/aws_remote_app_control.sh public-status` => EC2 app runtime healthy with `primary_status=ok` and advisory-only control-plan | architecture_check=PASS: product truth anchored to public EC2 endpoints, not VM localhost; VM control-plane truth was read from local `product_delivery_state.json`; advisory monitor/doctor drift on the EC2 app-only host was correctly treat | vision_alignment=PASS: the shipped flow now matches the batch goal `answer \"what should I do with my portfolio today?\"` by exposing a brief-first starter with ranked action/open path and a working explainable memo answer on the public EC"

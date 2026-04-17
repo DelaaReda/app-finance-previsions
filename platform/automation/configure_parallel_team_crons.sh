@@ -56,16 +56,9 @@ BACKUP_DIR="/home/venom/.openclaw/cron/backups"
 TS="$(date +%Y%m%d-%H%M%S)"
 
 DEFAULT_ROLE_PROFILES=(
-  "planner|12m|1|vision-architect-tasks-planner: dispatch + analyst/architect/po/scrum regrouped lane"
-  "backend_engineer|12m|1|Backend implementation lane"
-  "frontend_engineer|12m|1|Frontend implementation lane"
-  "integrator|15m|1|Cross-team integration lane"
-  "data_analyst|17m|1|Data validation and metrics lane"
-  "infra_engineer|20m|1|Infra and CI/CD acceleration lane"
-  "dev|16m|1|Legacy generalist dev lane"
-  "tester|15m|1|Test automation lane"
-  "qa|20m|1|Quality gate and release lane"
-  "clawsentinel|25m|0|Safety and anti-drift lane"
+  "planner|12m|1|Planner delivery decision lane"
+  "app-dev|15m|1|App-dev implementation lane"
+  "verifier|10m|0|Verifier public-proof lane (change-driven)"
 )
 ROLE_PROFILES=("${DEFAULT_ROLE_PROFILES[@]}")
 
@@ -108,6 +101,22 @@ load_role_profiles_from_topology() {
   mapfile -t loaded < <(jq -r '.roles[]? | select((.role // "") != "") | "\(.role)|\(.every // "15m")|\(.allow_file_edits // 0)|\(.description // "parallel role lane")"' "$TOPOLOGY_FILE" 2>/dev/null || true)
   if [[ "${#loaded[@]}" -gt 0 ]]; then
     ROLE_PROFILES=("${loaded[@]}")
+  fi
+}
+
+filter_continuous_roles() {
+  local filtered=()
+  local line role
+  for line in "${ROLE_PROFILES[@]}"; do
+    role="${line%%|*}"
+    case "$role" in
+      planner|app-dev|verifier)
+        filtered+=("$line")
+        ;;
+    esac
+  done
+  if [[ "${#filtered[@]}" -gt 0 ]]; then
+    ROLE_PROFILES=("${filtered[@]}")
   fi
 }
 
@@ -241,13 +250,17 @@ if ! command -v openclaw >/dev/null 2>&1; then
 fi
 
 load_role_profiles_from_topology
+filter_continuous_roles
 
 role_slug() {
   printf '%s' "$1" | tr '_' '-'
 }
 
 agent_for_role() {
-  printf '%s' "$1" | tr '-' '_'
+  case "$1" in
+    verifier) printf 'adminapp-codex' ;;
+    *) printf '%s' "$1" | tr '-' '_' ;;
+  esac
 }
 
 job_name_for_role() {
@@ -266,6 +279,8 @@ session_for_role() {
   fi
   case "$1" in
     planner) echo "codex_planner_cron" ;;
+    app-dev) echo "codex_dev_cron" ;;
+    verifier) echo "verifier-script-lane" ;;
     analyst) echo "codex_analyst_cron" ;;
     architect) echo "codex_architect_cron" ;;
     backend_engineer) echo "codex_backend_engineer_cron" ;;
@@ -291,6 +306,7 @@ trace_for_role() {
     return 0
   fi
   case "$1" in
+    verifier) echo "logs-codex-runs/fc-ticks/verifier.tick.log" ;;
     *) echo "logs-codex-runs/role-runner/$1.live.log" ;;
   esac
 }
@@ -343,14 +359,10 @@ message_for_role() {
   local role="$1"
   local allow_edits="$2"
   local role_model="$3"
-  local role_runner_arg="$role"
-  if [[ "$role" == "planner" ]]; then
-    role_runner_arg="vision-architect-tasks-planner"
-  fi
   cat <<EOF
 Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.
 Never call send/message/delivery actions.
-Command: cd ${ROOT} && TMUX_ROLE_AGENT_BIN=${ROLE_AGENT_BIN} TMUX_ROLE_RETRY_ENGINE_DEFAULT=${ROLE_RETRY_ENGINE_DEFAULT} PROMPT_TIMEOUT_SECONDS=${ROLE_PROMPT_TIMEOUT_SECONDS} RETRY_PROMPT_TIMEOUT_SECONDS=${ROLE_RETRY_PROMPT_TIMEOUT_SECONDS} TMUX_ROLE_RECOVERY_THRESHOLD=${ROLE_RECOVERY_THRESHOLD} TMUX_ROLE_NO_DELTA_THRESHOLD=${ROLE_NO_DELTA_THRESHOLD} TMUX_ROLE_STALL_ABORT_SECONDS=${ROLE_STALL_ABORT_SECONDS} SKIP_RETRY_ON_TIMEOUT=${ROLE_SKIP_RETRY_ON_TIMEOUT} TMUX_ROLE_CODEX_EXEC_FALLBACK=${ROLE_CODEX_EXEC_FALLBACK} TMUX_ROLE_CODEX_MODEL=${role_model} TMUX_ROLE_CODEX_EXEC_RESUME=${ROLE_CODEX_EXEC_RESUME} TMUX_ROLE_MIN_REFLECTION_PASSES=${ROLE_MIN_REFLECTION_PASSES} TMUX_ROLE_ALLOW_FILE_EDITS=${allow_edits} bash scripts/cron_tmux_role_runner.sh ${role_runner_arg}
+Command: cd ${ROOT} && FC_ROLE_TICK_MODE=continuous TMUX_ROLE_AGENT_BIN=${ROLE_AGENT_BIN} TMUX_ROLE_RETRY_ENGINE_DEFAULT=${ROLE_RETRY_ENGINE_DEFAULT} PROMPT_TIMEOUT_SECONDS=${ROLE_PROMPT_TIMEOUT_SECONDS} RETRY_PROMPT_TIMEOUT_SECONDS=${ROLE_RETRY_PROMPT_TIMEOUT_SECONDS} TMUX_ROLE_RECOVERY_THRESHOLD=${ROLE_RECOVERY_THRESHOLD} TMUX_ROLE_NO_DELTA_THRESHOLD=${ROLE_NO_DELTA_THRESHOLD} TMUX_ROLE_STALL_ABORT_SECONDS=${ROLE_STALL_ABORT_SECONDS} SKIP_RETRY_ON_TIMEOUT=${ROLE_SKIP_RETRY_ON_TIMEOUT} TMUX_ROLE_CODEX_EXEC_FALLBACK=${ROLE_CODEX_EXEC_FALLBACK} TMUX_ROLE_CODEX_MODEL=${role_model} TMUX_ROLE_CODEX_EXEC_RESUME=${ROLE_CODEX_EXEC_RESUME} TMUX_ROLE_MIN_REFLECTION_PASSES=${ROLE_MIN_REFLECTION_PASSES} TMUX_ROLE_ALLOW_FILE_EDITS=${allow_edits} bash scripts/fc_agent_tick.sh ${role}
 EOF
 }
 
@@ -603,6 +615,16 @@ done
 # Coordination lanes merged into planner: disable old dedicated loops when present.
 disable_job_if_exists "analyst-tmux-loop"
 disable_job_if_exists "architect-tmux-loop"
+disable_job_if_exists "backend-engineer-tmux-loop"
+disable_job_if_exists "frontend-engineer-tmux-loop"
+disable_job_if_exists "integrator-tmux-loop"
+disable_job_if_exists "data-analyst-tmux-loop"
+disable_job_if_exists "infra-engineer-tmux-loop"
+disable_job_if_exists "dev-tmux-loop"
+disable_job_if_exists "tester-tmux-loop"
+disable_job_if_exists "qa-tmux-loop"
+disable_job_if_exists "clawsentinel"
+disable_job_if_exists "admin-tmux-loop"
 disable_job_if_exists "po-tmux-loop"
 disable_job_if_exists "scrum-master-tmux-loop"
 disable_job_if_exists "analyst-tmux-14m"

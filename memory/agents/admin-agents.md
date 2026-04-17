@@ -39,131 +39,6 @@
   - orchestration_improvement: partial
   - independent_delivery_effectiveness: not_ok
 
-
-Top priorities
-1. Réconcilier la vérité planner/runtime pour `BATCH-95-DEV-02`: si le batch n’existe plus en SQLite/graph/public-status, le retirer des projections locales au lieu de continuer à le présenter runnable
-2. Restaurer un `ranked_action` public non nul sur `/api/copilot/start` et `/api/personal-finance/start`, aligné avec le ticker scope (`NVDA`) et la chaîne `judge -> copilot -> personal-finance`
-3. Corriger la sélection des prompts/actions dérivés côté judge start pour éliminer la fuite `AAPL` dans le scope `NVDA`
-
-Main blocker
-- faux actif control-plane sur `BATCH-95-DEV-02`: le snapshot planner local garde `runtime_actionable=true` et `task_id=BATCH-95-DEV-02`, tandis que la vérité publique/EC2 publiée par `aws_remote_app_control.sh public-status` expose `active_batch=null` et aucun travail ouvert
-
-False progress detected
-- `planner_board_runtime.py snapshot` continue d’annoncer `next_action=advance batch-95-dev-02` alors que le monitor public EC2 et `fc_doctor` n’exposent plus aucun batch actif
-- stabilité du produit public = vraie disponibilité applicative, mais pas nouvelle livraison; la simple réponse 200 des endpoints ne constitue pas un nouveau delta utilisateur
-- présence du champ `ranked_action` dans le contrat partagé `packages/contracts/copilot_v1.py` sans valeur effective sur les endpoints publics crée une illusion de complétude
-
-Next useful delivery
-- le plus petit lot utile est une correction backend publique qui remet `ranked_action` non nul et scope-first (`ticker:NVDA` ou action ask/open cohérente) sur `/api/copilot/start` et `/api/personal-finance/start`, avec parité judge et preuve EC2
-
-Architecture note
-- ce qui rapproche de judge -> copilot -> portfolio: les endpoints publics restent branchés sur `judge_personal_finance_start_service` et le contrat partagé `copilot_v1` existe déjà
-- ce qui doit être réduit: les projections locales/planner qui continuent de publier un batch actif sans corroboration runtime publique ou graph SQLite
-- ce qui doit être supprimé: toute lecture du “progrès” fondée sur batch runnable/proof/monitor local quand `active_batch_ids=[]` ou `active_batch=null` côté vérité publique
-- [2026-04-16 08:14:18 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260416T121404Z_role_contract_blockers next_action_unique=admin-agents-tick-20260416T121404Z directive=none/none message=none/none exec_report=tick=20260416T121404Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck
-## 2026-04-16T22:26:20Z orchestration-architect
-
-Verdict
-- app_progress: no
-- orchestration_efficiency: poor
-- delivered_value_now: none
-
-What changed since previous run
-- Worse: la vérité produit publique a régressé brutalement; `curl -i http://3.98.20.77/` et `curl -i http://3.98.20.77/api/health` renvoient maintenant `502 Bad Gateway`.
-- Changed: le planner guardian continue pourtant d’annoncer `BATCH-95` actif sur `BATCH-95-DEV-03` (`READY_DEV`) avec recommandation de suivre la lane dev.
-- Changed: le runtime truth local montre surtout `BATCH-95-DEV-01` et `BATCH-95-DEV-02` déjà `merged/validated` avec preuves EC2 antérieures, pas une nouvelle preuve actuelle sur `DEV-03`.
-- Unchanged: le contrat partagé `packages/contracts/copilot_v1.py` et les services `copilot`/`judge` existent toujours côté code; la livraison publique reste donc bloquée par le runtime EC2, pas par l’absence de code.
-- Worse: `executors-monitoring-latest.json` garde `health=OK`, `done_24h=617`, `proofs=118` et des widgets `ok` malgré la panne publique actuelle, donc le monitor app-first continue de sur-vendre l’état réel.
-
-Top priorities
-1. Restaurer immédiatement la disponibilité publique EC2 (`frontend` + `api`) avant toute nouvelle lecture de progrès batch.
-2. Réconcilier `BATCH-95-DEV-03` avec la vérité runtime: si aucune preuve publique actuelle n’existe, sortir cette tâche du statut “active delivery” au lieu de la laisser gonfler les projections planner.
-3. Faire tomber le faux vert monitor/doctor: `apps/monitor/services/status_service.py` et les snapshots dérivés doivent refléter la panne publique 502 au lieu de préserver un `health=OK` hérité.
-
-Main blocker
-- `BATCH-95-DEV-03` dans `logs-codex-runs/orchestrator-state/planner-guardian-latest.json` / `priority-queue.json` / `parallel-workstreams.json` est traité comme travail actif alors que le vrai goulot actuel est la panne publique EC2 (`502` sur `/` et `/api/health`); tant que cette panne n’est pas réparée, le task_id actif est un résidu control-plane, pas un delta livrable.
-
-False progress detected
-- `planner-guardian-latest.json` recommande encore de “faire avancer la tâche canonique active BATCH-95-DEV-03” alors que le produit public est indisponible.
-- `executors-monitoring-latest.json` affiche `health=OK`, `done_24h=617` et `proofs=118` malgré la régression publique en cours.
-- Les preuves `merged/validated` de `BATCH-95-DEV-01` et `BATCH-95-DEV-02` dans `planner-graph-state.json` restent historiquement vraies, mais elles ne valent pas livraison actuelle tant que l’EC2 public est à `502`.
-- `packages/contracts/copilot_v1.py` et les services endpoint donnent une impression de parité produit au niveau code, alors que l’endpoint public n’est pas utilisable maintenant.
-
-Next useful delivery
-- Le plus petit lot utile est un rétablissement runtime EC2 vérifié publiquement, puis un smoke simple de la chaîne `judge -> copilot -> personal-finance` (`/api/judge/personal-finance/start`, `/api/copilot/start`, `/api/personal-finance/start`) montrant à nouveau un brief + `ask/open` utilisables sur l’host public.
-
-Architecture note
-- ce qui rapproche de judge -> copilot -> portfolio: les contrats partagés existent (`packages/contracts/copilot_v1.py`) et `apps/api/src/domains/judge/application/judge_endpoint_service.py` reste la bonne référence de façade métier.
-- ce qui doit être réduit: la dépendance des décisions planner/monitor à des projections vertes (`priority-queue.json`, `parallel-workstreams.json`, `executors-monitoring-latest.json`) quand la surface publique est rouge.
-- ce qui doit être supprimé: toute lecture de “delivery avance” basée sur `proofs`, `done_24h`, retries ou tâches `READY_DEV` sans smoke public EC2 actuel.
-
-## 2026-04-16T22:27:24Z role-prompt-engineer
-
-Continuity
-- previous_target_role: planner
-- previous_prompt_issue: `planner_guardian` confondait `READY_*` downstream avec une lane déjà active
-- changed_since_last_run: VM `planner-guardian-latest.json` = `ready_but_none_task_update` sur `BATCH-95-DEV-03` (`READY_DEV`) pendant que le patch actif demandait encore `collect`/`handoff-ack`
-
-Target
-- role: planner
-- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
-- why_this_prompt_now: le problème n’était plus la doctrine admin ni la couche commune, mais une mauvaise consigne planner face à une lane dev prête
-
-Prompt audit
-- useful_rules: `follow_canonical_active_task` reste utile pour une lane downstream réellement active
-- redundant_rules: guidance `collect` répétée sur `READY_DEV`, alors qu’aucun subagent n’est encore à collecter
-- contradictory_rules: patch guardian vs état réel `READY_DEV`
-- too_long_or_noisy_sections: défaut de branchement, pas de longueur
-- missing_tool_guidance: manque d’un `planner_subagent_manager.py run` explicite pour `READY_*`
-- likely_output_failures_caused_by_prompt: attente passive planner et churn `ready_but_none_task_update`
-- architecture_doctrine_overcopy: no
-
-Optimization
-- keep: collect/ack pour `IN_PROGRESS|BLOCKED`
-- simplify: branche READY séparée et courte
-- remove: collect/ack sur lane prête
-- move_out_of_prompt: none
-- tool_usage_improvements: READY downstream -> run ciblé
-- expected_runtime_impact: meilleur dispatch dev à partir du planner sans fausse attente
-
-Patch proposal
-- patch_type: tool-guidance / anti-churn
-- create_now: yes
-- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
-- exact_goal: faire publier un patch guardian cohérent avec `READY_DEV`
-- expected_gain: moins de churn planner vers la lane dev
-- risk: low
-
-Measurement
-- signals_to_watch: `ready_but_none_task_update`, contenu de `planner-prompt-patches.json`, disparition des consignes `collect` sur `READY_*`
-- success_criteria: patch guardian READY -> `run`, pas `collect`
-- rollback_condition: perte de guidance pour les vraies lanes actives
-
-Decision
-- next_owner: prompt-expert
-- next_action: surveiller la prochaine publication guardian et confirmer que la lane prête reçoit bien un dispatch clair
-## 2026-04-16T22:29:24Z admin-unblock
-
-Continuity
-- previous_verdict: le control-plane sur-vendait `BATCH-95` alors que les surfaces publiques/monitor pouvaient afficher `active_batch=null`
-- previous_main_blocker: divergence forte entre batch actif runtime local et surfaces compatibles/public-status lisant un board vide
-- previous_top_priority: réconcilier la vérité planner/runtime sur `BATCH-95` avant de conclure à un faux batch actif
-- changed_since_last_run: la VM confirme toujours `BATCH-95-DEV-03` en `READY_DEV`, mais `parallel-workstreams.json` publiait les streams uniquement sous `streams`, pas sous l’alias `workstreams` consommé par certaines surfaces de compatibilité
-
-Verdict
-- blocker: faux `active_batch=null` causé par une projection de workboard incomplète: les streams actifs existaient dans `streams`, mais pas dans `workstreams`
-- blocker_class: false progress / misleading metrics
-- fix_needed: republier systématiquement l’alias `workstreams` depuis la projection canonique `streams`
-- runtime_can_resume: yes
-
-Actions taken
-- patché `platform/automation/compat/projections/parallel_workstream.py` pour hydrater `streams` depuis `workstreams` si nécessaire et republier toujours `workstreams` à la sauvegarde
-- ajouté une régression ciblée dans `platform/automation/tests/test_parallel_workstream_queue_sync.py`
-- exécuté `bash scripts/vm_safe_exec.sh -- "python3 platform/automation/compat/projections/parallel_workstream.py sync-priority --queue logs-codex-runs/orchestrator-state/priority-queue.json"` pour republier la projection vivante côté VM
-
-Validation
-- command_or_check: `PYTHONPATH=/Users/venom/Documents/analyse-financiere/platform/automation python3 platform/automation/tests/test_parallel_workstream_queue_sync.py`; `PYTHONPATH=/Users/venom/Documents/analyse-financiere/platform/automation python3 platform/automation/tests/test_planner_guardian.py`; `bash scripts/vm_ssh_exec.sh -- "python3 - <<'PY' ... parallel-workstreams.json ... PY"`
-- observed_result: suites ciblées OK (`22 tests`, `21 tests`); côté VM `workstreams_len=97` et `BATCH-95` est désormais publié avec `state=READY_DEV` et `next_action=claim BATCH-95-DEV-03 (READY_DEV pour dev)`
 - canonical_signal_after_fix: la projection compatible reflète à nouveau le batch canonique actif au lieu d’un faux board vide; le flux `planner -> dev` redevient lisible pour les lecteurs `workstreams`
 
 Decision
@@ -889,3 +764,84 @@ Decision
 - [2026-04-16 22:32:56 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T023245Z_sessions_missing next_action_unique=admin-agents-tick-20260417T023245Z directive=none/none message=none/none exec_report=tick=20260417T023245Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
 - [2026-04-16 22:47:50 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T024739Z_sessions_missing next_action_unique=admin-agents-tick-20260417T024739Z directive=none/none message=none/none exec_report=tick=20260417T024739Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
 - [2026-04-16 23:03:21 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T030310Z_sessions_missing next_action_unique=admin-agents-tick-20260417T030310Z directive=none/none message=none/none exec_report=tick=20260417T030310Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
+
+## 2026-04-17T03:23:45Z admin-unblock
+
+Continuity
+- previous_verdict: runtime_can_resume=yes
+- previous_main_blocker: delivery-first authority had been repaired, but needed live verification against real VM truth and public EC2 status
+- previous_top_priority: planner
+- changed_since_last_run: public EC2 app and public monitor are both healthy; VM `product_delivery_state.json` now shows `BATCH-97` as publicly proved and `product_done=true`, while `priority-queue.json` still keeps `active_batch_ids=["BATCH-97"]`
+
+Verdict
+- blocker: no public delivery blocker; remaining drift is a stale control-plane closure on `BATCH-97`
+- blocker_class: stale/orphan state
+- fix_needed: none in this run; next useful move is canonical closure/reconciliation of `BATCH-97`, not another infra patch
+- runtime_can_resume: yes
+
+Actions taken
+- verified VM host context with `bash scripts/vm_ssh_exec.sh -- "bash scripts/runtime_host_check.sh"`
+- verified public EC2 product health with `curl http://3.98.20.77/api/health`, `curl 'http://3.98.20.77:8080/api/status?lite=1'`, and `bash scripts/aws_remote_app_control.sh public-status`
+- read VM canonical state from `/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/product_delivery_state.json` and `priority-queue.json`
+
+Validation
+- command_or_check: VM runtime host check + public health + public monitor lite + VM `product_delivery_state.json` + VM `priority-queue.json`
+- observed_result: public API=`ok`; public monitor=`health:OK`, `product_runtime.status=ok`, `active_batch=null`; VM canonical delivery state=`phase=product_done_ops_dirty`, `product_done=true`, `next_batch_eligible=true`, `current_public_proof.batch_id=BATCH-97`; queue projection still says `active_batch_ids=["BATCH-97"]` and `BATCH-97 state=IN_PROGRESS`
+- canonical_signal_after_fix: not blocked on product delivery; only advisory mismatch remains between runtime-truth closure state and queue projection closure
+
+Decision
+- next_owner: planner
+- next_action: close/reconcile `BATCH-97` canonically, then open the next eligible batch from runtime truth instead of treating the stale queue projection as active work
+- escalation_needed: no
+
+Notes
+- false_progress_detected: yes; `BATCH-97` still looks active in queue projection even though public proof is green and runtime truth already marks `product_done=true`
+- legacy_influence: low; the remaining issue is projection residue, not endpoint logic or EC2 availability
+- value_impact: public delivery is live and usable now; this run only verified that the remaining problem is ops/control-plane residue, not a user-visible outage; public_delivery_after_fix=no
+- [2026-04-16 23:25:50 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=deterministic_issue_detected blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T032512Z_sessions_missing next_action_unique=admin-agents-tick-20260417T032512Z directive=none/none message=none/none exec_report=tick=20260417T032512Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
+
+## 2026-04-17T03:35:11Z admin-unblock
+
+Continuity
+- previous_verdict: runtime_can_resume=yes
+- changed_since_last_run: execution cutover already existed in fragments (`verifier_autonomy_tick.sh`, 3-lane role routing, reduced crons) but the lane backoff contract underneath it was broken/incompatible
+
+Verdict
+- blocker: verifier/app-dev anti-burn contract drift; the new topology could look enabled while lane backoff and verifier failure handling were not actually reliable
+- blocker_class: bad guard
+- ec2_reachable: yes
+- product_delivery_blocked: no
+- delivery_continuity_restored: yes
+- public_delivery_after_fix: no
+- runtime_can_resume: yes
+
+Authority check
+- public_proof_status: unchanged in this run; no public EC2 regression introduced
+- runtime_truth_status: canonical runtime state path untouched; execution guard repaired under it
+- next_batch_eligible: unchanged
+- projections_status: unchanged
+- guardian_status: unchanged
+- false_authority_detected: no
+- token_burn_detected: yes
+
+Actions taken
+- rebuilt `platform/automation/runtime/truth/lane_backoff.py` so both cwd-root and explicit-root callers work, added expiry-aware active detection, and removed duplicate/broken helper definitions
+- hardened `platform/automation/verifier_autonomy_tick.sh` so `public-proof` failures are recorded instead of aborting silently under `set -e`
+- aligned fallback execution wiring with the 3-lane cutover in `platform/config/runner/runner_config.v1.yaml`, `platform/automation/runner_config.py`, `scripts/fc_agent_tick.sh`, `platform/automation/configure_tmux_role_crons.sh`, and `platform/automation/configure_parallel_team_crons.sh`
+- added regression coverage in `platform/automation/tests/test_lane_backoff.py`
+
+Validation
+- command_or_check: `python3 -m py_compile ...lane_backoff.py ...runner_config.py ...public_proof_runner.py`
+- observed_result: ok
+- canonical_signal_after_fix: scheduler/backoff helpers now match the verifier/app-dev callers actually used by the cutover scripts
+- command_or_check: `python3 platform/automation/tests/test_lane_backoff.py` and `python3 platform/automation/tests/test_public_proof_runner.py`
+- observed_result: ok
+- canonical_signal_after_fix: verifier public-proof path and backoff compatibility hold in targeted tests
+- command_or_check: `bash -n scripts/fc_agent_tick.sh platform/automation/verifier_autonomy_tick.sh platform/automation/configure_tmux_role_crons.sh platform/automation/configure_parallel_team_crons.sh`
+- observed_result: ok
+- canonical_signal_after_fix: 3-lane scheduler/tick wrappers are syntactically coherent
+
+Decision
+- next_owner: planner
+- next_action: continue Slice B/C on live runtime behavior only; the next useful step is validating that planner opens/relieves lanes from canonical state without legacy cron residue, not another state-model refactor
+- [2026-04-16 23:49:27 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T034756Z_sessions_missing next_action_unique=admin-agents-tick-20260417T034756Z directive=none/none message=none/none exec_report=tick=20260417T034756Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)

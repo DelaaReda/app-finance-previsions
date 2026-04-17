@@ -1,0 +1,137 @@
+{
+  "schema_version": "api_wave_manifest.v1",
+  "mode": "api_autonomy",
+  "enabled": true,
+  "stream_id": "API-WAVE",
+  "domains": [
+    "copilot",
+    "forecasts",
+    "market_data"
+  ],
+  "excluded_domains": [
+    "judge",
+    "dashboard",
+    "monitor",
+    "runtime",
+    "admin"
+  ],
+  "endpoints": [
+    {
+      "endpoint_id": "copilot_search",
+      "domain": "copilot",
+      "route_path": "/api/copilot/search",
+      "route_module": "apps/api/src/domains/copilot/api/search.py",
+      "priority": "P1",
+      "product_surface": "copilot",
+      "shared_contract": "copilot_search_v1",
+      "endpoint_service": "copilot_search_endpoint_service.py",
+      "parity_status": "route_heavy",
+      "last_public_proof": "none",
+      "deferred_reason": "none"
+    },
+    {
+      "endpoint_id": "copilot_universal_search",
+      "domain": "copilot",
+      "route_path": "/api/copilot/universal-search",
+      "route_module": "apps/api/src/domains/copilot/api/universal_search.py",
+      "priority": "P1",
+      "product_surface": "copilot",
+      "shared_contract": "copilot_universal_search_v1",
+      "endpoint_service": "copilot_universal_search_endpoint_service.py",
+      "parity_status": "route_heavy",
+      "last_public_proof": "none",
+      "deferred_reason": "none"
+    },
+    {
+      "endpoint_id": "forecasts_brief",
+      "domain": "forecasts",
+      "route_path": "/api/forecasts/brief",
+      "route_module": "apps/api/src/domains/forecasts/api/brief.py",
+      "priority": "P1",
+      "product_surface": "brief",
+      "shared_contract": "forecasts_brief_v1",
+      "endpoint_service": "forecasts_brief_endpoint_service.py",
+      "parity_status": "route_heavy",
+      "last_public_proof": "none",
+      "deferred_reason": "none"
+    },
+    {
+      "endpoint_id": "market_data_news_feed",
+      "domain": "market_data",
+      "route_path": "/api/market-data/news",
+      "route_module": "apps/api/src/domains/market_data/api/news.py",
+      "priority": "P2",
+      "product_surface": "brief",
+      "shared_contract": "market_data_news_feed_v1",
+      "endpoint_service": "market_data_news_endpoint_service.py",
+      "parity_status": "route_heavy",
+      "last_public_proof": "none",
+      "deferred_reason": "none"
+    },
+    {
+      "endpoint_id": "market_data_stocks",
+      "domain": "market_data",
+      "route_path": "/api/market-data/stocks",
+      "route_module": "apps/api/src/domains/market_data/api/stocks.py",
+      "priority": "P2",
+      "product_surface": "portfolio",
+      "shared_contract": "market_data_stocks_v1",
+      "endpoint_service": "market_data_stocks_endpoint_service.py",
+      "parity_status": "route_heavy",
+      "last_public_proof": "none",
+      "deferred_reason": "none"
+    },
+    {
+      "endpoint_id": "market_data_news_impact",
+      "domain": "market_data",
+      "route_path": "/api/market-data/news-impact",
+      "route_module": "apps/api/src/domains/market_data/api/news_impact.py",
+      "priority": "P2",
+      "product_surface": "memo",
+      "shared_contract": "market_data_news_impact_v1",
+      "endpoint_service": "market_data_news_impact_endpoint_service.py",
+      "parity_status": "route_heavy",
+      "last_public_proof": "none",
+      "deferred_reason": "none"
+    },
+    {
+      "endpoint_id": "market_data_news_extra",
+      "domain": "market_data",
+      "route_path": "/api/market-data/news-extra",
+      "route_module": "apps/api/src/domains/market_data/api/news_extra.py",
+      "priority": "P3",
+      "product_surface": "memo",
+      "shared_contract": "market_data_news_extra_v1",
+      "endpoint_service": "market_data_news_extra_endpoint_service.py",
+      "parity_status": "route_heavy",
+      "last_public_proof": "none",
+      "deferred_reason": "none"
+    },
+    {
+      "endpoint_id": "market_data_analytics",
+      "domain": "market_data",
+      "route_path": "/api/market-data/analytics",
+      "route_module": "apps/api/src/domains/market_data/api/analytics.py",
+      "priority": "P3",
+      "product_surface": "portfolio",
+      "shared_contract": "market_data_analytics_v1",
+      "endpoint_service": "market_data_analytics_endpoint_service.py",
+      "parity_status": "route_heavy",
+      "last_public_proof": "none",
+      "deferred_reason": "none"
+    },
+    {
+      "endpoint_id": "market_data_stocks_client",
+      "domain": "market_data",
+      "route_path": "/api/market-data/stocks-client",
+      "route_module": "apps/api/src/domains/market_data/api/stocks_client.py",
+      "priority": "P3",
+      "product_surface": "portfolio",
+      "shared_contract": "market_data_stocks_client_v1",
+      "endpoint_service": "market_data_stocks_client_endpoint_service.py",
+      "parity_status": "route_heavy",
+      "last_public_proof": "none",
+      "deferred_reason": "none"
+    }
+  ]
+}

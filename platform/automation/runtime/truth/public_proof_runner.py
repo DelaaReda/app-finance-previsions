@@ -9,6 +9,14 @@ from typing import Any
 from browser_smoke import run_browser_smoke
 from orchestrator_paths import resolve_orchestrator_read_path, write_orchestrator_json
 
+from runtime.planner.api_wave import (
+    api_wave_delivery_contract,
+    api_wave_mode_enabled,
+    apply_public_proof_result,
+    entry_for_batch_id,
+    load_api_wave_state,
+)
+
 from .public_runtime_probe import probe_public_surface
 from .runtime_truth_reader import load_product_delivery_state
 
@@ -83,6 +91,9 @@ def _find_batch_contract(root: Path, batch_id: str) -> tuple[dict[str, Any], str
         contract = task.get("delivery_contract")
         if isinstance(contract, dict):
             return dict(contract), "parallel_workstreams.task"
+    api_wave_entry, _, _ = entry_for_batch_id(root, batch_token)
+    if api_wave_entry is not None:
+        return api_wave_delivery_contract(api_wave_entry), "api_wave_manifest"
     return _default_delivery_contract(batch_token), "default"
 
 
@@ -187,6 +198,13 @@ def run_public_proof(
     root = Path(root)
     delivery_state = load_product_delivery_state(root)
     effective_batch_id = str(batch_id or delivery_state.get("active_batch_id") or delivery_state.get("last_completed_batch_id") or "").strip().upper()
+    if not effective_batch_id and api_wave_mode_enabled(root):
+        api_wave_state = load_api_wave_state(root, persist_defaults=True)
+        effective_batch_id = str(
+            api_wave_state.get("current_owner_task_id")
+            or api_wave_state.get("current_endpoint_id")
+            or ""
+        ).strip().upper()
     if not effective_batch_id:
         return {
             "batch_id": None,
@@ -231,6 +249,8 @@ def run_public_proof(
     proof_path = persist_public_proof(root, artifact)
     artifact["proof_ref"] = str(proof_path)
     persist_public_proof(root, artifact)
+    if api_wave_mode_enabled(root):
+        apply_public_proof_result(root, batch_id=effective_batch_id, artifact=artifact)
     return artifact
 
 

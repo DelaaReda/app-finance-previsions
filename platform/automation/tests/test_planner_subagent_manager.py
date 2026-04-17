@@ -60,7 +60,8 @@ class PlannerSubagentManagerTests(unittest.TestCase):
                     "defaults": {"prompt_timeout_seconds": 210, "retry_prompt_timeout_seconds": 90, "tick_timeout_seconds": 540},
                     "roles": {
                         "planner": {"model": "gpt-5.4", "thinking": "high"},
-                        "dev": {"model": "gpt-5.4", "thinking": "high"},
+                        "app-dev": {"model": "gpt-5.4", "thinking": "high"},
+                        "verifier": {"model": "gpt-5.4-mini", "thinking": "medium"},
                         "admin": {"model": "gpt-5.4", "thinking": "high"},
                         "scrum_master": {"model": "gpt-5.4", "thinking": "high"},
                     },
@@ -72,7 +73,7 @@ class PlannerSubagentManagerTests(unittest.TestCase):
                             "default_ttl_min": 30,
                             "retry_max": 2,
                             "backend": "mock",
-                            "managed_roles": ["dev", "admin", "scrum_master"],
+                            "managed_roles": ["dev", "admin"],
                         }
                     },
                     "paths": {},
@@ -88,10 +89,10 @@ class PlannerSubagentManagerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def test_plan_allows_planner_to_spawn_dev(self) -> None:
+    def test_plan_allows_planner_to_spawn_app_dev(self) -> None:
         result = plan_subagent(self.config, "planner", "dev", "BATCH-61-DEV-01", "delivery")
         self.assertTrue(result["allowed"])
-        self.assertEqual(result["target_role"], "dev")
+        self.assertEqual(result["target_role"], "app-dev")
 
     def test_plan_refuses_non_planner_parent(self) -> None:
         result = plan_subagent(self.config, "admin", "dev", "BATCH-61-DEV-01", "delivery")
@@ -101,7 +102,7 @@ class PlannerSubagentManagerTests(unittest.TestCase):
     def test_plan_rejects_owner_task_target_role_mismatch(self) -> None:
         result = plan_subagent(self.config, "planner", "admin", "BATCH-61-DEV-02", "runtime")
         self.assertFalse(result["allowed"])
-        self.assertEqual(result["reason"], "owner_task_target_role_mismatch:dev!=admin")
+        self.assertEqual(result["reason"], "owner_task_target_role_mismatch:app-dev!=admin")
 
     def test_prompt_enforces_json_only_contract_and_narrow_scope_rule(self) -> None:
         prompt = _build_prompt("admin", "BATCH-61-ADMIN-01", "runtime", "Validate runtime truth.")
@@ -117,6 +118,19 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertIn("queue/workboard/monitor are projections", prompt)
         self.assertIn("planner_runtime_actions.py, runtime truth helpers, VM-safe wrappers", prompt)
         self.assertIn("recommended_next=planner_route_to_dev_or_scrum", prompt)
+
+    def test_app_dev_prompt_allows_full_api_wave_endpoint_migration(self) -> None:
+        prompt = _build_prompt(
+            "app-dev",
+            "APIWAVE-COPILOT_SEARCH-DEV-01",
+            "delivery",
+            "Ship the next API wave endpoint.",
+        )
+        self.assertIn("If OWNER_TASK_ID starts with APIWAVE-", prompt)
+        self.assertIn("you may ship one whole endpoint end-to-end", prompt)
+        self.assertIn("judge_like_endpoint", prompt)
+        self.assertIn("public EC2 smoke", prompt)
+        self.assertIn("Do not redesign frontend surfaces", prompt)
 
     def test_config_defaults_to_native_codex_runtime_policy(self) -> None:
         self.assertFalse(self.config.allow_runtime_explorer)

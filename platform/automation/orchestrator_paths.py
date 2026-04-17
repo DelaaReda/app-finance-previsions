@@ -160,6 +160,9 @@ def load_runtime_state(root: Path) -> dict[str, Any]:
     lifecycle = str(state.get("lifecycle", "")).strip().lower()
     if lifecycle not in VALID_LIFECYCLES:
         lifecycle = "running"
+    lane_backoff = state.get("lane_backoff", {})
+    if not isinstance(lane_backoff, dict):
+        lane_backoff = {}
     return {
         "lifecycle": lifecycle,
         "reason": str(state.get("reason", "inferred") or "inferred").strip() or "inferred",
@@ -167,6 +170,7 @@ def load_runtime_state(root: Path) -> dict[str, Any]:
         "execution_mode": str(state.get("execution_mode", "") or "").strip(),
         "source": str(state.get("source", "inferred") or "inferred").strip() or "inferred",
         "updated_at": str(state.get("updated_at", "") or "").strip(),
+        "lane_backoff": lane_backoff,
         "path": str(path),
     }
 
@@ -179,10 +183,12 @@ def persist_runtime_state(
     execution_mode: str = "",
     operator_mode: str = "",
     source: str = "manual",
+    lane_backoff: dict[str, Any] | None = None,
 ) -> Path:
     lifecycle_token = str(lifecycle or "").strip().lower()
     if lifecycle_token not in VALID_LIFECYCLES:
         raise ValueError(f"invalid lifecycle: {lifecycle}")
+    previous = load_runtime_state(root)
     payload = {
         "lifecycle": lifecycle_token,
         "reason": str(reason or "none").strip() or "none",
@@ -190,6 +196,7 @@ def persist_runtime_state(
         "execution_mode": str(execution_mode or "").strip(),
         "source": str(source or "manual").strip() or "manual",
         "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "lane_backoff": lane_backoff if isinstance(lane_backoff, dict) else dict(previous.get("lane_backoff", {})),
     }
     path = runtime_state_file(root)
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")

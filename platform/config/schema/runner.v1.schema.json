@@ -34,7 +34,7 @@
     },
     "roles": {
       "type": "object",
-      "required": ["planner", "dev", "admin", "scrum_master"],
+      "required": ["planner", "app-dev", "verifier"],
       "additionalProperties": {
         "type": "object"
       }

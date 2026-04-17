@@ -587,6 +587,68 @@ print(f"{phase}|{active_batch}|{next_batch_eligible}|{freeze_reason}|{product_do
 PY
 }
 
+api_wave_snapshot() {
+  ROOT_PATH="$ROOT" AUTOMATION_DIR="$SCRIPT_DIR" DELIVERY_EC2_REACHABLE="${FC_PLANNER_AUTONOMY_EC2_REACHABLE:-}" python3 - <<'PY'
+import os
+from pathlib import Path
+import sys
+
+root = Path(os.environ["ROOT_PATH"])
+automation_dir = Path(os.environ["AUTOMATION_DIR"]).resolve()
+if str(automation_dir) not in sys.path:
+    sys.path.insert(0, str(automation_dir))
+
+from runtime.truth.public_runtime_probe import probe_public_surface
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+
+raw_reachable = str(os.environ.get("DELIVERY_EC2_REACHABLE", "") or "").strip().lower()
+maintenance_active = False
+maintenance_details = {}
+public_probe_status = "unknown"
+if raw_reachable in {"1", "true", "yes", "ok"}:
+    ec2_reachable = True
+    public_probe_status = "ok"
+elif raw_reachable in {"0", "false", "no", "error"}:
+    ec2_reachable = False
+    public_probe_status = "error"
+else:
+    base_url = str(os.environ.get("FC_PUBLIC_APP_BASE_URL") or os.environ.get("FC_API_BASE_URL") or "http://3.98.20.77").strip() or "http://3.98.20.77"
+    probe = probe_public_surface(f"{base_url.rstrip('/')}/api/health", timeout_s=1.5)
+    maintenance_active = bool(probe.get("maintenance_active"))
+    maintenance_details = probe
+    if probe.get("http_ok"):
+        ec2_reachable = True
+        public_probe_status = "ok"
+    elif maintenance_active:
+        ec2_reachable = True
+        public_probe_status = "degraded"
+    else:
+        ec2_reachable = False
+        public_probe_status = "error"
+
+snapshot = build_runtime_truth_snapshot(
+    root,
+    state_limit=24,
+    event_limit=24,
+    ec2_reachable=ec2_reachable,
+    public_probe_status=public_probe_status,
+    maintenance_active=maintenance_active,
+    maintenance_details=maintenance_details,
+    persist_delivery_state=True,
+)
+wave = snapshot.get("api_wave_state", {}) if isinstance(snapshot, dict) else {}
+endpoint = wave.get("current_endpoint") if isinstance(wave.get("current_endpoint"), dict) else None
+if endpoint is None:
+    endpoint = wave.get("next_endpoint") if isinstance(wave.get("next_endpoint"), dict) else None
+endpoint_id = str((endpoint or {}).get("endpoint_id") or "none").strip() or "none"
+task_id = str(wave.get("current_task_id") or (endpoint or {}).get("owner_task_id") or "none").strip() or "none"
+enabled = "1" if bool(wave.get("enabled")) else "0"
+dispatch_ready = "1" if bool(wave.get("dispatch_ready")) else "0"
+reason = str(wave.get("reason") or "none").strip() or "none"
+print(f"{enabled}|{dispatch_ready}|{endpoint_id}|{task_id}|{reason}")
+PY
+}
+
 parse_kv_field() {
   local payload="$1"
   local field="$2"
@@ -616,13 +678,6 @@ dispatch_capability_capture() {
   printf '%s' "$payload"
 }
 
-public_proof_capture() {
-  local batch_id="$1"
-  local payload
-  payload="$(run_safe_capture "public_proof" "python3 platform/automation/runtime/planner/planner_runtime_actions.py public-proof --root \"$ROOT\" --batch-id \"$batch_id\"")"
-  printf '%s' "$payload"
-}
-
 with_lock
 
 delivery_snapshot="$(delivery_state_snapshot)"
@@ -646,52 +701,9 @@ if [[ "$delivery_phase" == "external_outage" ]]; then
 fi
 
 if [[ "$delivery_phase" == "verifying_public_proof" && -n "$delivery_active_batch" && "$delivery_active_batch" != "none" ]]; then
-  public_proof_payload="$(public_proof_capture "$delivery_active_batch")"
-  public_proof_rc="$(capture_rc "$public_proof_payload")"
-  public_proof_out="$(capture_body "$public_proof_payload")"
-  public_proof_status="$(parse_kv_field "$public_proof_out" "status")"
-  public_proof_batch_id="$(parse_kv_field "$public_proof_out" "batch_id")"
-  public_proof_api_status="$(parse_kv_field "$public_proof_out" "api_smoke_status")"
-  public_proof_ui_status="$(parse_kv_field "$public_proof_out" "ui_smoke_status")"
-  public_proof_ref="$(parse_kv_field "$public_proof_out" "proof_ref")"
-
-  if [[ "$public_proof_rc" != "0" ]]; then
-    write_state 1 "public_proof" "failed" "public_proof_runner_failed" "${delivery_active_batch}" "public_proof_runner_failed" "batch_id=${delivery_active_batch};proof_rc=${public_proof_rc}"
-    echo "PLANNER_AUTONOMY status=error action=public_proof outcome=failed issue=public_proof_runner_failed batch_id=${delivery_active_batch} proof_rc=${public_proof_rc}"
-    exit 0
-  fi
-
-  delivery_snapshot="$(delivery_state_snapshot)"
-  delivery_phase="${delivery_snapshot%%|*}"
-  delivery_rest="${delivery_snapshot#*|}"
-  delivery_active_batch="${delivery_rest%%|*}"
-  delivery_rest="${delivery_rest#*|}"
-  delivery_next_batch_eligible="${delivery_rest%%|*}"
-  delivery_rest="${delivery_rest#*|}"
-  delivery_freeze_reason="${delivery_rest%%|*}"
-  delivery_rest="${delivery_rest#*|}"
-  delivery_product_done="${delivery_rest%%|*}"
-  delivery_rest="${delivery_rest#*|}"
-  delivery_ops_clean="${delivery_rest%%|*}"
-  delivery_ec2_reachable="${delivery_rest##*|}"
-
-  if [[ "$delivery_phase" == "external_outage" ]]; then
-    write_state 0 "public_proof" "deferred" "external_outage" "${public_proof_batch_id:-none}" "external_outage" "status=${public_proof_status:-unknown};proof_ref=${public_proof_ref:-none};ec2_reachable=${delivery_ec2_reachable}"
-    echo "PLANNER_AUTONOMY status=warn action=public_proof outcome=deferred issue=external_outage batch_id=${public_proof_batch_id:-none} proof_status=${public_proof_status:-unknown} ec2_reachable=${delivery_ec2_reachable}"
-    exit 0
-  fi
-
-  if [[ "$public_proof_status" == "maintenance" ]]; then
-    write_state 1 "public_proof" "deferred" "runtime_restart_in_progress" "${public_proof_batch_id:-none}" "runtime_restart_in_progress" "status=${public_proof_status};proof_ref=${public_proof_ref:-none}"
-    echo "PLANNER_AUTONOMY status=warn action=public_proof outcome=deferred issue=runtime_restart_in_progress batch_id=${public_proof_batch_id:-none} proof_status=${public_proof_status} proof_ref=${public_proof_ref:-none}"
-    exit 0
-  fi
-
-  if [[ "$delivery_phase" == "verifying_public_proof" && -n "$delivery_active_batch" && "$delivery_active_batch" != "none" ]]; then
-    write_state 1 "public_proof" "deferred" "waiting_public_proof" "${delivery_active_batch}" "waiting_public_proof" "status=${public_proof_status:-unknown};api=${public_proof_api_status:-unknown};ui=${public_proof_ui_status:-unknown};proof_ref=${public_proof_ref:-none}"
-    echo "PLANNER_AUTONOMY status=warn action=public_proof outcome=deferred issue=waiting_public_proof batch_id=${delivery_active_batch} proof_status=${public_proof_status:-unknown} api_status=${public_proof_api_status:-unknown} ui_status=${public_proof_ui_status:-unknown}"
-    exit 0
-  fi
+  write_state 1 "public_proof" "deferred" "waiting_verifier_lane" "${delivery_active_batch}" "waiting_public_proof" "phase=${delivery_phase};batch_id=${delivery_active_batch};ec2_reachable=${delivery_ec2_reachable}"
+  echo "PLANNER_AUTONOMY status=warn action=public_proof outcome=deferred issue=waiting_verifier_lane batch_id=${delivery_active_batch} phase=${delivery_phase} ec2_reachable=${delivery_ec2_reachable}"
+  exit 0
 fi
 
 snapshot="$(planner_runway_snapshot)"
@@ -752,7 +764,7 @@ if bool(runtime_truth.get("event_store_primary", False)):
     subagents_active = any(
         isinstance(row, dict)
         and str(row.get("owner_role", "")).strip().lower() == "planner"
-        and str(row.get("target_role", "")).strip().lower() in {"dev", "admin", "scrum_master"}
+        and str(row.get("target_role", "")).strip().lower() in {"dev", "app-dev", "admin", "scrum_master", "verifier"}
         and str(row.get("status", "")).strip().lower() in graph_active_statuses
         for row in (runtime_truth.get("latest_states") if isinstance(runtime_truth.get("latest_states"), list) else [])
     )
@@ -838,6 +850,46 @@ if [[ "$planner_in_progress" == "0" && "$planner_ready" == "0" && -n "$capabilit
   fi
   write_state 1 "dispatch_ready_capability" "deferred" "planner_${capability_ready_role}_dispatch_not_materialized" "${capability_ready_task}" "planner_${capability_ready_role}_dispatch_not_materialized" "role=${capability_ready_role};candidate_state=${capability_ready_state};planner_takeover_required=${capability_takeover_required};next_action=${capability_next_action};blocked_reason=${capability_blocked_reason};dispatch_reason=${targeted_dispatch_reason:-none};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
   echo "PLANNER_AUTONOMY status=warn action=dispatch_ready_capability outcome=deferred issue=planner_${capability_ready_role}_dispatch_not_materialized role=${capability_ready_role} task_id=${capability_ready_task} candidate_state=${capability_ready_state} planner_takeover_required=${capability_takeover_required} dispatch_reason=${targeted_dispatch_reason:-none} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+  exit 0
+fi
+
+api_wave_runtime_snapshot="$(api_wave_snapshot)"
+api_wave_enabled="${api_wave_runtime_snapshot%%|*}"
+api_wave_rest="${api_wave_runtime_snapshot#*|}"
+api_wave_dispatch_ready="${api_wave_rest%%|*}"
+api_wave_rest="${api_wave_rest#*|}"
+api_wave_endpoint_id="${api_wave_rest%%|*}"
+api_wave_rest="${api_wave_rest#*|}"
+api_wave_task_id="${api_wave_rest%%|*}"
+api_wave_reason="${api_wave_rest##*|}"
+
+if [[ "$planner_in_progress" == "0" && "$api_wave_enabled" == "1" && "$api_wave_dispatch_ready" == "1" ]]; then
+  api_wave_payload="$(run_safe_capture "api_wave_dispatch" "python3 platform/automation/runtime/planner/planner_runtime_actions.py api-wave-dispatch --root \"$ROOT\" --source planner_autonomy_tick --backend auto")"
+  api_wave_rc="$(capture_rc "$api_wave_payload")"
+  api_wave_out="$(capture_body "$api_wave_payload")"
+  api_wave_reason_out="none"
+  api_wave_task_out="none"
+  api_wave_endpoint_out="none"
+  api_wave_backend_out="none"
+  if [[ "$api_wave_out" =~ reason=([^[:space:]]+) ]]; then
+    api_wave_reason_out="${BASH_REMATCH[1]}"
+  fi
+  if [[ "$api_wave_out" =~ task_id=([^[:space:]]+) ]]; then
+    api_wave_task_out="${BASH_REMATCH[1]}"
+  fi
+  if [[ "$api_wave_out" =~ endpoint_id=([^[:space:]]+) ]]; then
+    api_wave_endpoint_out="${BASH_REMATCH[1]}"
+  fi
+  if [[ "$api_wave_out" =~ backend=([^[:space:]]+) ]]; then
+    api_wave_backend_out="${BASH_REMATCH[1]}"
+  fi
+  if [[ "$api_wave_rc" == "0" && "$api_wave_out" == API_WAVE_DISPATCH* ]]; then
+    write_state 1 "dispatch_api_wave" "resolved" "planner_api_wave_dispatch_active" "${api_wave_task_out:-$api_wave_task_id}" "none" "endpoint_id=${api_wave_endpoint_out:-$api_wave_endpoint_id};reason=${api_wave_reason_out:-none};backend=${api_wave_backend_out:-none};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+    echo "PLANNER_AUTONOMY status=ok action=dispatch_api_wave outcome=resolved endpoint_id=${api_wave_endpoint_out:-$api_wave_endpoint_id} task_id=${api_wave_task_out:-$api_wave_task_id} backend=${api_wave_backend_out:-none} reason=${api_wave_reason_out:-none} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+    exit 0
+  fi
+  write_state 1 "dispatch_api_wave" "deferred" "planner_api_wave_dispatch_not_materialized" "${api_wave_task_out:-$api_wave_task_id}" "planner_api_wave_dispatch_not_materialized" "endpoint_id=${api_wave_endpoint_out:-$api_wave_endpoint_id};reason=${api_wave_reason_out:-$api_wave_reason};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+  echo "PLANNER_AUTONOMY status=warn action=dispatch_api_wave outcome=deferred issue=planner_api_wave_dispatch_not_materialized endpoint_id=${api_wave_endpoint_out:-$api_wave_endpoint_id} task_id=${api_wave_task_out:-$api_wave_task_id} reason=${api_wave_reason_out:-$api_wave_reason} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
   exit 0
 fi
 

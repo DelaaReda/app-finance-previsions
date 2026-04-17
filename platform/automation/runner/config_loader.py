@@ -44,11 +44,13 @@ REQUIRED_TOP_KEYS = (
     "retries",
     "telemetry",
 )
-REQUIRED_ROLES = ("planner", "dev", "admin", "scrum_master")
+REQUIRED_ROLES = ("planner", "app-dev", "verifier")
 
 ROLE_ENV_PREFIX = {
     "planner": "FC_PLANNER",
+    "app-dev": "FC_DEV",
     "dev": "FC_DEV",
+    "verifier": "FC_VERIFIER",
     "admin": "FC_ADMIN",
     "scrum_master": "FC_SCRUM_MASTER",
 }
@@ -269,6 +271,8 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 def cmd_emit_env(args: argparse.Namespace) -> int:
     role = str(args.role).strip()
+    legacy = _load_legacy_module()
+    role = legacy._canonical_role(role)  # noqa: SLF001
     if role not in REQUIRED_ROLES:
         print(f"invalid role: {role}", file=sys.stderr)
         return 2
@@ -280,7 +284,6 @@ def cmd_emit_env(args: argparse.Namespace) -> int:
         return 2
 
     # Use legacy flattening logic for output compatibility.
-    legacy = _load_legacy_module()
     env_map, missing = legacy._flatten(cfg, role)  # noqa: SLF001
     env_map["RUNNER_CONFIG_SOURCE"] = str(Path(args.config).expanduser().resolve())
     env_map["RUNNER_CONFIG_HASH"] = _config_hash(cfg)

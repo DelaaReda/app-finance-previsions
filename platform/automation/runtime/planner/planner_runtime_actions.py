@@ -47,10 +47,11 @@ from compat.projections.parallel_workstream import (
 from browser_smoke import run_browser_smoke
 from orchestrator_paths import CANONICAL_VM_ROOT, SHARED_VM_ROOT, resolve_orchestrator_read_path, resolve_orchestrator_write_path
 from runtime.model_plane.model_plane import resolve_planner_backend_choice as model_plane_resolve_planner_backend_choice
+from runtime.truth.api_wave import persist_api_wave_state
 from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
 from runtime.truth.event_store import latest_graph_states
 from runtime.truth.public_proof_runner import run_public_proof
-from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot, load_product_delivery_state
 from planner_subagent_manager import (
     ACTIVE_STATUSES,
     _load_config as load_subagent_config,
@@ -147,6 +148,19 @@ def _runtime_board_path(root: Path) -> Path:
 
 def _runtime_queue_path(root: Path) -> Path:
     return resolve_orchestrator_write_path(root, "priority-queue.json")
+
+
+def _canonical_runtime_role(value: Any) -> str:
+    token = str(value or "").strip().replace("-", "_").lower()
+    if token in {"app_dev", "app-dev", "dev", "backend_engineer", "frontend_engineer", "data_analyst", "integrator"}:
+        return "dev"
+    if token in {"verifier", "qa", "tester"}:
+        return "verifier"
+    if token in {"admin", "infra_engineer", "clawsentinel"}:
+        return "admin"
+    if token in {"analyst", "architect", "po", "vision-architect-tasks-planner", "vision_architect_tasks_planner"}:
+        return "planner"
+    return token
 
 
 def _parse_iso_utc(raw: str) -> datetime | None:
@@ -881,7 +895,7 @@ def _payload_has_delivery_evidence(payload: dict[str, Any], target_role: str = "
         value = str(payload.get(key, "")).strip().lower()
         if not _delivery_value_present(value):
             return False
-    target = str(target_role or "").strip().lower()
+    target = _canonical_runtime_role(target_role)
     if target in {"dev", "admin"}:
         tests_run = str(payload.get("tests_run", "")).strip().lower()
         if not _delivery_value_present(tests_run):
@@ -929,6 +943,7 @@ def _task_operational_state(task: dict[str, Any] | None) -> str:
 
 def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | None:
     index = task_index(board)
+    api_wave_candidates: list[tuple[int, int, dict[str, Any]]] = []
     recovery_candidates: list[tuple[int, int, dict[str, Any]]] = []
     candidates: list[tuple[int, int, dict[str, Any]]] = []
     retry_candidates: list[tuple[int, int, dict[str, Any]]] = []
@@ -941,12 +956,15 @@ def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | Non
         if not _task_in_active_cycle(task, board):
             continue
         state = _task_operational_state(task)
-        if str(task.get("role", "")).strip().lower() != "dev":
+        if _task_capability_role(task) != "dev":
             continue
         deps = [dep for dep in task.get("depends_on", []) if dep]
         if any(_task_operational_state(index.get(dep, {})) not in {STATE_DONE, "CLOSED"} for dep in deps):
             continue
         row = (priority_rank(str(task.get("priority", "P9"))), idx, task)
+        if bool(task.get("api_wave")) and state in {STATE_READY, STATE_READY_DEV, "READY"}:
+            api_wave_candidates.append(row)
+            continue
         if bool(task.get("dev_recovery_required")):
             recovery_candidates.append(row)
             continue
@@ -961,6 +979,9 @@ def _select_dispatchable_dev_task(board: dict[str, Any]) -> dict[str, Any] | Non
         blocked_reason = str(task.get("blocked_reason", "")).strip().lower()
         if state == STATE_BLOCKED and blocked_reason.startswith("planner_dev_capability_failed:"):
             retry_candidates.append(row)
+    if api_wave_candidates:
+        api_wave_candidates.sort(key=lambda row: (row[0], row[1]))
+        return api_wave_candidates[0][2]
     if recovery_candidates:
         recovery_candidates.sort(key=lambda row: (row[0], row[1]))
         return recovery_candidates[0][2]
@@ -1045,7 +1066,7 @@ def _browser_backfill_candidates(board: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         if str(task.get("state", "")).strip().upper() != STATE_DONE:
             continue
-        if str(task.get("role", "")).strip().lower() != "dev":
+        if _task_capability_role(task) != "dev":
             continue
         if not _requires_browser_proof(task):
             continue
@@ -1059,7 +1080,7 @@ def _browser_backfill_candidates(board: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _task_has_dev_completion_evidence(task: dict[str, Any]) -> bool:
-    if str(task.get("role", "")).strip().lower() != "dev":
+    if _task_capability_role(task) != "dev":
         return False
     if not _has_real_commit(str(task.get("commit_sha", ""))):
         return False
@@ -1771,7 +1792,7 @@ def _dispatch_pending_qa_reviews(root: Path, source: str) -> list[str]:
         for task in board.get("tasks", []):
             if not isinstance(task, dict):
                 continue
-            if str(task.get("role", "")).strip().lower() != "dev":
+            if _task_capability_role(task) != "dev":
                 continue
             if not _task_has_dev_completion_evidence(task):
                 continue
@@ -2006,7 +2027,10 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
         candidate["last_progress_at"] = now_iso()
         _claim_task(board_path=board_path, role="dev", task_id_value=task_id_value, source=source, board=board)
 
-    message = _build_dev_dispatch_message(candidate)
+    if bool(candidate.get("api_wave")):
+        message = _build_api_wave_dispatch_message(candidate)
+    else:
+        message = _build_dev_dispatch_message(candidate)
     chosen_backend = _resolve_dispatch_backend(root, "dev", backend, "delivery")
     if chosen_backend != "mock":
         subagent_id = f"planner_dev_{os.urandom(5).hex()}"
@@ -2250,6 +2274,207 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
         task=candidate,
         payload=payload,
     )
+
+
+def _build_api_wave_dispatch_message(endpoint: dict[str, Any]) -> str:
+    endpoint_id = str(endpoint.get("endpoint_id") or "unknown").strip()
+    route_path = str(endpoint.get("route_path") or "unknown").strip()
+    route_module = str(endpoint.get("route_module") or "unknown").strip()
+    shared_contract = str(endpoint.get("shared_contract") or "pending_shared_contract").strip()
+    endpoint_service = str(endpoint.get("endpoint_service") or "pending_endpoint_service").strip()
+    product_surface = str(endpoint.get("product_surface") or "product").strip()
+    parity_status = str(endpoint.get("parity_status") or "unknown").strip()
+    return (
+        "API wave owner task. Migrate this endpoint to Judge-parity without touching judge itself. "
+        f"Endpoint={endpoint_id}; route={route_path}; module={route_module}; "
+        f"product_surface={product_surface}; contract={shared_contract}; endpoint_service={endpoint_service}; "
+        f"current_parity={parity_status}. "
+        "Implement the reusable application slice first, keep the route thin, reuse judge_like_endpoint and existing metadata/fallback helpers, "
+        "add targeted tests, then return public EC2 smoke proof or a concrete blocker."
+    )
+
+
+def _upsert_api_wave_stream(board: dict[str, Any], endpoint: dict[str, Any], state: str) -> None:
+    streams = board.setdefault("streams", [])
+    if not isinstance(streams, list):
+        streams = []
+        board["streams"] = streams
+    stream = next(
+        (
+            row
+            for row in streams
+            if isinstance(row, dict)
+            and str(row.get("id") or row.get("stream_id") or "").strip().upper() == "API-WAVE"
+        ),
+        None,
+    )
+    payload = {
+        "id": "API-WAVE",
+        "stream_id": "API-WAVE",
+        "state": state,
+        "title": "API Wave Judge Parity",
+        "kind": "api_wave",
+        "current_endpoint_id": str(endpoint.get("endpoint_id") or "").strip(),
+        "route_path": str(endpoint.get("route_path") or "").strip(),
+        "product_surface": str(endpoint.get("product_surface") or "").strip(),
+        "updated_at": now_iso(),
+    }
+    if stream is None:
+        streams.append(payload)
+        return
+    stream.update(payload)
+
+
+def _seed_api_wave_dev_task(root: Path, source: str, wave: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
+    endpoint = wave.get("current_endpoint") if isinstance(wave.get("current_endpoint"), dict) else None
+    if endpoint is None:
+        endpoint = wave.get("next_endpoint") if isinstance(wave.get("next_endpoint"), dict) else None
+    if endpoint is None:
+        return None, "no_endpoint_selected"
+    task_id_value = str(endpoint.get("owner_task_id") or "").strip()
+    if not task_id_value:
+        return None, "missing_owner_task_id"
+    board_path = _runtime_board_path(root)
+    queue_path = _runtime_queue_path(root)
+    with board_lock(board_path):
+        board = load_board(board_path)
+        tasks = task_index(board)
+        task = tasks.get(task_id_value)
+        if not isinstance(task, dict):
+            task = {
+                "id": task_id_value,
+                "stream_id": "API-WAVE",
+                "batch_id": "API-WAVE",
+                "role": "dev",
+                "state": STATE_READY_DEV,
+                "title": f"API Wave {str(endpoint.get('endpoint_id') or 'endpoint').strip()}",
+                "next_action": "judge_parity_endpoint",
+                "priority": str(endpoint.get("priority") or "P9").strip().upper() or "P9",
+                "api_wave": True,
+                "api_wave_endpoint_id": str(endpoint.get("endpoint_id") or "").strip(),
+                "route_path": str(endpoint.get("route_path") or "").strip(),
+                "route_module": str(endpoint.get("route_module") or "").strip(),
+                "shared_contract": str(endpoint.get("shared_contract") or "none").strip(),
+                "endpoint_service": str(endpoint.get("endpoint_service") or "none").strip(),
+                "product_surface": str(endpoint.get("product_surface") or "").strip(),
+                "parity_status": str(endpoint.get("parity_status") or "unknown").strip(),
+                "created_at": now_iso(),
+                "updated_at": now_iso(),
+            }
+            board.setdefault("tasks", []).append(task)
+            append_event(
+                board,
+                "planner_api_wave_seeded",
+                {
+                    "task_id": task_id_value,
+                    "source": source,
+                    "endpoint_id": str(endpoint.get("endpoint_id") or "").strip(),
+                },
+            )
+        elif not _task_effectively_done(task) and _task_operational_state(task) not in {STATE_IN_PROGRESS, "REVIEW"}:
+            task["state"] = STATE_READY_DEV
+            task["blocked_reason"] = ""
+            task["stalled_reason"] = ""
+            task["updated_at"] = now_iso()
+            task["api_wave"] = True
+            task["api_wave_endpoint_id"] = str(endpoint.get("endpoint_id") or "").strip()
+        _upsert_api_wave_stream(
+            board,
+            endpoint,
+            str(task.get("state") or STATE_READY_DEV).strip().upper() or STATE_READY_DEV,
+        )
+        reconcile_state(board, queue_path)
+        save_board(board_path, board)
+    return endpoint, task_id_value
+
+
+def _set_api_wave_stream_state(root: Path, endpoint: dict[str, Any], state: str, reason: str) -> None:
+    board_path = _runtime_board_path(root)
+    queue_path = _runtime_queue_path(root)
+    with board_lock(board_path):
+        board = load_board(board_path)
+        _upsert_api_wave_stream(board, endpoint, state)
+        append_event(
+            board,
+            "planner_api_wave_state",
+            {
+                "task_id": str(endpoint.get("owner_task_id") or "").strip() or "none",
+                "source": reason,
+                "endpoint_id": str(endpoint.get("endpoint_id") or "").strip(),
+                "state": state,
+            },
+        )
+        reconcile_state(board, queue_path)
+        save_board(board_path, board)
+
+
+def _api_wave_dispatch_cli(root: Path, args: argparse.Namespace) -> int:
+    runtime_truth = build_runtime_truth_snapshot(root, state_limit=24, event_limit=24, persist_delivery_state=True)
+    wave = runtime_truth.get("api_wave_state", {}) if isinstance(runtime_truth.get("api_wave_state"), dict) else {}
+    state = wave.get("state", {}) if isinstance(wave.get("state"), dict) else {}
+    if not bool(wave.get("enabled")):
+        print("API_WAVE_SKIP reason=disabled")
+        return 0
+    endpoint = wave.get("current_endpoint") if isinstance(wave.get("current_endpoint"), dict) else None
+    if endpoint is None:
+        endpoint = wave.get("next_endpoint") if isinstance(wave.get("next_endpoint"), dict) else None
+    if endpoint is None:
+        print("API_WAVE_SKIP reason=no_remaining_endpoint")
+        return 0
+    if not bool(wave.get("dispatch_ready")):
+        print(
+            "API_WAVE_SKIP "
+            f"reason={str(wave.get('reason') or 'not_ready').strip() or 'not_ready'} "
+            f"endpoint_id={str(endpoint.get('endpoint_id') or 'none').strip() or 'none'}"
+        )
+        return 0
+    if _has_active_subagent(root, "dev"):
+        print(
+            "API_WAVE_SKIP "
+            f"reason=active_dev_capability endpoint_id={str(endpoint.get('endpoint_id') or 'none').strip() or 'none'}"
+        )
+        return 0
+
+    endpoint, task_id_value = _seed_api_wave_dev_task(
+        root,
+        str(args.source or "api_wave_dispatch").strip() or "api_wave_dispatch",
+        wave,
+    )
+    if endpoint is None:
+        print(f"API_WAVE_SKIP reason={task_id_value or 'seed_failed'}")
+        return 0
+
+    state["current_endpoint_id"] = str(endpoint.get("endpoint_id") or "").strip()
+    state["current_task_id"] = task_id_value
+    state["updated_at"] = now_iso()
+    persist_api_wave_state(root, state)
+
+    payload = _dispatch_dev_capability(
+        root,
+        source=str(args.source or "api_wave_dispatch").strip() or "api_wave_dispatch",
+        backend=str(args.backend or "auto").strip() or "auto",
+    )
+    if bool(payload.get("dispatched")):
+        stream_state = STATE_DONE if bool(payload.get("completed")) else STATE_IN_PROGRESS
+        _set_api_wave_stream_state(root, endpoint, stream_state, "api_wave_dispatch")
+        print(
+            "API_WAVE_DISPATCH "
+            f"endpoint_id={str(endpoint.get('endpoint_id') or 'none').strip() or 'none'} "
+            f"task_id={payload.get('task_id', task_id_value)} "
+            f"reason={payload.get('reason', 'dispatched')} "
+            f"backend={payload.get('backend', 'none')} "
+            f"completed={1 if payload.get('completed') else 0}"
+        )
+        return 0
+
+    _set_api_wave_stream_state(root, endpoint, STATE_READY_DEV, "api_wave_dispatch_not_materialized")
+    print(
+        "API_WAVE_SKIP "
+        f"reason={str(payload.get('reason') or 'dispatch_not_materialized').strip() or 'dispatch_not_materialized'} "
+        f"endpoint_id={str(endpoint.get('endpoint_id') or 'none').strip() or 'none'} "
+        f"task_id={task_id_value}"
+    )
+    return 0
 
 
 def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[str, Any]:
@@ -2546,14 +2771,7 @@ def _task_effectively_done(task: dict[str, Any] | None) -> bool:
 
 
 def _canonical_task_role(role: str) -> str:
-    token = str(role or "").strip().lower()
-    if token in {"backend_engineer", "frontend_engineer", "data_analyst", "integrator"}:
-        return "dev"
-    if token in {"qa", "tester", "infra_engineer", "clawsentinel"}:
-        return "admin"
-    if token in {"analyst", "architect", "po", "vision-architect-tasks-planner", "vision_architect_tasks_planner"}:
-        return "planner"
-    return token
+    return _canonical_runtime_role(role)
 
 
 def _task_capability_role(task: dict[str, Any] | None) -> str:
@@ -2646,7 +2864,7 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
     for row in rows:
         if str(row.get("parent_role", "")).strip().lower() != "planner":
             continue
-        if str(row.get("target_role", "")).strip().lower() != "dev":
+        if _canonical_runtime_role(row.get("target_role", "")) != "dev":
             continue
         if str(row.get("status", "")).strip().lower() not in ACTIVE_STATUSES:
             continue
@@ -2973,7 +3191,7 @@ def _has_active_subagent(root: Path, target_role: str = "") -> bool:
     board = load_board(board_path)
     index = task_index(board)
     active_batch_ids = _board_active_batch_ids(board)
-    target = str(target_role or "").strip().lower()
+    target = _canonical_runtime_role(target_role)
     runtime_truth = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24)
     event_store_primary = bool(runtime_truth.get("event_store_primary", False))
     rows: list[dict[str, Any]] = []
@@ -2984,7 +3202,7 @@ def _has_active_subagent(root: Path, target_role: str = "") -> bool:
             for row in active_rows:
                 if not isinstance(row, dict):
                     continue
-                row_role = str(row.get("role", row.get("target_role", ""))).strip().lower()
+                row_role = _canonical_runtime_role(row.get("role", row.get("target_role", "")))
                 if target and row_role != target:
                     continue
                 owner_task_id = str(row.get("owner_task_id") or row.get("task_id") or "").strip()
@@ -3009,7 +3227,7 @@ def _has_active_subagent(root: Path, target_role: str = "") -> bool:
     for row in rows:
         if str(row.get("parent_role", "")).strip().lower() != "planner":
             continue
-        if target and str(row.get("target_role", "")).strip().lower() != target:
+        if target and _canonical_runtime_role(row.get("target_role", "")) != _canonical_runtime_role(target):
             continue
         if str(row.get("status", "")).strip().lower() not in ACTIVE_STATUSES:
             continue
@@ -3040,7 +3258,7 @@ def _collect_finished_dev_subagents(root: Path, source: str, owner_task_filter: 
     for row in rows:
         if str(row.get("parent_role", "")).strip().lower() != "planner":
             continue
-        if str(row.get("target_role", "")).strip().lower() != "dev":
+        if _canonical_runtime_role(row.get("target_role", "")) != "dev":
             continue
         subagent_id = str(row.get("subagent_id", "")).strip()
         if not subagent_id:
@@ -3582,14 +3800,18 @@ def _prune_resolved_qa_workers(root: Path, source: str) -> list[str]:
 
 
 def _infer_result_target_role(payload: dict[str, Any], subagent_id: str) -> str:
-    token = str(payload.get("target_role", "")).strip().lower()
-    if token in {"dev", "admin", "qa"}:
+    token = _canonical_runtime_role(payload.get("target_role", ""))
+    if token in {"dev", "admin", "verifier"}:
         return token
     subagent_token = str(subagent_id or "").strip().lower()
     if subagent_token.startswith("planner_dev_"):
         return "dev"
+    if subagent_token.startswith("planner_app-dev_") or subagent_token.startswith("planner_app_dev_"):
+        return "dev"
     if subagent_token.startswith("planner_admin_"):
         return "admin"
+    if subagent_token.startswith("planner_verifier_"):
+        return "verifier"
     return ""
 
 
@@ -3626,7 +3848,7 @@ def _collect_orphan_result_payloads(root: Path, source: str, owner_task_filter: 
         if owner_task_filter and task_id_value != owner_task_filter:
             continue
         role_token = _infer_result_target_role(payload, subagent_id)
-        if target_role and role_token != str(target_role).strip().lower():
+        if target_role and _canonical_runtime_role(role_token) != _canonical_runtime_role(target_role):
             continue
         with board_lock(board_path):
             board = load_board(board_path)
@@ -3636,7 +3858,7 @@ def _collect_orphan_result_payloads(root: Path, source: str, owner_task_filter: 
             if str(task.get("state", "")).strip().upper() == STATE_DONE:
                 continue
             status_token = _payload_status(payload)
-            if role_token == "dev" and _payload_semantic_success(payload, target_role="dev"):
+            if _canonical_runtime_role(role_token) == "dev" and _payload_semantic_success(payload, target_role="dev"):
                 evidence = {
                     "root_cause": str(payload.get("root_cause", "none")),
                     "fix_applied": str(payload.get("fix_applied", "none")),
@@ -3820,6 +4042,7 @@ def build_parser() -> argparse.ArgumentParser:
             "novelty-target",
             "public-proof",
             "dispatch-capability",
+            "api-wave-dispatch",
             "claim",
             "complete",
             "enforce-sla",
@@ -3866,6 +4089,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-role", default="")
     parser.add_argument("--subagent-id", default="")
     parser.add_argument("--allow-active-queued", action="store_true")
+    parser.add_argument("--if-needed", action="store_true")
     parser.add_argument("--timeout-seconds", type=float, default=12.0)
     return parser
 
@@ -4098,6 +4322,69 @@ def _save_json_dict(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
 
 
+def _public_proof_artifact_path(root: Path, batch_id: str) -> Path:
+    token = str(batch_id or "").strip().upper()
+    return resolve_orchestrator_read_path(root, f"public-proof/{token}.json")
+
+
+def _load_public_proof_artifact(root: Path, batch_id: str) -> dict[str, Any]:
+    token = str(batch_id or "").strip().upper()
+    if not token:
+        return {}
+    path = _public_proof_artifact_path(root, token)
+    return _load_json_dict(path)
+
+
+def _should_run_public_proof(root: Path, batch_id: str = "") -> tuple[bool, str, dict[str, Any], dict[str, Any]]:
+    delivery_state = load_product_delivery_state(root)
+    if not delivery_state:
+        snapshot = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24)
+        delivery_state = snapshot.get("product_delivery_state", {}) if isinstance(snapshot, dict) else {}
+    delivery_state = delivery_state if isinstance(delivery_state, dict) else {}
+
+    active_batch_id = str(
+        batch_id
+        or delivery_state.get("active_batch_id")
+        or delivery_state.get("last_completed_batch_id")
+        or ""
+    ).strip().upper()
+    if not active_batch_id:
+        return False, "no_canonical_batch", delivery_state, {}
+
+    artifact = _load_public_proof_artifact(root, active_batch_id)
+    artifact_status = str(artifact.get("status", "") or "").strip().lower()
+    phase = str(delivery_state.get("phase", "") or "").strip().lower()
+    product_done = bool(delivery_state.get("product_done", False))
+    public_proof_status = str(delivery_state.get("public_proof_status", "") or "").strip().lower()
+
+    if product_done and not str(delivery_state.get("active_batch_id", "") or "").strip():
+        if artifact_status == "ok":
+            return False, "already_closed_with_public_proof", delivery_state, artifact
+        if artifact_status in {"error", "maintenance"}:
+            return True, "recheck_closed_batch_after_non_ok_proof", delivery_state, artifact
+        return False, "already_closed", delivery_state, artifact
+
+    if not artifact:
+        return True, "missing_public_proof_artifact", delivery_state, artifact
+
+    artifact_batch_id = str(artifact.get("batch_id", "") or "").strip().upper()
+    if artifact_batch_id != active_batch_id:
+        return True, "batch_changed", delivery_state, artifact
+
+    if artifact_status in {"error", "maintenance"}:
+        return True, f"retry_after_{artifact_status}", delivery_state, artifact
+
+    delta_ts = _parse_iso_utc(delivery_state.get("last_meaningful_delta_at"))
+    proof_ts = _parse_iso_utc(artifact.get("timestamp"))
+    if delta_ts is not None and (proof_ts is None or proof_ts < delta_ts):
+        return True, "new_delivery_delta_after_last_proof", delivery_state, artifact
+
+    if phase == "verifying_public_proof" and public_proof_status != "ok":
+        return True, "verifying_public_proof_pending", delivery_state, artifact
+
+    return False, "already_verified_current_batch", delivery_state, artifact
+
+
 def _sync_priority_cli(root: Path, board_path: Path, queue_path: Path, include_pass: bool) -> int:
     runtime_meta = _projection_runtime_meta(root)
     with board_lock(board_path):
@@ -4324,9 +4611,30 @@ def _planner_novelty_target_cli(root: Path, board_path: Path, queue_path: Path, 
 
 def _public_proof_cli(root: Path, args: argparse.Namespace) -> int:
     runtime_meta = _projection_runtime_meta(root)
+    batch_id = str(args.batch_id or "").strip() or None
+    if bool(args.if_needed):
+        should_run, reason, delivery_state, artifact = _should_run_public_proof(root, batch_id or "")
+        if not should_run:
+            active_batch_id = str(
+                delivery_state.get("active_batch_id")
+                or delivery_state.get("last_completed_batch_id")
+                or batch_id
+                or ""
+            ).strip().upper() or "none"
+            proof_ref = str(artifact.get("proof_ref") or "").strip() or str(_public_proof_artifact_path(root, active_batch_id))
+            print(
+                "PUBLIC_PROOF_SKIP "
+                f"reason={reason} "
+                f"batch_id={active_batch_id} "
+                f"status={str(artifact.get('status', 'skip') or 'skip').strip()} "
+                f"proof_ref={proof_ref or 'none'} "
+                f"runtime_truth_source={runtime_meta['runtime_truth_source']} "
+                f"event_store_primary={1 if runtime_meta['event_store_primary'] else 0}"
+            )
+            return 0
     artifact = run_public_proof(
         root,
-        batch_id=str(args.batch_id or "").strip() or None,
+        batch_id=batch_id,
         timeout_seconds=float(args.timeout_seconds),
     )
     print(
@@ -4348,10 +4656,12 @@ def _dispatch_capability_cli(root: Path, args: argparse.Namespace) -> int:
     target_role = str(args.target_role or "").strip().lower()
     source = str(args.source or "dispatch_capability_cli").strip() or "dispatch_capability_cli"
     backend = str(args.backend or "auto").strip() or "auto"
-    if target_role == "admin":
+    if _canonical_runtime_role(target_role) == "admin":
         payload = _dispatch_admin_capability(root, source=source, backend=backend)
-    elif target_role == "dev":
+        target_role = "admin"
+    elif _canonical_runtime_role(target_role) == "dev":
         payload = _dispatch_dev_capability(root, source=source, backend=backend)
+        target_role = "app-dev" if target_role in {"app-dev", "app_dev"} else "dev"
     else:
         print(f"DISPATCH_ERROR reason=unsupported_target_role target_role={target_role or 'none'}", file=sys.stderr)
         return 1
@@ -4424,6 +4734,8 @@ def main() -> int:
             return _public_proof_cli(root, args)
         if args.cmd == "dispatch-capability":
             return _dispatch_capability_cli(root, args)
+        if args.cmd == "api-wave-dispatch":
+            return _api_wave_dispatch_cli(root, args)
         with board_lock(board_path):
             board = load_board(board_path)
             if args.cmd == "claim":

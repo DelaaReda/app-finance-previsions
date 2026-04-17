@@ -104,6 +104,40 @@ class PlannerGuardianTests(unittest.TestCase):
         self.assertIn("debloque la lane active", patch["instruction"])
         self.assertNotIn("route bloquante", patch["instruction"])
 
+    def test_api_wave_idle_runtime_prefers_dispatch_over_autobatch(self) -> None:
+        patches = build_prompt_patches(
+            ["planner_passive_forbidden_violation", "planner_autobatch_missing_when_idle"],
+            {
+                "active_batch_ids": [],
+                "active_task_id": "",
+                "active_task_role": "",
+                "active_task_state": "",
+                "projection_decision_reason": "runtime_idle_no_active_cycle",
+                "product_delivery_state": {
+                    "phase": "idle_ready_for_next_batch",
+                    "next_batch_eligible": True,
+                    "api_wave": {
+                        "enabled": True,
+                        "dispatch_ready": True,
+                        "current_endpoint": {"endpoint_id": "copilot_search"},
+                    },
+                },
+            },
+            {"ready_idle_streak": 3},
+            {},
+            {
+                "queue_has_ready": 0,
+                "workboard_role_has_work": 0,
+                "workboard_role_has_in_progress": 0,
+                "top_level_non_closed": 0,
+            },
+        )
+        patch_ids = [patch["id"] for patch in patches]
+        self.assertIn("dispatch_api_wave_now", patch_ids)
+        self.assertNotIn("continue_api_wave_now", patch_ids)
+        self.assertNotIn("open_next_batch_now", patch_ids)
+        self.assertNotIn("claim_or_autobatch_now", patch_ids)
+
     def test_ready_downstream_patch_dispatches_instead_of_collecting(self) -> None:
         patches = build_prompt_patches(
             ["ready_but_none_task_update"],

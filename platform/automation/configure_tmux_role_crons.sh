@@ -106,19 +106,18 @@ with_admin_lock openclaw cron list --json > "${BACKUP_DIR}/list.${TS}.json"
 msg_for_role() {
   local role="$1"
   local role_model="$2"
-  local role_runner_arg="$role"
-  if [[ "$role" == "planner" ]]; then
-    role_runner_arg="vision-architect-tasks-planner"
-  fi
   cat <<EOF
 Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.
 Never call send/message/delivery actions.
-Command: cd ${WORKDIR} && TMUX_ROLE_AGENT_BIN=${ROLE_AGENT_BIN} TMUX_ROLE_RETRY_ENGINE_DEFAULT=${ROLE_RETRY_ENGINE_DEFAULT} PROMPT_TIMEOUT_SECONDS=${ROLE_PROMPT_TIMEOUT_SECONDS} RETRY_PROMPT_TIMEOUT_SECONDS=${ROLE_RETRY_PROMPT_TIMEOUT_SECONDS} TMUX_ROLE_RECOVERY_THRESHOLD=${ROLE_RECOVERY_THRESHOLD} TMUX_ROLE_NO_DELTA_THRESHOLD=${ROLE_NO_DELTA_THRESHOLD} TMUX_ROLE_STALL_ABORT_SECONDS=${ROLE_STALL_ABORT_SECONDS} SKIP_RETRY_ON_TIMEOUT=${ROLE_SKIP_RETRY_ON_TIMEOUT} TMUX_ROLE_CODEX_EXEC_FALLBACK=${ROLE_CODEX_EXEC_FALLBACK} TMUX_ROLE_CODEX_MODEL=${role_model} TMUX_ROLE_CODEX_EXEC_RESUME=${ROLE_CODEX_EXEC_RESUME} TMUX_ROLE_MIN_REFLECTION_PASSES=${ROLE_MIN_REFLECTION_PASSES} TMUX_ROLE_ALLOW_FILE_EDITS=${ROLE_ALLOW_FILE_EDITS} bash scripts/cron_tmux_role_runner.sh ${role_runner_arg}
+Command: cd ${WORKDIR} && FC_ROLE_TICK_MODE=continuous TMUX_ROLE_AGENT_BIN=${ROLE_AGENT_BIN} TMUX_ROLE_RETRY_ENGINE_DEFAULT=${ROLE_RETRY_ENGINE_DEFAULT} PROMPT_TIMEOUT_SECONDS=${ROLE_PROMPT_TIMEOUT_SECONDS} RETRY_PROMPT_TIMEOUT_SECONDS=${ROLE_RETRY_PROMPT_TIMEOUT_SECONDS} TMUX_ROLE_RECOVERY_THRESHOLD=${ROLE_RECOVERY_THRESHOLD} TMUX_ROLE_NO_DELTA_THRESHOLD=${ROLE_NO_DELTA_THRESHOLD} TMUX_ROLE_STALL_ABORT_SECONDS=${ROLE_STALL_ABORT_SECONDS} SKIP_RETRY_ON_TIMEOUT=${ROLE_SKIP_RETRY_ON_TIMEOUT} TMUX_ROLE_CODEX_EXEC_FALLBACK=${ROLE_CODEX_EXEC_FALLBACK} TMUX_ROLE_CODEX_MODEL=${role_model} TMUX_ROLE_CODEX_EXEC_RESUME=${ROLE_CODEX_EXEC_RESUME} TMUX_ROLE_MIN_REFLECTION_PASSES=${ROLE_MIN_REFLECTION_PASSES} TMUX_ROLE_ALLOW_FILE_EDITS=${ROLE_ALLOW_FILE_EDITS} bash scripts/fc_agent_tick.sh ${role}
 EOF
 }
 
 agent_for_role() {
-  printf '%s' "$1" | tr '-' '_'
+  case "$1" in
+    verifier) printf 'adminapp-codex' ;;
+    *) printf '%s' "$1" | tr '-' '_' ;;
+  esac
 }
 
 upsert_existing() {
@@ -210,17 +209,18 @@ upsert_by_name() {
 
 # Reuse existing IDs for all roles to avoid orphaned schedules and keep audit continuity.
 # Rebalanced cadence to reduce cron lane pressure while keeping role continuity.
-upsert_existing "09d045db-b12a-4486-a743-57b761d52e50" "planner-tmux-12m" "12m" "planner" "vision-architect-tasks-planner tmux context loop (rebalanced cadence)"
+upsert_existing "09d045db-b12a-4486-a743-57b761d52e50" "planner-tmux-12m" "12m" "planner" "Planner delivery decision lane"
 sleep 8
-upsert_existing "dfd61f17-206f-4feb-ab14-6ae4ce54f04c" "dev-tmux-15m" "15m" "dev" "Dev tmux context loop (rebalanced cadence)"
+upsert_existing "dfd61f17-206f-4feb-ab14-6ae4ce54f04c" "app-dev-tmux-15m" "15m" "app-dev" "App-dev implementation lane"
 sleep 8
-upsert_existing "36bed423-e965-4a19-a43a-c8ffbff751d8" "tester-tmux-15m" "15m" "tester" "Tester tmux context loop (rebalanced cadence)"
-sleep 8
-upsert_existing "454dc361-14bb-4f71-8ca2-ec86708c503f" "qa-tmux-20m" "20m" "qa" "QA tmux context loop (rebalanced cadence)"
-sleep 8
-upsert_existing "25756cb4-57f1-41c7-83d4-66fd67a0164d" "clawsentinel-tmux-25m" "25m" "clawsentinel" "ClawSentinel safety/quality tmux loop (rebalanced cadence)"
+upsert_existing "36bed423-e965-4a19-a43a-c8ffbff751d8" "verifier-10m" "10m" "verifier" "Verifier public-proof lane (change-driven)"
 
 # Coordination lanes merged into planner: disable legacy dedicated jobs if still present.
+disable_job_by_name "dev-tmux-15m"
+disable_job_by_name "tester-tmux-15m"
+disable_job_by_name "qa-tmux-20m"
+disable_job_by_name "clawsentinel-tmux-25m"
+disable_job_by_name "admin-tmux-20m"
 disable_job_by_name "architect-tmux-25m"
 disable_job_by_name "analyst-tmux-14m"
 disable_job_by_name "po-tmux-25m"

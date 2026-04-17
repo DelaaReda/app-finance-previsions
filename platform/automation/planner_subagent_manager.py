@@ -55,7 +55,7 @@ RETRYABLE_BACKEND_FAILURE_COOLDOWN_SECONDS = max(
     int(os.environ.get("FC_PLANNER_RETRYABLE_FAILURE_COOLDOWN_SECONDS", "300") or "300"),
 )
 ALLOWED_PARENT_ROLES = {"planner"}
-DEFAULT_MANAGED_ROLES = ("dev", "admin", "scrum_master")
+DEFAULT_MANAGED_ROLES = ("app-dev", "verifier", "admin")
 CODEX_STARTUP_NOISE_MARKERS = (
     "openai codex v",
     "research preview",
@@ -77,12 +77,14 @@ SECONDARY_CODEX_DEFAULT_MODEL = "gpt-5.4"
 SECONDARY_CODEX_DEFAULT_THINKING = "high"
 CANONICAL_RUNTIME_WORKSPACE = Path("/home/venom/analyse-financiere")
 ROLE_MODELS = {
-    "dev": ("codex-full/gpt-5.4", "high", "danger-full-access"),
+    "app-dev": ("codex-full/gpt-5.4", "high", "danger-full-access"),
+    "verifier": ("codex-full/gpt-5.4-mini", "medium", "danger-full-access"),
     "admin": ("codex-full/gpt-5.4", "high", "danger-full-access"),
     "scrum_master": ("codex-full/gpt-5.4", "high", "danger-full-access"),
 }
 ROLE_TASK_KINDS = {
-    "dev": {"delivery", "implementation", "verification", "targeted_fix"},
+    "app-dev": {"delivery", "implementation", "verification", "targeted_fix"},
+    "verifier": {"verification", "validation", "review", "public_proof"},
     "admin": {"runtime", "reconcile", "takeover", "repair"},
     "scrum_master": {"flow", "coordination", "unblock", "starvation"},
 }
@@ -150,6 +152,14 @@ def canonical_role(value: Any) -> str:
     token = str(value or "").strip().replace("-", "_").lower()
     if token in {"po_scrum_master", "scrum"}:
         return "scrum_master"
+    if token in {"app_dev", "app-dev"}:
+        return "app-dev"
+    if token in {"dev", "backend_engineer", "frontend_engineer", "data_analyst", "integrator"}:
+        return "app-dev"
+    if token in {"verifier", "qa", "tester"}:
+        return "verifier"
+    if token in {"infra_engineer", "clawsentinel"}:
+        return "admin"
     return token
 
 
@@ -1464,7 +1474,9 @@ def _expected_target_role_from_owner_task_id(owner_task_id: str) -> str:
         return ""
     marker = parts[2]
     if marker == "DEV":
-        return "dev"
+        return "app-dev"
+    if marker in {"VERIFY", "VERIFIER", "QA"}:
+        return "verifier"
     if marker == "ADMIN":
         return "admin"
     if marker == "GOV_REVIEW":
@@ -1491,7 +1503,7 @@ def _role_runtime_defaults(config: PlannerSubagentConfig, target_role: str) -> t
 def _effective_task_sandbox(target_role: str, task_kind: str, sandbox: str) -> str:
     role = canonical_role(target_role)
     current = str(sandbox or "").strip().lower() or "workspace-write"
-    if role in {"dev", "admin", "scrum_master"}:
+    if role in {"app-dev", "verifier", "admin", "scrum_master"}:
         return "danger-full-access"
     return current
 
@@ -1573,17 +1585,33 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         "status must be completed, blocked, or failed. blocked=in-scope blocker; failed=tool/runtime failure. If shipped or verified, set blocking_issue=none and recommended_next=planner_merge_result.\n"
         "blocked/failed require concrete blocking_issue + recommended_next. Use none or SKIP(reason) only when a field truly does not apply.\n"
         "You are a capability inside OWNER_TASK_ID, not a scheduler. No queue/workboard mutation, no repo-wide audit, no broad repo hygiene.\n"
-        "Target the smallest in-scope fix or proof for the Finance Copilot brief+ask with explainable memo output path or its next delivery blocker.\n"
+        "Target one mergeable product slice for the Finance Copilot brief+ask with explainable memo output path or its next delivery blocker.\n"
+        "If OWNER_TASK_ID starts with APIWAVE-, that slice is one full endpoint migration to Judge-parity, not a micro-orchestration tweak.\n"
         "Read minimum context with rg/sed/tail; for large memory/log files use rg/sed/tail instead of cat. As soon as you have proof or a real blocker, emit the final JSON immediately.\n"
         "Prefer a bounded fix or artifact now; do not stop at analysis-only.\n"
         "Work on the narrowest file/test set that can unblock OWNER_TASK_ID.\n"
         f"Planner instruction: {message.strip()}\n"
     )
-    if target_role == "dev":
+    if target_role in {"dev", "app-dev"}:
         return common + (
-            "Dev role:\n"
+            "App-dev role:\n"
             "- Default to code/config/tests inside the task path; touch docs/prompts only when the task notes make them part of the delivery slice.\n"
             "- Reuse existing modules, services, and contracts before creating new helpers or files.\n"
+            "- In API wave mode, you may ship one whole endpoint end-to-end: shared contract if needed, application/* logic, ..._endpoint_service.py, thin route, targeted tests, and public EC2 smoke.\n"
+            "- `judge` is the reference architecture and behavior model; do not refactor `judge` itself.\n"
+            "- Reuse judge_like_endpoint and existing metadata/fallback helpers before inventing new plumbing.\n"
+            "- Do not redesign frontend surfaces; wire only the minimal frontend change needed when the backend contract is already ready.\n"
+            "- verify=before=...; after=...; test=...\n"
+            "- architecture_check=layer=...; imports_ok=...; path_target=...\n"
+            "- vision_alignment=batch=...; target=...; impact=...\n"
+        )
+    if target_role == "verifier":
+        return common + (
+            "Verifier role:\n"
+            "- Own targeted validation, degraded-mode checks, and public proof for one delivery slice.\n"
+            "- In API wave mode, validate route -> service delegation, contract stability, metadata parity, fallback_used semantics, and public EC2 smoke.\n"
+            "- Reuse existing tests, public-proof runners, and endpoint-smoke helpers before adding new harnesses.\n"
+            "- If the backend is still structurally wrong, return blocked with the narrowest concrete missing layer/service/contract.\n"
             "- verify=before=...; after=...; test=...\n"
             "- architecture_check=layer=...; imports_ok=...; path_target=...\n"
             "- vision_alignment=batch=...; target=...; impact=...\n"

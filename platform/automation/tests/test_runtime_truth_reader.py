@@ -20,6 +20,52 @@ from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot, loa
 
 
 class RuntimeTruthReaderTests(unittest.TestCase):
+    def test_api_wave_state_exposes_next_endpoint_when_runtime_is_idle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(json.dumps({"items": []}), encoding="utf-8")
+            (orch / "parallel-workstreams.json").write_text(json.dumps({"tasks": []}), encoding="utf-8")
+            manifest_dir = root / "platform" / "automation" / "config"
+            manifest_dir.mkdir(parents=True, exist_ok=True)
+            (manifest_dir / "api_wave_manifest.v1.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "api_wave_manifest.v1",
+                        "mode": "api_autonomy",
+                        "enabled": True,
+                        "stream_id": "API-WAVE",
+                        "endpoints": [
+                            {
+                                "endpoint_id": "copilot_search",
+                                "domain": "copilot",
+                                "route_path": "/api/copilot/search",
+                                "route_module": "apps/api/src/domains/copilot/api/search.py",
+                                "priority": "P1",
+                                "product_surface": "copilot",
+                                "shared_contract": "copilot_search_v1",
+                                "endpoint_service": "copilot_search_endpoint_service.py",
+                                "parity_status": "route_heavy",
+                                "last_public_proof": "none",
+                                "deferred_reason": "none",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            snapshot = build_runtime_truth_snapshot(root, state_limit=8, event_limit=8, ec2_reachable=True)
+            delivery_state = snapshot["product_delivery_state"]
+            api_wave = snapshot["api_wave_state"]
+
+            self.assertTrue(delivery_state["api_autonomy_mode"])
+            self.assertTrue(api_wave["enabled"])
+            self.assertTrue(api_wave["dispatch_ready"])
+            self.assertEqual(api_wave["current_endpoint"]["endpoint_id"], "copilot_search")
+            self.assertEqual(api_wave["current_task_id"], "APIWAVE-COPILOT_SEARCH-DEV-01")
+
     def test_product_done_clears_active_batch_monotonically(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

@@ -17,64 +17,112 @@
       "model": "gpt-5.4",
       "thinking": "high",
       "resume": 1,
-      "rate_limit_precheck": 0,
+      "rate_limit_precheck": 1,
       "prompt_timeout_seconds": 300,
       "retry_timeout_seconds": 120,
       "tick_timeout_seconds": 420
     },
-    "dev": {
+    "app-dev": {
       "model": "gpt-5.4",
       "thinking": "high",
       "resume": 1,
-      "rate_limit_precheck": 0,
-      "prompt_timeout_seconds": 300,
-      "retry_timeout_seconds": 120,
+      "codex_require_fresh_tick": 0,
+      "codex_tick_autofix": 1,
+      "rate_limit_precheck": 1,
+      "prompt_timeout_seconds": 180,
+      "retry_timeout_seconds": 90,
       "tick_timeout_seconds": 540,
       "autonomy": {
         "stall_threshold_ticks": 2,
-        "enforce_cooldown_seconds": 1200,
+        "enforce_cooldown_seconds": 900,
         "max_enforced_per_hour": 4,
         "min_delivery_actions_24h": 4,
         "strict_enforce": 1
       }
     },
+    "dev": {
+      "model": "gpt-5.4",
+      "thinking": "high",
+      "resume": 1,
+      "codex_require_fresh_tick": 0,
+      "codex_tick_autofix": 1,
+      "rate_limit_precheck": 1,
+      "prompt_timeout_seconds": 180,
+      "retry_timeout_seconds": 90,
+      "tick_timeout_seconds": 540,
+      "autonomy": {
+        "stall_threshold_ticks": 2,
+        "enforce_cooldown_seconds": 900,
+        "max_enforced_per_hour": 4,
+        "min_delivery_actions_24h": 4,
+        "strict_enforce": 1
+      }
+    },
+    "verifier": {
+      "model": "gpt-5.4-mini",
+      "thinking": "medium",
+      "resume": 0,
+      "rate_limit_precheck": 0,
+      "prompt_timeout_seconds": 90,
+      "retry_timeout_seconds": 45,
+      "tick_timeout_seconds": 240
+    },
     "admin": {
       "model": "gpt-5.4",
       "thinking": "high",
-      "resume": 1,
-      "rate_limit_precheck": 0,
-      "prompt_timeout_seconds": 360,
-      "retry_timeout_seconds": 150,
-      "tick_timeout_seconds": 540
-    },
-    "scrum_master": {
-      "model": "gpt-5.4",
-      "thinking": "high",
-      "resume": 1,
-      "rate_limit_precheck": 0,
+      "resume": 0,
+      "rate_limit_precheck": 1,
       "prompt_timeout_seconds": 300,
       "retry_timeout_seconds": 120,
-      "tick_timeout_seconds": 420,
+      "tick_timeout_seconds": 420
+    },
+    "scrum_master": {
+      "model": "gpt-5.4-mini",
+      "thinking": "medium",
+      "resume": 0,
+      "rate_limit_precheck": 0,
+      "prompt_timeout_seconds": 180,
+      "retry_timeout_seconds": 90,
+      "tick_timeout_seconds": 300,
       "allow_bus_post": 1,
-      "max_posts_per_tick": 2,
-      "post_cooldown_s": 600
+      "max_posts_per_tick": 1,
+      "post_cooldown_s": 1800
     }
   },
   "features": {
+    "execution_topology": {
+      "continuous_roles": ["planner", "app-dev", "verifier"],
+      "tmux_roles": ["planner", "app-dev"],
+      "script_roles": ["verifier"],
+      "on_demand_roles": ["admin", "scrum_master", "architect", "prompt", "guardian"],
+      "legacy_aliases": {
+        "dev": "app-dev",
+        "backend_engineer": "app-dev",
+        "frontend_engineer": "app-dev",
+        "integrator": "app-dev",
+        "data_analyst": "app-dev",
+        "tester": "verifier",
+        "qa": "verifier",
+        "clawsentinel": "verifier",
+        "analyst": "planner",
+        "architect": "planner",
+        "po": "planner"
+      }
+    },
     "tshape": {
-      "enabled": 1,
+      "enabled": 0,
       "trigger": "blocked",
       "blocked_threshold": 1,
       "scope": "full_takeover",
       "exit_policy": "resolved_only",
-      "allowed_targets": "planner,dev"
+      "allowed_targets": "planner,app-dev"
     },
     "admin_dispatcher": {
-      "enabled": 1
+      "enabled": 0
     },
-    "po_scrum_master": {
-      "enabled": 1,
-      "cron_enabled_profile": "full"
+    "scrum_master": {
+      "enabled": 0,
+      "cron_enabled_profile": "slow"
     }
   },
   "paths": {
@@ -90,7 +138,7 @@
   },
   "retries": {
     "recovery_threshold": 2,
-    "no_delta_threshold": 12,
+    "no_delta_threshold": 3,
     "skip_retry_on_timeout": 1,
     "engine_default": "sdk"
   },

@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-97-BATCH-97-GOV_REVIEW-20260417T032901Z-451"
+stream_id: "BATCH-97"
+task_id: "BATCH-97-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-04-17T03:29:01Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(runtime_truth_already_verified)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-17T03:29:01Z"
+      ended_at_utc: "2026-04-17T03:29:01Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(no_code_runtime_fix)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/product_delivery_state.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "IK-3c673e7eddfb"
+  review_ref: "runner:BATCH-97-GOV_REVIEW"
+  note: "source=runner | root_cause=La preuve publique EC2 et product_delivery_state avaient deja clos BATCH-97, mais GOV_REVIEW restait IN_PROGRESS dans la projection planner | fix_applied=Cloture canonique de BATCH-97-GOV_REVIEW via planner_runtime_actions en s appuyant sur la verite runtime et la preuve admin deja fusionnee | verify=before=BATCH-97-GOV_REVIEW:IN_PROGRESS et product_delivery_state active_batch_id=null last_completed_batch_id=BATCH-97; after=completion planner demandee pour aligner queue et workboard sur product_done; test=planner_runtime_actions.py public-proof --if-needed --batch-id BATCH-97 => PUBLIC_PROOF_SKIP reason=already_closed | architecture_check=layer=platform; imports_ok=yes; path_target=platform/automation/runtime/planner/planner_runtime_actions.py|logs-codex-runs/orchestrator-state/product_delivery_state.json | vision_alignment=batch=BATCH-97; target=portfolio_first_brief_with_ranked_actions; impact=fermeture_gov_review_apres_preuve_publique_ec2"

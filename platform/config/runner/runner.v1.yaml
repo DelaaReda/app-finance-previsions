@@ -22,6 +22,24 @@
       "retry_timeout_seconds": 120,
       "tick_timeout_seconds": 420
     },
+    "app-dev": {
+      "model": "gpt-5.4",
+      "thinking": "high",
+      "resume": 1,
+      "codex_require_fresh_tick": 0,
+      "codex_tick_autofix": 1,
+      "rate_limit_precheck": 1,
+      "prompt_timeout_seconds": 180,
+      "retry_timeout_seconds": 90,
+      "tick_timeout_seconds": 540,
+      "autonomy": {
+        "stall_threshold_ticks": 2,
+        "enforce_cooldown_seconds": 900,
+        "max_enforced_per_hour": 4,
+        "min_delivery_actions_24h": 4,
+        "strict_enforce": 1
+      }
+    },
     "dev": {
       "model": "gpt-5.4",
       "thinking": "high",
@@ -31,33 +49,68 @@
       "rate_limit_precheck": 1,
       "prompt_timeout_seconds": 180,
       "retry_timeout_seconds": 90,
-      "tick_timeout_seconds": 540
+      "tick_timeout_seconds": 540,
+      "autonomy": {
+        "stall_threshold_ticks": 2,
+        "enforce_cooldown_seconds": 900,
+        "max_enforced_per_hour": 4,
+        "min_delivery_actions_24h": 4,
+        "strict_enforce": 1
+      }
+    },
+    "verifier": {
+      "model": "gpt-5.4-mini",
+      "thinking": "medium",
+      "resume": 0,
+      "rate_limit_precheck": 0,
+      "prompt_timeout_seconds": 90,
+      "retry_timeout_seconds": 45,
+      "tick_timeout_seconds": 240
     },
     "admin": {
       "model": "gpt-5.4",
       "thinking": "high",
-      "resume": 1,
-      "rate_limit_precheck": 1,
-      "prompt_timeout_seconds": 360,
-      "retry_timeout_seconds": 150,
-      "tick_timeout_seconds": 540
-    },
-    "scrum_master": {
-      "model": "gpt-5.4",
-      "thinking": "high",
-      "resume": 1,
+      "resume": 0,
       "rate_limit_precheck": 1,
       "prompt_timeout_seconds": 300,
       "retry_timeout_seconds": 120,
-      "tick_timeout_seconds": 420,
+      "tick_timeout_seconds": 420
+    },
+    "scrum_master": {
+      "model": "gpt-5.4-mini",
+      "thinking": "medium",
+      "resume": 0,
+      "rate_limit_precheck": 0,
+      "prompt_timeout_seconds": 180,
+      "retry_timeout_seconds": 90,
+      "tick_timeout_seconds": 300,
       "allow_bus_post": 1,
-      "max_posts_per_tick": 2,
-      "post_cooldown_s": 600
+      "max_posts_per_tick": 1,
+      "post_cooldown_s": 1800
     }
   },
   "features": {
+    "execution_topology": {
+      "continuous_roles": ["planner", "app-dev", "verifier"],
+      "tmux_roles": ["planner", "app-dev"],
+      "script_roles": ["verifier"],
+      "on_demand_roles": ["admin", "scrum_master", "architect", "prompt", "guardian"],
+      "legacy_aliases": {
+        "dev": "app-dev",
+        "backend_engineer": "app-dev",
+        "frontend_engineer": "app-dev",
+        "integrator": "app-dev",
+        "data_analyst": "app-dev",
+        "tester": "verifier",
+        "qa": "verifier",
+        "clawsentinel": "verifier",
+        "analyst": "planner",
+        "architect": "planner",
+        "po": "planner"
+      }
+    },
     "tshape": {
-      "enabled": 1,
+      "enabled": 0,
       "trigger": "blocked",
       "blocked_threshold": 1,
       "scope": "full_takeover",
@@ -65,10 +118,10 @@
       "allowed_targets": "planner,dev"
     },
     "admin_dispatcher": {
-      "enabled": 1
+      "enabled": 0
     },
     "admin_autonomy": {
-      "enabled": 1,
+      "enabled": 0,
       "stall_ticks_threshold": 2,
       "scope": "full_with_proofs",
       "max_actions": 2,
@@ -79,8 +132,8 @@
       "security_window_min": 10
     },
     "scrum_master": {
-      "enabled": 1,
-      "cron_enabled_profile": "full"
+      "enabled": 0,
+      "cron_enabled_profile": "slow"
     },
     "state_reconciler": {
       "enabled": 1,
@@ -95,14 +148,14 @@
       "burst_threshold": 3
     },
     "scrum_policy": {
-      "enabled": 1,
+      "enabled": 0,
       "ready_starvation_seconds": 1800,
       "stalled_in_progress_seconds": 14400,
       "escalate_after_cycles": 2
     },
     "planner_orchestrator": {
       "enabled": 1,
-      "cron_planner_only": 1,
+      "cron_planner_only": 0,
       "max_active": 3,
       "default_ttl_min": 45,
       "retry_max": 2,
@@ -110,17 +163,15 @@
       "default_helper_mode": "worker_first",
       "backend": "auto",
       "backend_by_role": {
-        "admin": "codex_exec",
         "runtime": "codex_exec",
         "dev": "codex_exec",
-        "qa": "codex_exec",
-        "scrum_master": "codex_exec"
+        "admin": "codex_exec"
       },
-      "managed_roles": ["dev", "admin", "scrum_master"]
+      "managed_roles": ["dev", "admin"]
     },
     "dynamic_workers": {
       "enabled": 1,
-      "max_active": 6,
+      "max_active": 4,
       "default_ttl_min": 60,
       "retry_max": 2,
       "allowed_roles": ["planner", "dev", "admin"]
@@ -136,9 +187,9 @@
       "ready_task_only": 1
     },
     "stability": {
-      "admin_runtime_stale_autoheal": 1,
-      "scrum_artifact_autofill": 1,
-      "scrum_auto_intents_hardened": 1,
+      "admin_runtime_stale_autoheal": 0,
+      "scrum_artifact_autofill": 0,
+      "scrum_auto_intents_hardened": 0,
       "monitor_ready_dev_from_workboard": 1
     }
   },
@@ -155,7 +206,7 @@
   },
   "retries": {
     "recovery_threshold": 2,
-    "no_delta_threshold": 12,
+    "no_delta_threshold": 3,
     "skip_retry_on_timeout": 1,
     "engine_default": "sdk"
   },

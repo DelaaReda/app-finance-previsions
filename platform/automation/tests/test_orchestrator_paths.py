@@ -19,6 +19,7 @@ from orchestrator_paths import (
     runtime_state_root,
     write_orchestrator_json,
 )
+from runtime.truth.lane_backoff import persist_lane_backoff
 
 
 class OrchestratorPathsTests(unittest.TestCase):
@@ -88,6 +89,38 @@ class OrchestratorPathsTests(unittest.TestCase):
 
             self.assertEqual(json.loads(runtime_path.read_text(encoding="utf-8")), {"tasks": [{"id": "BATCH-01-DEV-01"}]})
             self.assertEqual(json.loads(docs_path.read_text(encoding="utf-8")), {"tasks": [{"id": "BATCH-01-DEV-01"}]})
+
+    def test_lane_backoff_is_mirrored_into_runtime_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            persist_runtime_state(
+                root,
+                lifecycle="running",
+                reason="unit_test",
+                execution_mode="parallel_roles",
+                operator_mode="delivery-first",
+                source="unit_test",
+            )
+
+            persist_lane_backoff(
+                root,
+                "verifier",
+                {
+                    "active": True,
+                    "reason": "verifier_no_change_streak",
+                    "trigger_streak": 3,
+                    "batch_id": "BATCH-101",
+                    "phase": "verifying_public_proof",
+                },
+            )
+
+            state = load_runtime_state(root)
+            lane_backoff = state.get("lane_backoff", {})
+
+            self.assertIn("verifier", lane_backoff)
+            self.assertTrue(lane_backoff["verifier"]["active"])
+            self.assertEqual(lane_backoff["verifier"]["reason"], "verifier_no_change_streak")
+            self.assertEqual(lane_backoff["verifier"]["batch_id"], "BATCH-101")
 
 
 if __name__ == "__main__":

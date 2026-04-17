@@ -72,11 +72,17 @@ export PATH="/home/venom/.npm-global/bin:$PATH"
 mkdir -p "$LOG_DIR" "$LOCK_DIR"
 
 if [[ -z "$ROLE" ]]; then
-  echo "Usage: $0 <role|planner_architect_orchestrator|vision-architect-tasks-planner>" >&2
+  echo "Usage: $0 <planner|app-dev|verifier|admin|scrum_master|aliases...>" >&2
   exit 1
 fi
 
 ROLE_INPUT="$ROLE"
+FC_AGENT_TICK_MODE="${FC_AGENT_TICK_MODE:-${FC_ROLE_TICK_MODE:-continuous}}"
+FC_AGENT_TICK_EXPLICIT="${FC_AGENT_TICK_EXPLICIT:-0}"
+FC_AGENT_TICK_ON_DEMAND="${FC_AGENT_TICK_ON_DEMAND:-0}"
+if [[ "$FC_AGENT_TICK_MODE" == "on_demand" || "$FC_AGENT_TICK_EXPLICIT" == "1" ]]; then
+  FC_AGENT_TICK_ON_DEMAND="1"
+fi
 FC_SCRUM_MASTER_ENABLED="${FC_SCRUM_MASTER_ENABLED:-1}"
 FC_ENABLE_PO_SCRUM_MASTER="${FC_ENABLE_PO_SCRUM_MASTER:-${FC_SCRUM_MASTER_ENABLED}}"
 FC_PO_SCRUM_MASTER_RUN_NOW="${FC_PO_SCRUM_MASTER_RUN_NOW:-1}"
@@ -92,29 +98,30 @@ FC_EXPERIMENTAL_PLANNER_ONLY="${FC_EXPERIMENTAL_PLANNER_ONLY:-0}"
 if [[ "${FC_PLANNER_ORCHESTRATOR_ENABLED:-0}" == "1" && "${FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY:-0}" == "1" ]]; then
   FC_EXPERIMENTAL_PLANNER_ONLY="1"
 fi
-LEGACY_ROLE_ALIAS_MODE="${FC_LEGACY_ROLE_ALIAS_MODE:-skip}"
+LEGACY_ROLE_ALIAS_MODE="${FC_LEGACY_ROLE_ALIAS_MODE:-map}"
 DEFAULT_ROLE_ALLOW_FILE_EDITS="0"
 if [[ "${FC_FORCE_ALLOW_FILE_EDITS_ALL}" == "1" ]]; then
   DEFAULT_ROLE_ALLOW_FILE_EDITS="1"
 fi
-# === CONSOLIDATION 2026-03-02: legacy aliases → 4 runtime roles ===
-# Tout ce qui était backend_engineer / frontend_engineer / data_analyst → dev
-# Tout ce qui était architect / po / analyst → planner
-# Tout ce qui était clawsentinel / infra_engineer / qa → admin
+# === DELIVERY-FIRST CUTOVER 2026-04-16: 3 continuous lanes ===
+# planner = seule lane de décision
+# app-dev = implémentation produit
+# verifier = preuve publique API/UI
+# admin/scrum_master ne survivent qu'en on-demand explicite
 case "$ROLE" in
   planner_architect_orchestrator)
     ROLE="planner"
     ;;
-  backend_engineer|frontend_engineer|data_analyst|integrator)
+  app-dev|app_dev|dev|backend_engineer|frontend_engineer|data_analyst|integrator)
     if [[ "$LEGACY_ROLE_ALIAS_MODE" == "map" ]]; then
-      echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'dev' (legacy alias mode=map)" >&2
-      ROLE="dev"
+      echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'app-dev' (legacy alias mode=map)" >&2
+      ROLE="app-dev"
     else
       echo "[fc_tick] Role '$ROLE_INPUT' is legacy; skip tick to avoid lock contention (set FC_LEGACY_ROLE_ALIAS_MODE=map to map)" >&2
       exit 0
     fi
     ;;
-  analyst|architect|po|vision-architect-tasks-planner|vision_architect_tasks_planner)
+  guardian|prompt|analyst|architect|po|vision-architect-tasks-planner|vision_architect_tasks_planner)
     if [[ "$ROLE" == "vision-architect-tasks-planner" || "$ROLE" == "vision_architect_tasks_planner" ]]; then
       ROLE="planner"
     elif [[ "$LEGACY_ROLE_ALIAS_MODE" == "map" ]]; then
@@ -128,7 +135,16 @@ case "$ROLE" in
   scrum_master)
     ROLE="scrum_master"
     ;;
-  clawsentinel|infra_engineer|qa|tester)
+  verifier|qa|tester)
+    if [[ "$LEGACY_ROLE_ALIAS_MODE" == "map" ]]; then
+      echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'verifier' (legacy alias mode=map)" >&2
+      ROLE="verifier"
+    else
+      echo "[fc_tick] Role '$ROLE_INPUT' is legacy; skip tick to avoid lock contention (set FC_LEGACY_ROLE_ALIAS_MODE=map to map)" >&2
+      exit 0
+    fi
+    ;;
+  infra_engineer|clawsentinel)
     if [[ "$LEGACY_ROLE_ALIAS_MODE" == "map" ]]; then
       echo "[fc_tick] Role '$ROLE_INPUT' consolidated into 'admin' (legacy alias mode=map)" >&2
       ROLE="admin"
@@ -142,11 +158,17 @@ esac
 ROLE_RL_CACHE_FILE="${CODEX_RL_CACHE_DIR}/${ROLE}.rate_limit_gate_cache"
 ROLE_STATE_CONTRACT_FILE="${CODEX_RL_CACHE_DIR}/${ROLE}.last_contract"
 
-# 4 rôles actifs
+# 3 lanes continues + on-demand auxiliaire
 case "$ROLE" in
-  dev|planner|admin|scrum_master) ;;
+  planner|app-dev|verifier) ;;
+  admin|scrum_master)
+    if [[ "$FC_AGENT_TICK_ON_DEMAND" != "1" ]]; then
+      echo "[fc_tick] Role '$ROLE_INPUT' (canonical=$ROLE) is on-demand only; skipping continuous tick" >&2
+      exit 0
+    fi
+    ;;
   *)
-    echo "[fc_tick] Role '$ROLE_INPUT' (canonical=$ROLE) not in active set {planner,dev,admin,scrum_master}, skipping" >&2
+    echo "[fc_tick] Role '$ROLE_INPUT' (canonical=$ROLE) not in supported set {planner,app-dev,verifier,admin,scrum_master}, skipping" >&2
     exit 0
     ;;
 esac
@@ -202,6 +224,186 @@ if [[ "$FC_EXPERIMENTAL_PLANNER_ONLY" == "1" ]]; then
 fi
 
 ts() { date '+%Y-%m-%dT%H:%M:%S'; }
+
+session_name_for_role() {
+  local role="$1"
+  local prefix="${2:-codex}"
+  case "$role" in
+    planner)
+      printf '%s\n' "${prefix}_planner_cron"
+      ;;
+    app-dev)
+      printf '%s\n' "${prefix}_dev_cron"
+      ;;
+    *)
+      printf '%s\n' "${prefix}_${role}_cron"
+      ;;
+  esac
+}
+
+delivery_signature() {
+  python3 - "$ROOT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+path = root / "logs-codex-runs" / "orchestrator-state" / "product_delivery_state.json"
+try:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    payload = {}
+current_public = payload.get("current_public_proof") if isinstance(payload.get("current_public_proof"), dict) else {}
+print(
+    "|".join(
+        [
+            str(payload.get("active_batch_id") or "none"),
+            str(payload.get("phase") or "unknown"),
+            str(payload.get("last_meaningful_delta_at") or "none"),
+            str(current_public.get("proof_ref") or "none"),
+            str(payload.get("public_proof_status") or "unknown"),
+            "1" if bool(payload.get("ec2_reachable", False)) else "0",
+        ]
+    )
+)
+PY
+}
+
+lane_backoff_snapshot() {
+  local role="$1"
+  python3 - "$ROOT" "$role" <<'PY'
+import sys
+from runtime.truth.lane_backoff import load_lane_backoff, is_lane_backoff_active
+
+root, role = sys.argv[1:3]
+payload = load_lane_backoff(root, role)
+print(
+    "|".join(
+        [
+            "1" if is_lane_backoff_active(payload) else "0",
+            str(payload.get("batch_id") or "none"),
+            str(payload.get("phase") or "none"),
+            str(payload.get("reason") or "none"),
+            str(payload.get("trigger_streak") or 0),
+        ]
+    )
+)
+PY
+}
+
+clear_lane_backoff() {
+  local role="$1"
+  local reason="$2"
+  python3 - "$ROOT" "$role" "$reason" <<'PY'
+import sys
+from runtime.truth.lane_backoff import clear_lane_backoff
+
+root, role, reason = sys.argv[1:4]
+clear_lane_backoff(root, role, reason=reason or "cleared")
+PY
+}
+
+set_lane_backoff() {
+  local role="$1"
+  local reason="$2"
+  local streak="$3"
+  local batch_id="$4"
+  local phase="$5"
+  local duration_minutes="${6:-20}"
+  python3 - "$ROOT" "$role" "$reason" "$streak" "$batch_id" "$phase" "$duration_minutes" <<'PY'
+import sys
+from datetime import datetime, timedelta, timezone
+from runtime.truth.lane_backoff import write_lane_backoff
+
+root, role, reason, streak, batch_id, phase, duration_minutes = sys.argv[1:8]
+minutes = max(1, int(duration_minutes or "20"))
+now = datetime.now(timezone.utc)
+until = now + timedelta(minutes=minutes)
+write_lane_backoff(
+    root,
+    role,
+    {
+        "active": True,
+        "reason": reason or "lane_backoff",
+        "trigger_streak": int(streak or "0"),
+        "batch_id": batch_id if batch_id and batch_id != "none" else None,
+        "phase": phase if phase and phase != "none" else None,
+        "until": until.isoformat().replace("+00:00", "Z"),
+        "until_epoch": int(until.timestamp()),
+        "updated_at": now.isoformat().replace("+00:00", "Z"),
+    },
+)
+PY
+}
+
+lane_progress_streak() {
+  local role="$1"
+  local action="${2:-get}"
+  local value="${3:-0}"
+  local file="${CODEX_RL_CACHE_DIR}/${role}.delivery_progress_state.json"
+  python3 - "$file" "$action" "$value" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+path = Path(sys.argv[1])
+action = sys.argv[2]
+value = int(sys.argv[3] or "0")
+try:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    payload = {}
+if action == "get":
+    print(int(payload.get("null_tick_streak", 0) or 0))
+else:
+    payload["null_tick_streak"] = max(0, value)
+    payload["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
+    print(payload["null_tick_streak"])
+PY
+}
+
+BEFORE_DELIVERY_SIGNATURE=""
+ACTIVE_BATCH_BEFORE="none"
+DELIVERY_PHASE_BEFORE="unknown"
+LAST_DELTA_BEFORE="none"
+PROOF_REF_BEFORE="none"
+PUBLIC_PROOF_STATUS_BEFORE="unknown"
+EC2_REACHABLE_BEFORE="0"
+if [[ "$ROLE" == "app-dev" || "$ROLE" == "verifier" ]]; then
+  BEFORE_DELIVERY_SIGNATURE="$(delivery_signature)"
+  ACTIVE_BATCH_BEFORE="${BEFORE_DELIVERY_SIGNATURE%%|*}"
+  _delivery_rest="${BEFORE_DELIVERY_SIGNATURE#*|}"
+  DELIVERY_PHASE_BEFORE="${_delivery_rest%%|*}"
+  _delivery_rest="${_delivery_rest#*|}"
+  LAST_DELTA_BEFORE="${_delivery_rest%%|*}"
+  _delivery_rest="${_delivery_rest#*|}"
+  PROOF_REF_BEFORE="${_delivery_rest%%|*}"
+  _delivery_rest="${_delivery_rest#*|}"
+  PUBLIC_PROOF_STATUS_BEFORE="${_delivery_rest%%|*}"
+  EC2_REACHABLE_BEFORE="${_delivery_rest##*|}"
+
+  BACKOFF_SNAPSHOT="$(lane_backoff_snapshot "$ROLE")"
+  BACKOFF_ACTIVE="${BACKOFF_SNAPSHOT%%|*}"
+  _backoff_rest="${BACKOFF_SNAPSHOT#*|}"
+  BACKOFF_BATCH="${_backoff_rest%%|*}"
+  _backoff_rest="${_backoff_rest#*|}"
+  BACKOFF_PHASE="${_backoff_rest%%|*}"
+  _backoff_rest="${_backoff_rest#*|}"
+  BACKOFF_REASON="${_backoff_rest%%|*}"
+  BACKOFF_TRIGGER_STREAK="${_backoff_rest##*|}"
+  if [[ "$BACKOFF_ACTIVE" == "1" ]]; then
+    if [[ "$ACTIVE_BATCH_BEFORE" != "$BACKOFF_BATCH" || "$DELIVERY_PHASE_BEFORE" != "$BACKOFF_PHASE" ]]; then
+      clear_lane_backoff "$ROLE" "state_changed"
+      echo "$(ts) [LANE_BACKOFF_CLEAR] role=$ROLE reason=state_changed batch_id=${ACTIVE_BATCH_BEFORE} phase=${DELIVERY_PHASE_BEFORE}" >> "$LOG"
+    else
+      echo "$(ts) [LANE_BACKOFF_SKIP] role=$ROLE reason=${BACKOFF_REASON} streak=${BACKOFF_TRIGGER_STREAK} batch_id=${ACTIVE_BATCH_BEFORE} phase=${DELIVERY_PHASE_BEFORE}" >> "$LOG"
+      exit 0
+    fi
+  fi
+fi
 
 load_runner_config_env() {
   local cfg_role="$1"
@@ -533,8 +735,7 @@ LAST_EPOCH=0
 echo "$NOW_EPOCH" > "$RESUME_FILE"
 
 GAP=$((NOW_EPOCH - LAST_EPOCH))
-SESSION="codex_${ROLE}_cron"
-[[ "$ROLE" == "planner" ]] && SESSION="codex_planner_cron"
+SESSION="$(session_name_for_role "$ROLE" "codex")"
 
 # If gap is abnormally large, VM likely woke from sleep — kill stale session
 if [[ "$LAST_EPOCH" -gt 0 && "$GAP" -gt "$VM_RESUME_KILL_GAP_SECONDS" ]]; then
@@ -580,21 +781,24 @@ CODEX_COOLDOWN_ACTIVE=0
 RATE_LIMIT_SECONDARY_MODEL="${TMUX_ROLE_RATE_LIMIT_SECONDARY_MODEL:-${TMUX_ROLE_RATE_LIMIT_FALLBACK_MODEL:-${LM_FALLBACK_SECONDARY_MODEL:-gpt-5.3-codex-spark}}}"
 RATE_LIMIT_SECONDARY_THINKING="${TMUX_ROLE_RATE_LIMIT_SECONDARY_THINKING:-${LM_FALLBACK_SECONDARY_THINKING:-high}}"
 # Default conservative: keep qwen fallback opt-in until qwen tmux transport is hardened.
-if [[ "$ROLE" == "planner" || "$ROLE" == "dev" || "$ROLE" == "admin" ]]; then
+if [[ "$ROLE" == "planner" || "$ROLE" == "app-dev" || "$ROLE" == "admin" || "$ROLE" == "verifier" ]]; then
   FC_ENABLE_QWEN_FALLBACK="${FC_ENABLE_QWEN_FALLBACK:-${TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK:-1}}"
 fi
 ENABLE_QWEN_FALLBACK="${FC_ENABLE_QWEN_FALLBACK:-${TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK:-1}}"
+if [[ "$ROLE" == "verifier" ]]; then
+  ENABLE_QWEN_FALLBACK=0
+fi
 
 if ! [[ "$ENABLE_QWEN_FALLBACK" =~ ^[01]$ ]]; then
   ENABLE_QWEN_FALLBACK=0
 fi
 
-if is_rl_cache_active "$ROLE_RL_CACHE_FILE"; then
+if [[ "$ROLE" != "verifier" ]] && is_rl_cache_active "$ROLE_RL_CACHE_FILE"; then
   echo "$(ts) [SKIP] role cooldown active (${ROLE_RL_CACHE_FILE}) reason=$(cache_reason "$ROLE_RL_CACHE_FILE")" >> "$LOG"
   exit 0
 fi
 
-if is_rl_cache_active "$CODEX_RL_CACHE_FILE"; then
+if [[ "$ROLE" != "verifier" ]] && is_rl_cache_active "$CODEX_RL_CACHE_FILE"; then
   CODEX_COOLDOWN_ACTIVE=1
 fi
 
@@ -640,7 +844,7 @@ if [[ "$CODEX_COOLDOWN_ACTIVE" -eq 1 ]]; then
 
     AGENT_MODE="qwen"
     AGENT_BIN_EFFECTIVE="$QWEN_BIN"
-    SESSION="qwen_${ROLE}_cron"
+    SESSION="$(session_name_for_role "$ROLE" "qwen")"
     echo "$(ts) [AGENT] using qwen fallback: $QWEN_BIN" >> "$LOG"
   fi
 fi
@@ -653,11 +857,13 @@ if [[ "$AGENT_MODE" == "qwen" ]]; then
   LAUNCH_CMD="${QWEN_BIN} --channel CI --approval-mode yolo --chat-recording false -o text"
 fi
 
-if ! tmux has-session -t "$SESSION" 2>/dev/null; then
-  echo "$(ts) [START_SESSION] $SESSION agent=$AGENT_MODE" >> "$LOG"
-  tmux new-session -d -s "$SESSION" -c "$ROOT" \
-    "bash -lc 'export PATH=/home/venom/.npm-global/bin:\$PATH; unset NO_COLOR; export TERM=xterm-256color FORCE_COLOR=1; exec $LAUNCH_CMD'"
-  sleep 3
+if [[ "$ROLE" != "verifier" ]]; then
+  if ! tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "$(ts) [START_SESSION] $SESSION agent=$AGENT_MODE" >> "$LOG"
+    tmux new-session -d -s "$SESSION" -c "$ROOT" \
+      "bash -lc 'export PATH=/home/venom/.npm-global/bin:\$PATH; unset NO_COLOR; export TERM=xterm-256color FORCE_COLOR=1; exec $LAUNCH_CMD'"
+    sleep 3
+  fi
 fi
 
 # ============================================================
@@ -752,7 +958,7 @@ if [[ "$SANITIZED_ROLE_MODEL" == "qwen" ]]; then
   QWEN_BIN="$RESOLVED_QWEN_BIN"
   AGENT_MODE="qwen"
   AGENT_BIN_EFFECTIVE="$QWEN_BIN"
-  SESSION="qwen_${ROLE}_cron"
+  SESSION="$(session_name_for_role "$ROLE" "qwen")"
   echo "$(ts) [AGENT] qwen primary (not fallback) role=$ROLE" >> "$LOG"
 fi
 
@@ -819,7 +1025,7 @@ case "$ROLE" in
     export TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S="${FC_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S:-0}"
     export TMUX_ROLE_PLANNER_PREFLIGHT_SYNC="${FC_PLANNER_PREFLIGHT_SYNC:-1}"
     ;;
-  dev)
+  app-dev)
     export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_DEV_RATE_LIMIT_PRECHECK:-${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}}"
     export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_DEV_CODEX_EXEC_RESUME:-1}"
     export TMUX_ROLE_RATE_LIMIT_SECONDARY_MODEL="${FC_DEV_RATE_LIMIT_SECONDARY_MODEL:-gpt-5.3-codex-spark}"
@@ -836,6 +1042,15 @@ case "$ROLE" in
     export FC_DEV_WAIT_READY_TASK_ONLY="${FC_DEV_WAIT_READY_TASK_ONLY:-1}"
     export TMUX_ROLE_DEV_WAIT_ROLE_SCOPED="${FC_DEV_WAIT_ROLE_SCOPED:-1}"
     export TMUX_ROLE_DEV_WAIT_READY_TASK_ONLY="${FC_DEV_WAIT_READY_TASK_ONLY:-1}"
+    ;;
+  verifier)
+    export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_VERIFIER_RATE_LIMIT_PRECHECK:-1}"
+    export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_VERIFIER_CODEX_EXEC_RESUME:-1}"
+    export PROMPT_TIMEOUT_SECONDS="${FC_VERIFIER_PROMPT_TIMEOUT_SECONDS:-120}"
+    export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_VERIFIER_RETRY_TIMEOUT_SECONDS:-60}"
+    TICK_TIMEOUT_SECONDS="$(normalize_seconds "${FC_VERIFIER_TICK_TIMEOUT_SECONDS:-240}" "$TICK_TIMEOUT_SECONDS" "120" "600")"
+    export TMUX_ROLE_STALL_ABORT_SECONDS="${FC_VERIFIER_STALL_ABORT_SECONDS:-45}"
+    export ROLE_ALLOW_FILE_EDITS="0"
     ;;
   admin)
     export TMUX_ROLE_CODEX_MODEL="${TMUX_ROLE_CODEX_MODEL:-${FC_ADMIN_MODEL:-$SANITIZED_ROLE_MODEL}}"
@@ -955,10 +1170,28 @@ if [[ "$ROLE" == "admin" && "${FC_ADMIN_DISPATCH_ENABLED:-1}" == "1" ]]; then
   fi
 fi
 
+if [[ "$ROLE" == "verifier" ]]; then
+  echo "$(ts) [TICK] role=$ROLE agent=local mode=verifier_autonomy timeout=${TICK_TIMEOUT_SECONDS}s" >> "$LOG"
+  set +e
+  RESULT="$(run_with_timeout_portable "$TICK_TIMEOUT_SECONDS" bash platform/automation/verifier_autonomy_tick.sh 2>&1)"
+  RC=$?
+  set -e
+  echo "$(ts) [END] role=$ROLE agent=local rc=$RC" >> "$LOG"
+  if [[ -n "$RESULT" ]]; then
+    printf '%s\n' "$RESULT" >> "$LOG"
+  fi
+  exit 0
+fi
+
+RUNNER_ROLE="$ROLE"
+if [[ "$ROLE" == "app-dev" ]]; then
+  RUNNER_ROLE="dev"
+fi
+
 echo "$(ts) [TICK] role=$ROLE agent=$AGENT_MODE session=$SESSION timeout=${TICK_TIMEOUT_SECONDS}s" >> "$LOG"
 
 set +e
-RESULT="$(run_with_timeout_portable "$TICK_TIMEOUT_SECONDS" bash scripts/cron_tmux_role_runner.sh "$ROLE" 2>&1)"
+RESULT="$(run_with_timeout_portable "$TICK_TIMEOUT_SECONDS" bash scripts/cron_tmux_role_runner.sh "$RUNNER_ROLE" 2>&1)"
 RC=$?
 set -e
 
@@ -1051,6 +1284,37 @@ if [[ -n "$RESULT" ]]; then
 
     if [[ -n "$TASK_UPDATE$STREAM_ID$TASK_ID$RUN_NOTE$ROOT_CAUSE$FIX_APPLIED$VERIFY_NOTE$ISSUE_COUNT$ISSUE_SEVERITY$ISSUES_LIST" ]]; then
       echo "$(ts) [ACTION] task_update=$(printf '%s' "${TASK_UPDATE:-?}" | cut -c1-24) stream=$(printf '%s' "${STREAM_ID:-?}" | cut -c1-24) task=$(printf '%s' "${TASK_ID:-?}" | cut -c1-28) issue_count=$(printf '%s' "${ISSUE_COUNT:-?}" | cut -c1-5) issue_severity=$(printf '%s' "${ISSUE_SEVERITY:-?}" | cut -c1-12) issues=$(printf '%s' "${ISSUES_LIST:-?}" | cut -c1-44) run_note=$(printf '%s' "${RUN_NOTE:-?}" | cut -c1-70) root_cause=$(printf '%s' "${ROOT_CAUSE:-?}" | cut -c1-40) fix=$(printf '%s' "${FIX_APPLIED:-?}" | cut -c1-40) verify=$(printf '%s' "${VERIFY_NOTE:-?}" | cut -c1-40)" >> "$LOG"
+    fi
+  fi
+fi
+
+if [[ "$ROLE" == "app-dev" ]]; then
+  AFTER_DELIVERY_SIGNATURE="$(delivery_signature)"
+  APP_DEV_MEANINGFUL_PROGRESS=0
+  case "${TASK_UPDATE:-}" in
+    claim|progress|complete|handoff)
+      APP_DEV_MEANINGFUL_PROGRESS=1
+      ;;
+  esac
+  if [[ "$AFTER_DELIVERY_SIGNATURE" != "$BEFORE_DELIVERY_SIGNATURE" ]]; then
+    APP_DEV_MEANINGFUL_PROGRESS=1
+  fi
+
+  if [[ "$APP_DEV_MEANINGFUL_PROGRESS" == "1" ]]; then
+    lane_progress_streak "$ROLE" set 0 >/dev/null
+    clear_lane_backoff "$ROLE" "progress_observed"
+    echo "$(ts) [LANE_PROGRESS] role=$ROLE status=meaningful_progress before=${BEFORE_DELIVERY_SIGNATURE} after=${AFTER_DELIVERY_SIGNATURE}" >> "$LOG"
+  else
+    APP_DEV_NULL_STREAK="$(lane_progress_streak "$ROLE" get)"
+    if ! [[ "$APP_DEV_NULL_STREAK" =~ ^[0-9]+$ ]]; then
+      APP_DEV_NULL_STREAK=0
+    fi
+    APP_DEV_NULL_STREAK=$(( APP_DEV_NULL_STREAK + 1 ))
+    lane_progress_streak "$ROLE" set "$APP_DEV_NULL_STREAK" >/dev/null
+    echo "$(ts) [LANE_PROGRESS] role=$ROLE status=null_tick streak=${APP_DEV_NULL_STREAK} batch_id=${ACTIVE_BATCH_BEFORE} phase=${DELIVERY_PHASE_BEFORE}" >> "$LOG"
+    if (( APP_DEV_NULL_STREAK >= 3 )); then
+      set_lane_backoff "$ROLE" "app_dev_no_progress_streak" "$APP_DEV_NULL_STREAK" "$ACTIVE_BATCH_BEFORE" "$DELIVERY_PHASE_BEFORE" "${FC_APP_DEV_BACKOFF_MINUTES:-20}"
+      echo "$(ts) [LANE_BACKOFF_SET] role=$ROLE reason=app_dev_no_progress_streak streak=${APP_DEV_NULL_STREAK} batch_id=${ACTIVE_BATCH_BEFORE} phase=${DELIVERY_PHASE_BEFORE}" >> "$LOG"
     fi
   fi
 fi

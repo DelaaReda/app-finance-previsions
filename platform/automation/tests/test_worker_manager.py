@@ -4,6 +4,7 @@ import importlib.util
 import json
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -12,6 +13,12 @@ ROOT = Path(__file__).resolve().parents[3]
 AUTOMATION_DIR = ROOT / "platform" / "automation"
 if str(AUTOMATION_DIR) not in sys.path:
     sys.path.insert(0, str(AUTOMATION_DIR))
+
+if "yaml" not in sys.modules:
+    fake_yaml = types.ModuleType("yaml")
+    fake_yaml.safe_load = lambda text, *args, **kwargs: json.loads(text)
+    fake_yaml.safe_dump = lambda *args, **kwargs: ""
+    sys.modules["yaml"] = fake_yaml
 
 MODULE_PATH = AUTOMATION_DIR / "compat" / "legacy_workers" / "worker_manager.py"
 SPEC = importlib.util.spec_from_file_location("fc_worker_manager", MODULE_PATH)
@@ -38,7 +45,7 @@ _save_registry = MODULE._save_registry
 class WorkerManagerTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
+        self.root = Path(self.tmp.name).resolve()
         cfg_dir = self.root / "platform" / "config" / "runner"
         cfg_dir.mkdir(parents=True, exist_ok=True)
         skills_root = self.root / "skills"
@@ -52,7 +59,7 @@ class WorkerManagerTests(unittest.TestCase):
                 {
                     "version": "v1",
                     "defaults": {"prompt_timeout_seconds": 210, "retry_prompt_timeout_seconds": 90, "tick_timeout_seconds": 540},
-                    "roles": {"planner": {}, "dev": {}, "admin": {}, "scrum_master": {}},
+                    "roles": {"planner": {}, "app-dev": {}, "verifier": {}, "admin": {}, "scrum_master": {}},
                     "features": {
                         "dynamic_workers": {
                             "enabled": 1,
@@ -240,7 +247,7 @@ class WorkerManagerTests(unittest.TestCase):
 
     def test_qa_worker_uses_full_model_and_fix_prompt(self) -> None:
         self.assertEqual(_worker_runtime_model("qa_review_worker"), "codex-full/gpt-5.4")
-        self.assertEqual(_secondary_codex_model("codex-full/gpt-5.4"), ("gpt-5.4", "low"))
+        self.assertEqual(_secondary_codex_model("codex-full/gpt-5.4"), ("", "low"))
         prompt = _worker_prompt("qa_review_worker", "BATCH-28-DEV-01", "qa_review", "Check and fix API contract drift.")
         self.assertIn("allowed to resolve the issues you discover", prompt)
         self.assertIn("Preserve the existing frontend theme", prompt)

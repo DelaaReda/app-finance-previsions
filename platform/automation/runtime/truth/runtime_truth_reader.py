@@ -19,6 +19,8 @@ from orchestrator_paths import (
 )
 
 from .event_store import event_store_path, latest_graph_states, recent_events
+from .api_wave import build_api_wave_snapshot, persist_api_wave_state
+from .lane_backoff import load_active_lane_backoffs
 
 LEGACY_BRIDGE_FILES = (
     "planner-subagents-registry.json",
@@ -951,6 +953,9 @@ def _build_product_delivery_state(
         "last_completion_proof_ref": last_completion_proof_ref,
         "close_reason": close_reason,
         "advisory_mismatch": advisory_mismatch,
+        "api_autonomy_mode": False,
+        "api_wave": {},
+        "lane_backoff": load_active_lane_backoffs(root),
         "generated_at": now.isoformat().replace("+00:00", "Z"),
     }
 
@@ -1037,8 +1042,32 @@ def build_runtime_truth_snapshot(
         prior_state=prior_delivery_state,
         now=datetime.now(timezone.utc),
     )
+    api_wave = build_api_wave_snapshot(
+        root,
+        delivery_state=delivery_state,
+        normalized_states=all_states,
+        prior_state=prior_delivery_state.get("api_wave_state") if isinstance(prior_delivery_state.get("api_wave_state"), dict) else None,
+        now=datetime.now(timezone.utc),
+    )
+    delivery_state["api_autonomy_mode"] = bool(api_wave.get("enabled"))
+    delivery_state["api_wave"] = {
+        "enabled": bool(api_wave.get("enabled")),
+        "mode": str(api_wave.get("mode") or "disabled").strip(),
+        "stream_id": str(api_wave.get("stream_id") or "API-WAVE").strip() or "API-WAVE",
+        "current_endpoint": api_wave.get("current_endpoint"),
+        "current_task_id": api_wave.get("current_task_id"),
+        "current_status": str(api_wave.get("current_status") or "idle").strip(),
+        "next_endpoint": api_wave.get("next_endpoint"),
+        "dispatch_ready": bool(api_wave.get("dispatch_ready")),
+        "completed_endpoints": list(api_wave.get("completed_endpoints") or []),
+        "deferred_endpoints": list(api_wave.get("deferred_endpoints") or []),
+        "last_proof_ref": str(api_wave.get("last_proof_ref") or "none").strip() or "none",
+        "reason": str(api_wave.get("reason") or "idle").strip() or "idle",
+    }
+    delivery_state["api_wave_state"] = api_wave.get("state", {})
     delivery_state_file = product_delivery_state_path(root)
     if _persist_delivery_state_enabled(root, persist_delivery_state):
+        persist_api_wave_state(root, api_wave.get("state", {}))
         persist_product_delivery_state(root, delivery_state)
 
     return {
@@ -1065,6 +1094,7 @@ def build_runtime_truth_snapshot(
             "recent_event_count": len(recent_event_rows),
         },
         "legacy_bridges": legacy_bridges,
+        "api_wave_state": api_wave,
         "product_delivery_state": delivery_state,
         "product_delivery_state_path": str(delivery_state_file),
         "projection_paths": {

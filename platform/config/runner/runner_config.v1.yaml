@@ -22,7 +22,7 @@
       "retry_timeout_seconds": 120,
       "tick_timeout_seconds": 420
     },
-    "dev": {
+    "app-dev": {
       "model": "gpt-5.4",
       "thinking": "high",
       "resume": 1,
@@ -30,6 +30,15 @@
       "prompt_timeout_seconds": 300,
       "retry_timeout_seconds": 120,
       "tick_timeout_seconds": 540
+    },
+    "verifier": {
+      "model": "gpt-5.4-mini",
+      "thinking": "medium",
+      "resume": 1,
+      "rate_limit_precheck": 1,
+      "prompt_timeout_seconds": 120,
+      "retry_timeout_seconds": 60,
+      "tick_timeout_seconds": 240
     },
     "admin": {
       "model": "gpt-5.4",
@@ -55,7 +64,7 @@
   },
   "features": {
     "tshape": {
-      "enabled": 1,
+      "enabled": 0,
       "trigger": "blocked",
       "blocked_threshold": 1,
       "scope": "full_takeover",
@@ -63,22 +72,22 @@
       "allowed_targets": "planner,dev"
     },
     "admin_dispatcher": {
-      "enabled": 1
+      "enabled": 0
     },
     "scrum_master": {
-      "enabled": 1,
-      "cron_enabled_profile": "full"
+      "enabled": 0,
+      "cron_enabled_profile": "disabled"
     },
     "planner_orchestrator": {
       "enabled": 1,
-      "cron_planner_only": 1,
+      "cron_planner_only": 0,
       "max_active": 3,
       "default_ttl_min": 45,
       "retry_max": 2,
       "allow_runtime_explorer": 0,
       "default_helper_mode": "worker_first",
       "backend": "auto",
-      "managed_roles": ["dev", "admin", "scrum_master"]
+      "managed_roles": ["dev", "admin"]
     },
     "dynamic_workers": {
       "enabled": 0,
@@ -102,7 +111,7 @@
   },
   "retries": {
     "recovery_threshold": 2,
-    "no_delta_threshold": 12,
+    "no_delta_threshold": 3,
     "skip_retry_on_timeout": 1,
     "engine_default": "sdk"
   },

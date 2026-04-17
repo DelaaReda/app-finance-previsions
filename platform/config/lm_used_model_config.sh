@@ -45,7 +45,7 @@ LM_TIER_DEEP_DEBUG_MODEL="${LM_TIER_DEEP_DEBUG_MODEL:-gpt-5.3-codex}"
 LM_TIER_DEEP_DEBUG_THINKING="${LM_TIER_DEEP_DEBUG_THINKING:-high}"
 
 # =============================================================================
-# SECTION 2 — PER-ROLE  (3 rôles lean actifs + legacy aliasés)
+# SECTION 2 — PER-ROLE  (3 lanes continues + rôles on-demand)
 # =============================================================================
 
 # --- RÔLES LEAN ACTIFS ---
@@ -53,7 +53,15 @@ LM_TIER_DEEP_DEBUG_THINKING="${LM_TIER_DEEP_DEBUG_THINKING:-high}"
 LM_ROLE_PLANNER_MODEL="${LM_ROLE_PLANNER_MODEL:-${LM_TIER_ORCHESTRATION_MODEL}}"
 LM_ROLE_PLANNER_THINKING="${LM_ROLE_PLANNER_THINKING:-${LM_TIER_ORCHESTRATION_THINKING}}"
 
-# dev: code + tests + QA consolide -> 5.4 medium
+# app-dev: implémente le delta batch actif
+LM_ROLE_APP_DEV_MODEL="${LM_ROLE_APP_DEV_MODEL:-${LM_TIER_BUILD_MODEL}}"
+LM_ROLE_APP_DEV_THINKING="${LM_ROLE_APP_DEV_THINKING:-${LM_TIER_BUILD_THINKING}}"
+
+# verifier: preuve publique API/UI sur changement
+LM_ROLE_VERIFIER_MODEL="${LM_ROLE_VERIFIER_MODEL:-${LM_TIER_VALIDATION_MODEL}}"
+LM_ROLE_VERIFIER_THINKING="${LM_ROLE_VERIFIER_THINKING:-medium}"
+
+# dev: alias legacy vers app-dev
 LM_ROLE_DEV_MODEL="${LM_ROLE_DEV_MODEL:-${LM_TIER_BUILD_MODEL}}"
 LM_ROLE_DEV_THINKING="${LM_ROLE_DEV_THINKING:-${LM_TIER_BUILD_THINKING}}"
 

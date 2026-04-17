@@ -319,7 +319,7 @@ def _control_plane_location(root: Path, host_context: dict[str, str] | None = No
     runner_dir = root / "platform" / "config" / "runner"
     if (runner_dir / "runner.v1.yaml").exists() or (runner_dir / "runner_config.v1.yaml").exists():
         return "local_vm"
-    return "remote_vm"
+    return "local_vm"
 
 
 def _monitor_host_context(root: Path) -> dict[str, str]:
@@ -510,9 +510,11 @@ DEFAULT_SCHEDULE_MAP = {
     "planner": [0, 22, 44],
     "dev": [6, 28, 50],
     "admin": [12, 34, 56],
-    "scrum_master": [3, 18, 33, 48],
+    "scrum_master": [18, 40],
+    "app-dev": [6, 28, 50],
+    "verifier": [12, 34, 56],
 }
-ROLE_NAME_RE = re.compile(r"^[A-Za-z0-9_]+$")
+ROLE_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 ORCH_ROOT = _orchestrator_root_for_workspace(ROOT) or runtime_state_root(ROOT)
 CANONICAL_ORCH_ROOT = canonical_docs_root(ROOT)
 # Legacy payload field kept for status compatibility; the old docs/orchestrator-ops
@@ -1649,7 +1651,7 @@ def _ordered_roles(roles: list[str] | set[str] | tuple[str, ...]) -> tuple[str, 
             continue
         seen.add(r)
         cleaned.append(r)
-    priority = ["planner", "dev", "admin", "scrum_master"]
+    priority = ["planner", "dev", "admin", "scrum_master", "app-dev", "verifier"]
     ordered = [r for r in priority if r in cleaned]
     ordered += sorted(r for r in cleaned if r not in priority)
     return tuple(ordered)
@@ -1705,7 +1707,7 @@ def _roles_from_crontab() -> tuple[str, ...]:
     for line in (proc.stdout or "").splitlines():
         if "fc_agent_tick.sh" not in line:
             continue
-        m = re.search(r"fc_agent_tick\.sh\s+([A-Za-z0-9_]+)", line)
+        m = re.search(r"fc_agent_tick\.sh\s+([A-Za-z0-9_-]+)", line)
         if not m:
             continue
         roles.append(m.group(1).strip())
@@ -1783,16 +1785,24 @@ def monitor_roles() -> tuple[str, ...]:
 ROLE_CANONICAL_MAP = {
     "analyst": "planner",
     "architect": "planner",
+    "guardian": "planner",
     "po": "planner",
     "po_scrum_master": "scrum_master",
+    "prompt": "planner",
+    "app_dev": "dev",
+    "app-dev": "dev",
+    "dev": "dev",
     "backend_engineer": "dev",
     "frontend_engineer": "dev",
     "data_analyst": "dev",
-    "infra_engineer": "dev",
     "integrator": "dev",
-    "tester": "dev",
-    "qa": "dev",
+    "admin": "admin",
+    "verifier": "admin",
+    "infra_engineer": "admin",
+    "tester": "admin",
+    "qa": "admin",
     "clawsentinel": "admin",
+    "scrum_master": "scrum_master",
 }
 
 
@@ -1851,8 +1861,16 @@ LOG_KIND_LABELS = {
 }
 
 app = FastAPI(docs_url=None, redoc_url=None)
-app.include_router(create_doctor_router(doctor_snapshot))
-app.include_router(
+
+
+def _safe_include_router(app_obj: FastAPI, router_obj: object) -> None:
+    if hasattr(router_obj, "routes"):
+        app_obj.include_router(router_obj)  # type: ignore[arg-type]
+
+
+_safe_include_router(app, create_doctor_router(doctor_snapshot))
+_safe_include_router(
+    app,
     create_activity_router(
         lambda window, limit: _activity_bundle(window, limit),
         lambda window, limit: (
@@ -1872,7 +1890,7 @@ app.include_router(
             **(_activity_bundle(ACTIVITY_FEED_WINDOW_HOURS, max(limit, ACTIVITY_FEED_MAX_EVENTS)).get("dependencies", {})),
             "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         },
-    )
+    ),
 )
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -4456,6 +4474,22 @@ def status(lite: int = 0):
             pass
         primary_status = str(lite_payload.get("primary_status", "") or "").strip().lower()
         doctor_overall_status = str(lite_payload.get("doctor_overall_status", "") or "").strip().lower()
+        stale_health_snapshot = str(
+            ((lite_payload.get("health_snapshot") or {}) if isinstance(lite_payload.get("health_snapshot"), dict) else {}).get("health", "")
+            or (hs.get("health", "") if isinstance(hs, dict) else "")
+            or ""
+        ).strip().upper()
+        critical_widget_state = str(
+            ((lite_payload.get("critical_widget_health") or {}) if isinstance(lite_payload.get("critical_widget_health"), dict) else {}).get("state", "")
+            or (critical_widget_health.get("state", "") if isinstance(critical_widget_health, dict) else "")
+            or ""
+        ).strip().lower()
+        if (
+            primary_status == "ok"
+            and doctor_overall_status in {"", "ok"}
+            and (stale_health_snapshot == "STALE" or critical_widget_state == "stale")
+        ):
+            lite_payload["health"] = "STALE"
         if (
             str(lite_payload.get("health", "") or "").strip().upper() in {"", "UNKNOWN"}
             and primary_status == "ok"
@@ -5860,7 +5894,7 @@ def runtime_diagnostics(lite: int = 0):
 
 @app.get("/api/agents/activity")
 def agents_activity():
-    snapshot = status(lite=1)
+    snapshot = status()
     payload = snapshot.get("agent_activity", {}) if isinstance(snapshot, dict) else {}
     if not isinstance(payload, dict):
         payload = {}

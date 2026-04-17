@@ -22,7 +22,7 @@ if str(THIS_DIR) not in sys.path:
 from orchestrator_paths import load_runtime_state, resolve_orchestrator_read_path
 from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
 
-CORE_ROLES = ("planner", "dev", "admin")
+CORE_ROLES = ("planner", "dev")
 ROLE_MAP_FILE = Path("logs-codex-runs/orchestrator-state/parallel-role-cron-map.json")
 BASELINE_ADMIN_JOBS = (
     "adminapp-codex-sync-10m",

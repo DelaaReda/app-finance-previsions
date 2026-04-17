@@ -662,5 +662,65 @@ class PlannerRuntimeActionsAutobatchGuardTests(unittest.TestCase):
             self.assertIn("batch_id=BATCH-01", out)
 
 
+class PlannerRuntimeActionsPublicProofTests(unittest.TestCase):
+    def test_should_run_public_proof_skips_closed_batch_with_ok_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            proof_dir = orch / "public-proof"
+            proof_dir.mkdir(parents=True, exist_ok=True)
+            (orch / "product_delivery_state.json").write_text(
+                json.dumps(
+                    {
+                        "active_batch_id": None,
+                        "last_completed_batch_id": "BATCH-301",
+                        "phase": "idle_ready_for_next_batch",
+                        "product_done": True,
+                        "public_proof_status": "ok",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (proof_dir / "BATCH-301.json").write_text(
+                json.dumps({"batch_id": "BATCH-301", "status": "ok", "timestamp": "2026-04-16T12:00:00Z"}),
+                encoding="utf-8",
+            )
+
+            should_run, reason, delivery_state, artifact = MODULE._should_run_public_proof(root)
+
+            self.assertFalse(should_run)
+            self.assertEqual(reason, "already_closed_with_public_proof")
+            self.assertTrue(delivery_state["product_done"])
+            self.assertEqual(artifact["status"], "ok")
+
+    def test_should_run_public_proof_reruns_when_delta_is_newer_than_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            proof_dir = orch / "public-proof"
+            proof_dir.mkdir(parents=True, exist_ok=True)
+            (orch / "product_delivery_state.json").write_text(
+                json.dumps(
+                    {
+                        "active_batch_id": "BATCH-302",
+                        "phase": "verifying_public_proof",
+                        "product_done": False,
+                        "public_proof_status": "degraded",
+                        "last_meaningful_delta_at": "2026-04-16T12:05:00Z",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (proof_dir / "BATCH-302.json").write_text(
+                json.dumps({"batch_id": "BATCH-302", "status": "ok", "timestamp": "2026-04-16T12:00:00Z"}),
+                encoding="utf-8",
+            )
+
+            should_run, reason, _, _ = MODULE._should_run_public_proof(root)
+
+            self.assertTrue(should_run)
+            self.assertEqual(reason, "new_delivery_delta_after_last_proof")
+
+
 if __name__ == "__main__":
     unittest.main()
