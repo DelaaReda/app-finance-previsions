@@ -1,12 +1,12 @@
 {
-  "updated_at_utc": "2026-04-17T03:38:04Z",
+  "updated_at_utc": "2026-04-17T04:08:06Z",
   "roles": {
     "dev": {
-      "ts_utc": "2026-04-17T03:38:04Z",
+      "ts_utc": "2026-04-17T04:08:06Z",
       "role": "dev",
       "source": "health_snapshot",
-      "status": "WAIT",
-      "delta": "NO_ACTIVE_CAPABILITY",
+      "status": "PASS",
+      "delta": "NO_DELTA",
       "verdict": "PASS",
       "blocker_id": "NONE",
       "next_action_unique": "none",
@@ -28,8 +28,8 @@
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "queue_1776396542_cbb235386bbb",
-      "workboard_version": "workboard_1776396874_344c6b039437",
+      "queue_version": "queue_1776398421_69c65314386f",
+      "workboard_version": "workboard_1776398717_3247408a21f8",
       "action_summary": "none",
       "run_note": "none",
       "root_cause": "none",
@@ -37,7 +37,7 @@
       "verify": "none"
     },
     "planner": {
-      "ts_utc": "2026-04-17T03:38:04Z",
+      "ts_utc": "2026-04-17T04:08:06Z",
       "role": "planner",
       "source": "health_snapshot",
       "status": "IDLE",
@@ -68,11 +68,11 @@
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "queue_1776396542_cbb235386bbb",
-      "workboard_version": "workboard_1776396874_344c6b039437"
+      "queue_version": "queue_1776398421_69c65314386f",
+      "workboard_version": "workboard_1776398717_3247408a21f8"
     },
     "admin": {
-      "ts_utc": "2026-04-17T03:38:04Z",
+      "ts_utc": "2026-04-17T04:08:06Z",
       "role": "admin",
       "source": "health_snapshot",
       "status": "PASS",
@@ -98,8 +98,8 @@
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "queue_1776396542_cbb235386bbb",
-      "workboard_version": "workboard_1776396874_344c6b039437",
+      "queue_version": "queue_1776398421_69c65314386f",
+      "workboard_version": "workboard_1776398717_3247408a21f8",
       "action_summary": "none",
       "run_note": "none",
       "root_cause": "none",
@@ -135,11 +135,79 @@
       "impact_action": "aviser planner de confirmer claim BATCH11_ARCH puis de basculer claim BATCH-27-DEV-01",
       "queue_version": "queue_1772835433_514fdb133eec",
       "workboard_version": "workboard_1772835503_f8bb2c1be057"
+    },
+    "app-dev": {
+      "next_action_unique": "none",
+      "next": "owner=none; action=none",
+      "action_summary": "none",
+      "task_update": "none_no_signal",
+      "exec_report": "none",
+      "run_note": "none",
+      "root_cause": "none",
+      "fix_applied": "none",
+      "verify": "none",
+      "issues": "none",
+      "issue_count": 0,
+      "issue_severity": "none",
+      "issue_codes": [],
+      "issue_reporting_ok": true,
+      "issue_reporting_errors": [],
+      "suggestions": "none",
+      "stream_id": "none",
+      "task_id": "none",
+      "tool_request": "none",
+      "skill_request": "none",
+      "tools_used": "",
+      "channels_read": "",
+      "impact_assessment": "",
+      "impact_action": "",
+      "verdict": "GO_WITH_CAUTION",
+      "status": "IN_PROGRESS",
+      "blocker_id": "NONE",
+      "delta": "NO_DELTA",
+      "ts_utc": "2026-04-17T04:08:06Z",
+      "source": "health_snapshot",
+      "queue_version": "queue_1776398421_69c65314386f",
+      "workboard_version": "workboard_1776398717_3247408a21f8"
+    },
+    "verifier": {
+      "next_action_unique": "none",
+      "next": "owner=none; action=none",
+      "action_summary": "none",
+      "task_update": "none_no_signal",
+      "exec_report": "none",
+      "run_note": "none",
+      "root_cause": "none",
+      "fix_applied": "none",
+      "verify": "none",
+      "issues": "none",
+      "issue_count": 0,
+      "issue_severity": "none",
+      "issue_codes": [],
+      "issue_reporting_ok": true,
+      "issue_reporting_errors": [],
+      "suggestions": "none",
+      "stream_id": "none",
+      "task_id": "none",
+      "tool_request": "none",
+      "skill_request": "none",
+      "tools_used": "",
+      "channels_read": "",
+      "impact_assessment": "",
+      "impact_action": "",
+      "verdict": "blocage réel",
+      "status": "blocage confirmé",
+      "blocker_id": "runtime_import_error_api_wave",
+      "delta": "contexte_lane_bloqué",
+      "ts_utc": "2026-04-17T04:08:06Z",
+      "source": "health_snapshot",
+      "queue_version": "queue_1776398421_69c65314386f",
+      "workboard_version": "workboard_1776398717_3247408a21f8"
     }
   },
   "summary": {
-    "roles_total": 4,
-    "fresh_roles_total": 3,
+    "roles_total": 6,
+    "fresh_roles_total": 5,
     "stale_context_open": 1,
     "issues_open": 0,
     "issue_reports_open": 0,
@@ -151,26 +219,28 @@
     "delivery_gaps_open": 0,
     "delivery_probe_loops_open": 0,
     "flow_gaps_open": 0,
-    "blockers_open": 0,
+    "blockers_open": 1,
     "tool_skill_requests_open": 0,
     "issue_roles": [],
     "process_issue_roles": [],
     "delivery_probe_roles": [],
     "flow_gap_roles": [],
     "delivery_gap_roles": [],
-    "blocker_roles": [],
+    "blocker_roles": [
+      "verifier"
+    ],
     "tool_skill_request_roles": [],
     "stale_context_roles": [
       "scrum_master"
     ],
     "context_versions": {
-      "queue_version": "queue_1776396542_cbb235386bbb",
-      "workboard_version": "workboard_1776396874_344c6b039437"
+      "queue_version": "queue_1776398421_69c65314386f",
+      "workboard_version": "workboard_1776398717_3247408a21f8"
     }
   },
-  "updated_at": "2026-04-17T03:38:04Z",
+  "updated_at": "2026-04-17T04:08:06Z",
   "health_snapshot": {
-    "ts_utc": "2026-04-17T03:38:04Z",
+    "ts_utc": "2026-04-17T04:08:06Z",
     "health": "DEGRADED",
     "health_reason": "critical_widget_degraded",
     "execution_mode": "planner_experimental",
@@ -178,14 +248,14 @@
       "planner"
     ],
     "capability_roles": [],
-    "delivery_runway_present": false,
+    "delivery_runway_present": true,
     "rate_limit_backoff_non_blocking": false,
     "workboard": {
-      "total": 638,
+      "total": 645,
       "done": 638,
       "ready": 0,
-      "in_progress": 0,
-      "waiting_dep": 0
+      "in_progress": 1,
+      "waiting_dep": 6
     },
     "velocity": {
       "done_24h": 610,
@@ -193,11 +263,11 @@
       "proofs": 120
     },
     "queue": {
-      "total": 95,
+      "total": 96,
       "ready": 0,
       "closed": 95,
       "waiting_dep": 0,
-      "in_progress": 0
+      "in_progress": 1
     },
     "agents": {
       "planner": {
@@ -206,17 +276,29 @@
         "blocker": "NONE",
         "delta": "NO_ACTIVE_CANONICAL_WORK"
       },
-      "dev": {
-        "verdict": "PASS",
-        "status": "WAIT",
+      "app-dev": {
+        "verdict": "GO_WITH_CAUTION",
+        "status": "IN_PROGRESS",
         "blocker": "NONE",
-        "delta": "NO_ACTIVE_CAPABILITY"
+        "delta": "NO_DELTA"
+      },
+      "verifier": {
+        "verdict": "blocage réel",
+        "status": "blocage confirmé",
+        "blocker": "runtime_import_error_api_wave",
+        "delta": "contexte_lane_bloqué"
       },
       "admin": {
         "verdict": "GO_WITH_CAUTION",
         "status": "PASS",
         "blocker": "NONE",
         "delta": "BATCH-97-ADMIN-01_IN_PROGRESS_PUBLIC_BRIEF_OK_NEWS_STALE"
+      },
+      "dev": {
+        "verdict": "PASS",
+        "status": "PASS",
+        "blocker": "NONE",
+        "delta": "NO_DELTA"
       }
     },
     "blocked_agents": [],
@@ -224,12 +306,12 @@
     "stale_agents": [],
     "rate_limits": [],
     "tick_age_min": {
-      "planner": 36,
-      "dev": 59552,
-      "admin": 59538
+      "planner": 0,
+      "dev": 59582,
+      "admin": 59568
     },
     "critical_widget_health": {
-      "ts_utc": "2026-04-17T03:38:04Z",
+      "ts_utc": "2026-04-17T04:08:06Z",
       "state": "degraded",
       "monitor_base_url": "http://3.98.20.77:8080",
       "api_base_url": "http://3.98.20.77",
@@ -273,7 +355,7 @@
   "_cleanup_ts": "2026-03-04T11:59:09.835863+00:00",
   "_cleanup_note": "Removed 12 phantom roles (not in active topology): ['frontend_engineer', 'infra_engineer', 'backend_engineer', 'integrator', 'analyst', 'architect', 'data_analyst', 'tester', 'qa', 'scrum_master', 'clawsentinel', 'po']",
   "critical_widget_health": {
-    "ts_utc": "2026-04-17T03:38:04Z",
+    "ts_utc": "2026-04-17T04:08:06Z",
     "state": "degraded",
     "monitor_base_url": "http://3.98.20.77:8080",
     "api_base_url": "http://3.98.20.77",
@@ -307,5 +389,5 @@
       }
     }
   },
-  "generated_at": "2026-04-17T03:38:04Z"
+  "generated_at": "2026-04-17T04:08:06Z"
 }

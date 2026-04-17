@@ -61,15 +61,47 @@ try:
 except Exception:
     payload = {}
 current_public = payload.get("current_public_proof") if isinstance(payload.get("current_public_proof"), dict) else {}
+current_value = payload.get("current_value_target") if isinstance(payload.get("current_value_target"), dict) else {}
+api_wave = payload.get("api_wave") if isinstance(payload.get("api_wave"), dict) else {}
+api_mode = bool(payload.get("api_autonomy_mode")) and bool(api_wave)
+current_endpoint = api_wave.get("current_endpoint") if isinstance(api_wave.get("current_endpoint"), dict) else {}
+next_endpoint = api_wave.get("next_endpoint") if isinstance(api_wave.get("next_endpoint"), dict) else {}
+wave_endpoint_id = str(
+    api_wave.get("current_endpoint_id")
+    or current_endpoint.get("endpoint_id")
+    or api_wave.get("next_endpoint_id")
+    or next_endpoint.get("endpoint_id")
+    or ""
+).strip()
+phase = str(payload.get("phase") or "unknown")
+batch_id = str(payload.get("active_batch_id") or "none")
+public_status = str(payload.get("public_proof_status") or "unknown")
+proof_ref = str(current_public.get("proof_ref") or "none")
+target_id = str(
+    current_value.get("endpoint_id")
+    or current_value.get("route_path")
+    or current_value.get("batch_id")
+    or wave_endpoint_id
+    or batch_id
+    or "none"
+).strip()
+if api_mode and wave_endpoint_id:
+    phase = str(api_wave.get("current_status") or phase or "unknown")
+    batch_id = wave_endpoint_id
+    public_status = str(api_wave.get("current_proof_status") or public_status or "unknown")
+    proof_ref = str(api_wave.get("last_public_proof_ref") or proof_ref or "none")
+    target_id = wave_endpoint_id
 print(
     "|".join(
         [
-            str(payload.get("phase") or "unknown"),
-            str(payload.get("active_batch_id") or "none"),
-            str(payload.get("public_proof_status") or "unknown"),
-            str(current_public.get("proof_ref") or "none"),
+            phase,
+            batch_id,
+            public_status,
+            proof_ref,
             str(payload.get("last_meaningful_delta_at") or "none"),
             "1" if bool(payload.get("ec2_reachable", False)) else "0",
+            "1" if api_mode else "0",
+            target_id or "none",
         ]
     )
 )
@@ -105,9 +137,11 @@ write_state() {
   local public_status="$3"
   local proof_ref="$4"
   local last_delta="$5"
-  local streak="$6"
-  local reason="$7"
-  python3 - "$STATE_FILE" "$batch_id" "$phase" "$public_status" "$proof_ref" "$last_delta" "$streak" "$reason" <<'PY'
+  local api_mode="$6"
+  local target_id="$7"
+  local streak="$8"
+  local reason="$9"
+  python3 - "$STATE_FILE" "$batch_id" "$phase" "$public_status" "$proof_ref" "$last_delta" "$api_mode" "$target_id" "$streak" "$reason" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -120,8 +154,10 @@ payload = {
     "last_status": sys.argv[4] or None,
     "last_proof_ref": sys.argv[5] or None,
     "last_meaningful_delta_at": sys.argv[6] or None,
-    "null_tick_streak": int(sys.argv[7] or "0"),
-    "reason": sys.argv[8] or "none",
+    "last_api_mode": sys.argv[7] or None,
+    "last_target_id": sys.argv[8] or None,
+    "null_tick_streak": int(sys.argv[9] or "0"),
+    "reason": sys.argv[10] or "none",
     "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
 }
 path.parent.mkdir(parents=True, exist_ok=True)
@@ -132,9 +168,11 @@ PY
 set_backoff() {
   local batch_id="$1"
   local phase="$2"
-  local reason="$3"
-  local streak="$4"
-  python3 - "$ROOT" "$BACKOFF_MINUTES" "$batch_id" "$phase" "$reason" "$streak" <<'PY'
+  local api_mode="$3"
+  local target_id="$4"
+  local reason="$5"
+  local streak="$6"
+  python3 - "$ROOT" "$BACKOFF_MINUTES" "$batch_id" "$phase" "$api_mode" "$target_id" "$reason" "$streak" <<'PY'
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -149,10 +187,12 @@ write_lane_backoff(
     "verifier",
     {
         "active": True,
-        "reason": sys.argv[5] or "verifier_no_change_streak",
-        "trigger_streak": int(sys.argv[6] or "0"),
+        "reason": sys.argv[7] or "verifier_no_change_streak",
+        "trigger_streak": int(sys.argv[8] or "0"),
         "batch_id": sys.argv[3] or None,
         "phase": sys.argv[4] or None,
+        "api_mode": sys.argv[5] or None,
+        "target_id": sys.argv[6] or None,
         "until": until.isoformat().replace("+00:00", "Z"),
         "until_epoch": int(until.timestamp()),
         "updated_at": now.isoformat().replace("+00:00", "Z"),
@@ -184,6 +224,8 @@ print(
             "1" if active else "0",
             str(payload.get("batch_id") or "none"),
             str(payload.get("phase") or "none"),
+            str(payload.get("api_mode") or "0"),
+            str(payload.get("target_id") or "none"),
             str(payload.get("reason") or "none"),
             str(payload.get("trigger_streak") or 0),
         ]
@@ -193,8 +235,13 @@ PY
 }
 
 run_public_proof() {
-  local batch_id="$1"
-  python3 platform/automation/runtime/planner/planner_runtime_actions.py public-proof --root "$ROOT" --batch-id "$batch_id" --if-needed
+  local target_id="$1"
+  local api_mode="$2"
+  if [[ "$api_mode" == "1" ]]; then
+    python3 platform/automation/runtime/planner/planner_runtime_actions.py api-wave-proof --root "$ROOT" --endpoint-id "$target_id" --if-needed
+    return
+  fi
+  python3 platform/automation/runtime/planner/planner_runtime_actions.py public-proof --root "$ROOT" --batch-id "$target_id" --if-needed
 }
 
 with_lock
@@ -209,7 +256,11 @@ rest="${rest#*|}"
 proof_ref="${rest%%|*}"
 rest="${rest#*|}"
 last_delta="${rest%%|*}"
-ec2_reachable="${rest##*|}"
+rest="${rest#*|}"
+ec2_reachable="${rest%%|*}"
+rest="${rest#*|}"
+api_mode="${rest%%|*}"
+target_id="${rest##*|}"
 
 backoff="$(backoff_snapshot)"
 backoff_active="${backoff%%|*}"
@@ -218,16 +269,20 @@ backoff_batch="${backoff_rest%%|*}"
 backoff_rest="${backoff_rest#*|}"
 backoff_phase="${backoff_rest%%|*}"
 backoff_rest="${backoff_rest#*|}"
+backoff_api_mode="${backoff_rest%%|*}"
+backoff_rest="${backoff_rest#*|}"
+backoff_target_id="${backoff_rest%%|*}"
+backoff_rest="${backoff_rest#*|}"
 backoff_reason="${backoff_rest%%|*}"
 backoff_streak="${backoff_rest##*|}"
 
 if [[ "$backoff_active" == "1" ]]; then
-  if [[ "$batch_id" != "$backoff_batch" || "$phase" != "$backoff_phase" ]]; then
+  if [[ "$batch_id" != "$backoff_batch" || "$phase" != "$backoff_phase" || "$api_mode" != "$backoff_api_mode" || "$target_id" != "$backoff_target_id" ]]; then
     clear_backoff "state_changed"
-    log_line "verifier_backoff_cleared reason=state_changed batch_id=${batch_id} phase=${phase}"
+    log_line "verifier_backoff_cleared reason=state_changed batch_id=${batch_id} api_mode=${api_mode} target_id=${target_id} phase=${phase}"
   else
-    log_line "verifier_backoff_skip reason=${backoff_reason} streak=${backoff_streak} batch_id=${batch_id} phase=${phase}"
-    echo "VERIFIER_AUTONOMY status=skip reason=lane_backoff_active batch_id=${batch_id:-none} phase=${phase:-unknown} trigger_streak=${backoff_streak:-0}"
+    log_line "verifier_backoff_skip reason=${backoff_reason} streak=${backoff_streak} batch_id=${batch_id} api_mode=${api_mode} target_id=${target_id} phase=${phase}"
+    echo "VERIFIER_AUTONOMY status=skip reason=lane_backoff_active batch_id=${batch_id:-none} api_mode=${api_mode:-0} target_id=${target_id:-none} phase=${phase:-unknown} trigger_streak=${backoff_streak:-0}"
     exit 0
   fi
 fi
@@ -237,13 +292,15 @@ last_phase="$(state_field last_phase)"
 last_status="$(state_field last_status)"
 last_proof_ref="$(state_field last_proof_ref)"
 last_meaningful_delta="$(state_field last_meaningful_delta_at)"
+last_api_mode="$(state_field last_api_mode)"
+last_target_id="$(state_field last_target_id)"
 null_tick_streak="$(state_field null_tick_streak)"
 if ! [[ "$null_tick_streak" =~ ^[0-9]+$ ]]; then
   null_tick_streak=0
 fi
 
 if [[ "$phase" != "verifying_public_proof" || -z "$batch_id" || "$batch_id" == "none" ]]; then
-  write_state "$batch_id" "$phase" "$public_status" "$proof_ref" "$last_delta" "0" "idle_or_non_verifying_phase"
+  write_state "$batch_id" "$phase" "$public_status" "$proof_ref" "$last_delta" "$api_mode" "$target_id" "0" "idle_or_non_verifying_phase"
   echo "VERIFIER_AUTONOMY status=skip reason=idle_or_non_verifying_phase batch_id=${batch_id:-none} phase=${phase:-unknown}"
   exit 0
 fi
@@ -253,6 +310,9 @@ run_reason="no_change"
 if [[ "$batch_id" != "$last_batch_id" ]]; then
   should_run=1
   run_reason="batch_changed"
+elif [[ "$api_mode" != "$last_api_mode" || "$target_id" != "$last_target_id" ]]; then
+  should_run=1
+  run_reason="target_changed"
 elif [[ "$phase" != "$last_phase" ]]; then
   should_run=1
   run_reason="phase_changed"
@@ -271,38 +331,38 @@ elif [[ "$proof_ref" != "$last_proof_ref" && "$proof_ref" != "none" ]]; then
 fi
 
 if [[ "$public_status" == "ok" && "$proof_ref" != "none" && "$should_run" != "1" ]]; then
-  write_state "$batch_id" "$phase" "$public_status" "$proof_ref" "$last_delta" "0" "proof_already_ok"
+  write_state "$batch_id" "$phase" "$public_status" "$proof_ref" "$last_delta" "$api_mode" "$target_id" "0" "proof_already_ok"
   echo "VERIFIER_AUTONOMY status=skip reason=proof_already_ok batch_id=${batch_id} phase=${phase}"
   exit 0
 fi
 
 if [[ "$should_run" != "1" ]]; then
   null_tick_streak=$(( null_tick_streak + 1 ))
-  write_state "$batch_id" "$phase" "$public_status" "$proof_ref" "$last_delta" "$null_tick_streak" "no_change"
+  write_state "$batch_id" "$phase" "$public_status" "$proof_ref" "$last_delta" "$api_mode" "$target_id" "$null_tick_streak" "no_change"
   if (( null_tick_streak >= NULL_STREAK_THRESHOLD )); then
-    set_backoff "$batch_id" "$phase" "verifier_no_change_streak" "$null_tick_streak"
-    log_line "verifier_backoff_set reason=verifier_no_change_streak streak=${null_tick_streak} batch_id=${batch_id} phase=${phase}"
+    set_backoff "$batch_id" "$phase" "$api_mode" "$target_id" "verifier_no_change_streak" "$null_tick_streak"
+    log_line "verifier_backoff_set reason=verifier_no_change_streak streak=${null_tick_streak} batch_id=${batch_id} api_mode=${api_mode} target_id=${target_id} phase=${phase}"
   fi
-  echo "VERIFIER_AUTONOMY status=skip reason=no_change batch_id=${batch_id} phase=${phase} trigger_streak=${null_tick_streak}"
+  echo "VERIFIER_AUTONOMY status=skip reason=no_change batch_id=${batch_id} api_mode=${api_mode:-0} target_id=${target_id:-none} phase=${phase} trigger_streak=${null_tick_streak}"
   exit 0
 fi
 
 clear_backoff "triggered_run"
 set +e
-proof_output="$(run_public_proof "$batch_id" 2>&1)"
+proof_output="$(run_public_proof "$batch_id" "$api_mode" 2>&1)"
 proof_rc=$?
 set -e
 printf '%s\n' "$proof_output" >> "$LOG_FILE"
 if [[ "$proof_rc" -ne 0 ]]; then
-  write_state "$batch_id" "$phase" "error" "$proof_ref" "$last_delta" "0" "public_proof_runner_failed"
+  write_state "$batch_id" "$phase" "error" "$proof_ref" "$last_delta" "$api_mode" "$target_id" "0" "public_proof_runner_failed"
   echo "VERIFIER_AUTONOMY status=error reason=public_proof_runner_failed batch_id=${batch_id} phase=${phase}"
   exit 0
 fi
 
-proof_status="$(printf '%s\n' "$proof_output" | sed -n 's/^PUBLIC_PROOF\(_SKIP\)\{0,1\} .*status=\([^[:space:]]*\).*/\2/p' | tail -1)"
-proof_ref_new="$(printf '%s\n' "$proof_output" | sed -n 's/^PUBLIC_PROOF\(_SKIP\)\{0,1\} .*proof_ref=\([^[:space:]]*\).*/\2/p' | tail -1)"
+proof_status="$(printf '%s\n' "$proof_output" | sed -n 's/^\(PUBLIC_PROOF\|API_WAVE_PROOF\)\(_SKIP\)\{0,1\} .*status=\([^[:space:]]*\).*/\3/p' | tail -1)"
+proof_ref_new="$(printf '%s\n' "$proof_output" | sed -n 's/^\(PUBLIC_PROOF\|API_WAVE_PROOF\)\(_SKIP\)\{0,1\} .*proof_ref=\([^[:space:]]*\).*/\3/p' | tail -1)"
 proof_status="${proof_status:-unknown}"
 proof_ref_new="${proof_ref_new:-$proof_ref}"
-write_state "$batch_id" "$phase" "$proof_status" "$proof_ref_new" "$last_delta" "0" "$run_reason"
-log_line "verifier_public_proof_run reason=${run_reason} batch_id=${batch_id} proof_status=${proof_status} proof_ref=${proof_ref_new}"
-echo "VERIFIER_AUTONOMY status=ok reason=${run_reason} batch_id=${batch_id} phase=${phase} proof_status=${proof_status} proof_ref=${proof_ref_new}"
+write_state "$batch_id" "$phase" "$proof_status" "$proof_ref_new" "$last_delta" "$api_mode" "$target_id" "0" "$run_reason"
+log_line "verifier_public_proof_run reason=${run_reason} batch_id=${batch_id} api_mode=${api_mode} target_id=${target_id} proof_status=${proof_status} proof_ref=${proof_ref_new}"
+echo "VERIFIER_AUTONOMY status=ok reason=${run_reason} batch_id=${batch_id} api_mode=${api_mode:-0} target_id=${target_id:-none} phase=${phase} proof_status=${proof_status} proof_ref=${proof_ref_new}"

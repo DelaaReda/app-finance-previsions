@@ -410,12 +410,17 @@ canonical_idle = canonical_runtime_idle(pq, wb, runtime_truth)
 
 # ── Agents ───────────────────────────────────────────────────────────────────
 execution_mode = str(RUNTIME_STATE.get('execution_mode') or '').strip().lower()
-scheduled_roles = ['planner'] if execution_mode == 'planner_experimental' else ['planner', 'dev', 'admin']
+if execution_mode == 'planner_experimental':
+    scheduled_roles = ['planner']
+elif execution_mode == 'api_autonomy_mode':
+    scheduled_roles = ['planner', 'app-dev', 'verifier']
+else:
+    scheduled_roles = ['planner', 'app-dev', 'verifier', 'admin']
 capability_roles = [role for role in active_planner_subagent_roles() if role not in scheduled_roles]
 iteration_roles = iteration_issue_roles()
 agent_states = {}
-for role in ['planner', 'dev', 'admin']:
-    cf = STATE_DIR / f'{role}.last_contract'
+for role, contract_role in [('planner', 'planner'), ('app-dev', 'dev'), ('verifier', 'verifier'), ('admin', 'admin')]:
+    cf = STATE_DIR / f'{contract_role}.last_contract'
     if not cf.exists(): continue
     lines = cf.read_text(encoding='utf-8', errors='ignore').splitlines()
     verdict  = next((l.split(':',1)[-1].strip() for l in lines if l.startswith('VERDICT:')),  '?')
@@ -424,8 +429,9 @@ for role in ['planner', 'dev', 'admin']:
     delta    = next((l.split(':',1)[-1].strip() for l in lines if l.startswith('DELTA:')),    '?')
     agent_states[role] = {'verdict': verdict, 'status': status, 'blocker': blocker, 'delta': delta}
 
-if execution_mode == 'planner_experimental':
-    for role in ('dev', 'admin', 'scrum_master'):
+if execution_mode in {'planner_experimental', 'api_autonomy_mode'}:
+    projection_roles = ('app-dev', 'verifier', 'admin', 'scrum_master') if execution_mode == 'api_autonomy_mode' else ('dev', 'admin', 'scrum_master')
+    for role in projection_roles:
         payload = iteration_roles.get(role, {}) if isinstance(iteration_roles, dict) else {}
         if not isinstance(payload, dict):
             continue
@@ -464,7 +470,7 @@ if isinstance(planner_state, dict):
     planner_blocker = str(planner_state.get('blocker') or '').strip().upper()
     planner_delta = str(planner_state.get('delta') or '').strip().upper()
     planner_soft_blocker = (
-        execution_mode == 'planner_experimental'
+        execution_mode in {'planner_experimental', 'api_autonomy_mode'}
         and ip_n > 0
         and planner_blocker in {'PLANNER_NO_READY_TASK_AFTER_SYNC', 'DELIVERY_VALUE_INSUFFICIENT'}
     )
@@ -556,8 +562,9 @@ for role in ['planner', 'dev', 'admin']:
     else:
         tick_age_min[role] = -1
 
-if execution_mode == 'planner_experimental' and not capability_roles and q_ready == 0 and ip_n == 0:
-    for role in ('dev', 'admin', 'scrum_master'):
+if execution_mode in {'planner_experimental', 'api_autonomy_mode'} and not capability_roles and q_ready == 0 and ip_n == 0:
+    projection_roles = ('app-dev', 'verifier', 'admin', 'scrum_master') if execution_mode == 'api_autonomy_mode' else ('dev', 'admin', 'scrum_master')
+    for role in projection_roles:
         state = agent_states.get(role)
         if not isinstance(state, dict) or role in scheduled_roles:
             continue

@@ -130,6 +130,8 @@ class StatusServiceAppOnlyDeliveryControlTests(unittest.TestCase):
         self.assertTrue(result["delivery_control"]["ec2_reachable"])
         self.assertEqual(result["delivery_control"]["freeze_reason"], "none")
         self.assertTrue(result["delivery_control"]["next_batch_eligible"])
+        self.assertIn("api_wave", result)
+        self.assertEqual(result["api_wave"]["mode"], "disabled")
         self.assertEqual(result["product_runtime"]["status"], "ok")
         self.assertTrue(result["agentic_runtime"]["advisory_only"])
 

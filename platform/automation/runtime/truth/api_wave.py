@@ -97,8 +97,7 @@ def build_api_wave_snapshot(
         persist_api_wave_state(root, merged)
         state = load_api_wave_state(root, persist_defaults=True)
 
-    current_entry = ensure_current_endpoint(root)
-    state = load_api_wave_state(root, persist_defaults=True)
+    _, state, current_entry = ensure_current_endpoint(root)
     current_entry = current_entry or entry_for_batch_id(root, state.get("current_endpoint_id"))[0]
     next_entry = select_next_endpoint(manifest, state)
     current_endpoint_id = str(state.get("current_endpoint_id") or "").strip()
@@ -152,7 +151,7 @@ def build_api_wave_snapshot(
                 if artifact:
                     apply_public_proof_result(root, batch_id=API_WAVE_BATCH_ID, artifact=artifact)
                     state = load_api_wave_state(root, persist_defaults=True)
-                    current_entry = ensure_current_endpoint(root)
+                    _, state, current_entry = ensure_current_endpoint(root)
                     current_endpoint_id = str(state.get("current_endpoint_id") or "").strip()
                     current_task_id = str(state.get("current_owner_task_id") or state.get("current_task_id") or "").strip()
                     current_status = str(state.get("current_status") or "idle_ready_for_next_endpoint").strip().lower()

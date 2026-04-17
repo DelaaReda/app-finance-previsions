@@ -119,7 +119,7 @@ class PlannerGuardianTests(unittest.TestCase):
                     "api_wave": {
                         "enabled": True,
                         "dispatch_ready": True,
-                        "current_endpoint": {"endpoint_id": "copilot_search"},
+                        "current_endpoint": {"endpoint_id": "copilot-search"},
                     },
                 },
             },
@@ -133,8 +133,8 @@ class PlannerGuardianTests(unittest.TestCase):
             },
         )
         patch_ids = [patch["id"] for patch in patches]
-        self.assertIn("dispatch_api_wave_now", patch_ids)
-        self.assertNotIn("continue_api_wave_now", patch_ids)
+        self.assertIn("dispatch_api_wave_endpoint_now", patch_ids)
+        self.assertNotIn("idle_ready_for_next_endpoint", patch_ids)
         self.assertNotIn("open_next_batch_now", patch_ids)
         self.assertNotIn("claim_or_autobatch_now", patch_ids)
 

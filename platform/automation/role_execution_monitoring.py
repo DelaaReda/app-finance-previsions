@@ -98,7 +98,7 @@ def planner_only_runtime(state_path: Path) -> bool:
         return False
     operator_mode = str(data.get("operator_mode", "")).strip().lower()
     execution_mode = str(data.get("execution_mode", "")).strip().lower()
-    return operator_mode == "planner-only" or execution_mode == "planner_experimental"
+    return operator_mode == "planner-only" or execution_mode in {"planner_experimental", "api_autonomy_mode"}
 
 
 def canonical_runtime_idle(queue_path: Path, workboard_path: Path) -> bool:

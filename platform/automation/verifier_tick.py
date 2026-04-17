@@ -43,12 +43,14 @@ def _emit_contract(
 def _skip_contract(delivery_state: dict[str, object], *, reason: str, batch_id: str) -> int:
     phase = str(delivery_state.get("phase") or "none").strip() or "none"
     public_proof_status = str(delivery_state.get("public_proof_status") or "unknown").strip() or "unknown"
+    current_value_target = delivery_state.get("current_value_target") if isinstance(delivery_state.get("current_value_target"), dict) else {}
+    endpoint_id = str(current_value_target.get("endpoint_id") or "none").strip() or "none"
     return _emit_contract(
         status="WAIT",
         delta="NO_DELTA",
         evidence=(
             f"task_update=none_no_signal; stream_id={batch_id or 'none'}; task_id={batch_id or 'none'}; "
-            f"run_note=verifier_skip_{reason}; phase={phase}; public_proof_status={public_proof_status}"
+            f"run_note=verifier_skip_{reason}; phase={phase}; public_proof_status={public_proof_status}; endpoint_id={endpoint_id}"
         ),
         risks="aucun rerun verifier utile sans changement canonique",
         next_step="owner=planner; action=rerun verifier seulement sur changement ou relance explicite",
@@ -73,12 +75,13 @@ def main() -> int:
     verifier_state = load_verifier_state(root)
     decision = should_run_verifier(delivery_state, verifier_state, force=bool(args.force))
     batch_id = str(decision.get("batch_id") or "").strip().upper()
+    endpoint_id = str(decision.get("endpoint_id") or "").strip()
     if not bool(decision.get("should_run")):
         return _skip_contract(delivery_state, reason=str(decision.get("reason") or "no_change"), batch_id=batch_id)
 
     artifact = run_public_proof(
         root,
-        batch_id=batch_id or None,
+        batch_id=(batch_id or ("BATCH-900" if endpoint_id else None)),
         timeout_seconds=float(args.timeout_seconds),
     )
     record_verifier_result(root, delivery_state, artifact, decision_reason=str(decision.get("reason") or "state_changed"))
@@ -92,7 +95,7 @@ def main() -> int:
         f"task_update=verify; stream_id={batch_id or 'none'}; task_id={batch_id or 'none'}; "
         f"run_note=verifier_run_{artifact_status}; trigger_reason={str(decision.get('reason') or 'state_changed')}; "
         f"api_smoke_status={api_status}; ui_smoke_status={ui_status}; "
-        f"user_visible_delta_confirmed={visible_delta}; proof_ref={proof_ref}"
+        f"user_visible_delta_confirmed={visible_delta}; endpoint_id={str(artifact.get('endpoint_id') or endpoint_id or 'none')}; proof_ref={proof_ref}"
     )
     if artifact_status == "ok":
         return _emit_contract(

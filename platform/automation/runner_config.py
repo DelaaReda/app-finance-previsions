@@ -233,6 +233,37 @@ def _flatten(cfg: dict[str, Any], role: str) -> tuple[dict[str, str], list[str]]
     out["FC_PLANNER_IDLE_AUTOBATCH"] = out["FC_PLANNER_AUTO_CREATE_ON_EMPTY"]
     out["FC_PLANNER_CREATE_SOURCE"] = _as_text(planner_autonomy.get("create_source"), "vision")
 
+    api_autonomy_mode = (
+        features.get("api_autonomy_mode", {})
+        if isinstance(features.get("api_autonomy_mode"), dict)
+        else {}
+    )
+    out["FC_API_AUTONOMY_MODE"] = str(_as_int01(api_autonomy_mode.get("enabled", 0), 0))
+    out["FC_API_WAVE_MANIFEST_PATH"] = _as_text(
+        api_autonomy_mode.get("manifest_path"),
+        "platform/automation/config/api_wave_manifest.json",
+    )
+    out["FC_API_WAVE_STATE_PATH"] = _as_text(
+        api_autonomy_mode.get("state_path"),
+        "logs-codex-runs/orchestrator-state/api_wave_state.json",
+    )
+    out["FC_API_WAVE_BATCH_ID"] = _as_text(
+        api_autonomy_mode.get("wave_batch_id"),
+        "API-WAVE",
+    )
+    raw_api_domains = api_autonomy_mode.get("allowed_domains", ["copilot", "forecasts", "market_data"])
+    if not isinstance(raw_api_domains, list):
+        raw_api_domains = ["copilot", "forecasts", "market_data"]
+    out["FC_API_WAVE_ALLOWED_DOMAINS"] = ",".join(
+        str(token).strip() for token in raw_api_domains if str(token).strip()
+    )
+    raw_api_roles = api_autonomy_mode.get("managed_roles", ["app-dev"])
+    if not isinstance(raw_api_roles, list):
+        raw_api_roles = ["app-dev"]
+    out["FC_API_WAVE_MANAGED_ROLES"] = ",".join(
+        str(token).strip() for token in raw_api_roles if str(token).strip()
+    )
+
     dev_wait_policy = (
         features.get("dev_wait_policy", {})
         if isinstance(features.get("dev_wait_policy"), dict)

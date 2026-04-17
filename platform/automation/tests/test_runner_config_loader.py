@@ -39,6 +39,9 @@ class RunnerConfigLoaderTests(unittest.TestCase):
         self.assertTrue(any(line.startswith("TMUX_ROLE_CODEX_EXEC_RESUME=") for line in lines))
         self.assertTrue(any(line.startswith("RUNNER_CONFIG_SOURCE=") for line in lines))
         self.assertTrue(any(line.startswith("RUNNER_CONFIG_HASH=") for line in lines))
+        self.assertTrue(any(line.startswith("FC_API_AUTONOMY_MODE=") for line in lines))
+        self.assertTrue(any(line.startswith("FC_API_WAVE_MANIFEST_PATH=") for line in lines))
+        self.assertTrue(any(line.startswith("FC_API_WAVE_BATCH_ID=") for line in lines))
 
     def test_cli_set_precedence(self) -> None:
         cp = subprocess.run(

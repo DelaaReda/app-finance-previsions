@@ -13,7 +13,7 @@ from storage.io import load_json
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/search")
 
 try:
     from services.service_standard import ensure_decision_contract, utc_now_iso  # type: ignore
@@ -295,6 +295,9 @@ async def universal_search_endpoint(
     except Exception as e:
         logger.error(f"Error in universal search: {str(e)}", exc_info=True)
         return err(f"Universal search failed: {str(e)}", code=500)
+
+
+universal_search_router = router
 
 # Export the router for use in main API app
 search_router = router

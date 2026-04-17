@@ -53,14 +53,58 @@ import json
 from pathlib import Path
 from typing import Any
 
+API_WAVE_BATCH_ID = "API-WAVE"
+
 
 def _state_path(root: Path) -> Path:
     return Path(root) / "logs-codex-runs" / "orchestrator-state" / "api_wave_state.json"
 
 
+def api_wave_proof_path(root: Path, endpoint_id: str) -> Path:
+    endpoint_token = str(endpoint_id or "").strip().replace(".", "__").replace("-", "_").lower()
+    return Path(root) / "logs-codex-runs" / "orchestrator-state" / "api-wave-proofs" / f"{endpoint_token}.json"
+
+
+def load_api_wave_manifest(root: Path, persist_defaults: bool = False) -> dict[str, Any]:
+    manifest_path = Path(root) / "platform" / "automation" / "config" / "api_wave_manifest.json"
+    if not manifest_path.exists():
+        return {}
+    return json.loads(manifest_path.read_text(encoding="utf-8"))
+
+
+def load_api_wave_state(root: Path, persist_defaults: bool = False) -> dict[str, Any]:
+    path = _state_path(Path(root))
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_api_wave_proof(root: Path, endpoint_id: str) -> dict[str, Any]:
+    path = api_wave_proof_path(Path(root), endpoint_id)
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def persist_api_wave_proof(root: Path, endpoint_id: str, payload: dict[str, Any]) -> Path:
+    path = api_wave_proof_path(Path(root), endpoint_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\\n", encoding="utf-8")
+    return path
+
+
+def api_wave_manifest_path(root: Path) -> Path:
+    return Path(root) / "platform" / "automation" / "config" / "api_wave_manifest.json"
+
+
+def api_wave_owner_task_id(endpoint_id: str) -> str:
+    token = str(endpoint_id or '').strip().upper().replace('.', '_').replace('-', '_')
+    return f"API-WAVE-DEV-{token}"
+
+
 def build_api_wave_snapshot(root: Path, *, delivery_state: dict[str, Any] | None = None, normalized_states: list[dict[str, Any]] | None = None, prior_state: dict[str, Any] | None = None, now: Any = None) -> dict[str, Any]:
     root = Path(root)
-    manifest_path = root / "platform" / "automation" / "config" / "api_wave_manifest.v1.json"
+    manifest_path = root / "platform" / "automation" / "config" / "api_wave_manifest.json"
     if not manifest_path.exists():
         return {
             "enabled": False,
@@ -68,37 +112,40 @@ def build_api_wave_snapshot(root: Path, *, delivery_state: dict[str, Any] | None
             "current_endpoint": None,
             "next_endpoint": None,
             "current_task_id": None,
-            "state": {"schema_version": "api_wave_state.v1", "current_endpoint_id": "", "current_task_id": "", "completed_endpoints": [], "deferred_endpoints": []},
+            "state": {"schema_version": "api_wave_state.v1", "current_endpoint_id": "", "current_task_id": "", "completed_endpoint_ids": [], "deferred_endpoint_ids": []},
             "reason": "disabled",
         }
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
-    endpoints = payload.get("endpoints", [])
+    endpoints = payload.get("endpoints", payload.get("items", []))
     endpoint = endpoints[0] if isinstance(endpoints, list) and endpoints else {}
     endpoint_id = str(endpoint.get("endpoint_id") or "copilot_search").strip()
-    task_id = f"APIWAVE-{endpoint_id.upper()}-DEV-01"
+    task_id = f"API-WAVE-DEV-{endpoint_id.upper().replace('.', '_').replace('-', '_')}"
     delivery_state = delivery_state if isinstance(delivery_state, dict) else {}
     dispatch_ready = bool(delivery_state.get("ec2_reachable", False)) and not str(delivery_state.get("active_batch_id") or "").strip()
     endpoint_payload = dict(endpoint)
     endpoint_payload["owner_task_id"] = task_id
     state = {
         "schema_version": "api_wave_state.v1",
+        "wave_batch_id": API_WAVE_BATCH_ID,
         "current_endpoint_id": endpoint_id,
         "current_task_id": task_id,
-        "completed_endpoints": [],
-        "deferred_endpoints": [],
+        "completed_endpoint_ids": [],
+        "deferred_endpoint_ids": [],
     }
     return {
         "enabled": True,
-        "mode": "api_autonomy",
-        "stream_id": "API-WAVE",
+        "mode": "api_autonomy_mode",
+        "stream_id": API_WAVE_BATCH_ID,
+        "batch_id": API_WAVE_BATCH_ID,
+        "wave_batch_id": API_WAVE_BATCH_ID,
         "dispatch_ready": dispatch_ready,
         "current_endpoint": endpoint_payload,
         "next_endpoint": None,
         "current_task_id": task_id,
         "current_status": "ready",
-        "completed_endpoints": [],
-        "deferred_endpoints": [],
-        "last_proof_ref": "none",
+        "completed_endpoint_ids": [],
+        "deferred_endpoint_ids": [],
+        "last_public_proof_ref": "none",
         "state": state,
         "reason": "dispatch_ready" if dispatch_ready else "waiting_active_batch",
     }
@@ -230,7 +277,7 @@ if sub == "planner-autobatch":
     raise SystemExit(0)
 
 if sub == "api-wave-dispatch":
-    print("API_WAVE_DISPATCH endpoint_id=copilot_search task_id=APIWAVE-COPILOT_SEARCH-DEV-01 reason=subagent_running backend=mock completed=0")
+    print("API_WAVE_DISPATCH endpoint_id=copilot_search task_id=API-WAVE-DEV-COPILOT_SEARCH reason=subagent_running backend=mock completed=0")
     raise SystemExit(0)
 
 if sub == "claim":
@@ -280,6 +327,11 @@ def _setup_workspace() -> Path:
     (td / "state").mkdir(parents=True, exist_ok=True)
 
     _write_exec_safe(td / "platform" / "policies" / "exec_safe.sh")
+    (td / "platform" / "automation" / "runtime" / "__init__.py").write_text("", encoding="utf-8")
+    (td / "platform" / "automation" / "runtime" / "truth" / "__init__.py").write_text("", encoding="utf-8")
+    (td / "platform" / "automation" / "runtime" / "planner" / "__init__.py").write_text("", encoding="utf-8")
+    (td / "platform" / "automation" / "compat" / "__init__.py").write_text("", encoding="utf-8")
+    (td / "platform" / "automation" / "compat" / "projections" / "__init__.py").write_text("", encoding="utf-8")
     _write_api_wave_stub(td / "platform" / "automation" / "runtime" / "truth" / "api_wave.py")
     (td / "platform" / "automation" / "runtime" / "planner").mkdir(parents=True, exist_ok=True)
     _write_planner_runtime_actions_stub(td / "platform" / "automation" / "runtime" / "planner" / "planner_runtime_actions.py")
@@ -297,26 +349,25 @@ def _setup_workspace() -> Path:
 def _enable_api_wave(workspace: Path) -> None:
     manifest_dir = workspace / "platform" / "automation" / "config"
     manifest_dir.mkdir(parents=True, exist_ok=True)
-    (manifest_dir / "api_wave_manifest.v1.json").write_text(
+    (manifest_dir / "api_wave_manifest.json").write_text(
         json.dumps(
             {
                 "schema_version": "api_wave_manifest.v1",
-                "mode": "api_autonomy",
+                "mode": "api_autonomy_mode",
                 "enabled": True,
+                "wave_batch_id": "API-WAVE",
                 "stream_id": "API-WAVE",
-                "endpoints": [
+                "items": [
                     {
                         "endpoint_id": "copilot_search",
                         "domain": "copilot",
-                        "route_path": "/api/copilot/search",
+                        "route_path": "/api/search/tickers",
+                        "public_smoke_path": "/api/search/tickers?q=NVDA",
                         "route_module": "apps/api/src/domains/copilot/api/search.py",
                         "priority": "P1",
                         "product_surface": "copilot",
-                        "shared_contract": "copilot_search_v1",
-                        "endpoint_service": "copilot_search_endpoint_service.py",
-                        "parity_status": "route_heavy",
-                        "last_public_proof": "none",
-                        "deferred_reason": "none",
+                        "shared_contract": "packages/contracts/copilot_search_v1.py",
+                        "endpoint_service": "apps/api/src/domains/copilot/application/copilot_search_endpoint_service.py",
                     }
                 ],
             }

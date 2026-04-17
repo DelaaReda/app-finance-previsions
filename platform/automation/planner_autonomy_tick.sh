@@ -893,6 +893,46 @@ if [[ "$planner_in_progress" == "0" && "$api_wave_enabled" == "1" && "$api_wave_
   exit 0
 fi
 
+if [[ "$api_wave_enabled" == "1" ]]; then
+  case "$api_wave_reason" in
+    route_admin)
+      write_state 1 "route_api_wave_admin" "deferred" "planner_api_wave_route_admin" "${api_wave_task_id:-none}" "planner_api_wave_route_admin" "endpoint_id=${api_wave_endpoint_id};reason=${api_wave_reason};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+      echo "PLANNER_AUTONOMY status=warn action=route_api_wave_admin outcome=deferred issue=planner_api_wave_route_admin endpoint_id=${api_wave_endpoint_id} task_id=${api_wave_task_id:-none} reason=${api_wave_reason} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+      exit 0
+      ;;
+    route_scrum)
+      write_state 1 "route_api_wave_scrum" "deferred" "planner_api_wave_route_scrum" "${api_wave_task_id:-none}" "planner_api_wave_route_scrum" "endpoint_id=${api_wave_endpoint_id};reason=${api_wave_reason};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+      echo "PLANNER_AUTONOMY status=warn action=route_api_wave_scrum outcome=deferred issue=planner_api_wave_route_scrum endpoint_id=${api_wave_endpoint_id} task_id=${api_wave_task_id:-none} reason=${api_wave_reason} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+      exit 0
+      ;;
+    defer_current_endpoint)
+      write_state 1 "defer_api_wave_endpoint" "deferred" "planner_api_wave_endpoint_deferred" "${api_wave_task_id:-none}" "planner_api_wave_endpoint_deferred" "endpoint_id=${api_wave_endpoint_id};reason=${api_wave_reason};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+      echo "PLANNER_AUTONOMY status=warn action=defer_api_wave_endpoint outcome=deferred issue=planner_api_wave_endpoint_deferred endpoint_id=${api_wave_endpoint_id} task_id=${api_wave_task_id:-none} reason=${api_wave_reason} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+      exit 0
+      ;;
+    backoff)
+      write_state 1 "api_wave_backoff" "deferred" "planner_api_wave_backoff" "${api_wave_task_id:-none}" "planner_api_wave_backoff" "endpoint_id=${api_wave_endpoint_id};reason=${api_wave_reason};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+      echo "PLANNER_AUTONOMY status=warn action=api_wave_backoff outcome=deferred issue=planner_api_wave_backoff endpoint_id=${api_wave_endpoint_id} task_id=${api_wave_task_id:-none} reason=${api_wave_reason} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+      exit 0
+      ;;
+    waiting_public_proof|active_delivery|waiting_active_batch)
+      write_state 1 "api_wave_wait" "deferred" "planner_api_wave_wait" "${api_wave_task_id:-none}" "planner_api_wave_wait" "endpoint_id=${api_wave_endpoint_id};reason=${api_wave_reason};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+      echo "PLANNER_AUTONOMY status=ok action=api_wave_wait outcome=deferred issue=planner_api_wave_wait endpoint_id=${api_wave_endpoint_id} task_id=${api_wave_task_id:-none} reason=${api_wave_reason} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+      exit 0
+      ;;
+    exhausted)
+      write_state 1 "api_wave_exhausted" "resolved" "planner_api_wave_exhausted" "${api_wave_task_id:-none}" "none" "endpoint_id=${api_wave_endpoint_id};reason=${api_wave_reason};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+      echo "PLANNER_AUTONOMY status=ok action=api_wave_exhausted outcome=resolved endpoint_id=${api_wave_endpoint_id} task_id=${api_wave_task_id:-none} reason=${api_wave_reason} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+      exit 0
+      ;;
+    *)
+      write_state 1 "api_wave_hold" "deferred" "planner_api_wave_hold" "${api_wave_task_id:-none}" "planner_api_wave_hold" "endpoint_id=${api_wave_endpoint_id};reason=${api_wave_reason};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
+      echo "PLANNER_AUTONOMY status=warn action=api_wave_hold outcome=deferred issue=planner_api_wave_hold endpoint_id=${api_wave_endpoint_id} task_id=${api_wave_task_id:-none} reason=${api_wave_reason} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+      exit 0
+      ;;
+  esac
+fi
+
 if [[ "$planner_ready" =~ ^[0-9]+$ ]] && (( planner_ready > 0 )); then
   claim_payload="$(run_safe_capture "claim_ready" "$(build_claim_cmd "")")"
   claim_rc="$(capture_rc "$claim_payload")"

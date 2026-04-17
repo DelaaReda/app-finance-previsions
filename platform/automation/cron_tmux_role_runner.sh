@@ -4605,8 +4605,8 @@ Décision tick:
 2) Si une tâche canonique downstream est active: collect/repair/ack seulement et republier le vrai wait-state. Pas d'ANALYSIS ni de planner-autobatch tant qu'elle n'a pas transitionné.
 3) Si planner a une tâche IN_PROGRESS: reprendre cette tâche, pas de nouveau claim.
 4) Si planner a une tâche READY: sync-priority une fois si nécessaire, puis claim cette tâche READY exacte. PLAN/ANALYSIS/ARCH/GOV_REVIEW restent planner-owned, jamais claim si non-READY.
-5) Si la tâche planner demande delivery/runtime/flow: un seul subagent ciblé (dev=patch/test, admin=runtime/reconcile/cleanup, scrum_master=unblock/escalation). Sinon traiter puis complete.
-6) Autobatch top-level seulement s'il n'existe aucune tâche canonique exécutable ni lane downstream utile; après autobatch, sync-priority puis claim. Si runtime truth n'a aucun batch actif et EC2 est joignable: `create_or_claim_now` ou repair immediat, jamais attente durable.
+5) Si la tâche planner demande delivery/runtime/flow: un seul subagent ciblé (dev=patch/test, admin=runtime/reconcile/public-proof, scrum_master=unblock/escalation). En `api_autonomy_mode`, pas de micro-batch endpoint ni de chaîne ANALYSIS->ARCH->DEV->ADMIN: dispatch direct vers dev sur `BATCH-900`, admin seulement pour runtime/control-plane/public-proof, scrum_master seulement après 2 blocages non runtime consécutifs sur le même endpoint.
+6) Hors `api_autonomy_mode`, autobatch top-level seulement s'il n'existe aucune tâche canonique exécutable ni lane downstream utile; après autobatch, sync-priority puis claim. En `api_autonomy_mode`, si runtime truth n'a aucun batch actif et EC2 est joignable: continuer `BATCH-900` via api-wave-dispatch, defer le current endpoint, backoff la lane stérile ou route admin/scrum selon la cause; jamais attente durable ni autobatch legacy.
 7) Si claim/collect/autobatch échoue: rester non passif avec repair/collect/create_or_claim_now. Résidu historique seul (`secondary_compat_only`, SQLite orpheline, batch clos, aucune tâche canonique ouverte) => un seul subagent admin cleanup/reconcile puis retry `create_or_claim_now`; jamais `BLOCKED` produit pour ce cas. `none_no_signal` seulement si runtime indisponible est prouvé ce tick.
 8) Lanes qui répètent `none_no_signal|retry|takeover` sans effet canonique => backoff + action d'unblock/fix; pas de relance infinie ni de redispatch décoratif.
 9) Preuve publique EC2 d'un delta utilisateur => `product_done`; `ops_clean=no` n'est pas un blocage produit par défaut et aucune projection/guardian/monitor ne rouvre ce batch.
@@ -4642,8 +4642,9 @@ Décision tick (ordre strict):
 1) blocker runtime réel -> si blocker produit, le prouver sur l'EC2 publique; si blocker orchestration/control-plane, le prouver sur la VM UTM; puis fix immédiat + vérification.
 2) dérive orchestration (queue/workboard/prompt/cron/docs) -> correction ciblée + preuve.
 3) si une lane planner/dev est bloquée -> action de déblocage concrète ce tick (pas d'analyse passive).
+3b) En `api_autonomy_mode`, un blocage provider/dépendance/métier non runtime ne réveille jamais admin: il doit defer l'endpoint courant ou router scrum_master si le même endpoint a déjà bloqué 2 fois.
 4) sinon task_update=none_no_signal avec preuve santé explicite.
-5) N'utilise task_update=blocked que pour panne runtime vérifiable ce tick (jamais pour drift documentaire).
+5) N'utilise task_update=blocked que pour panne runtime/control-plane/public-proof vérifiable ce tick (jamais pour drift documentaire ni blocage provider).
 6) `CRON_SCHEDULE_MISSING` exige double preuve: `crontab -l | rg "fc_agent_tick|cron_tmux_role_runner"` = 0 et `logs-codex-runs/fc-ticks/admin.cron.log` inactive; ajouter `crontab_agent_jobs=<n>` + `cron_log_recent=<0|1>`.
 7) Si le même blocker revient >=2 ticks et que la cause est prompt/contrat: patch ROLE=admin, sync éventuel du wrapper, puis log audit + itération; `admin_artifact` = prompt + audit.
 8) Quand `ADMIN_TSHAPE_ACTIVE=1` (full takeover):
@@ -4809,10 +4810,7 @@ Mode delivery strict:
 - avant création de fichier/module: preuve reuse-first obligatoire (`rg` + module réutilisé ou justification `NONE(reason)`).
 - architecture-first obligatoire avant patch: confirmer la couche cible (domain/application/api/platform) et éviter imports cross-layer.
 - appliquer le modèle JUDGE endpoint comme référence de qualité d'intégration: réutiliser clients/modules existants avant création.
-Spécialisation par task_id:
-- DEV-01 => API/contracts + module-load/layering fixes (apps/api/src/**)
-- DEV-02 => runtime-path/integration coherence (+ UI wiring si demandé)
-- DEV-03 => data quality/scoring/guardrails/spec hardening (apps/api/src/** + docs/ops/**)
+- si `task_id` commence par `BATCH-900-DEV-`: autonomie wave complète sur un endpoint allowlisté. Tu peux livrer d'un bout à l'autre contrat partagé (`packages/contracts/*`) si nécessaire, logique `application/*`, `*_endpoint_service.py`, route mince, tests ciblés, puis smoke EC2 public. Pas de retour à un micro-fix orchestration, pas de moteur de décision parallèle, pas de redesign frontend; seulement le wiring minimal si le backend est prêt.
 
 Blocker permission/read-only: preuve fraîche obligatoire du tick courant sur fichier métier (cmd_err_excerpt). Pas de preuve sur *.lock uniquement.
 Commandes shell via platform/policies/exec_safe.sh.
@@ -4950,6 +4948,7 @@ Mission:
 4) produire un rapport compact horodaté.
 En mode planner-only (`execution_mode=planner_experimental`), considérer `planner.last_contract`, `planner_subagent_summary` et le runtime_context comme source de vérité.
 Ne pas traiter un vieux `dev.last_contract` ou de vieux logs `dev/admin` standalone comme un blocker actif si aucune capability planner correspondante n'est active sur ce tick.
+En `api_autonomy_mode`, n'intervenir qu'après 2 blocages non runtime consécutifs sur le même endpoint; débloquer l'acceptance/coordination puis laisser le planner rerouter vers dev ou defer, sans réouvrir admin ni ANALYSIS.
 Sources minimales:
 - logs-codex-runs/orchestrator-state/priority-queue.json
 - logs-codex-runs/orchestrator-state/parallel-workstreams.json

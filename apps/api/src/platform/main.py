@@ -1114,7 +1114,9 @@ def create_app() -> FastAPI:
 
     try:
         from .routes.stocks import stocks_router
-        app.include_router(stocks_router)
+        # /api/stocks/* is served by the canonical route family below; avoid a parallel
+        # unprefixed /stocks/* surface.
+        pass
     except ImportError as e:
         print(f"⚠️  Failed to include stocks routes: {e}")
 
@@ -1135,13 +1137,15 @@ def create_app() -> FastAPI:
 
     try:
         from .routes.brief import router as legacy_brief_router
-        app.include_router(legacy_brief_router)
+        # Keep a single public API surface: /api/brief/*
+        pass
     except ImportError as e:
         print(f"⚠️  Failed to include brief routes: {e}")
 
     try:
         from .routes.brief_alias import router as legacy_brief_alias_router
-        app.include_router(legacy_brief_alias_router)
+        # Alias-only API paths are intentionally suppressed.
+        pass
     except ImportError as e:
         print(f"⚠️  Failed to include brief alias routes: {e}")
 
@@ -1177,13 +1181,14 @@ def create_app() -> FastAPI:
 
     try:
         from .routes.news import router as legacy_news_router
-        app.include_router(legacy_news_router)
+        # Keep /api/news/feed as the only public API route.
+        pass
     except ImportError as e:
         print(f"⚠️  Failed to include news routes: {e}")
 
     try:
         from .routes.news_impact import router as legacy_news_impact_router
-        app.include_router(legacy_news_impact_router)
+        app.include_router(legacy_news_impact_router, prefix="/api")
     except ImportError as e:
         print(f"⚠️  Failed to include news impact routes: {e}")
 
@@ -1195,13 +1200,16 @@ def create_app() -> FastAPI:
 
     try:
         from .routes.search import router as legacy_search_router
-        app.include_router(legacy_search_router)
+        app.include_router(legacy_search_router, prefix="/api")
+        from domains.copilot.api.universal_search import router as universal_search_router
+        app.include_router(universal_search_router, prefix="/api")
     except ImportError as e:
         print(f"⚠️  Failed to include search routes: {e}")
 
     try:
         from .routes.stocks_extra import router as legacy_stocks_extra_router
-        app.include_router(legacy_stocks_extra_router)
+        # Alias-only API paths are intentionally suppressed.
+        pass
     except ImportError as e:
         print(f"⚠️  Failed to include stocks extra routes: {e}")
 

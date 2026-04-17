@@ -197,6 +197,25 @@ def _literal_delivery_control(delivery_state: dict[str, Any]) -> dict[str, Any]:
     return dict(delivery_state)
 
 
+def _api_wave_advisory(delivery_state: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(delivery_state, dict):
+        return {}
+    api_wave = delivery_state.get("api_wave")
+    api_wave = api_wave if isinstance(api_wave, dict) else {}
+    lane_backoff = delivery_state.get("lane_backoff")
+    lane_backoff = lane_backoff if isinstance(lane_backoff, dict) else {}
+    verifier_backoff = lane_backoff.get("verifier")
+    verifier_backoff = verifier_backoff if isinstance(verifier_backoff, dict) else {}
+    return {
+        "mode": str(api_wave.get("mode") or "disabled").strip() or "disabled",
+        "current_endpoint_id": api_wave.get("current_endpoint_id"),
+        "next_endpoint_id": api_wave.get("next_endpoint_id"),
+        "completed_count": len(api_wave.get("completed_endpoint_ids") or []),
+        "deferred_count": len(api_wave.get("deferred_endpoint_ids") or []),
+        "backoff_active": bool(verifier_backoff.get("active")),
+    }
+
+
 def build_status_snapshot(
     root: Path,
     status_builder: Callable[[], dict[str, Any]],
@@ -406,6 +425,7 @@ def build_status_snapshot(
     payload["layers"]["service"] = "status_service.v3"
     payload["delivery_control_advisory"] = dict(advisory_delivery_control)
     payload["delivery_control"] = _literal_delivery_control(delivery_state)
+    payload["api_wave"] = _api_wave_advisory(delivery_state)
     payload["status_semantics"] = {
         "overall_status": {
             "field": "doctor_overall_status",

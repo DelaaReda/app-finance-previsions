@@ -53,7 +53,7 @@ usage() {
 Usage: set_orchestration_mode.sh [options]
 
 Options:
-  --mode <admins-only|sequential|parallel|planner-only|paused>  Target mode (default: admins-only)
+  --mode <admins-only|sequential|parallel|api-autonomy|planner-only|paused>  Target mode (default: admins-only)
   --role <role>                                    Role used for sequential mode (default: planner)
   --stop-sessions                                  Kill mapped tmux sessions after mode apply
   --status                                         Print cron status only (no changes)
@@ -404,7 +404,7 @@ case "$MODE" in
       stop_disabled_sessions "$ROLE"
     fi
     ;;
-  parallel)
+  parallel|api-autonomy)
     enable_roles
     enable_governance_jobs
     disable_unexpected_jobs
@@ -451,10 +451,18 @@ else
     --operator-mode "$MODE"
     --source "set_orchestration_mode"
   )
-  if [[ -n "$RUNTIME_EXECUTION_MODE" ]]; then
-    runtime_write_args+=(--execution-mode "$RUNTIME_EXECUTION_MODE")
+  runtime_execution_mode_to_write="$RUNTIME_EXECUTION_MODE"
+  if [[ "$MODE" == "api-autonomy" ]]; then
+    runtime_execution_mode_to_write="api_autonomy_mode"
+  elif [[ "$MODE" == "planner-only" ]]; then
+    runtime_execution_mode_to_write="planner_experimental"
+  elif [[ "$MODE" == "parallel" && -z "$runtime_execution_mode_to_write" ]]; then
+    runtime_execution_mode_to_write="parallel_roles"
+  fi
+  if [[ -n "$runtime_execution_mode_to_write" ]]; then
+    runtime_write_args+=(--execution-mode "$runtime_execution_mode_to_write")
   fi
   python3 "$SOURCE_ROOT/platform/automation/runtime_state.py" "${runtime_write_args[@]}" >/dev/null 2>&1 || true
-  echo "ORCHESTRATION_MODE_APPLIED requested_mode=${REQUESTED_MODE} effective_mode=${MODE} role=${ROLE} dry_run=${DRY_RUN} stop_sessions=${STOP_SESSIONS} execution_mode=${RUNTIME_EXECUTION_MODE:-none}"
+  echo "ORCHESTRATION_MODE_APPLIED requested_mode=${REQUESTED_MODE} effective_mode=${MODE} role=${ROLE} dry_run=${DRY_RUN} stop_sessions=${STOP_SESSIONS} execution_mode=${runtime_execution_mode_to_write:-none}"
 fi
 timeout "$OPENCLAW_CRON_TIMEOUT_SECONDS" openclaw cron list || true

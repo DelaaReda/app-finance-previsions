@@ -6,16 +6,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from runtime.core.contracts import PlannerGraphState
-from runtime.truth.event_store import EventStore
-
-
 ROOT = Path(__file__).resolve().parents[3]
 AUTOMATION_DIR = ROOT / "platform" / "automation"
 if str(AUTOMATION_DIR) not in sys.path:
     sys.path.insert(0, str(AUTOMATION_DIR))
 
-MODULE_PATH = AUTOMATION_DIR / "runtime" / "truth" / "runtime_truth_reader.py"
+from runtime.core.contracts import PlannerGraphState
+from runtime.truth.event_store import EventStore
 from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot, load_product_delivery_state, product_delivery_state_path
 
 
@@ -29,26 +26,27 @@ class RuntimeTruthReaderTests(unittest.TestCase):
             (orch / "parallel-workstreams.json").write_text(json.dumps({"tasks": []}), encoding="utf-8")
             manifest_dir = root / "platform" / "automation" / "config"
             manifest_dir.mkdir(parents=True, exist_ok=True)
-            (manifest_dir / "api_wave_manifest.v1.json").write_text(
+            (manifest_dir / "api_wave_manifest.json").write_text(
                 json.dumps(
                     {
                         "schema_version": "api_wave_manifest.v1",
-                        "mode": "api_autonomy",
+                        "mode": "api_autonomy_mode",
                         "enabled": True,
+                        "wave_batch_id": "API-WAVE",
                         "stream_id": "API-WAVE",
-                        "endpoints": [
+                        "items": [
                             {
-                                "endpoint_id": "copilot_search",
+                                "endpoint_id": "copilot-search",
                                 "domain": "copilot",
-                                "route_path": "/api/copilot/search",
+                                "route_path": "/api/search/tickers",
                                 "route_module": "apps/api/src/domains/copilot/api/search.py",
                                 "priority": "P1",
                                 "product_surface": "copilot",
-                                "shared_contract": "copilot_search_v1",
-                                "endpoint_service": "copilot_search_endpoint_service.py",
-                                "parity_status": "route_heavy",
-                                "last_public_proof": "none",
-                                "deferred_reason": "none",
+                                "shared_contract": "packages/contracts/copilot_v1.py",
+                                "endpoint_service": "apps/api/src/domains/copilot/application/copilot_search_endpoint_service.py",
+                                "public_smoke_path": "/api/search/tickers?q=NVDA",
+                                "canonical": True,
+                                "alias_only": False,
                             }
                         ],
                     }
@@ -63,8 +61,11 @@ class RuntimeTruthReaderTests(unittest.TestCase):
             self.assertTrue(delivery_state["api_autonomy_mode"])
             self.assertTrue(api_wave["enabled"])
             self.assertTrue(api_wave["dispatch_ready"])
-            self.assertEqual(api_wave["current_endpoint"]["endpoint_id"], "copilot_search")
+            self.assertEqual(api_wave["current_endpoint"]["endpoint_id"], "copilot-search")
             self.assertEqual(api_wave["current_task_id"], "APIWAVE-COPILOT_SEARCH-DEV-01")
+            self.assertEqual(delivery_state["active_batch_id"], "API-WAVE")
+            self.assertEqual(delivery_state["current_value_target"]["endpoint_id"], "copilot-search")
+            self.assertEqual(delivery_state["current_value_target"]["route_path"], "/api/search/tickers")
 
     def test_product_done_clears_active_batch_monotonically(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

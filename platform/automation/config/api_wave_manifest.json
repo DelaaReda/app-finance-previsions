@@ -1,119 +1,247 @@
 {
-  "schema_version": "api_wave_manifest",
+  "schema_version": "api_wave_manifest.v1",
   "mode": "api_autonomy_mode",
   "enabled": true,
-  "stream_id": "BATCH-API",
-  "domains": [
-    "copilot",
-    "forecasts",
-    "market_data"
-  ],
-  "excluded_domains": [
-    "judge",
-    "dashboard",
-    "monitor",
-    "runtime",
-    "admin"
-  ],
-  "endpoints": [
+  "wave_id": "BATCH-900",
+  "batch_id": "BATCH-900",
+  "stream_id": "BATCH-900",
+  "domains": ["copilot", "forecasts", "market_data"],
+  "excluded_domains": ["judge", "dashboard", "monitor", "runtime", "admin", "control_plane"],
+  "items": [
     {
-      "endpoint_id": "copilot-search",
+      "endpoint_id": "copilot_search",
       "domain": "copilot",
-      "route_path": "/api/search/global",
-      "route_paths": [
-        "/api/search/tickers",
-        "/api/search/global",
-        "/api/search/sectors"
-      ],
+      "route_path": "/api/search/tickers",
+      "route_paths": ["/api/search/tickers", "/api/search/global", "/api/search/sectors"],
       "route_module": "apps/api/src/domains/copilot/api/search.py",
-      "priority": "P1",
+      "companion_modules": [],
+      "priority": 10,
       "product_surface": "copilot",
       "shared_contract": "packages/contracts/copilot_v1.py",
-      "endpoint_service": "apps/api/src/domains/copilot/application/copilot_search_endpoint_service.py"
+      "endpoint_service": "apps/api/src/domains/copilot/application/copilot_search_endpoint_service.py",
+      "parity_status": "route_local_mixed_contract",
+      "last_public_proof": "none",
+      "deferred_reason": "none",
+      "selectable": true,
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": [
+          "/api/search/tickers?q=NVDA&limit=3",
+          "/api/search/global?q=NVDA&limit=3",
+          "/api/search/sectors?q=AI&limit=3"
+        ],
+        "success_condition": "returns ok=true plus stable search metadata"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "copilot_search",
+        "required": false
+      }
     },
     {
-      "endpoint_id": "copilot-universal-search",
+      "endpoint_id": "copilot_universal_search",
       "domain": "copilot",
       "route_path": "/api/search/universal",
-      "route_paths": [
-        "/api/search/universal"
-      ],
+      "route_paths": ["/api/search/universal"],
       "route_module": "apps/api/src/domains/copilot/api/universal_search.py",
-      "priority": "P1",
+      "companion_modules": ["apps/api/src/domains/copilot/api/search.py"],
+      "priority": 20,
       "product_surface": "copilot",
       "shared_contract": "packages/contracts/copilot_v1.py",
-      "endpoint_service": "apps/api/src/domains/copilot/application/copilot_universal_search_endpoint_service.py"
+      "endpoint_service": "apps/api/src/domains/copilot/application/universal_search.py",
+      "parity_status": "duplicate_route_surface_needs_single_service_contract",
+      "last_public_proof": "none",
+      "deferred_reason": "none",
+      "selectable": true,
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": ["/api/search/universal?q=NVDA&limit=5"],
+        "success_condition": "returns ok=true and universal search results"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "copilot_universal_search",
+        "required": false
+      }
     },
     {
-      "endpoint_id": "forecasts-brief",
+      "endpoint_id": "forecasts_brief",
       "domain": "forecasts",
       "route_path": "/api/brief/daily",
-      "route_paths": [
-        "/api/brief/daily",
-        "/api/brief/weekly"
-      ],
+      "route_paths": ["/api/brief/daily", "/api/brief/weekly"],
       "route_module": "apps/api/src/domains/forecasts/api/brief.py",
-      "priority": "P1",
-      "product_surface": "brief",
+      "companion_modules": [],
+      "priority": 30,
+      "product_surface": "forecasts",
       "shared_contract": "packages/contracts/forecast_v1.py",
-      "endpoint_service": "apps/api/src/domains/forecasts/application/forecasts_brief_endpoint_service.py"
+      "endpoint_service": "apps/api/src/domains/forecasts/application/forecasts_brief_endpoint_service.py",
+      "parity_status": "route_local_contract_needs_judge_metadata",
+      "last_public_proof": "none",
+      "deferred_reason": "none",
+      "selectable": true,
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": ["/api/brief/daily", "/api/brief/weekly"],
+        "success_condition": "returns ok=true with generated_at, source, and freshness"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "forecasts_brief",
+        "required": false
+      }
     },
     {
-      "endpoint_id": "market-data-news-feed",
+      "endpoint_id": "market_data_news_feed",
       "domain": "market_data",
       "route_path": "/api/news/feed",
-      "route_paths": [
-        "/api/news/feed"
-      ],
+      "route_paths": ["/api/news/feed", "/api/news/features/daily"],
       "route_module": "apps/api/src/domains/market_data/api/news.py",
-      "priority": "P2",
-      "product_surface": "brief",
+      "companion_modules": ["apps/api/src/domains/market_data/api/news_extra.py"],
+      "priority": 40,
+      "product_surface": "market_data",
       "shared_contract": "packages/contracts/market_data.py",
-      "endpoint_service": "apps/api/src/domains/market_data/application/market_data_news_endpoint_service.py"
+      "endpoint_service": "apps/api/src/domains/market_data/application/news_service.py",
+      "parity_status": "mixed_route_service_contract",
+      "last_public_proof": "none",
+      "deferred_reason": "none",
+      "selectable": true,
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": ["/api/news/feed?limit=5"],
+        "success_condition": "returns ok=true and stable news feed metadata"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market_data_news_feed",
+        "required": false
+      }
     },
     {
-      "endpoint_id": "market-data-stocks",
-      "domain": "market_data",
-      "route_path": "/api/stocks/top",
-      "route_paths": [
-        "/api/stocks/top"
-      ],
-      "route_module": "apps/api/src/domains/market_data/api/stocks.py",
-      "priority": "P2",
-      "product_surface": "portfolio",
-      "shared_contract": "packages/contracts/market_data.py",
-      "endpoint_service": "apps/api/src/domains/market_data/application/market_data_stocks_endpoint_service.py"
-    },
-    {
-      "endpoint_id": "market-data-news-impact",
-      "domain": "market_data",
-      "route_path": "/api/news/analysis",
-      "route_paths": [
-        "/api/news/analysis"
-      ],
-      "route_module": "apps/api/src/domains/market_data/api/news_impact.py",
-      "priority": "P2",
-      "product_surface": "memo",
-      "shared_contract": "packages/contracts/market_data.py",
-      "endpoint_service": "apps/api/src/domains/market_data/application/market_data_news_impact_endpoint_service.py"
-    },
-    {
-      "endpoint_id": "market-data-analytics",
-      "domain": "market_data",
-      "route_path": "/api/analytics/predictions",
-      "route_paths": [
-        "/api/analytics/predictions"
-      ],
-      "route_module": "apps/api/src/domains/market_data/api/analytics.py",
-      "priority": "P3",
-      "product_surface": "portfolio",
-      "shared_contract": "packages/contracts/market_data.py",
-      "endpoint_service": "apps/api/src/domains/market_data/application/market_data_analytics_endpoint_service.py"
-    },
-    {
-      "endpoint_id": "market-data-stocks-client",
+      "endpoint_id": "market_data_stocks",
       "domain": "market_data",
       "route_path": "/api/stocks/prices",
+      "route_paths": ["/api/stocks/top-legacy", "/api/stocks/prices"],
+      "route_module": "apps/api/src/domains/market_data/api/stocks.py",
+      "companion_modules": [],
+      "priority": 50,
+      "product_surface": "market_data",
+      "shared_contract": "packages/contracts/market_data.py",
+      "endpoint_service": "apps/api/src/domains/market_data/application/stocks_service.py",
+      "parity_status": "legacy_route_needs_endpoint_service_parity",
+      "last_public_proof": "none",
+      "deferred_reason": "none",
+      "selectable": true,
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": ["/api/stocks/prices?ticker=NVDA&interval=1d"],
+        "success_condition": "returns ok=true and non-empty price points"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market_data_stocks",
+        "required": false
+      }
+    },
+    {
+      "endpoint_id": "market_data_news_impact",
+      "domain": "market_data",
+      "route_path": "/api/news/analysis",
+      "route_paths": ["/api/news/analysis"],
+      "route_module": "apps/api/src/domains/market_data/api/news_impact.py",
+      "companion_modules": [],
+      "priority": 60,
+      "product_surface": "market_data",
+      "shared_contract": "packages/contracts/market_data.py",
+      "endpoint_service": "apps/api/src/domains/market_data/application/market_data_news_impact_endpoint_service.py",
+      "parity_status": "route_local_contract_needs_metadata",
+      "last_public_proof": "none",
+      "deferred_reason": "none",
+      "selectable": true,
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": ["/api/news/analysis?tickers=NVDA&limit=5"],
+        "success_condition": "returns ok=true and impact analysis payload"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market_data_news_impact",
+        "required": false
+      }
+    },
+    {
+      "endpoint_id": "market_data_news_extra",
+      "domain": "market_data",
+      "route_path": "/api/news/feed",
+      "route_paths": ["/api/news/feed"],
+      "route_module": "apps/api/src/domains/market_data/api/news_extra.py",
+      "companion_modules": ["apps/api/src/domains/market_data/api/news.py"],
+      "priority": 70,
+      "product_surface": "market_data",
+      "shared_contract": "packages/contracts/market_data.py",
+      "endpoint_service": "apps/api/src/domains/market_data/application/news_service.py",
+      "parity_status": "duplicate_route_surface_needs_single_service_contract",
+      "last_public_proof": "none",
+      "deferred_reason": "grouped_under_market_data_news_feed",
+      "selectable": false,
+      "grouped_under_endpoint_id": "market_data_news_feed",
+      "public_smoke_reuse_from": "market_data_news_feed",
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": ["/api/news/feed?limit=5"],
+        "success_condition": "reuses the market_data_news_feed public proof"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market_data_news_extra",
+        "required": false
+      }
+    },
+    {
+      "endpoint_id": "market_data_analytics",
+      "domain": "market_data",
+      "route_path": "/api/analytics/predictions",
+      "route_paths": ["/api/analytics/predictions"],
+      "route_module": "apps/api/src/domains/market_data/api/analytics.py",
+      "companion_modules": [],
+      "priority": 80,
+      "product_surface": "market_data",
+      "shared_contract": "packages/contracts/market_data.py",
+      "endpoint_service": "apps/api/src/domains/market_data/application/market_data_analytics_endpoint_service.py",
+      "parity_status": "route_local_contract_needs_service_boundary",
+      "last_public_proof": "none",
+      "deferred_reason": "none",
+      "selectable": true,
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": ["/api/analytics/predictions?ticker=NVDA&limit=5"],
+        "success_condition": "returns ok=true and analytics metadata"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market_data_analytics",
+        "required": false
+      }
+    },
+    {
+      "endpoint_id": "market_data_stocks_client",
+      "domain": "market_data",
+      "route_path": "/api/stocks/search",
       "route_paths": [
         "/api/stocks/prices",
         "/api/stocks/universe",
@@ -122,10 +250,28 @@
         "/api/stocks/meta"
       ],
       "route_module": "apps/api/src/domains/market_data/api/stocks_client.py",
-      "priority": "P3",
-      "product_surface": "portfolio",
+      "companion_modules": [],
+      "priority": 90,
+      "product_surface": "market_data",
       "shared_contract": "packages/contracts/market_data.py",
-      "endpoint_service": "apps/api/src/domains/market_data/application/market_data_stocks_client_endpoint_service.py"
+      "endpoint_service": "apps/api/src/domains/market_data/application/market_data_stocks_client_endpoint_service.py",
+      "parity_status": "client_route_needs_shared_contract_metadata",
+      "last_public_proof": "none",
+      "deferred_reason": "none",
+      "selectable": true,
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": ["/api/stocks/search?q=NVDA&limit=5"],
+        "success_condition": "returns ok=true and stocks search metadata"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market_data_stocks_client",
+        "required": false
+      }
     }
-  ]
+  ],
+  "updated_at": "2026-04-17T00:00:00Z"
 }

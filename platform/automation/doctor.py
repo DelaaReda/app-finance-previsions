@@ -92,7 +92,7 @@ def _planner_orchestrator_flags(root: Path) -> tuple[bool, bool]:
 def _expected_core_roles(root: Path) -> tuple[str, ...]:
     if _planner_only_mode(root):
         return ("planner",)
-    return CORE_ROLES
+    return ("planner", "app-dev", "verifier")
 
 
 def _planner_only_mode(root: Path) -> bool:

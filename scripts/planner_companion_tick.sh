@@ -235,7 +235,8 @@ elif ready_planner_task is not None:
             f"planner_companion relaunch: mode={mode} task_id={contract['task_id']} "
             f"stream_id={contract['stream_id']} ready_dev={dev_ready_count} next={next_action}. "
             "Priorise un delta livrable maintenant: API/contrat partage ou comportement user-visible "
-            "verifiable sur EC2 public, pas d'analyse passive."
+            "verifiable sur EC2 public, pas d'analyse passive. Si api_autonomy_mode est actif, "
+            "pas de planner-autobatch: poursuivre BATCH-900 ou defer l'endpoint courant."
         )
     if contract_age is not None and contract_age < idle_stale_s and not issues and dev_ready_count == 0:
         action = "skip"
@@ -258,7 +259,8 @@ elif dev_ready_count > 0:
         message = (
             f"planner_companion relaunch: mode={mode} dev_ready_count={dev_ready_count} "
             f"next={next_action}. Lancer la capability utile maintenant et viser un delta "
-            "user-visible ou API mergeable prouve sur EC2 public."
+            "user-visible ou API mergeable prouve sur EC2 public. Si api_autonomy_mode est actif, "
+            "pas de planner-autobatch ni d'ANALYSIS legacy."
         )
 elif issues:
     if guardian_level == "green" and not blocking_issues:

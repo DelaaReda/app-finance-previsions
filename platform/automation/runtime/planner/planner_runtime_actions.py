@@ -47,7 +47,18 @@ from compat.projections.parallel_workstream import (
 from browser_smoke import run_browser_smoke
 from orchestrator_paths import CANONICAL_VM_ROOT, SHARED_VM_ROOT, resolve_orchestrator_read_path, resolve_orchestrator_write_path
 from runtime.model_plane.model_plane import resolve_planner_backend_choice as model_plane_resolve_planner_backend_choice
-from runtime.truth.api_wave import persist_api_wave_state
+from runtime.planner.api_wave import (
+    API_WAVE_BATCH_ID,
+    api_wave_mode_enabled,
+    api_wave_manifest_path,
+    api_wave_owner_task_id,
+    api_wave_proof_path,
+    load_api_wave_manifest,
+    load_api_wave_proof,
+    load_api_wave_state,
+    persist_api_wave_proof,
+    save_api_wave_state as persist_api_wave_state,
+)
 from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
 from runtime.truth.event_store import latest_graph_states
 from runtime.truth.public_proof_runner import run_public_proof
@@ -1236,6 +1247,7 @@ def _record_dev_progress(task: dict[str, Any], progress_at: datetime | None, pro
 
 
 def _record_dev_failure(
+    root: Path,
     board: dict[str, Any],
     *,
     task_id_value: str,
@@ -1283,6 +1295,7 @@ def _record_dev_failure(
         return f"dev_{failure_kind}_requeued"
     set_block_state(board, task_id_value=task_id_value, reason=f"planner_dev_capability_failed:{issue}", blocked=True)
     append_event(board, event_kind, {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none"})
+    _sync_api_wave_failure(root, task, issue)
     return issue
 
 
@@ -1955,6 +1968,8 @@ def _complete_task_from_evidence(
     recompute_states(board)
     reconcile_state(board, queue_path)
     save_board(board_path, board)
+    if str(role or "").strip().lower() == "dev":
+        _sync_api_wave_completion(root, task)
     return True
 
 
@@ -2120,6 +2135,7 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
         with board_lock(board_path):
             board = load_board(board_path)
             _record_dev_failure(
+                root,
                 board,
                 task_id_value=task_id_value,
                 source=source,
@@ -2152,6 +2168,7 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
         with board_lock(board_path):
             board = load_board(board_path)
             _record_dev_failure(
+                root,
                 board,
                 task_id_value=task_id_value,
                 source=source,
@@ -2195,6 +2212,7 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
         with board_lock(board_path):
             board = load_board(board_path)
             _record_dev_failure(
+                root,
                 board,
                 task_id_value=task_id_value,
                 source=source,
@@ -2284,13 +2302,18 @@ def _build_api_wave_dispatch_message(endpoint: dict[str, Any]) -> str:
     endpoint_service = str(endpoint.get("endpoint_service") or "pending_endpoint_service").strip()
     product_surface = str(endpoint.get("product_surface") or "product").strip()
     parity_status = str(endpoint.get("parity_status") or "unknown").strip()
+    public_paths = ",".join(_api_wave_public_paths(endpoint)) or "none"
+    test_targets = ",".join(
+        str(token).strip() for token in endpoint.get("test_targets", []) if str(token).strip()
+    ) or "none"
     return (
         "API wave owner task. Migrate this endpoint to Judge-parity without touching judge itself. "
         f"Endpoint={endpoint_id}; route={route_path}; module={route_module}; "
         f"product_surface={product_surface}; contract={shared_contract}; endpoint_service={endpoint_service}; "
-        f"current_parity={parity_status}. "
-        "Implement the reusable application slice first, keep the route thin, reuse judge_like_endpoint and existing metadata/fallback helpers, "
-        "add targeted tests, then return public EC2 smoke proof or a concrete blocker."
+        f"current_parity={parity_status}; public_paths={public_paths}; test_targets={test_targets}. "
+        "Implement the reusable application slice first, keep the route thin, reuse judge_like_endpoint and service_standard helpers, "
+        "ship the full route family end-to-end, add targeted tests, and return public EC2 smoke proof or a concrete blocker. "
+        "Do not re-invent a decision engine outside reusable services, and do not redesign frontend surfaces."
     )
 
 
@@ -2304,13 +2327,14 @@ def _upsert_api_wave_stream(board: dict[str, Any], endpoint: dict[str, Any], sta
             row
             for row in streams
             if isinstance(row, dict)
-            and str(row.get("id") or row.get("stream_id") or "").strip().upper() == "API-WAVE"
+            and str(row.get("id") or row.get("stream_id") or "").strip().upper() in {"API-WAVE", "BATCH-API", API_WAVE_BATCH_ID}
         ),
         None,
     )
     payload = {
-        "id": "API-WAVE",
-        "stream_id": "API-WAVE",
+        "id": API_WAVE_BATCH_ID,
+        "stream_id": API_WAVE_BATCH_ID,
+        "batch_id": API_WAVE_BATCH_ID,
         "state": state,
         "title": "API Wave Judge Parity",
         "kind": "api_wave",
@@ -2343,8 +2367,8 @@ def _seed_api_wave_dev_task(root: Path, source: str, wave: dict[str, Any]) -> tu
         if not isinstance(task, dict):
             task = {
                 "id": task_id_value,
-                "stream_id": "API-WAVE",
-                "batch_id": "API-WAVE",
+                "stream_id": API_WAVE_BATCH_ID,
+                "batch_id": API_WAVE_BATCH_ID,
                 "role": "dev",
                 "state": STATE_READY_DEV,
                 "title": f"API Wave {str(endpoint.get('endpoint_id') or 'endpoint').strip()}",
@@ -2354,10 +2378,12 @@ def _seed_api_wave_dev_task(root: Path, source: str, wave: dict[str, Any]) -> tu
                 "api_wave_endpoint_id": str(endpoint.get("endpoint_id") or "").strip(),
                 "route_path": str(endpoint.get("route_path") or "").strip(),
                 "route_module": str(endpoint.get("route_module") or "").strip(),
+                "public_paths": list(endpoint.get("public_paths") or []),
                 "shared_contract": str(endpoint.get("shared_contract") or "none").strip(),
                 "endpoint_service": str(endpoint.get("endpoint_service") or "none").strip(),
                 "product_surface": str(endpoint.get("product_surface") or "").strip(),
                 "parity_status": str(endpoint.get("parity_status") or "unknown").strip(),
+                "test_targets": list(endpoint.get("test_targets") or []),
                 "created_at": now_iso(),
                 "updated_at": now_iso(),
             }
@@ -2378,6 +2404,8 @@ def _seed_api_wave_dev_task(root: Path, source: str, wave: dict[str, Any]) -> tu
             task["updated_at"] = now_iso()
             task["api_wave"] = True
             task["api_wave_endpoint_id"] = str(endpoint.get("endpoint_id") or "").strip()
+            task["public_paths"] = list(endpoint.get("public_paths") or [])
+            task["test_targets"] = list(endpoint.get("test_targets") or [])
         _upsert_api_wave_stream(
             board,
             endpoint,
@@ -2446,6 +2474,8 @@ def _api_wave_dispatch_cli(root: Path, args: argparse.Namespace) -> int:
 
     state["current_endpoint_id"] = str(endpoint.get("endpoint_id") or "").strip()
     state["current_task_id"] = task_id_value
+    state["wave_batch_id"] = API_WAVE_BATCH_ID
+    state["current_status"] = "active_delivery"
     state["updated_at"] = now_iso()
     persist_api_wave_state(root, state)
 
@@ -3475,6 +3505,7 @@ def _collect_finished_dev_subagents(root: Path, source: str, owner_task_filter: 
                 actions.append(f"dev_orphan_collect:{task_id_value}")
                 continue
             outcome = _record_dev_failure(
+                root,
                 board,
                 task_id_value=task_id_value,
                 source=source,
@@ -4041,6 +4072,7 @@ def build_parser() -> argparse.ArgumentParser:
             "planner-autobatch",
             "novelty-target",
             "public-proof",
+            "api-wave-proof",
             "dispatch-capability",
             "api-wave-dispatch",
             "claim",
@@ -4080,6 +4112,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--proof-root", default=str(DEFAULT_PROOF_ROOT))
     parser.add_argument("--handoff", default="")
     parser.add_argument("--batch-id", default="")
+    parser.add_argument("--endpoint-id", default="")
     parser.add_argument("--novelty-target", default="")
     parser.add_argument("--user-visible-delta", default="")
     parser.add_argument("--ack-sla-seconds", type=int, default=900)
@@ -4322,6 +4355,202 @@ def _save_json_dict(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
 
 
+def _api_wave_manifest_entry(root: Path, endpoint_id: str = "") -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
+    manifest = load_api_wave_manifest(root)
+    state = load_api_wave_state(root)
+    target_id = str(
+        endpoint_id
+        or state.get("current_endpoint_id")
+        or state.get("next_endpoint_id")
+        or ""
+    ).strip()
+    if not target_id:
+        return manifest, state, None
+    for endpoint in manifest.get("endpoints", []):
+        if not isinstance(endpoint, dict):
+            continue
+        if str(endpoint.get("endpoint_id") or "").strip() == target_id:
+            return manifest, state, endpoint
+    return manifest, state, None
+
+
+def _api_wave_tests_command(entry: dict[str, Any]) -> list[str]:
+    targets = entry.get("test_targets")
+    if not isinstance(targets, list):
+        return []
+    filtered = [str(token).strip() for token in targets if str(token).strip()]
+    if not filtered:
+        return []
+    return [sys.executable, "-m", "pytest", "-q", *filtered]
+
+
+def _api_wave_public_paths(entry: dict[str, Any]) -> list[str]:
+    paths = entry.get("public_paths")
+    if not isinstance(paths, list) or not paths:
+        paths = entry.get("route_paths")
+    if not isinstance(paths, list) or not paths:
+        api_proof = entry.get("api_proof") if isinstance(entry.get("api_proof"), dict) else {}
+        paths = api_proof.get("expected_endpoints")
+    if not isinstance(paths, list):
+        route_path = str(entry.get("route_path") or "").strip()
+        paths = [route_path] if route_path else []
+    out: list[str] = []
+    for item in paths:
+        token = str(item or "").strip()
+        if not token:
+            continue
+        token = token.replace("{ticker}", "NVDA")
+        if token not in out:
+            out.append(token)
+    return out
+
+
+def _api_wave_public_urls(entry: dict[str, Any]) -> list[str]:
+    base_url = str(os.environ.get("FC_PUBLIC_APP_BASE_URL") or "http://3.98.20.77").strip() or "http://3.98.20.77"
+    urls: list[str] = []
+    for path in _api_wave_public_paths(entry):
+        if path.startswith("http://") or path.startswith("https://"):
+            urls.append(path)
+        else:
+            urls.append(f"{base_url.rstrip('/')}{path if path.startswith('/') else '/' + path}")
+    return urls
+
+
+def _api_wave_runtime_blocker(reason: str) -> bool:
+    token = " ".join(str(reason or "").strip().lower().split())
+    if not token:
+        return False
+    markers = (
+        "runtime",
+        "control-plane",
+        "control plane",
+        "planner_",
+        "dispatch_",
+        "public_proof",
+        "ec2",
+        "maintenance",
+        "5xx",
+        "502",
+        "503",
+        "timeout",
+        "stale_no_result",
+        "invalid_result",
+        "transport",
+    )
+    return any(marker in token for marker in markers)
+
+
+def _sync_api_wave_completion(root: Path, task: dict[str, Any]) -> None:
+    if not bool(task.get("api_wave")):
+        return
+    endpoint_id = str(task.get("api_wave_endpoint_id") or "").strip()
+    if not endpoint_id:
+        return
+    state = load_api_wave_state(root)
+    blocked_streaks = dict(state.get("blocked_streaks") or {})
+    blocked_streaks.pop(endpoint_id, None)
+    state.update(
+        {
+            "wave_batch_id": API_WAVE_BATCH_ID,
+            "current_endpoint_id": endpoint_id,
+            "current_task_id": str(task.get("id") or api_wave_owner_task_id(endpoint_id)).strip(),
+            "current_status": "verifying_public_proof",
+            "blocked_streaks": blocked_streaks,
+            "last_meaningful_delta_at": now_iso(),
+            "updated_at": now_iso(),
+        }
+    )
+    persist_api_wave_state(root, state)
+
+
+def _sync_api_wave_failure(root: Path, task: dict[str, Any], blocking_issue: str) -> str:
+    if not bool(task.get("api_wave")):
+        return "ignored"
+    endpoint_id = str(task.get("api_wave_endpoint_id") or "").strip()
+    if not endpoint_id:
+        return "ignored"
+    state = load_api_wave_state(root)
+    blocked_streaks = dict(state.get("blocked_streaks") or {})
+    state["wave_batch_id"] = API_WAVE_BATCH_ID
+    state["current_endpoint_id"] = endpoint_id
+    state["current_task_id"] = str(task.get("id") or api_wave_owner_task_id(endpoint_id)).strip()
+    state["updated_at"] = now_iso()
+    if _api_wave_runtime_blocker(blocking_issue):
+        state["current_status"] = "blocked_runtime"
+        persist_api_wave_state(root, state)
+        return "blocked_runtime"
+    streak = int(blocked_streaks.get(endpoint_id, 0) or 0) + 1
+    blocked_streaks[endpoint_id] = streak
+    state["blocked_streaks"] = blocked_streaks
+    if streak >= 2:
+        deferred = [str(token).strip() for token in state.get("deferred_endpoint_ids", []) if str(token).strip()]
+        if endpoint_id not in deferred:
+            deferred.append(endpoint_id)
+        state["deferred_endpoint_ids"] = deferred
+        state["current_endpoint_id"] = ""
+        state["current_task_id"] = ""
+        state["current_status"] = "deferred"
+        state["next_endpoint_id"] = ""
+        persist_api_wave_state(root, state)
+        return "deferred"
+    state["current_status"] = "blocked_retryable"
+    persist_api_wave_state(root, state)
+    return f"blocked_retryable:{streak}"
+
+
+def _run_api_wave_tests(root: Path, entry: dict[str, Any]) -> dict[str, Any]:
+    command = _api_wave_tests_command(entry)
+    if not command:
+        return {"status": "missing_targets", "command": "SKIP(no_test_targets)", "returncode": None}
+    try:
+        result = subprocess.run(
+            command,
+            cwd=str(root),
+            text=True,
+            capture_output=True,
+            timeout=180,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "command": " ".join(command), "returncode": 124, "stderr_tail": "pytest_timeout"}
+    return {
+        "status": "ok" if result.returncode == 0 else "error",
+        "command": " ".join(command),
+        "returncode": result.returncode,
+        "stdout_tail": "\n".join((result.stdout or "").splitlines()[-20:]),
+        "stderr_tail": "\n".join((result.stderr or "").splitlines()[-20:]),
+    }
+
+
+def _run_api_wave_public_smoke(entry: dict[str, Any], timeout_seconds: float) -> dict[str, Any]:
+    urls = _api_wave_public_urls(entry)
+    if not urls:
+        return {"status": "error", "urls": [], "details": [{"error": "missing_public_paths"}]}
+    details: list[dict[str, Any]] = []
+    overall_status = "ok"
+    for url in urls:
+        ok, payload, reason = _fetch_local_json(url, timeout_seconds=max(1, int(timeout_seconds)))
+        detail: dict[str, Any] = {"url": url, "status": "error", "reason": reason}
+        if ok and isinstance(payload, dict):
+            endpoint_ok = bool(payload.get("ok", False))
+            detail["status"] = "ok" if endpoint_ok else "error"
+            detail["ok"] = endpoint_ok
+            detail["payload_keys"] = sorted(payload.keys())
+            if not endpoint_ok:
+                overall_status = "error"
+        else:
+            if reason in {"http_502", "http_503"}:
+                detail["status"] = "maintenance"
+                if overall_status != "error":
+                    overall_status = "maintenance"
+            else:
+                overall_status = "error"
+        details.append(detail)
+        if detail["status"] not in {"ok"} and overall_status != "error":
+            overall_status = detail["status"]
+    return {"status": overall_status, "urls": urls, "details": details}
+
+
 def _public_proof_artifact_path(root: Path, batch_id: str) -> Path:
     token = str(batch_id or "").strip().upper()
     return resolve_orchestrator_read_path(root, f"public-proof/{token}.json")
@@ -4385,6 +4614,26 @@ def _should_run_public_proof(root: Path, batch_id: str = "") -> tuple[bool, str,
     return False, "already_verified_current_batch", delivery_state, artifact
 
 
+def _should_run_api_wave_proof(root: Path, endpoint_id: str = "") -> tuple[bool, str, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    manifest, state, entry = _api_wave_manifest_entry(root, endpoint_id)
+    if entry is None:
+        return False, "no_api_wave_endpoint", manifest, state, {}
+    endpoint_id = str(entry.get("endpoint_id") or "").strip()
+    artifact = load_api_wave_proof(root, endpoint_id)
+    artifact_status = str(artifact.get("status") or "").strip().lower()
+    last_ref = str(state.get("last_public_proof_ref") or "").strip()
+    artifact_ref = str(artifact.get("proof_ref") or "").strip()
+    if artifact_status == "ok" and artifact_ref and artifact_ref == last_ref:
+        return False, "public_proof_already_ok", manifest, state, artifact
+    current_endpoint_id = str(state.get("current_endpoint_id") or "").strip()
+    current_status = str(state.get("current_status") or "").strip().lower()
+    if current_endpoint_id and current_endpoint_id != endpoint_id:
+        return False, "different_endpoint_active", manifest, state, artifact
+    if current_status not in {"verifying_public_proof", "active_delivery", "blocked_retryable", "blocked_runtime", "ready"}:
+        return False, "endpoint_not_ready_for_proof", manifest, state, artifact
+    return True, "state_changed", manifest, state, artifact
+
+
 def _sync_priority_cli(root: Path, board_path: Path, queue_path: Path, include_pass: bool) -> int:
     runtime_meta = _projection_runtime_meta(root)
     with board_lock(board_path):
@@ -4424,6 +4673,9 @@ def _reconcile_state_cli(root: Path, board_path: Path, queue_path: Path) -> int:
 
 
 def _planner_autobatch_cli(root: Path, board_path: Path, queue_path: Path, args: argparse.Namespace) -> int:
+    if api_wave_mode_enabled(root):
+        return _api_wave_dispatch_cli(root, args)
+
     runtime_meta = _projection_runtime_meta(root)
     runtime_residue = _autobatch_runtime_residue(root, queue_path, board_path)
     if runtime_residue is not None:
@@ -4651,6 +4903,80 @@ def _public_proof_cli(root: Path, args: argparse.Namespace) -> int:
     return 0
 
 
+def _api_wave_proof_cli(root: Path, args: argparse.Namespace) -> int:
+    runtime_meta = _projection_runtime_meta(root)
+    endpoint_id = str(args.endpoint_id or "").strip()
+    if bool(args.if_needed):
+        should_run, reason, _manifest, _state, artifact = _should_run_api_wave_proof(root, endpoint_id)
+        if not should_run:
+            resolved_endpoint = endpoint_id or str(artifact.get("endpoint_id") or "none").strip() or "none"
+            proof_ref = str(artifact.get("proof_ref") or api_wave_proof_path(root, resolved_endpoint)).strip()
+            print(
+                "API_WAVE_PROOF_SKIP "
+                f"reason={reason} "
+                f"endpoint_id={resolved_endpoint} "
+                f"status={str(artifact.get('status') or 'skip').strip() or 'skip'} "
+                f"proof_ref={proof_ref or 'none'} "
+                f"runtime_truth_source={runtime_meta['runtime_truth_source']} "
+                f"event_store_primary={1 if runtime_meta['event_store_primary'] else 0}"
+            )
+            return 0
+
+    manifest, state, entry = _api_wave_manifest_entry(root, endpoint_id)
+    if entry is None:
+        print("API_WAVE_PROOF_ERROR reason=no_api_wave_endpoint", file=sys.stderr)
+        return 1
+
+    endpoint_id = str(entry.get("endpoint_id") or "").strip()
+    tests_result = _run_api_wave_tests(root, entry)
+    public_smoke = _run_api_wave_public_smoke(entry, float(args.timeout_seconds))
+    public_smoke_status = str(public_smoke.get("status") or "error").strip() or "error"
+    tests_status = str(tests_result.get("status") or "error").strip() or "error"
+    if public_smoke_status == "maintenance":
+        status = "maintenance"
+    elif tests_status == "ok" and public_smoke_status == "ok":
+        status = "ok"
+    else:
+        status = "error"
+
+    artifact = {
+        "endpoint_id": endpoint_id,
+        "batch_id": API_WAVE_BATCH_ID,
+        "status": status,
+        "tests_status": tests_status,
+        "public_smoke_status": public_smoke_status,
+        "user_visible_delta_confirmed": bool(public_smoke_status == "ok"),
+        "public_urls_checked": list(public_smoke.get("urls") or []),
+        "timestamp": now_iso(),
+        "proof_ref": "",
+        "test_targets": list(entry.get("test_targets") or []),
+        "tests_command": str(tests_result.get("command") or "SKIP(no_test_targets)"),
+        "tests_returncode": tests_result.get("returncode"),
+        "smoke_details": list(public_smoke.get("details") or []),
+    }
+    artifact_path = persist_api_wave_proof(root, endpoint_id, artifact)
+    artifact["proof_ref"] = _payload_relpath(artifact_path, root)
+    persist_api_wave_proof(root, endpoint_id, artifact)
+
+    state["last_public_proof_ref"] = artifact["proof_ref"]
+    state["current_endpoint_id"] = endpoint_id
+    state["current_task_id"] = str(state.get("current_task_id") or api_wave_owner_task_id(endpoint_id)).strip()
+    state["current_status"] = "verifying_public_proof" if status != "ok" else str(state.get("current_status") or "verifying_public_proof")
+    persist_api_wave_state(root, state)
+
+    print(
+        "API_WAVE_PROOF "
+        f"status={status} "
+        f"endpoint_id={endpoint_id} "
+        f"tests_status={tests_status} "
+        f"public_smoke_status={public_smoke_status} "
+        f"proof_ref={artifact['proof_ref']} "
+        f"runtime_truth_source={runtime_meta['runtime_truth_source']} "
+        f"event_store_primary={1 if runtime_meta['event_store_primary'] else 0}"
+    )
+    return 0
+
+
 def _dispatch_capability_cli(root: Path, args: argparse.Namespace) -> int:
     runtime_meta = _projection_runtime_meta(root)
     target_role = str(args.target_role or "").strip().lower()
@@ -4732,6 +5058,8 @@ def main() -> int:
             return _planner_novelty_target_cli(root, board_path, queue_path, args)
         if args.cmd == "public-proof":
             return _public_proof_cli(root, args)
+        if args.cmd == "api-wave-proof":
+            return _api_wave_proof_cli(root, args)
         if args.cmd == "dispatch-capability":
             return _dispatch_capability_cli(root, args)
         if args.cmd == "api-wave-dispatch":

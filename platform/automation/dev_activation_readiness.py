@@ -156,7 +156,7 @@ def build_readiness(
     lifecycle = str(runtime_state.get("lifecycle", "unknown") or "unknown").strip().lower()
     execution_mode = str(status_payload.get("execution_mode", "") or "").strip()
     checks["runtime_mode"] = {
-        "status": "ok" if lifecycle == "running" and execution_mode == "planner_experimental" else "blocked",
+        "status": "ok" if lifecycle == "running" and execution_mode in {"planner_experimental", "api_autonomy_mode"} else "blocked",
         "detail": {
             "lifecycle": lifecycle,
             "execution_mode": execution_mode,

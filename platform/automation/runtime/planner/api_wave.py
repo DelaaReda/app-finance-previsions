@@ -12,18 +12,19 @@ from orchestrator_paths import load_runtime_state, read_json_file, resolve_orche
 
 API_WAVE_EXECUTION_MODE = "api_autonomy_mode"
 API_WAVE_MODE_ALIASES = {API_WAVE_EXECUTION_MODE, "api_autonomy"}
-API_WAVE_BATCH_ID = "BATCH-API-WAVE-01"
+API_WAVE_BATCH_ID = "BATCH-API"
 API_WAVE_STREAM_ID = API_WAVE_BATCH_ID
 API_WAVE_SCHEMA_VERSION = "api_wave_state.v1"
 API_WAVE_MANIFEST_SCHEMA_VERSION = "api_wave_manifest.v1"
-API_WAVE_CANONICAL_MANIFEST_FILE = "platform/config/api_wave_manifest.v1.json"
-API_WAVE_LEGACY_MANIFEST_FILE = "platform/automation/config/api_wave_manifest.json"
+API_WAVE_CANONICAL_MANIFEST_FILE = "platform/automation/config/api_wave_manifest.json"
+API_WAVE_LEGACY_MANIFEST_FILE = "platform/automation/config/api_wave_manifest.v1.json"
+API_WAVE_ADDITIONAL_MANIFEST_FILE = "platform/automation/config/api_wave_manifest.v1.json"
 API_WAVE_CANONICAL_STATE_FILE = "api_wave_state.json"
 API_WAVE_LEGACY_STATE_FILE = "api-wave-state.json"
 # Backward-compat aliases still imported by runtime truth compatibility paths.
 API_WAVE_MANIFEST_FILE = API_WAVE_CANONICAL_MANIFEST_FILE
 API_WAVE_STATE_FILE = API_WAVE_CANONICAL_STATE_FILE
-API_WAVE_PROOF_DIR = "api-wave-proof"
+API_WAVE_PROOF_DIR = "api-wave-proofs"
 PUBLIC_PROOF_OK_MARKERS = (
     "http://3.98.20.77",
     "ec2-3-98-20-77",
@@ -63,7 +64,7 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "ui_proof": {
             "kind": "public_ui_smoke",
             "url": "http://3.98.20.77/",
-            "label": "copilot_search",
+        "label": "copilot-search",
             "required": False,
         },
     },
@@ -73,12 +74,12 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "route_path": "/api/search/universal",
         "route_paths": ["/api/search/universal"],
         "route_module": "apps/api/src/domains/copilot/api/universal_search.py",
-        "companion_modules": ["apps/api/src/domains/copilot/api/search.py"],
+        "companion_modules": [],
         "priority": 20,
         "product_surface": "copilot",
         "shared_contract": "packages/contracts/copilot_v1.py",
         "endpoint_service": "apps/api/src/domains/copilot/application/universal_search.py",
-        "parity_status": "duplicate_route_surface_needs_single_service_contract",
+        "parity_status": "legacy_route_no_shared_service_contract",
         "last_public_proof": "none",
         "deferred_reason": "none",
         "selectable": True,
@@ -91,7 +92,7 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "ui_proof": {
             "kind": "public_ui_smoke",
             "url": "http://3.98.20.77/",
-            "label": "copilot_universal_search",
+        "label": "copilot-universal-search",
             "required": False,
         },
     },
@@ -119,7 +120,7 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "ui_proof": {
             "kind": "public_ui_smoke",
             "url": "http://3.98.20.77/",
-            "label": "forecasts_brief",
+        "label": "forecasts-brief",
             "required": False,
         },
     },
@@ -127,13 +128,13 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "endpoint_id": "market_data_news_feed",
         "domain": "market_data",
         "route_path": "/api/news/feed",
-        "route_paths": ["/api/news/feed", "/api/news/features/daily"],
+        "route_paths": ["/api/news/feed"],
         "route_module": "apps/api/src/domains/market_data/api/news.py",
-        "companion_modules": ["apps/api/src/domains/market_data/api/news_extra.py"],
+        "companion_modules": [],
         "priority": 40,
         "product_surface": "market_data",
-        "shared_contract": "packages/contracts/market_data_v1.py",
-        "endpoint_service": "apps/api/src/domains/market_data/application/market_data_news_endpoint_service.py",
+        "shared_contract": "packages/contracts/market_data.py",
+        "endpoint_service": "apps/api/src/domains/market_data/application/news_service.py",
         "parity_status": "mixed_route_service_contract",
         "last_public_proof": "none",
         "deferred_reason": "none",
@@ -141,13 +142,13 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "api_proof": {
             "kind": "public_api_smoke",
             "base_url": "http://3.98.20.77",
-            "expected_endpoints": ["/api/news/feed?limit=5"],
+            "expected_endpoints": ["/api/news/feed?tickers=NVDA"],
             "success_condition": "returns ok=true and stable news feed metadata",
         },
         "ui_proof": {
             "kind": "public_ui_smoke",
             "url": "http://3.98.20.77/",
-            "label": "market_data_news_feed",
+            "label": "market-data-news-feed",
             "required": False,
         },
     },
@@ -155,13 +156,13 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "endpoint_id": "market_data_stocks",
         "domain": "market_data",
         "route_path": "/api/stocks/prices",
-        "route_paths": ["/api/stocks/top-legacy", "/api/stocks/prices"],
+        "route_paths": ["/api/stocks/prices"],
         "route_module": "apps/api/src/domains/market_data/api/stocks.py",
         "companion_modules": [],
         "priority": 50,
         "product_surface": "market_data",
-        "shared_contract": "packages/contracts/market_data_v1.py",
-        "endpoint_service": "apps/api/src/domains/market_data/application/market_data_stocks_endpoint_service.py",
+        "shared_contract": "packages/contracts/market_data.py",
+        "endpoint_service": "apps/api/src/domains/market_data/application/stocks_service.py",
         "parity_status": "legacy_route_needs_endpoint_service_parity",
         "last_public_proof": "none",
         "deferred_reason": "none",
@@ -169,13 +170,13 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "api_proof": {
             "kind": "public_api_smoke",
             "base_url": "http://3.98.20.77",
-            "expected_endpoints": ["/api/stocks/prices?ticker=NVDA&interval=1d"],
+            "expected_endpoints": ["/api/stocks/prices?ticker=NVDA"],
             "success_condition": "returns ok=true and non-empty price points",
         },
         "ui_proof": {
             "kind": "public_ui_smoke",
             "url": "http://3.98.20.77/",
-            "label": "market_data_stocks",
+            "label": "market-data-stocks",
             "required": False,
         },
     },
@@ -188,7 +189,7 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "companion_modules": [],
         "priority": 60,
         "product_surface": "market_data",
-        "shared_contract": "packages/contracts/market_data_v1.py",
+        "shared_contract": "packages/contracts/market_data.py",
         "endpoint_service": "apps/api/src/domains/market_data/application/market_data_news_impact_endpoint_service.py",
         "parity_status": "route_local_contract_needs_metadata",
         "last_public_proof": "none",
@@ -197,43 +198,13 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "api_proof": {
             "kind": "public_api_smoke",
             "base_url": "http://3.98.20.77",
-            "expected_endpoints": ["/api/news/analysis?tickers=NVDA&limit=5"],
+            "expected_endpoints": ["/api/news/analysis?tickers=NVDA"],
             "success_condition": "returns ok=true and impact analysis payload",
         },
         "ui_proof": {
             "kind": "public_ui_smoke",
             "url": "http://3.98.20.77/",
-            "label": "market_data_news_impact",
-            "required": False,
-        },
-    },
-    {
-        "endpoint_id": "market_data_news_extra",
-        "domain": "market_data",
-        "route_path": "/api/news/feed",
-        "route_paths": ["/api/news/feed"],
-        "route_module": "apps/api/src/domains/market_data/api/news_extra.py",
-        "companion_modules": ["apps/api/src/domains/market_data/api/news.py"],
-        "priority": 70,
-        "product_surface": "market_data",
-        "shared_contract": "packages/contracts/market_data_v1.py",
-        "endpoint_service": "apps/api/src/domains/market_data/application/market_data_news_endpoint_service.py",
-        "parity_status": "duplicate_route_surface_needs_single_service_contract",
-        "last_public_proof": "none",
-        "deferred_reason": "grouped_under_market_data_news_feed",
-        "selectable": False,
-        "grouped_under_endpoint_id": "market_data_news_feed",
-        "public_smoke_reuse_from": "market_data_news_feed",
-        "api_proof": {
-            "kind": "public_api_smoke",
-            "base_url": "http://3.98.20.77",
-            "expected_endpoints": ["/api/news/feed?limit=5"],
-            "success_condition": "reuses the market_data_news_feed public proof",
-        },
-        "ui_proof": {
-            "kind": "public_ui_smoke",
-            "url": "http://3.98.20.77/",
-            "label": "market_data_news_extra",
+            "label": "market-data-news-impact",
             "required": False,
         },
     },
@@ -246,7 +217,7 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "companion_modules": [],
         "priority": 80,
         "product_surface": "market_data",
-        "shared_contract": "packages/contracts/market_data_v1.py",
+        "shared_contract": "packages/contracts/market_data.py",
         "endpoint_service": "apps/api/src/domains/market_data/application/market_data_analytics_endpoint_service.py",
         "parity_status": "route_local_contract_needs_service_boundary",
         "last_public_proof": "none",
@@ -255,13 +226,13 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "api_proof": {
             "kind": "public_api_smoke",
             "base_url": "http://3.98.20.77",
-            "expected_endpoints": ["/api/analytics/predictions?ticker=NVDA&limit=5"],
+            "expected_endpoints": ["/api/analytics/predictions?ticker=NVDA"],
             "success_condition": "returns ok=true and analytics metadata",
         },
         "ui_proof": {
             "kind": "public_ui_smoke",
             "url": "http://3.98.20.77/",
-            "label": "market_data_analytics",
+            "label": "market-data-analytics",
             "required": False,
         },
     },
@@ -270,18 +241,17 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "domain": "market_data",
         "route_path": "/api/stocks/search",
         "route_paths": [
-            "/api/stocks/prices",
+            "/api/stocks/search",
             "/api/stocks/universe",
             "/api/stocks/{ticker}",
-            "/api/stocks/search",
             "/api/stocks/meta",
         ],
         "route_module": "apps/api/src/domains/market_data/api/stocks_client.py",
         "companion_modules": [],
         "priority": 90,
         "product_surface": "market_data",
-        "shared_contract": "packages/contracts/market_data_v1.py",
-        "endpoint_service": "apps/api/src/domains/market_data/application/market_data_stocks_endpoint_service.py",
+        "shared_contract": "packages/contracts/market_data.py",
+        "endpoint_service": "apps/api/src/domains/market_data/application/market_data_stocks_client_endpoint_service.py",
         "parity_status": "client_route_needs_shared_contract_metadata",
         "last_public_proof": "none",
         "deferred_reason": "none",
@@ -289,13 +259,13 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "api_proof": {
             "kind": "public_api_smoke",
             "base_url": "http://3.98.20.77",
-            "expected_endpoints": ["/api/stocks/search?q=NVDA&limit=5"],
+            "expected_endpoints": ["/api/stocks/search?q=NVDA"],
             "success_condition": "returns ok=true and stocks search metadata",
         },
         "ui_proof": {
             "kind": "public_ui_smoke",
             "url": "http://3.98.20.77/",
-            "label": "market_data_stocks_client",
+            "label": "market-data-stocks-client",
             "required": False,
         },
     },
@@ -351,17 +321,9 @@ def _canonical_endpoint_id(value: Any) -> str:
     token = str(value or "").strip().lower()
     if not token:
         return ""
-    token = token.replace(" ", "_").replace("-", "_")
-    token = re.sub(r"_+", "_", token)
-    if "." in token:
-        domain, rest = token.split(".", 1)
-        return f"{domain.strip('_')}.{rest.strip('_')}".strip(".")
-    for prefix in ("market_data_", "copilot_", "forecasts_"):
-        if token.startswith(prefix):
-            domain = prefix[:-1]
-            rest = token[len(prefix) :].strip("_")
-            return f"{domain}.{rest}".strip(".")
-    return token.strip("_")
+    token = token.replace(" ", "-").replace("_", "-").replace(".", "-")
+    token = re.sub(r"-+", "-", token)
+    return token.strip("-")
 
 
 def _canonical_priority(value: Any) -> str:
@@ -439,9 +401,10 @@ def api_wave_manifest_path(root: Path) -> Path:
     primary = Path(root) / API_WAVE_CANONICAL_MANIFEST_FILE
     if primary.exists():
         return primary
-    legacy = Path(root) / API_WAVE_LEGACY_MANIFEST_FILE
-    if legacy.exists():
-        return legacy
+    for relative_path in (API_WAVE_LEGACY_MANIFEST_FILE, API_WAVE_ADDITIONAL_MANIFEST_FILE):
+        legacy = Path(root) / relative_path
+        if legacy.exists():
+            return legacy
     return primary
 
 
@@ -559,7 +522,7 @@ def default_api_wave_manifest() -> dict[str, Any]:
     return {
         "schema_version": API_WAVE_MANIFEST_SCHEMA_VERSION,
         "mode": API_WAVE_EXECUTION_MODE,
-        "enabled": True,
+        "enabled": False,
         "wave_id": API_WAVE_BATCH_ID,
         "batch_id": API_WAVE_BATCH_ID,
         "stream_id": API_WAVE_STREAM_ID,

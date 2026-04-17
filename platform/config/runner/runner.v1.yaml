@@ -183,6 +183,14 @@
       "auto_create_on_empty": 1,
       "create_source": "vision"
     },
+    "api_autonomy_mode": {
+      "enabled": 1,
+      "manifest_path": "platform/automation/config/api_wave_manifest.json",
+      "state_path": "logs-codex-runs/orchestrator-state/api_wave_state.json",
+      "wave_batch_id": "BATCH-API",
+      "allowed_domains": ["copilot", "forecasts", "market_data"],
+      "managed_roles": ["app-dev", "verifier"]
+    },
     "dev_wait_policy": {
       "ready_task_only": 1
     },

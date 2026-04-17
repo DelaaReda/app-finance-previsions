@@ -79,6 +79,47 @@ class VerifierGovernorTests(unittest.TestCase):
             self.assertEqual(payload["last_status"], "ok")
             self.assertIn("updated_at", payload)
 
+    def test_api_wave_verifier_runs_once_per_endpoint_change(self) -> None:
+        delivery_state = {
+            "active_batch_id": "BATCH-API-WAVE-01",
+            "phase": "verifying_public_proof",
+            "product_done": False,
+            "public_proof_status": "degraded",
+            "last_meaningful_delta_at": "2026-04-16T12:00:00Z",
+            "current_public_proof": {"batch_id": "BATCH-API-WAVE-01", "endpoint_id": "copilot.search", "proof_ref": None},
+            "current_value_target": {"batch_id": "BATCH-API-WAVE-01", "endpoint_id": "copilot.search"},
+            "api_autonomy_mode": True,
+            "api_wave": {
+                "wave_batch_id": "BATCH-API-WAVE-01",
+                "current_endpoint_id": "copilot.search",
+                "current_status": "verifying_public_proof",
+                "current_proof_status": "degraded",
+                "last_public_proof_ref": "none",
+            },
+        }
+
+        first = should_run_verifier(delivery_state, {})
+        self.assertTrue(first["should_run"])
+        self.assertEqual(first["endpoint_id"], "copilot.search")
+
+        verifier_state = {
+            "last_batch_id": "BATCH-API-WAVE-01",
+            "last_endpoint_id": "copilot.search",
+            "last_status": "error",
+            "last_trigger_fingerprint": first["trigger_fingerprint"],
+        }
+        second = should_run_verifier(delivery_state, verifier_state)
+        self.assertFalse(second["should_run"])
+        self.assertEqual(second["reason"], "no_change")
+
+        changed = dict(delivery_state)
+        changed["api_wave"] = dict(delivery_state["api_wave"], current_endpoint_id="copilot.universal_search")
+        changed["current_public_proof"] = {"batch_id": "BATCH-API-WAVE-01", "endpoint_id": "copilot.universal_search", "proof_ref": None}
+        changed["current_value_target"] = {"batch_id": "BATCH-API-WAVE-01", "endpoint_id": "copilot.universal_search"}
+        rerun = should_run_verifier(changed, verifier_state)
+        self.assertTrue(rerun["should_run"])
+        self.assertEqual(rerun["reason"], "new_batch")
+
 
 if __name__ == "__main__":
     unittest.main()

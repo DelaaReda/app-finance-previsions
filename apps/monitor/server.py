@@ -486,16 +486,23 @@ def _multi_agent_policy_snapshot(root: Path) -> dict:
 
 
 def _execution_mode(root: Path) -> str:
+    runtime_state = load_runtime_state(root)
+    runtime_execution_mode = str(runtime_state.get("execution_mode", "") or "").strip()
+    if runtime_execution_mode:
+        return runtime_execution_mode
+    delivery_state = load_product_delivery_state(root)
+    if isinstance(delivery_state, dict) and bool(delivery_state.get("api_autonomy_mode")):
+        return "api_autonomy_mode"
     enabled, cron_planner_only = _planner_orchestrator_flags(root)
     if enabled and cron_planner_only:
         return "planner_experimental"
-    return "parallel_roles"
+    return "api_autonomy_mode"
 
 
 def _core_roles_for_root(root: Path) -> tuple[str, ...]:
     if _execution_mode(root) == "planner_experimental":
         return ("planner",)
-    return ("planner", "dev", "admin", "scrum_master")
+    return ("planner", "app-dev", "verifier")
 
 
 CORE_ROLES = _core_roles_for_root(ROOT)
@@ -4651,6 +4658,17 @@ def status(lite: int = 0):
     if not isinstance(product_value_metrics, dict) or not product_value_metrics:
         product_value_metrics = _product_value_metrics_snapshot()
     execution_mode = _execution_mode(ROOT)
+    delivery_api_wave = delivery_control.get("api_wave") if isinstance(delivery_control.get("api_wave"), dict) else {}
+    if not isinstance(delivery_api_wave, dict):
+        delivery_api_wave = {}
+    api_wave_payload = {
+        "mode": str(delivery_control.get("api_autonomy_mode") and "api_autonomy_mode" or execution_mode).strip() or execution_mode,
+        "current_endpoint_id": str(delivery_api_wave.get("current_endpoint_id") or "").strip() or None,
+        "next_endpoint_id": str(delivery_api_wave.get("next_endpoint_id") or "").strip() or None,
+        "completed_count": len(delivery_api_wave.get("completed_endpoint_ids") or []),
+        "deferred_count": len(delivery_api_wave.get("deferred_endpoint_ids") or []),
+        "backoff_active": bool((delivery_control.get("lane_backoff") or {}).get("app-dev") or (delivery_control.get("lane_backoff") or {}).get("verifier")),
+    }
     multi_agent_policy = _multi_agent_policy_snapshot(ROOT)
     monitor_access = _monitor_access_snapshot(ROOT)
 
@@ -4709,6 +4727,7 @@ def status(lite: int = 0):
             "delivery_integrity": delivery_integrity,
             "delivery_control": delivery_control,
             "delivery_control_advisory": delivery_control_advisory,
+            "api_wave": api_wave_payload,
             "product_value_metrics": product_value_metrics,
             "alerts_overview": alerts_overview,
             "po_scrum_master": po_scrum_master,

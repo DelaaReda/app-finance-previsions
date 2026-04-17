@@ -1,11 +1,13 @@
 {
   "version": 1,
-  "updated_at": "2026-04-17T03:45:01Z",
+  "updated_at": "2026-04-17T04:22:45Z",
   "active_cycle": {
     "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
     "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
     "dispatch_namespace": "BATCH",
-    "active_batch_ids": [],
+    "active_batch_ids": [
+      "BATCH-98"
+    ],
     "recent_completed_batch_ids": [
       "BATCH-97",
       "BATCH-96",
@@ -2617,7 +2619,7 @@
     {
       "id": "BATCH-98",
       "title": "support a strong deep dive on a ticker/theme/question",
-      "state": "READY",
+      "state": "IN_PROGRESS",
       "priority": "P0",
       "owner_role": "planner",
       "created_by": "planner_autonomy",
@@ -2626,11 +2628,11 @@
       "novelty_class": "net_new",
       "delivery_kind": "net_new",
       "user_value_delta_visible": 1,
-      "next_action": "ouvrir BATCH-98-ANALYSIS",
+      "next_action": "compl\u00e9ter BATCH-98-ARCH (READY_PLANNER pour planner)",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-04-17T03:45:01Z",
-      "updated_at": "2026-04-17T03:45:01Z",
+      "updated_at": "2026-04-17T04:22:45Z",
       "queued_only": false,
       "novelty_target": "portfolio_first_brief_with_ranked_actions",
       "user_visible_delta": "daily brief surfaces the top portfolio or watchlist action and opens an investment memo in one click",
@@ -2669,7 +2671,9 @@
         "smoke_ref": "platform/automation/browser_smoke.py"
       },
       "done_when": "public_proof_status=ok && user_visible_delta_confirmed=true",
-      "stagnation_alert": false
+      "stagnation_alert": false,
+      "dispatch_authorized": true,
+      "ready_at": "2026-04-17T04:21:15Z"
     }
   ],
   "meta": {
@@ -2696,17 +2700,17 @@
     "planner_hard_guard": {
       "active": false,
       "reason": "none",
-      "updated_at": "2026-04-17T03:44:11Z"
+      "updated_at": "2026-04-17T04:22:02Z"
     },
-    "workboard_decision_capable": true,
-    "workboard_decision_capability_reason": "canonical_fields_complete",
-    "workboard_decision_capability_checked_at": "2026-04-17T03:44:11Z",
+    "workboard_decision_capable": false,
+    "workboard_decision_capability_reason": "projection_missing_operational_fields",
+    "workboard_decision_capability_checked_at": "2026-04-17T04:22:02Z",
     "novelty_target_required": false,
     "novelty_target_missing_fields": [],
     "novelty_target_audit": {
       "status": "clear",
       "reason": "novelty_target_present",
-      "updated_at": "2026-04-17T03:44:11Z"
+      "updated_at": "2026-04-17T04:22:02Z"
     },
     "novelty_target": "portfolio_first_brief_with_ranked_actions",
     "user_visible_delta": "daily brief surfaces the top portfolio or watchlist action and opens an investment memo in one click",
@@ -2715,12 +2719,12 @@
       "reason": "backend_runtime_recovered",
       "affected_stream_ids": [],
       "affected_task_ids": [],
-      "updated_at": "2026-04-17T03:44:11Z"
+      "updated_at": "2026-04-17T04:22:02Z"
     },
     "novelty_target_workflow": {
       "status": "clear",
       "reason": "novelty_target_present",
-      "updated_at": "2026-04-17T03:44:11Z"
+      "updated_at": "2026-04-17T04:22:02Z"
     }
   }
 }

@@ -47,13 +47,29 @@ def build_verifier_trigger_fingerprint(delivery_state: dict[str, Any]) -> str:
         if isinstance(delivery_state.get("current_value_target"), dict)
         else {}
     )
+    api_wave = (
+        delivery_state.get("api_wave", {})
+        if isinstance(delivery_state.get("api_wave"), dict)
+        else {}
+    )
     payload = {
+        "api_autonomy_mode": bool(delivery_state.get("api_autonomy_mode")),
         "active_batch_id": str(delivery_state.get("active_batch_id") or "").strip().upper() or None,
+        "endpoint_id": str(
+            api_wave.get("current_endpoint_id")
+            or current_value_target.get("endpoint_id")
+            or current_public_proof.get("endpoint_id")
+            or ""
+        ).strip() or None,
+        "mode": str(current_value_target.get("mode") or "").strip() or None,
         "phase": str(delivery_state.get("phase") or "").strip() or None,
         "public_proof_status": str(delivery_state.get("public_proof_status") or "").strip() or None,
         "last_meaningful_delta_at": str(delivery_state.get("last_meaningful_delta_at") or "").strip() or None,
         "proof_ref": str(current_public_proof.get("proof_ref") or "").strip() or None,
         "proof_batch_id": str(current_public_proof.get("batch_id") or "").strip().upper() or None,
+        "wave_batch_id": str(api_wave.get("wave_batch_id") or "").strip().upper() or None,
+        "wave_proof_status": str(api_wave.get("current_proof_status") or "").strip() or None,
+        "wave_last_public_proof_ref": str(api_wave.get("last_public_proof_ref") or "").strip() or None,
         "target_batch_id": str(current_value_target.get("batch_id") or "").strip().upper() or None,
         "user_visible_delta": str(current_value_target.get("user_visible_delta") or "").strip() or None,
     }
@@ -68,8 +84,30 @@ def should_run_verifier(
 ) -> dict[str, Any]:
     state = verifier_state if isinstance(verifier_state, dict) else {}
     active_batch_id = str(delivery_state.get("active_batch_id") or "").strip().upper()
-    phase = str(delivery_state.get("phase") or "").strip()
+    api_wave = (
+        delivery_state.get("api_wave", {})
+        if isinstance(delivery_state.get("api_wave"), dict)
+        else {}
+    )
+    api_autonomy_mode = bool(delivery_state.get("api_autonomy_mode")) and bool(api_wave)
+    current_value_target = (
+        delivery_state.get("current_value_target", {})
+        if isinstance(delivery_state.get("current_value_target"), dict)
+        else {}
+    )
+    endpoint_id = str(
+        api_wave.get("current_endpoint_id")
+        or current_value_target.get("endpoint_id")
+        or ""
+    ).strip()
+    phase = (
+        str(api_wave.get("current_status") or "").strip()
+        if api_autonomy_mode and endpoint_id
+        else str(delivery_state.get("phase") or "").strip()
+    )
     public_proof_status = str(delivery_state.get("public_proof_status") or "").strip().lower()
+    if api_autonomy_mode and endpoint_id:
+        public_proof_status = str(api_wave.get("current_proof_status") or public_proof_status).strip().lower()
     product_done = bool(delivery_state.get("product_done"))
     current_public_proof = (
         delivery_state.get("current_public_proof", {})
@@ -77,38 +115,47 @@ def should_run_verifier(
         else {}
     )
     proof_batch_id = str(current_public_proof.get("batch_id") or "").strip().upper()
+    proof_endpoint_id = str(current_public_proof.get("endpoint_id") or "").strip()
     fingerprint = build_verifier_trigger_fingerprint(delivery_state)
     last_fingerprint = str(state.get("last_trigger_fingerprint") or "").strip()
     last_status = str(state.get("last_status") or "").strip().lower()
+    target_id = endpoint_id or active_batch_id
 
     if force:
         return {
             "should_run": True,
             "reason": "force",
-            "batch_id": active_batch_id or None,
+            "batch_id": target_id or None,
+            "endpoint_id": endpoint_id or None,
             "trigger_fingerprint": fingerprint,
         }
-    if not active_batch_id:
+    if not target_id:
         return {"should_run": False, "reason": "no_active_batch", "batch_id": None, "trigger_fingerprint": fingerprint}
     if phase != "verifying_public_proof":
         return {
             "should_run": False,
             "reason": "phase_not_verifying_public_proof",
-            "batch_id": active_batch_id,
+            "batch_id": target_id,
+            "endpoint_id": endpoint_id or None,
             "trigger_fingerprint": fingerprint,
         }
     if product_done:
         return {
             "should_run": False,
             "reason": "batch_already_closed",
-            "batch_id": active_batch_id,
+            "batch_id": target_id,
+            "endpoint_id": endpoint_id or None,
             "trigger_fingerprint": fingerprint,
         }
-    if public_proof_status == "ok" and proof_batch_id == active_batch_id:
+    if public_proof_status == "ok" and (
+        (endpoint_id and proof_endpoint_id == endpoint_id)
+        or (not endpoint_id and proof_batch_id == active_batch_id)
+    ):
         return {
             "should_run": False,
             "reason": "public_proof_already_ok",
-            "batch_id": active_batch_id,
+            "batch_id": target_id,
+            "endpoint_id": endpoint_id or None,
             "trigger_fingerprint": fingerprint,
         }
     if last_fingerprint and last_fingerprint == fingerprint:
@@ -116,27 +163,32 @@ def should_run_verifier(
             return {
                 "should_run": False,
                 "reason": "maintenance_requires_explicit_retry",
-                "batch_id": active_batch_id,
+                "batch_id": target_id,
+                "endpoint_id": endpoint_id or None,
                 "trigger_fingerprint": fingerprint,
             }
         if public_proof_status == "error":
             return {
                 "should_run": False,
                 "reason": "public_proof_error_no_new_delta",
-                "batch_id": active_batch_id,
+                "batch_id": target_id,
+                "endpoint_id": endpoint_id or None,
                 "trigger_fingerprint": fingerprint,
             }
         return {
             "should_run": False,
             "reason": "no_change",
-            "batch_id": active_batch_id,
+            "batch_id": target_id,
+            "endpoint_id": endpoint_id or None,
             "trigger_fingerprint": fingerprint,
         }
-    reason = "new_batch" if str(state.get("last_batch_id") or "").strip().upper() != active_batch_id else "state_changed"
+    last_target = str(state.get("last_endpoint_id") or state.get("last_batch_id") or "").strip().upper()
+    reason = "new_batch" if last_target != target_id.upper() else "state_changed"
     return {
         "should_run": True,
         "reason": reason,
-        "batch_id": active_batch_id,
+        "batch_id": target_id,
+        "endpoint_id": endpoint_id or None,
         "trigger_fingerprint": fingerprint,
     }
 
@@ -155,6 +207,7 @@ def record_verifier_result(
     )
     payload = {
         "last_batch_id": str(artifact.get("batch_id") or delivery_state.get("active_batch_id") or "").strip().upper() or None,
+        "last_endpoint_id": str(artifact.get("endpoint_id") or current_public_proof.get("endpoint_id") or "").strip() or None,
         "last_status": str(artifact.get("status") or "").strip() or None,
         "last_run_at": str(artifact.get("timestamp") or _utc_now()).strip() or _utc_now(),
         "last_trigger_fingerprint": build_verifier_trigger_fingerprint(delivery_state),

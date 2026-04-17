@@ -256,10 +256,22 @@ def canonical_active_snapshot(latest_file: Path) -> Dict[str, object]:
         if bool(api_wave.get("enabled")) and (current_endpoint or next_endpoint):
             endpoint = current_endpoint or next_endpoint or {}
             current_status = str(api_wave.get("current_status") or "").strip().lower()
-            if current_status == "running":
+            active_task_role = "dev"
+            active_task_next_action = "api_wave_dispatch"
+            active_task_blocked_reason = str(api_wave.get("reason") or "").strip()
+            if current_status in {"running", "active_delivery", "verifying_public_proof"}:
                 task_state = "IN_PROGRESS"
-            elif current_status == "blocked":
+            elif current_status == "blocked_route_admin":
+                task_state = "READY"
+                active_task_role = "admin"
+                active_task_next_action = "api_wave_route_admin"
+            elif current_status == "blocked_escalate_scrum":
+                task_state = "READY"
+                active_task_role = "scrum_master"
+                active_task_next_action = "api_wave_route_scrum"
+            elif current_status in {"blocked", "blocked_runtime"}:
                 task_state = "BLOCKED"
+                active_task_next_action = "api_wave_backoff"
             else:
                 task_state = "READY_DEV" if bool(api_wave.get("dispatch_ready")) else "READY"
             active_task_id = (
@@ -267,13 +279,13 @@ def canonical_active_snapshot(latest_file: Path) -> Dict[str, object]:
                 or str((endpoint or {}).get("owner_task_id") or "").strip()
             )
             return {
-                "active_batch_ids": [],
+                "active_batch_ids": [str(api_wave.get("batch_id") or api_wave.get("stream_id") or "BATCH-900").strip()],
                 "active_task_id": active_task_id,
                 "active_task_state": task_state,
-                "active_task_role": "dev",
+                "active_task_role": active_task_role,
                 "active_task_owner": "planner",
-                "active_task_blocked_reason": "",
-                "active_task_next_action": "api_wave_dispatch",
+                "active_task_blocked_reason": active_task_blocked_reason,
+                "active_task_next_action": active_task_next_action,
                 "projection_decision_capable": True,
                 "projection_decision_reason": "api_wave_autonomy",
                 "product_delivery_state": product_delivery_state,
@@ -749,6 +761,7 @@ def recommendations(issues: List[str], canonical: Dict[str, object] | None = Non
     api_wave_target = api_wave.get("current_endpoint") if isinstance(api_wave.get("current_endpoint"), dict) else None
     if api_wave_target is None:
         api_wave_target = api_wave.get("next_endpoint") if isinstance(api_wave.get("next_endpoint"), dict) else None
+    api_wave_reason = str(api_wave.get("reason") or "").strip().lower()
     out: List[str] = []
     if not active_batch_ids and not active_task_id:
         if bool(api_wave.get("enabled")) and isinstance(api_wave_target, dict) and bool(api_wave.get("dispatch_ready")):
@@ -756,6 +769,9 @@ def recommendations(issues: List[str], canonical: Dict[str, object] | None = Non
                 "Aucun batch canonique actif: lancer l'API wave maintenant via planner_runtime_actions.py api-wave-dispatch "
                 f"sur {str(api_wave_target.get('endpoint_id') or 'endpoint').strip()}."
             )
+            return out
+        if bool(api_wave.get("enabled")) and api_wave_reason == "route_admin":
+            out.append("Aucun batch classique actif mais incident API wave runtime/public-proof: router admin, pas planner-autobatch.")
             return out
         if delivery_phase in {"product_done_ops_dirty", "idle_ready_for_next_batch"} and next_batch_eligible:
             out.append("Aucun batch canonique actif: ouvrir le prochain batch eligible maintenant via sync-priority + planner-autobatch + claim.")
@@ -816,6 +832,14 @@ def recommendations(issues: List[str], canonical: Dict[str, object] | None = Non
             out.append("Lane planner idle sans READY batch: passer par api-wave-dispatch et continuer la migration Judge-parity de l'endpoint courant.")
         else:
             out.append("Lane planner idle sans READY: executer planner-autobatch puis claim la tache ANALYSIS.")
+    if bool(api_wave.get("enabled")) and api_wave_reason == "route_admin":
+        out.append("API wave: incident runtime/control-plane/public-proof => admin seulement, jamais defer provider ni planner-autobatch.")
+    if bool(api_wave.get("enabled")) and api_wave_reason == "route_scrum":
+        out.append("API wave: deux blocages non runtime consecutifs => un seul passage scrum_master puis defer si toujours sterile.")
+    if bool(api_wave.get("enabled")) and api_wave_reason == "defer_current_endpoint":
+        out.append("API wave: endpoint courant a differer puis passer au suivant sans reveiller admin.")
+    if bool(api_wave.get("enabled")) and api_wave_reason == "backoff":
+        out.append("API wave: lane sterile => backoff explicite, pas de retry/takeover decoratif.")
     if "ready_but_no_delta" in issues or "ready_but_none_task_update" in issues:
         out.append("Claim une tache READY et fournir un dispatch concret vers role delivery.")
     if "missing_architecture_plan_ref" in issues or "missing_architecture_audit" in issues:
@@ -933,6 +957,8 @@ def build_prompt_patches(
         api_wave_target = api_wave.get("next_endpoint") if isinstance(api_wave.get("next_endpoint"), dict) else None
     api_wave_enabled = bool(api_wave.get("enabled"))
     api_wave_dispatch_ready = bool(api_wave.get("dispatch_ready"))
+    api_wave_reason = str(api_wave.get("reason") or "").strip().lower()
+    api_wave_status = str(api_wave.get("current_status") or "").strip().lower()
     hard_guard_active = bool(canonical.get("planner_hard_guard_active"))
     hard_guard_reason = str(canonical.get("planner_hard_guard_reason") or "").strip().lower()
     novelty_audit = canonical.get("novelty_target_audit", {})
@@ -1108,8 +1134,18 @@ def build_prompt_patches(
             follow_exit = (
                 "La tâche canonique active transitionne hors de IN_PROGRESS/BLOCKED ou repasse à planner"
             )
+        follow_patch_id = (
+            "follow_api_wave_endpoint"
+            if api_wave_enabled and (
+                str(active_task_id or "").strip().upper().startswith("BATCH-900-")
+                or str(active_task_id or "").strip().upper().startswith("API-WAVE-")
+                or str(active_task_id or "").strip().upper().startswith("BATCH-API-")
+                or str(active_task_id or "").strip().upper().startswith("APIWAVE-")
+            )
+            else "follow_canonical_active_task"
+        )
         add_patch(
-            "follow_canonical_active_task",
+            follow_patch_id,
             priority=80,
             issue_codes=follow_canonical_issue_codes
             + ([f"canonical_active_{active_task_role}"] if active_task_id and active_task_role not in {"", "planner"} else []),
@@ -1118,6 +1154,85 @@ def build_prompt_patches(
             when_to_apply=follow_when,
             exit_condition=follow_exit,
             ttl_runs=6,
+        )
+
+    if (
+        api_wave_enabled
+        and isinstance(api_wave_target, dict)
+        and api_wave_reason == "route_admin"
+    ):
+        add_patch(
+            "follow_api_wave_endpoint",
+            priority=78,
+            issue_codes=["api_wave_route_admin"],
+            instruction=(
+                "API wave bloquee sur un incident runtime/control-plane/public-proof: route vers admin maintenant "
+                f"pour {str(api_wave_target.get('endpoint_id') or 'endpoint').strip()}. "
+                "Pas de planner-autobatch, pas d'ANALYSIS, pas de micro-batch."
+            ),
+            why="Les incidents runtime/public-proof doivent etre traites par admin, pas par churn planner.",
+            when_to_apply="api_autonomy_mode=1 et api_wave.reason=route_admin",
+            exit_condition="La lane admin traite le blocage ou l'endpoint repasse dispatch_ready/deferred",
+            ttl_runs=4,
+        )
+
+    if (
+        api_wave_enabled
+        and isinstance(api_wave_target, dict)
+        and api_wave_reason == "route_scrum"
+    ):
+        add_patch(
+            "follow_api_wave_endpoint",
+            priority=77,
+            issue_codes=["api_wave_route_scrum"],
+            instruction=(
+                "API wave sur deux blocages non runtime consecutifs: route scrum_master maintenant pour "
+                f"{str(api_wave_target.get('endpoint_id') or 'endpoint').strip()}, puis reviens au dev ou defer. "
+                "Pas d'admin ni de planner-autobatch pour ce cas."
+            ),
+            why="Scrum sert au debloquage d'acceptance/coordination apres repetition sterile, pas admin.",
+            when_to_apply="api_autonomy_mode=1 et api_wave.reason=route_scrum",
+            exit_condition="scrum_master debloque l'endpoint ou l'endpoint devient deferred",
+            ttl_runs=4,
+        )
+
+    if (
+        api_wave_enabled
+        and isinstance(api_wave_target, dict)
+        and api_wave_reason == "defer_current_endpoint"
+    ):
+        add_patch(
+            "defer_api_wave_endpoint",
+            priority=76,
+            issue_codes=["api_wave_defer_current_endpoint"],
+            instruction=(
+                "Endpoint API wave non runtime/provider bloque: marque-le deferred et passe au suivant; "
+                "pas de reveil admin, pas de planner-autobatch, pas de reouverture batch."
+            ),
+            why="Maintient la continuité delivery sur la wave sans stopper toute la machine.",
+            when_to_apply="api_autonomy_mode=1 et api_wave.reason=defer_current_endpoint",
+            exit_condition="Le runtime selectionne l'endpoint suivant eligible",
+            ttl_runs=4,
+        )
+
+    if (
+        api_wave_enabled
+        and isinstance(api_wave_target, dict)
+        and api_wave_reason == "backoff"
+    ):
+        add_patch(
+            "follow_api_wave_endpoint",
+            priority=75,
+            issue_codes=["api_wave_backoff"],
+            instruction=(
+                "Lane API wave sterile: applique un backoff explicite sur "
+                f"{str(api_wave_target.get('endpoint_id') or 'endpoint').strip()} et n'ouvre rien de nouveau tant "
+                "qu'il n'y a pas de delta runtime/proof."
+            ),
+            why="Evite le burn none_no_signal/retry/takeover sans effet canonique.",
+            when_to_apply="api_autonomy_mode=1 et api_wave.reason=backoff",
+            exit_condition="Nouvelle preuve runtime, defer, ou reroute scrum/admin",
+            ttl_runs=4,
         )
 
     if (
@@ -1135,7 +1250,7 @@ def build_prompt_patches(
     ):
         if api_wave_enabled and api_wave_dispatch_ready and isinstance(api_wave_target, dict):
             add_patch(
-                "dispatch_api_wave_now",
+                "dispatch_api_wave_endpoint_now",
                 priority=70,
                 issue_codes=[
                     "planner_passive_forbidden_violation",
@@ -1159,7 +1274,7 @@ def build_prompt_patches(
                 ),
                 ttl_runs=4,
             )
-        else:
+        elif not api_wave_enabled:
             add_patch(
                 "claim_or_autobatch_now",
                 priority=70,
@@ -1194,7 +1309,7 @@ def build_prompt_patches(
     ):
         if api_wave_enabled and isinstance(api_wave_target, dict):
             add_patch(
-                "continue_api_wave_now",
+                "idle_ready_for_next_endpoint",
                 priority=75,
                 issue_codes=[
                     "delivery_phase_product_done_ops_dirty"
@@ -1242,6 +1357,27 @@ def build_prompt_patches(
                 ),
                 ttl_runs=4,
             )
+
+    if api_wave_enabled and isinstance(api_wave_target, dict) and delivery_phase == "verifying_public_proof":
+        add_patch(
+            "verify_api_wave_public_proof",
+            priority=78,
+            issue_codes=["delivery_phase_verifying_public_proof"],
+            instruction=(
+                "L'endpoint API wave attend sa preuve publique: lance la lane verifier ou planner_runtime_actions.py "
+                f"public-proof sur {str(api_wave_target.get('endpoint_id') or 'endpoint').strip()} sans re-dispatch dev/admin."
+            ),
+            why=(
+                "Ferme monotoniquement l'endpoint courant dès que la preuve API publique EC2 est disponible."
+            ),
+            when_to_apply=(
+                "product_delivery_state.phase=verifying_public_proof et api_autonomy_mode=1"
+            ),
+            exit_condition=(
+                "La preuve publique devient ok, l'endpoint est différé, ou la lane verifier repart en active_delivery"
+            ),
+            ttl_runs=3,
+        )
 
     patches.sort(key=lambda item: (-int(item.get("priority", 0)), str(item.get("id") or "")))
     return patches[:3]

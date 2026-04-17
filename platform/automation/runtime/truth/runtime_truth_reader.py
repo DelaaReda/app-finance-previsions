@@ -19,7 +19,11 @@ from orchestrator_paths import (
 )
 
 from .event_store import event_store_path, latest_graph_states, recent_events
-from .api_wave import build_api_wave_snapshot, persist_api_wave_state
+from .api_wave import (
+    API_WAVE_BATCH_ID,
+    build_api_wave_snapshot,
+    persist_api_wave_state,
+)
 from .lane_backoff import load_active_lane_backoffs
 
 LEGACY_BRIDGE_FILES = (
@@ -966,40 +970,54 @@ def _apply_api_wave_delivery_override(delivery_state: dict[str, Any], api_wave: 
     if not bool(api_wave.get("enabled")):
         return delivery_state
 
+    wave_batch_id = str(api_wave.get("wave_batch_id") or API_WAVE_BATCH_ID).strip().upper() or API_WAVE_BATCH_ID
     classic_active_batch_id = str(delivery_state.get("active_batch_id") or "").strip().upper()
-    if classic_active_batch_id and classic_active_batch_id != "API-WAVE":
+    if classic_active_batch_id and classic_active_batch_id != wave_batch_id:
         return delivery_state
 
     current_endpoint = api_wave.get("current_endpoint") if isinstance(api_wave.get("current_endpoint"), dict) else None
     next_endpoint = api_wave.get("next_endpoint") if isinstance(api_wave.get("next_endpoint"), dict) else None
     effective_endpoint = current_endpoint or next_endpoint
-    current_status = str(api_wave.get("current_status") or "idle_ready_for_next_endpoint").strip().lower()
+    current_status = str(api_wave.get("current_status") or "idle").strip().lower()
     dispatch_ready = bool(api_wave.get("dispatch_ready"))
     ec2_reachable = bool(delivery_state.get("ec2_reachable"))
-    last_proof_ref = str(api_wave.get("last_proof_ref") or "none").strip() or "none"
-    last_public_proof_status = str(api_wave.get("last_public_proof_status") or "unknown").strip().lower() or "unknown"
-    last_completed_endpoint_id = str(
-        (api_wave.get("state") or {}).get("last_completed_endpoint_id")
-        if isinstance(api_wave.get("state"), dict)
-        else ""
-    ).strip()
-    has_wave_work = bool(effective_endpoint) and current_status not in {"idle_exhausted", "deferred"}
+    last_proof_ref = str(api_wave.get("last_public_proof_ref") or "none").strip() or "none"
+    last_public_proof_status = str(api_wave.get("current_proof_status") or "unknown").strip().lower() or "unknown"
+    wave_reason = str(api_wave.get("reason") or "idle").strip().lower() or "idle"
+    completed_endpoint_ids = list(api_wave.get("completed_endpoint_ids") or api_wave.get("completed_endpoints") or [])
+    last_completed_endpoint_id = (
+        str(completed_endpoint_ids[-1]).strip() if completed_endpoint_ids else ""
+    )
+    has_wave_work = bool(effective_endpoint) and wave_reason not in {"defer_current_endpoint", "exhausted"}
     is_verifying = current_status == "verifying_public_proof"
+    is_admin_block = current_status == "blocked_route_admin" or wave_reason == "route_admin"
+    is_scrum_block = current_status == "blocked_escalate_scrum" or wave_reason == "route_scrum"
+    is_backoff = current_status == "blocked" or wave_reason == "backoff"
 
     if delivery_state.get("phase") == "external_outage" and not ec2_reachable:
         has_wave_work = False
 
     if has_wave_work:
-        delivery_state["active_batch_id"] = "API-WAVE"
-        delivery_state["phase"] = "verifying_public_proof" if is_verifying else "active_delivery"
+        delivery_state["active_batch_id"] = wave_batch_id
+        if is_verifying:
+            delivery_state["phase"] = "verifying_public_proof"
+            delivery_state["freeze_reason"] = "waiting_public_proof"
+        elif is_admin_block:
+            delivery_state["phase"] = "active_delivery"
+            delivery_state["freeze_reason"] = "api_wave_route_admin"
+        elif is_scrum_block:
+            delivery_state["phase"] = "active_delivery"
+            delivery_state["freeze_reason"] = "api_wave_route_scrum"
+        elif is_backoff:
+            delivery_state["phase"] = "active_delivery"
+            delivery_state["freeze_reason"] = "api_wave_backoff"
+        else:
+            delivery_state["phase"] = "active_delivery"
+            delivery_state["freeze_reason"] = "none"
         delivery_state["product_done"] = False
         delivery_state["next_batch_eligible"] = False
-        if is_verifying:
-            delivery_state["freeze_reason"] = "waiting_public_proof"
-            if delivery_state.get("public_proof_status") == "ok":
-                delivery_state["public_proof_status"] = "pending"
-        else:
-            delivery_state["freeze_reason"] = "none"
+        if is_verifying and delivery_state.get("public_proof_status") == "ok":
+            delivery_state["public_proof_status"] = "pending"
     else:
         delivery_state["active_batch_id"] = None
         if ec2_reachable:
@@ -1020,9 +1038,9 @@ def _apply_api_wave_delivery_override(delivery_state: dict[str, Any], api_wave: 
     if endpoint_id or route_path:
         current_value_target.update(
             {
-                "batch_id": "API-WAVE" if has_wave_work else current_value_target.get("batch_id"),
+                "batch_id": wave_batch_id if has_wave_work else current_value_target.get("batch_id"),
                 "mode": "api_autonomy_mode",
-                "wave_id": str(api_wave.get("wave_id") or api_wave.get("stream_id") or "API-WAVE").strip() or "API-WAVE",
+                "wave_id": str(api_wave.get("wave_id") or api_wave.get("stream_id") or wave_batch_id).strip() or wave_batch_id,
                 "endpoint_id": endpoint_id or None,
                 "route_path": route_path or None,
                 "product_surface": product_surface or None,
@@ -1043,16 +1061,36 @@ def _apply_api_wave_delivery_override(delivery_state: dict[str, Any], api_wave: 
         current_public_proof = {}
     if last_proof_ref != "none":
         current_public_proof["proof_ref"] = last_proof_ref
-        current_public_proof["batch_id"] = "API-WAVE"
+        current_public_proof["batch_id"] = wave_batch_id
         current_public_proof["endpoint_id"] = endpoint_id or None
         current_public_proof["status"] = last_public_proof_status
         delivery_state["current_public_proof"] = current_public_proof
 
     if last_completed_endpoint_id and not delivery_state.get("last_completed_batch_id"):
-        delivery_state["last_completed_batch_id"] = f"API-WAVE:{last_completed_endpoint_id}"
-        delivery_state["close_reason"] = str(delivery_state.get("close_reason") or "public_proof_ok").strip() or "public_proof_ok"
+        delivery_state["last_completed_batch_id"] = wave_batch_id
+        delivery_state["close_reason"] = str(delivery_state.get("close_reason") or "api_wave_exhausted").strip() or "api_wave_exhausted"
         if last_proof_ref != "none" and not delivery_state.get("last_completion_proof_ref"):
             delivery_state["last_completion_proof_ref"] = last_proof_ref
+
+    delivery_state["api_wave_batch_id"] = wave_batch_id
+    delivery_state["current_endpoint_id"] = str((current_endpoint or {}).get("endpoint_id") or "").strip() or None
+    delivery_state["next_endpoint_id"] = str((next_endpoint or {}).get("endpoint_id") or "").strip() or None
+    delivery_state["current_endpoint_status"] = current_status or None
+    delivery_state["last_public_proof_ref"] = last_proof_ref
+    consecutive_map = (
+        api_wave.get("consecutive_block_count_by_endpoint")
+        if isinstance(api_wave.get("consecutive_block_count_by_endpoint"), dict)
+        else {}
+    )
+    current_endpoint_id = str((current_endpoint or {}).get("endpoint_id") or "").strip()
+    delivery_state["consecutive_non_runtime_blocks"] = int(consecutive_map.get(current_endpoint_id, 0) or 0) if current_endpoint_id else 0
+    deferred_reason_map = api_wave.get("deferred_reason_by_endpoint") if isinstance(api_wave.get("deferred_reason_by_endpoint"), dict) else {}
+    deferred_endpoint_id = current_endpoint_id or str((next_endpoint or {}).get("endpoint_id") or "").strip()
+    delivery_state["deferred_reason"] = (
+        str(deferred_reason_map.get(deferred_endpoint_id) or "none").strip() or "none"
+        if deferred_endpoint_id
+        else "none"
+    )
 
     return delivery_state
 
@@ -1150,25 +1188,25 @@ def build_runtime_truth_snapshot(
     delivery_state["api_wave"] = {
         "enabled": bool(api_wave.get("enabled")),
         "mode": str(api_wave.get("mode") or "disabled").strip(),
-        "stream_id": str(api_wave.get("stream_id") or "API-WAVE").strip() or "API-WAVE",
-        "wave_id": str(api_wave.get("wave_id") or api_wave.get("stream_id") or "API-WAVE").strip() or "API-WAVE",
+        "stream_id": str(api_wave.get("stream_id") or API_WAVE_BATCH_ID).strip() or API_WAVE_BATCH_ID,
+        "batch_id": str(api_wave.get("batch_id") or api_wave.get("wave_batch_id") or API_WAVE_BATCH_ID).strip() or API_WAVE_BATCH_ID,
+        "wave_batch_id": str(api_wave.get("wave_batch_id") or api_wave.get("batch_id") or API_WAVE_BATCH_ID).strip() or API_WAVE_BATCH_ID,
+        "wave_id": str(api_wave.get("wave_id") or api_wave.get("stream_id") or API_WAVE_BATCH_ID).strip() or API_WAVE_BATCH_ID,
         "current_endpoint": api_wave.get("current_endpoint"),
-        "current_endpoint_id": str((api_wave.get("current_endpoint") or {}).get("endpoint_id") or "").strip() or None
-        if isinstance(api_wave.get("current_endpoint"), dict)
-        else None,
+        "current_endpoint_id": str(api_wave.get("current_endpoint_id") or "").strip() or None,
         "current_task_id": api_wave.get("current_task_id"),
         "current_status": str(api_wave.get("current_status") or "idle").strip(),
+        "current_proof_status": str(api_wave.get("current_proof_status") or "none").strip() or "none",
         "next_endpoint": api_wave.get("next_endpoint"),
-        "next_endpoint_id": str((api_wave.get("next_endpoint") or {}).get("endpoint_id") or "").strip() or None
-        if isinstance(api_wave.get("next_endpoint"), dict)
-        else None,
+        "next_endpoint_id": str(api_wave.get("next_endpoint_id") or "").strip() or None,
         "dispatch_ready": bool(api_wave.get("dispatch_ready")),
-        "completed_endpoint_ids": list(api_wave.get("completed_endpoint_ids") or []),
+        "completed_endpoint_ids": list(api_wave.get("completed_endpoint_ids") or api_wave.get("completed_endpoints") or []),
         "deferred_endpoint_ids": list(api_wave.get("deferred_endpoint_ids") or []),
         "deferred_endpoints": list(api_wave.get("deferred_endpoints") or []),
-        "attempts_by_endpoint": dict(api_wave.get("attempts_by_endpoint") or {}),
-        "consecutive_blocks_by_endpoint": dict(api_wave.get("consecutive_blocks_by_endpoint") or {}),
-        "last_proof_ref": str(api_wave.get("last_proof_ref") or "none").strip() or "none",
+        "blocked_streaks": dict(api_wave.get("blocked_streaks") or api_wave.get("consecutive_block_count_by_endpoint") or {}),
+        "remaining_count": int(api_wave.get("remaining_count") or 0),
+        "total_count": int(api_wave.get("total_count") or 0),
+        "last_public_proof_ref": str(api_wave.get("last_public_proof_ref") or api_wave.get("last_proof_ref") or "none").strip() or "none",
         "last_public_proof_status": str(api_wave.get("last_public_proof_status") or "unknown").strip() or "unknown",
         "reason": str(api_wave.get("reason") or "idle").strip() or "idle",
     }
