@@ -122,11 +122,11 @@ class PlannerSubagentManagerTests(unittest.TestCase):
     def test_app_dev_prompt_allows_full_api_wave_endpoint_migration(self) -> None:
         prompt = _build_prompt(
             "app-dev",
-            "API-WAVE-DEV-COPILOT_SEARCH",
+            "BATCH-900-DEV-COPILOT_SEARCH",
             "delivery",
             "Ship the next API wave endpoint.",
         )
-        self.assertIn("If OWNER_TASK_ID starts with API-WAVE-", prompt)
+        self.assertIn("If OWNER_TASK_ID starts with BATCH-900-", prompt)
         self.assertIn("you may ship one whole endpoint end-to-end", prompt)
         self.assertIn("judge_like_endpoint", prompt)
         self.assertIn("public EC2 smoke", prompt)

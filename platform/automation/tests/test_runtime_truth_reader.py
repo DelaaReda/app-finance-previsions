@@ -32,15 +32,15 @@ class RuntimeTruthReaderTests(unittest.TestCase):
                         "schema_version": "api_wave_manifest.v1",
                         "mode": "api_autonomy_mode",
                         "enabled": True,
-                        "wave_batch_id": "API-WAVE",
-                        "stream_id": "API-WAVE",
+                        "wave_batch_id": "BATCH-900",
+                        "stream_id": "BATCH-900",
                         "items": [
                             {
-                                "endpoint_id": "copilot-search",
+                                "endpoint_id": "copilot_search",
                                 "domain": "copilot",
                                 "route_path": "/api/search/tickers",
                                 "route_module": "apps/api/src/domains/copilot/api/search.py",
-                                "priority": "P1",
+                                "priority": 10,
                                 "product_surface": "copilot",
                                 "shared_contract": "packages/contracts/copilot_v1.py",
                                 "endpoint_service": "apps/api/src/domains/copilot/application/copilot_search_endpoint_service.py",
@@ -62,8 +62,8 @@ class RuntimeTruthReaderTests(unittest.TestCase):
             self.assertTrue(api_wave["enabled"])
             self.assertTrue(api_wave["dispatch_ready"])
             self.assertEqual(api_wave["current_endpoint"]["endpoint_id"], "copilot_search")
-            self.assertEqual(api_wave["current_task_id"], "APIWAVE-COPILOT_SEARCH-DEV-01")
-            self.assertEqual(delivery_state["active_batch_id"], "API-WAVE")
+            self.assertEqual(api_wave["current_task_id"], "BATCH-900-DEV-COPILOT_SEARCH")
+            self.assertEqual(delivery_state["active_batch_id"], "BATCH-900")
             self.assertEqual(delivery_state["current_value_target"]["endpoint_id"], "copilot_search")
             self.assertEqual(delivery_state["current_value_target"]["route_path"], "/api/search/tickers")
 

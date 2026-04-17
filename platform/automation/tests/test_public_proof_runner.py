@@ -101,8 +101,8 @@ class PublicProofRunnerTests(unittest.TestCase):
                         "schema_version": "api_wave_manifest.v1",
                         "mode": "api_autonomy_mode",
                         "enabled": True,
-                        "wave_batch_id": "API-WAVE",
-                        "stream_id": "API-WAVE",
+                        "wave_batch_id": "BATCH-API",
+                        "stream_id": "BATCH-API",
                         "items": [
                             {
                                 "endpoint_id": "copilot-search",
@@ -130,12 +130,12 @@ class PublicProofRunnerTests(unittest.TestCase):
                 json.dumps(
                     {
                         "schema_version": "api_wave_state.v1",
-                        "wave_batch_id": "API-WAVE",
-                        "stream_id": "API-WAVE",
+                        "wave_batch_id": "BATCH-API",
+                        "stream_id": "BATCH-API",
                         "mode": "api_autonomy_mode",
                         "current_endpoint_id": "copilot-search",
-                        "current_task_id": "APIWAVE-COPILOT_SEARCH-DEV-01",
-                        "current_owner_task_id": "APIWAVE-COPILOT_SEARCH-DEV-01",
+                        "current_task_id": "BATCH-API-DEV-COPILOT-SEARCH",
+                        "current_owner_task_id": "BATCH-API-DEV-COPILOT-SEARCH",
                         "current_status": "verifying_public_proof",
                         "completed_endpoint_ids": [],
                         "deferred_endpoint_ids": [],
@@ -147,7 +147,7 @@ class PublicProofRunnerTests(unittest.TestCase):
                 root,
                 {
                     "schema_version": "product_delivery_state.v1",
-                    "active_batch_id": "API-WAVE",
+                    "active_batch_id": "BATCH-API",
                     "phase": "verifying_public_proof",
                     "product_done": False,
                     "ops_clean": False,

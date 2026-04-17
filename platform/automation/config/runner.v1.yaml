@@ -127,8 +127,8 @@
     "api_autonomy_mode": {
       "enabled": 1,
       "manifest_path": "platform/automation/config/api_wave_manifest.json",
-      "state_path": "logs-codex-runs/orchestrator-state/api-wave-state.json",
-      "wave_batch_id": "BATCH-900",
+      "state_path": "logs-codex-runs/orchestrator-state/api_wave_state.json",
+      "wave_batch_id": "API-WAVE",
       "allowed_domains": ["copilot", "forecasts", "market_data"],
       "managed_roles": ["app-dev", "verifier"]
     }
