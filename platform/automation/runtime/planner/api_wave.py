@@ -12,19 +12,19 @@ from orchestrator_paths import load_runtime_state, read_json_file, resolve_orche
 
 API_WAVE_EXECUTION_MODE = "api_autonomy_mode"
 API_WAVE_MODE_ALIASES = {API_WAVE_EXECUTION_MODE, "api_autonomy"}
-API_WAVE_BATCH_ID = "BATCH-900"
+API_WAVE_BATCH_ID = "BATCH-API-WAVE-01"
 API_WAVE_STREAM_ID = API_WAVE_BATCH_ID
 API_WAVE_SCHEMA_VERSION = "api_wave_state.v1"
 API_WAVE_MANIFEST_SCHEMA_VERSION = "api_wave_manifest.v1"
-API_WAVE_CANONICAL_MANIFEST_FILE = "platform/automation/config/api_wave_manifest.json"
-API_WAVE_LEGACY_MANIFEST_FILE = "platform/automation/config/api_wave_manifest.v1.json"
+API_WAVE_CANONICAL_MANIFEST_FILE = "platform/config/api_wave_manifest.v1.json"
+API_WAVE_LEGACY_MANIFEST_FILE = "platform/automation/config/api_wave_manifest.json"
 API_WAVE_ADDITIONAL_MANIFEST_FILE = "platform/automation/config/api_wave_manifest.v1.json"
-API_WAVE_CANONICAL_STATE_FILE = "api-wave-state.json"
-API_WAVE_LEGACY_STATE_FILE = "api_wave_state.json"
+API_WAVE_CANONICAL_STATE_FILE = "api_wave_state.json"
+API_WAVE_LEGACY_STATE_FILE = "api-wave-state.json"
 # Backward-compat aliases still imported by runtime truth compatibility paths.
 API_WAVE_MANIFEST_FILE = API_WAVE_CANONICAL_MANIFEST_FILE
 API_WAVE_STATE_FILE = API_WAVE_CANONICAL_STATE_FILE
-API_WAVE_PROOF_DIR = "api-wave-proofs"
+API_WAVE_PROOF_DIR = "api-wave-proof"
 PUBLIC_PROOF_OK_MARKERS = (
     "http://3.98.20.77",
     "ec2-3-98-20-77",

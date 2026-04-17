@@ -61,10 +61,10 @@ class RuntimeTruthReaderTests(unittest.TestCase):
             self.assertTrue(delivery_state["api_autonomy_mode"])
             self.assertTrue(api_wave["enabled"])
             self.assertTrue(api_wave["dispatch_ready"])
-            self.assertEqual(api_wave["current_endpoint"]["endpoint_id"], "copilot-search")
+            self.assertEqual(api_wave["current_endpoint"]["endpoint_id"], "copilot_search")
             self.assertEqual(api_wave["current_task_id"], "APIWAVE-COPILOT_SEARCH-DEV-01")
             self.assertEqual(delivery_state["active_batch_id"], "API-WAVE")
-            self.assertEqual(delivery_state["current_value_target"]["endpoint_id"], "copilot-search")
+            self.assertEqual(delivery_state["current_value_target"]["endpoint_id"], "copilot_search")
             self.assertEqual(delivery_state["current_value_target"]["route_path"], "/api/search/tickers")
 
     def test_product_done_clears_active_batch_monotonically(self) -> None:

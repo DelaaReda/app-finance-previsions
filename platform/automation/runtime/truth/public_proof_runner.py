@@ -94,7 +94,7 @@ def _find_batch_contract(root: Path, batch_id: str) -> tuple[dict[str, Any], str
         contract = task.get("delivery_contract")
         if isinstance(contract, dict):
             return dict(contract), "parallel_workstreams.task"
-    api_wave_entry = entry_for_batch_id(root, batch_token)
+    api_wave_entry, _, _ = entry_for_batch_id(root, batch_token)
     if api_wave_entry is not None:
         return api_wave_delivery_contract(api_wave_entry), "api_wave_manifest"
     return _default_delivery_contract(batch_token), "default"
@@ -259,7 +259,7 @@ def _resolve_wave_target(root: Path, batch_id: str) -> tuple[str, str]:
 def _proof_artifact_relative_path(batch_id: str, *, endpoint_id: str = "") -> str:
     endpoint_token = str(endpoint_id or "").strip().replace(".", "__").replace("-", "_").lower()
     if endpoint_token:
-        return f"api-wave-proofs/{endpoint_token}.json"
+        return f"api-wave-proof/{endpoint_token}.json"
     token = str(batch_id or "").strip().upper() or "BATCH-UNKNOWN"
     return f"public-proof/{token}.json"
 
@@ -292,7 +292,7 @@ def run_public_proof(
     raw_contract, contract_source = _find_batch_contract(root, effective_batch_id)
     contract = _normalize_contract(effective_batch_id, raw_contract)
     if api_wave_mode_enabled(root):
-        api_wave_entry = entry_for_batch_id(root, batch_id or effective_batch_id or API_WAVE_BATCH_ID)
+        api_wave_entry, _, _ = entry_for_batch_id(root, batch_id or effective_batch_id or API_WAVE_BATCH_ID)
     route_path = str((api_wave_entry or {}).get("route_path") or "").strip() or None
     api_result = _run_api_proof(contract, float(timeout_seconds))
     ui_result = _run_ui_proof(root, effective_batch_id, contract, int(max(5, timeout_seconds)))
