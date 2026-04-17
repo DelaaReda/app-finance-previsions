@@ -179,6 +179,49 @@ test('BATCH-74-DEV-02: Frontend renders signals and risks sections', () => {
   assert.equal(risksEl.style.display, 'block', 'Risks should be visible when data exists');
 });
 
+test('BATCH-74-DEV-02: Frontend prioritizes story-line headings when present', () => {
+  const widgetPath = path.join(__dirname, 'copilot-panel.html');
+  const source = fs.readFileSync(widgetPath, 'utf8');
+
+  const renderFn = extractRenderFunction(source, 'renderCopilotBrief');
+  const mockDoc = createMockDocument();
+
+  const sandbox = {
+    document: mockDoc,
+    formatCopilotTimestamp() { return ''; },
+    escapeHtml(text) { return String(text || ''); }
+  };
+
+  const vm = require('node:vm');
+  vm.createContext(sandbox);
+  vm.runInContext(renderFn, sandbox, { filename: 'copilot-panel.html' });
+
+  sandbox.renderCopilotBrief({
+    brief_of_day: {
+      summary: 'Leadership is rotating into the close.',
+      what_changed_today: ['NVDA gave back the morning breakout'],
+      what_matters_now: ['Watch whether semis recover breadth tomorrow'],
+      top_signals: ['Breadth improving'],
+      top_risks: ['CPI tomorrow'],
+    },
+  });
+
+  assert.equal(
+    mockDoc.getElementById('copilotBriefSignalsHeading').textContent,
+    'What Changed Today'
+  );
+  assert.equal(
+    mockDoc.getElementById('copilotBriefRisksHeading').textContent,
+    'What Matters Now'
+  );
+  assert.ok(
+    mockDoc.getElementById('copilotSignalList').innerHTML.includes('NVDA gave back the morning breakout')
+  );
+  assert.ok(
+    mockDoc.getElementById('copilotRiskList').innerHTML.includes('Watch whether semis recover breadth tomorrow')
+  );
+});
+
 test('BATCH-74-DEV-02: Frontend renders ask/open actions', () => {
   const widgetPath = path.join(__dirname, 'copilot-panel.html');
   const source = fs.readFileSync(widgetPath, 'utf8');

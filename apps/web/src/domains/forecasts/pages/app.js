@@ -1437,6 +1437,8 @@ const FALLBACK_COPILOT_START = {
     summary: 'No daily brief available yet.',
     market_regime: 'UNKNOWN',
     market_sentiment: 'UNKNOWN',
+    what_changed_today: [],
+    what_matters_now: [],
     top_opportunities: [],
     top_signals: [],
     top_risks: [],
@@ -2570,6 +2572,12 @@ function sanitizeCopilotStart(payload) {
       summary: toString(briefSource.summary || briefSource.message || briefSource.overview, fallback.brief_of_day.summary),
       market_regime: marketRegime,
       market_sentiment: marketRegime,
+      what_changed_today: normalizeCopilotStartList(
+        briefSource.what_changed_today || briefSource.whatChangedToday
+      ),
+      what_matters_now: normalizeCopilotStartList(
+        briefSource.what_matters_now || briefSource.whatMattersNow
+      ),
       top_opportunities: normalizeCopilotStartList(
         briefSource.top_opportunities || briefSource.topOpportunities || briefSource.opportunities || briefSource.top_signals || briefSource.signals
       ),
@@ -5651,6 +5659,8 @@ function buildDefaultCopilotStartState() {
       generatedAt: '',
       marketSentiment: 'UNKNOWN',
       marketRegime: 'UNKNOWN',
+      whatChangedToday: [],
+      whatMattersNow: [],
       topOpportunities: [],
       topSignals: [],
       topRisks: [],
@@ -5975,6 +5985,12 @@ function buildCopilotStartState(raw) {
     briefSource.top_opportunities || briefSource.topOpportunities || briefSource.opportunities || topSignals
   );
   const topRisks = normalizeCopilotStartList(briefSource.top_risks || briefSource.risks);
+  const whatChangedToday = normalizeCopilotStartList(
+    briefSource.what_changed_today || briefSource.whatChangedToday
+  );
+  const whatMattersNow = normalizeCopilotStartList(
+    briefSource.what_matters_now || briefSource.whatMattersNow
+  );
   const eventTiming = normalizeCopilotStartEventTiming(briefSource.event_timing || briefSource.eventTiming);
   const sourceLabels = normalizeCopilotSourceLabels(briefSource.sources || briefSource.source);
   const generatedAt = toString(
@@ -6022,6 +6038,8 @@ function buildCopilotStartState(raw) {
       generatedAt,
       marketSentiment: marketRegime || fallback.brief.marketSentiment,
       marketRegime: marketRegime || fallback.brief.marketRegime,
+      whatChangedToday,
+      whatMattersNow,
       topSignals,
       topOpportunities,
       topRisks,
@@ -6383,6 +6401,8 @@ function resolveCopilotStartState(state) {
       fallback.brief.marketRegime
     );
     const sourceLabels = normalizeCopilotSourceLabels(rawBrief.sources || rawBrief.source);
+    const whatChangedToday = normalizeCopilotStartList(rawBrief.whatChangedToday || rawBrief.what_changed_today);
+    const whatMattersNow = normalizeCopilotStartList(rawBrief.whatMattersNow || rawBrief.what_matters_now);
     const rawContextInfluence = isObject(state.contextInfluence || state.context_influence)
       ? (state.contextInfluence || state.context_influence)
       : null;
@@ -6394,6 +6414,8 @@ function resolveCopilotStartState(state) {
         marketRegime,
         generatedAt: toString(rawBrief.generatedAt || rawBrief.generated_at, fallback.brief.generatedAt),
         freshness: toString(rawBrief.freshness || rawBrief.generated_at || rawBrief.generatedAt, fallback.brief.freshness),
+        whatChangedToday,
+        whatMattersNow,
         topSignals,
         topRisks,
         topOpportunities,
@@ -6477,6 +6499,8 @@ function renderHeroCopilotBrief(state) {
     || normalizedBriefStatus === 'stale'
     || normalizedBriefStatus === 'api_unavailable';
   const briefSources = normalizeCopilotSourceLabels(brief.sources || brief.source);
+  const briefWhatChangedToday = normalizeCopilotStartList(brief.whatChangedToday || brief.what_changed_today);
+  const briefWhatMattersNow = normalizeCopilotStartList(brief.whatMattersNow || brief.what_matters_now);
   const briefTopSignals = normalizeCopilotStartList(brief.topSignals || brief.top_signals);
   const briefTopOpportunities = normalizeCopilotStartList(brief.topOpportunities || brief.top_opportunities);
   const derivedFocusItems = deriveCopilotStartFocusItems(state);
@@ -6534,10 +6558,12 @@ function renderHeroCopilotBrief(state) {
   }
 
   if (signalsEl) {
-    const signalItems = briefTopSignals.length
-      ? briefTopSignals
-      : briefTopOpportunities;
-    const signalLabel = briefTopSignals.length ? 'Signals' : 'Opportunities';
+    const signalItems = briefWhatChangedToday.length
+      ? briefWhatChangedToday
+      : (briefTopSignals.length ? briefTopSignals : briefTopOpportunities);
+    const signalLabel = briefWhatChangedToday.length
+      ? 'Changed today'
+      : (briefTopSignals.length ? 'Signals' : 'Opportunities');
     const text = signalItems.length ? `${signalLabel}: ${signalItems.join(' • ')}` : '';
     signalsEl.textContent = text;
     signalsEl.style.display = text ? 'block' : 'none';
@@ -6566,6 +6592,7 @@ function renderHeroCopilotBrief(state) {
       ? `Suppressed duplicates: ${suppressedCount}${suppressionWindow > 0 ? ` in ${suppressionWindow}m window` : ''}`
       : '';
     const text = [
+      briefWhatMattersNow.length ? `Matters now: ${briefWhatMattersNow.join(' • ')}` : '',
       briefTopRisks.length ? `Risks: ${briefTopRisks.join(' • ')}` : '',
       suppressionSummary,
       eventTimingSummary ? `Upcoming events: ${eventTimingSummary}` : ''

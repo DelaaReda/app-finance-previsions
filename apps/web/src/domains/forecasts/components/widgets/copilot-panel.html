@@ -173,11 +173,11 @@
         <div class="copilot-brief-content" id="copilotBriefContent">
             <p class="brief-summary" id="copilotBriefSummary">Fetching today's market brief...</p>
             <div class="brief-signals" id="copilotBriefSignals" style="display: none;">
-                <h4>Key Signals</h4>
+                <h4 id="copilotBriefSignalsHeading">Key Signals</h4>
                 <ul class="signal-list" id="copilotSignalList"></ul>
             </div>
             <div class="brief-risks" id="copilotBriefRisks" style="display: none;">
-                <h4>Top Risks</h4>
+                <h4 id="copilotBriefRisksHeading">Top Risks</h4>
                 <ul class="risk-list" id="copilotRiskList"></ul>
             </div>
         </div>
@@ -421,6 +421,12 @@ async function loadCopilotStart() {
  */
 function renderCopilotBrief(data) {
     const brief = data.brief_of_day || data.briefOfDay || {};
+    const changedToday = Array.isArray(brief.what_changed_today)
+        ? brief.what_changed_today
+        : (Array.isArray(brief.whatChangedToday) ? brief.whatChangedToday : []);
+    const mattersNow = Array.isArray(brief.what_matters_now)
+        ? brief.what_matters_now
+        : (Array.isArray(brief.whatMattersNow) ? brief.whatMattersNow : []);
     
     // Summary
     const summaryEl = document.getElementById('copilotBriefSummary');
@@ -437,11 +443,17 @@ function renderCopilotBrief(data) {
     
     // Signals
     const signalsEl = document.getElementById('copilotBriefSignals');
+    const signalsHeadingEl = document.getElementById('copilotBriefSignalsHeading');
     const signalListEl = document.getElementById('copilotSignalList');
-    const signals = brief.top_signals || brief.signals || brief.top_actions || [];
+    const signals = changedToday.length > 0
+        ? changedToday
+        : (brief.top_signals || brief.signals || brief.top_actions || []);
     
     if (signals && signals.length > 0) {
         signalsEl.style.display = 'block';
+        if (signalsHeadingEl) {
+            signalsHeadingEl.textContent = changedToday.length > 0 ? 'What Changed Today' : 'Key Signals';
+        }
         signalListEl.innerHTML = signals.map(signal => 
             `<li class="signal-item">${escapeHtml(signal)}</li>`
         ).join('');
@@ -451,11 +463,17 @@ function renderCopilotBrief(data) {
     
     // Risks
     const risksEl = document.getElementById('copilotBriefRisks');
+    const risksHeadingEl = document.getElementById('copilotBriefRisksHeading');
     const riskListEl = document.getElementById('copilotRiskList');
-    const risks = brief.top_risks || brief.risks || brief.main_risks || [];
+    const risks = mattersNow.length > 0
+        ? mattersNow
+        : (brief.top_risks || brief.risks || brief.main_risks || []);
 
     if (risks && risks.length > 0) {
         risksEl.style.display = 'block';
+        if (risksHeadingEl) {
+            risksHeadingEl.textContent = mattersNow.length > 0 ? 'What Matters Now' : 'Top Risks';
+        }
         riskListEl.innerHTML = risks.map(risk =>
             `<li class="risk-item">${escapeHtml(risk)}</li>`
         ).join('');

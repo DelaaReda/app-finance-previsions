@@ -4677,6 +4677,36 @@ test('renderHeroCopilotBrief hydrates the landing brief and wires ask/open actio
   assert.deepEqual(JSON.parse(JSON.stringify(openCalls)), ['overview']);
 });
 
+test('renderHeroCopilotBrief prioritizes what changed today and what matters now when present', () => {
+  const state = {
+    brief: {
+      title: 'Opening Brief',
+      summary: 'Leadership is shifting but conviction remains selective.',
+      marketSentiment: 'NEUTRAL',
+      whatChangedToday: ['NVDA momentum cooled after the morning spike'],
+      whatMattersNow: ['Watch if semis regain breadth before the close'],
+      topSignals: ['Breadth improving'],
+      topRisks: ['CPI tomorrow'],
+      freshness: '2026-03-09T08:00:00Z',
+      sources: [],
+    },
+    ask: [],
+    open: [],
+  };
+  const { sandbox, elements } = loadRenderHeroCopilotBriefWithHeroIds(state);
+
+  sandbox.renderHeroCopilotBrief(state);
+
+  assert.equal(
+    elements.heroBriefSignals.textContent,
+    'Changed today: NVDA momentum cooled after the morning spike'
+  );
+  assert.equal(
+    elements.heroBriefRisks.textContent,
+    'Matters now: Watch if semis regain breadth before the close | Risks: CPI tomorrow'
+  );
+});
+
 test('renderHeroCopilotBrief accepts normalized backend snake_case brief fields and falls back to opportunities', () => {
   const state = {
     brief: {
@@ -4881,6 +4911,62 @@ test('buildCopilotStartState derives ticker open actions from focus tickers', ()
       { id: 'open_msft', target: 'ticker:MSFT' },
     ]
   );
+});
+
+test('buildCopilotStartState preserves story-line fields for hero starter surfaces', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractSection(
+    source,
+    'function normalizeCopilotStarterTickers(',
+    '\n\nfunction focusCopilotInput('
+  );
+  const sandbox = {
+    console,
+    Date,
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    normalizeCopilotSourceLabels(value) {
+      return (Array.isArray(value) ? value : value ? [value] : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${functionSource}\nthis.buildCopilotStartState = buildCopilotStartState;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  const state = sandbox.buildCopilotStartState({
+    data: {
+      copilot_start: {
+        brief_of_day: {
+          summary: 'Leadership rotates but concentration still matters.',
+          what_changed_today: ['NVDA leadership faded into the close'],
+          what_matters_now: ['Watch semiconductor follow-through at the open'],
+          top_signals: ['Semis still lead'],
+          top_risks: ['CPI tomorrow'],
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(state.brief.whatChangedToday)), [
+    'NVDA leadership faded into the close',
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.brief.whatMattersNow)), [
+    'Watch semiconductor follow-through at the open',
+  ]);
 });
 
 test('renderHeroCopilotBrief surfaces saved portfolio context in hero metadata', () => {
