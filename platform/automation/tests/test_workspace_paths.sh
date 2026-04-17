@@ -33,11 +33,24 @@ assert_true() {
   fi
 }
 
+assert_false() {
+  local label="$1"
+  shift
+  if "$@"; then
+    echo "assert_fail:${label}:expected_false" >&2
+    exit 1
+  fi
+}
+
 assert_true "layout_repo" fc_workspace_has_layout "$ROOT"
 assert_true "writable_repo" fc_workspace_writable "$ROOT"
 
 resolved_from_env="$(FC_WORKSPACE_ROOT="$ROOT" fc_resolve_workspace_root "/tmp")"
-assert_eq "$resolved_from_env" "$ROOT" "env_precedence"
+if [[ "$ROOT" == "/home/venom/shared/analyse-financiere" ]]; then
+  assert_eq "$resolved_from_env" "/home/venom/analyse-financiere" "env_precedence_prefers_vm_canonical"
+else
+  assert_eq "$resolved_from_env" "$ROOT" "env_precedence"
+fi
 
 resolved_from_scripts="$(fc_resolve_workspace_root "${ROOT}/scripts")"
 if [[ "$ROOT" == "/home/venom/shared/analyse-financiere" ]]; then
@@ -53,6 +66,15 @@ resolved_tmp="$(FC_WORKSPACE_ROOT="$tmp_ws" fc_resolve_workspace_root "/tmp")"
 assert_eq "$resolved_tmp" "$tmp_ws" "tmp_workspace_layout"
 
 preferred="$(fc_prefer_writable_workspace "$ROOT")"
-assert_eq "$preferred" "$ROOT" "prefer_current_writable"
+if [[ "$ROOT" == "/home/venom/shared/analyse-financiere" ]]; then
+  assert_eq "$preferred" "/home/venom/analyse-financiere" "prefer_current_writable_prefers_vm_canonical"
+else
+  assert_eq "$preferred" "$ROOT" "prefer_current_writable"
+fi
+
+assert_false "shared_runtime_path_is_valid" \
+  fc_workspace_runtime_path_invalid "/home/venom/shared/analyse-financiere" "/home/venom/analyse-financiere"
+assert_false "shared_runtime_subpath_is_valid" \
+  fc_workspace_runtime_path_invalid "/home/venom/shared/analyse-financiere/platform" "/home/venom/analyse-financiere"
 
 echo "workspace_paths:PASS"

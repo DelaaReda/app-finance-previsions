@@ -52,13 +52,11 @@ fc_proc_cwd() {
 fc_workspace_runtime_path_invalid() {
   local candidate="${1:-}"
   local root="${2:-}"
-  local shared_root="/home/venom/shared/analyse-financiere"
   [[ -n "$candidate" && -n "$root" ]] || return 0
+  candidate="$(fc_normalize_workspace_candidate "$candidate")"
+  root="$(fc_normalize_workspace_candidate "$root")"
   [[ "$candidate" == *"(deleted)"* ]] && return 0
   case "$candidate" in
-    "$shared_root"|"$shared_root"/*)
-      return 0
-      ;;
     "$root"|"$root"/*)
       return 1
       ;;
