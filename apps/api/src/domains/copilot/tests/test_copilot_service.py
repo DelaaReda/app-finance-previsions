@@ -371,6 +371,48 @@ def test_ask_payload_preserves_structured_memo_fields():
     }
 
 
+def test_ask_payload_reconciles_conflicting_answer_text_with_effective_verdict():
+    fake_rag = _FakeRAGStore()
+
+    def fake_ask_llm(*, question: str, context_chunks: List[Dict[str, Any]], max_tokens: int = 1000):
+        assert len(context_chunks) == 2
+        return {
+            "model": "test-llm",
+            "answer": json.dumps(
+                {
+                    "action": "hold",
+                    "answer": "BUY NVDA today.",
+                    "reasoning": [
+                        "BUY NVDA today.",
+                        "Momentum is improving, but the event window is still hot.",
+                        "Wait for cleaner confirmation after earnings.",
+                    ],
+                    "confidence": 0.62,
+                }
+            ),
+            "citations": [],
+        }
+
+    response = asyncio.run(
+        copilot_service.build_ask_payload(
+            question="What should I do with my portfolio today?",
+            tickers=["NVDA"],
+            max_sources=2,
+            rag_store_cls=lambda: fake_rag,
+            ask_llm_fn=fake_ask_llm,
+            context_service_cls=_FakeContextService,
+        )
+    )
+
+    assert response["action"] == "hold"
+    assert response["verdict"] == "hold"
+    assert response["answer"].startswith("Conserver pour l'instant.")
+    assert response["why"][0] == "Conserver pour l'instant."
+    assert not response["answer"].startswith("BUY")
+    assert response["memo"]["verdict"] == "hold"
+    assert response["memo"]["why"][0] == "Conserver pour l'instant."
+
+
 def test_ask_payload_caps_structured_confidence_when_sources_are_insufficient():
     class _EmptyRAGStore(_FakeRAGStore):
         def search(self, scope: Optional[Dict[str, Any]] = None, top_k: int = 10):

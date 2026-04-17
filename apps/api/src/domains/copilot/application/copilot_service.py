@@ -525,6 +525,60 @@ def _normalize_memo_why(payload: Dict[str, Any]) -> List[str]:
     return [answer] if answer else []
 
 
+def _leading_recommendation_verdict(value: Any) -> str:
+    text = _safe_text(value)
+    if not text:
+        return ""
+    head = re.split(r"(?:\n+|(?<=[.!?])\s+)", text, maxsplit=1)[0].strip()
+    if not head:
+        return ""
+    match = re.match(
+        r"^(buy|sell|hold|acheter|vendre|conserver|maintenir|all[eé]ger|reduce|augmenter)\b",
+        head,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    return _coerce_verdict(match.group(1))
+
+
+def _verdict_summary_line(verdict: str) -> str:
+    if verdict == "buy":
+        return "Acheter reste le biais privilegie pour l'instant."
+    if verdict == "sell":
+        return "Vendre reste le biais privilegie pour l'instant."
+    return "Conserver pour l'instant."
+
+
+def _reconcile_text_with_verdict(
+    *,
+    answer: Any,
+    why_items: List[str],
+    verdict: str,
+) -> tuple[str, List[str]]:
+    if verdict not in {"buy", "sell", "hold"}:
+        return _safe_text(answer), why_items
+
+    answer_signal = _leading_recommendation_verdict(answer)
+    first_why_signal = _leading_recommendation_verdict(why_items[0]) if why_items else ""
+    if not any(signal and signal != verdict for signal in (answer_signal, first_why_signal)):
+        return _safe_text(answer), why_items
+
+    filtered_why = [
+        item
+        for item in why_items
+        if not (_leading_recommendation_verdict(item) and _leading_recommendation_verdict(item) != verdict)
+    ]
+    summary_line = _verdict_summary_line(verdict)
+    if not filtered_why:
+        filtered_why = [summary_line]
+    elif filtered_why[0].strip().lower() != summary_line.lower():
+        filtered_why = [summary_line, *filtered_why]
+
+    reconciled_answer = " ".join(filtered_why[:3]).strip() or summary_line
+    return reconciled_answer, filtered_why
+
+
 def _has_explicit_insufficient_evidence(items: List[str]) -> bool:
     haystack = " ".join(str(item).lower() for item in items)
     return any(
@@ -662,6 +716,12 @@ def normalize_ask_payload_contract(payload: Any) -> Dict[str, Any]:
         memo_payload.get("verdict") or normalized.get("verdict") or normalized.get("action"),
         "hold",
     ).lower()
+    why = _normalize_memo_why(normalized)
+    answer_text, why = _reconcile_text_with_verdict(
+        answer=normalized.get("answer"),
+        why_items=why,
+        verdict=verdict,
+    )
     horizon = _normalize_memo_horizon(normalized)
     confidence = memo_payload.get("confidence") if memo_payload.get("confidence") is not None else normalized.get("confidence")
     next_steps = _normalize_string_list(memo_payload.get("next_steps"))
@@ -686,6 +746,7 @@ def normalize_ask_payload_contract(payload: Any) -> Dict[str, Any]:
         memo["invalidation"] = invalidation
 
     normalized["memo"] = memo
+    normalized["answer"] = answer_text
     normalized["verdict"] = _safe_text(normalized.get("verdict"), verdict).lower() or verdict
     normalized["action"] = _safe_text(normalized.get("action"), normalized["verdict"]).lower() or normalized["verdict"]
     normalized["horizon"] = horizon
