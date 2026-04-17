@@ -73,6 +73,32 @@ def _normalize_tickers(tickers: Optional[List[str]]) -> List[str]:
     )
 
 
+def _context_chunk_dedupe_key(chunk: Dict[str, Any]) -> tuple[str, str, str, str, str, str]:
+    meta = chunk.get("meta") if isinstance(chunk.get("meta"), dict) else {}
+    return (
+        _safe_text(chunk.get("id")),
+        _safe_text(meta.get("type")),
+        _safe_text(meta.get("url")),
+        _safe_text(meta.get("date")),
+        _safe_text(meta.get("ticker")).upper(),
+        _safe_text(chunk.get("text")),
+    )
+
+
+def _dedupe_context_chunks(context_chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    deduped: List[Dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str, str, str]] = set()
+    for chunk in context_chunks:
+        if not isinstance(chunk, dict):
+            continue
+        dedupe_key = _context_chunk_dedupe_key(chunk)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        deduped.append(chunk)
+    return deduped
+
+
 def _build_sources_from_chunks(context_chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     sources: List[Dict[str, Any]] = []
     for chunk in context_chunks:
@@ -2323,6 +2349,7 @@ async def build_ask_payload(
         context_chunks = rag_store.search(resolved_scope, top_k=top_k)
         if not context_chunks and market_context_payload:
             context_chunks = [_build_context_chunk_from_payload(market_context_payload)]
+        context_chunks = _dedupe_context_chunks(context_chunks)
 
         if not context_chunks:
             return _finalize_ask_payload({

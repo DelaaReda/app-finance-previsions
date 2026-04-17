@@ -208,6 +208,66 @@ def test_ask_payload_uses_structured_confidence_when_sources_are_sufficient():
     assert response["freshness"] == response["generated_at"]
 
 
+def test_ask_payload_dedupes_duplicate_context_chunks_before_llm():
+    class _DuplicateChunkRAGStore(_FakeRAGStore):
+        def search(self, scope: Optional[Dict[str, Any]] = None, top_k: int = 10):
+            return [
+                {
+                    "text": "NVDA Q4 guidance beat expectations",
+                    "meta": {
+                        "type": "news",
+                        "ticker": "NVDA",
+                        "url": "https://example.com/nvda",
+                        "date": "2026-03-01",
+                    },
+                    "id": "n1",
+                },
+                {
+                    "text": "NVDA Q4 guidance beat expectations",
+                    "meta": {
+                        "type": "news",
+                        "ticker": "NVDA",
+                        "url": "https://example.com/nvda",
+                        "date": "2026-03-01",
+                    },
+                    "id": "n1",
+                },
+                {
+                    "text": "CPI stable at annualized 2.1%",
+                    "meta": {"type": "series", "url": "", "date": "2026-03-01"},
+                    "id": "macro1",
+                },
+            ]
+
+    def fake_ask_llm(*, question: str, context_chunks: List[Dict[str, Any]], max_tokens: int = 1000):
+        assert len(context_chunks) == 2
+        assert [chunk.get("id") for chunk in context_chunks] == ["n1", "macro1"]
+        return {
+            "model": "test-llm",
+            "answer": "HOLD [1] and monitor macro [2].",
+            "citations": copilot_service._extract_llm_citations(
+                "HOLD [1] and monitor macro [2].",
+                context_chunks,
+            ),
+        }
+
+    response = asyncio.run(
+        copilot_service.build_ask_payload(
+            question="What should I do with my portfolio today?",
+            tickers=["NVDA"],
+            max_sources=5,
+            rag_store_cls=_DuplicateChunkRAGStore,
+            ask_llm_fn=fake_ask_llm,
+            context_service_cls=_FakeContextService,
+        )
+    )
+
+    assert response["sources_count"] == 2
+    assert [item["id"] for item in response["sources"]] == ["n1", "macro1"]
+    assert len(response["citations"]) == 2
+    assert [item["index"] for item in response["citations"]] == [1, 2]
+
+
 def test_ask_payload_preserves_structured_memo_fields():
     fake_rag = _FakeRAGStore()
 
