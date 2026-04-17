@@ -256,8 +256,13 @@ def build_status_snapshot(
     )
     event_store_primary = bool(runtime_truth_snapshot.get("event_store_primary", False))
     delivery_state = load_product_delivery_state(root)
+    runtime_truth_delivery_state = runtime_truth_snapshot.get("product_delivery_state")
     if not isinstance(delivery_state, dict) or not delivery_state:
-        delivery_state = runtime_truth_snapshot.get("product_delivery_state")
+        delivery_state = runtime_truth_delivery_state
+    elif app_only_monitor_host and isinstance(runtime_truth_delivery_state, dict) and runtime_truth_delivery_state:
+        # On the EC2 app-only host, prefer the live public-probe-derived delivery state
+        # over any stale mirrored control-plane snapshot file.
+        delivery_state = runtime_truth_delivery_state
     if not isinstance(delivery_state, dict):
         delivery_state = {}
     doctor_app_runtime = _doctor_surface(doctor_payload, "app_runtime")
