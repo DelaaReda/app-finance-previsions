@@ -1682,6 +1682,12 @@ function loadAndRenderHeroBriefHarness(fetchResponse, options = {}) {
         brief: {
           summary: briefSource.summary || '',
           marketSentiment: briefSource.market_sentiment || briefSource.marketSentiment || 'UNKNOWN',
+          whatChangedToday: Array.isArray(briefSource.what_changed_today)
+            ? briefSource.what_changed_today
+            : (Array.isArray(briefSource.whatChangedToday) ? briefSource.whatChangedToday : []),
+          whatMattersNow: Array.isArray(briefSource.what_matters_now)
+            ? briefSource.what_matters_now
+            : (Array.isArray(briefSource.whatMattersNow) ? briefSource.whatMattersNow : []),
           topSignals: ['Breadth improving'],
           topRisks: ['CPI tomorrow'],
           freshness: briefSource.freshness || briefSource.generated_at || '',
@@ -5728,6 +5734,37 @@ test('loadAndRenderHeroBrief reuses the shared starter renderer and stores the s
   assert.deepEqual(sandbox.window.copilotStart, { sanitized: true, value: responsePayload.data });
   assert.equal(elements.heroBriefSummary.style.opacity, '1');
   assert.equal(renderCalls.length, 1);
+});
+
+test('loadAndRenderHeroBrief keeps what changed today and what matters now in the shared starter state', async () => {
+  const responsePayload = {
+    ok: true,
+    data: {
+      brief_of_day: {
+        summary: 'Leadership rotates while semis reset into the close.',
+        market_sentiment: 'NEUTRAL',
+        freshness: '2026-03-10T10:00:00Z',
+        what_changed_today: ['NVDA leadership faded into the close'],
+        what_matters_now: ['Watch semiconductor follow-through at the open'],
+      },
+      ask: [{ label: 'Ask About Today', prompt: 'What matters most today?' }],
+      open: [{ label: 'Open Live Brief', target: '/brief/daily' }],
+    },
+  };
+  const { sandbox, renderCalls } = loadAndRenderHeroBriefHarness({
+    ok: true,
+    json: async () => responsePayload,
+  });
+
+  await sandbox.loadAndRenderHeroBrief();
+
+  assert.equal(renderCalls.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(renderCalls[0].brief.whatChangedToday)), [
+    'NVDA leadership faded into the close',
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(renderCalls[0].brief.whatMattersNow)), [
+    'Watch semiconductor follow-through at the open',
+  ]);
 });
 
 test('loadAndRenderHeroBrief keeps the failure fallback when the starter request fails', async () => {
