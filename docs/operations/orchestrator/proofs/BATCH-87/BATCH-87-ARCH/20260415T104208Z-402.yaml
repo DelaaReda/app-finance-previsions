@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-87-BATCH-87-ARCH-20260415T104208Z-402"
+stream_id: "BATCH-87"
+task_id: "BATCH-87-ARCH"
+role: "planner"
+produced_at_utc: "2026-04-15T10:42:08Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "git add docs/operations/orchestrator/proofs/BATCH-87/BATCH-87-ARCH.md && git commit -m \"docs(planner): close BATCH-87 architecture proof (BATCH-87-ARCH)\""
+      rc: "0"
+      started_at_utc: "2026-04-15T10:42:08Z"
+      ended_at_utc: "2026-04-15T10:42:08Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pre-commit"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-87/BATCH-87-ARCH.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "BATCH-87-DEV-01_CLAIM_P1776249495_21968"
+  review_ref: "runner:BATCH-87-ARCH"
+  note: "source=runner | root_cause=BATCH-87-ARCH etait IN_PROGRESS sans artefact planner ni preuve d architecture exploitable | fix_applied=artefact planner ARCH committe avec reuse map, guardrails et handoff explicite vers DEV-01 | verify=before=BATCH-87-ARCH:IN_PROGRESS proof_count=0; after=arch_artifact_committed_and_complete_requested; test=parallel_workstream_context_and_git_commit_passed | architecture_check=layer=apps_api_apps_web_platform_automation; imports_ok=yes; path_target=apps/api/src/domains/copilot/api/copilot.py,apps/api/src/domains/copilot/application/copilot_service.py,apps/web/src/domains/forecasts/components/widgets/copilot-panel.html,apps/web/src/domains/forecasts/components/widgets/portfolio-health.html,platform/automation/runtime/planner/planner_runtime_actions.py | vision_alignment=batch=BATCH-87; target=portfolio_first_brief_with_ranked_actions; impact=arch_closed_and_dev01_is_next_canonical_step"

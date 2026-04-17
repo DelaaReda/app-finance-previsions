@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-93-BATCH-93-DEV-03-20260416T090300Z-590"
+stream_id: "BATCH-93"
+task_id: "BATCH-93-DEV-03"
+role: "dev"
+produced_at_utc: "2026-04-16T09:03:00Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T09:03:00Z"
+      ended_at_utc: "2026-04-16T09:03:00Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 -m pytest apps/api/src/domains/copilot/tests/test_copilot_ask_route_contract.py -q (8 passed); bash scripts/backend_regression_gate.sh domains/copilot/tests/test_copilot_ask_route_contract.py (PASS)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=42995f2f9bd8ddbd8a9c343e638f287feba4f699; files=apps/api/src/domains/copilot/api/copilot.py,apps/api/src/domains/copilot/tests/test_copilot_ask_route_contract.py"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-93-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-93-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=The /api/copilot/ask normalization path trusted raw LLM follow-up fragments, so short follow-up questions and naked URLs could be echoed into answer/why fields and then exposed through /api/personal-finance/ask. | fix_applied=Added route-level sanitization in apps/api/src/domains/copilot/api/copilot.py to drop follow-up-noise items from ask answer/why/reasoning and synced memo.why to the cleaned list; added a regression in apps/api/src/domain | verify=before=public POST http://3.98.20.77/api/personal-finance/ask on 2026-04-16 returned a valid memo contract but leaked a follow-up question and naked URL inside answer/why; after=route normalization strips short follow-up | architecture_check=layer=api_route_normalization_only; imports_ok=yes; path_target=apps/api/src/domains/copilot/api/copilot.py | vision_alignment=batch=BATCH-93; target=brief+ask path quality on personal finance copilot; impact=ask responses stay user-safe and readable without changing the upstream memo contract"

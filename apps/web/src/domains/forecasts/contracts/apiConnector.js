@@ -27,7 +27,7 @@ function resolveApiBase(win = typeof window !== 'undefined' ? window : null) {
     return `${origin}/api`;
   }
 
-  return 'http://localhost:8050/api';
+  return 'http://3.98.20.77/api';
 }
 
 const API_BASE = resolveApiBase();
@@ -1344,6 +1344,18 @@ function normalizeBriefOfDayPayload(payload) {
   }
 
   const normalizedAlerting = normalizeAlertingRichPayload(source);
+  const whatChangedToday = (Array.isArray(source.what_changed_today)
+    ? source.what_changed_today
+    : (Array.isArray(source.whatChangedToday) ? source.whatChangedToday : []))
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const whatMattersNow = (Array.isArray(source.what_matters_now)
+    ? source.what_matters_now
+    : (Array.isArray(source.whatMattersNow) ? source.whatMattersNow : []))
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .slice(0, 4);
   const marketRegime = String(
     source.market_regime
       || source.marketRegime
@@ -1367,6 +1379,10 @@ function normalizeBriefOfDayPayload(payload) {
     topRiskItems: normalizedAlerting.topRiskItems,
     suppressed_risks: normalizedAlerting.suppressedRisks,
     suppressedRisks: normalizedAlerting.suppressedRisks,
+    what_changed_today: whatChangedToday,
+    whatChangedToday: whatChangedToday,
+    what_matters_now: whatMattersNow,
+    whatMattersNow: whatMattersNow,
     freshness: normalizedAlerting.freshness,
     generated_at: source.generated_at || source.generatedAt || normalizedAlerting.freshness || new Date().toISOString(),
     sources: normalizedAlerting.sources,

@@ -291,6 +291,8 @@ def _build_novelty_target_workflow(
     scope_key: str,
     recent_classes: List[str],
     reason: str,
+    required_fields: List[str] | None = None,
+    policy: str = "no_new_downstream_work",
 ) -> Dict[str, object]:
     return {
         "status": "required",
@@ -299,13 +301,13 @@ def _build_novelty_target_workflow(
         "scope_key": str(scope_key or "").strip().lower(),
         "reason": str(reason or "stagnation_requires_novelty_target").strip().lower(),
         "next_action": "define_novelty_target",
-        "policy": "no_new_downstream_work",
-        "required_fields": [
+        "policy": str(policy or "no_new_downstream_work").strip().lower(),
+        "required_fields": list(required_fields or [
             "novelty_target",
-            "user_value_delta",
+            "user_visible_delta",
             "scope_delta",
             "success_metric",
-        ],
+        ]),
         "clear_when": "novelty_target_present",
         "recent_classes": [str(item or "").strip().lower() for item in recent_classes if str(item or "").strip()],
     }
@@ -573,6 +575,9 @@ def load_board(path: Path) -> dict:
         merged.update(role_cfg)
         roles[role_name] = merged
     data["roles"] = roles
+    if not isinstance(data.get("streams"), list):
+        legacy_workstreams = data.get("workstreams")
+        data["streams"] = list(legacy_workstreams) if isinstance(legacy_workstreams, list) else []
     data.setdefault("streams", [])
     data.setdefault("tasks", [])
     data.setdefault("handoffs", [])
@@ -590,6 +595,7 @@ def save_board(path: Path, board: dict) -> None:
     board["canonical_truth"] = "sqlite_event_store"
     board["planner_scheduler"] = "planner"
     board["updated_at"] = now_iso()
+    board["workstreams"] = [dict(stream) for stream in board.get("streams", []) if isinstance(stream, dict)]
     _write_projection_json(path, "parallel-workstreams.json", board)
 
 
@@ -609,6 +615,7 @@ def default_board() -> dict:
         },
         "roles": ROLE_CATALOG,
         "streams": [],
+        "workstreams": [],
         "tasks": [],
         "handoffs": [],
         "events": [],
@@ -1358,8 +1365,8 @@ def _auto_advance_queue(board: dict, queue_obj: dict) -> Tuple[int, str | None, 
             if desired_state in {"READY", "READY_PLANNER", "READY_DEV"}:
                 item["dispatch_authorized"] = True
                 item.setdefault("ready_at", now_iso())
-            if desired_state == "CLOSED":
-                item.setdefault("closed_at", now_iso())
+            if desired_state == "CLOSED" and not str(item.get("closed_at", "")).strip():
+                item["closed_at"] = now_iso()
                 closed_count += 1
             queue_states[item_id] = desired_state
             synced_queue_items += 1
@@ -1853,11 +1860,24 @@ def reconcile_state(board: dict, queue_path: Path) -> Dict[str, int]:
         item_id = str(item.get("id", "")).strip().upper()
         if not item_id:
             continue
-        q_state = _queue_item_state(item)
-        if q_state in closed_states:
-            continue
         wb_state = stream_states_from_wb.get(item_id, "")
         if not wb_state:
+            continue
+
+        q_state = _queue_item_state(item)
+        allow_reopen_closed = q_state in closed_states and wb_state in {
+            "READY",
+            "READY_PLANNER",
+            "READY_DEV",
+            "IN_PROGRESS",
+            "WAITING_DEP",
+            "PLANNED",
+            "REVIEW",
+        }
+        allow_closed_backfill = q_state in closed_states and wb_state in {"DONE", "CLOSED"} and not str(
+            item.get("closed_at", "")
+        ).strip()
+        if q_state in closed_states and not allow_reopen_closed and not allow_closed_backfill:
             continue
 
         desired_state = None
@@ -1866,7 +1886,19 @@ def reconcile_state(board: dict, queue_path: Path) -> Dict[str, int]:
         elif wb_state in {"DONE", "CLOSED"}:
             desired_state = "CLOSED"
 
-        if not desired_state or desired_state == q_state:
+        if not desired_state:
+            continue
+        if desired_state == q_state:
+            if desired_state == "CLOSED" and not str(item.get("closed_at", "")).strip():
+                item["closed_at"] = now
+                item["updated_at"] = now
+                queue_synced += 1
+                queue_changed = True
+            elif desired_state != "CLOSED" and str(item.get("closed_at", "")).strip():
+                item["closed_at"] = ""
+                item["updated_at"] = now
+                queue_synced += 1
+                queue_changed = True
             continue
 
         if q_state == "WAITING_DEP" and desired_state in {"READY", "READY_PLANNER", "READY_DEV", "IN_PROGRESS", "PLANNED"}:
@@ -1877,8 +1909,10 @@ def reconcile_state(board: dict, queue_path: Path) -> Dict[str, int]:
         if desired_state in {"READY", "READY_PLANNER", "READY_DEV"}:
             item["dispatch_authorized"] = True
             item.setdefault("ready_at", now)
-        if desired_state == "CLOSED":
-            item.setdefault("closed_at", now)
+        if desired_state != "CLOSED" and str(item.get("closed_at", "")).strip():
+            item["closed_at"] = ""
+        if desired_state == "CLOSED" and not str(item.get("closed_at", "")).strip():
+            item["closed_at"] = now
         queue_synced += 1
         queue_changed = True
 
@@ -1971,11 +2005,13 @@ def _ensure_autobatch_stream_and_task(
     *,
     batch_id: str,
     title: str,
+    priority: str,
     now: str,
     scope_key: str = "",
     novelty_class: str = "",
     user_value_delta_visible: int = 0,
     novelty_target: str = "",
+    user_visible_delta: str = "",
 ) -> Tuple[int, int]:
     stream_created = 0
     existing_stream = stream_index(board).get(batch_id)
@@ -1984,12 +2020,13 @@ def _ensure_autobatch_stream_and_task(
             {
                 "id": batch_id,
                 "title": title,
-                "priority": "P2",
+                "priority": priority,
                 "source_state": STATE_READY,
                 "state": STATE_READY,
                 "scope_key": scope_key,
                 "novelty_class": novelty_class,
                 "user_value_delta_visible": user_value_delta_visible,
+                "user_visible_delta": user_visible_delta,
                 "created_at": now,
                 "updated_at": now,
             }
@@ -1997,7 +2034,7 @@ def _ensure_autobatch_stream_and_task(
         stream_created = 1
     else:
         existing_stream["title"] = title
-        existing_stream["priority"] = "P2"
+        existing_stream["priority"] = priority
         existing_stream["source_state"] = STATE_READY
         existing_stream["state"] = STATE_READY
         if scope_key:
@@ -2010,6 +2047,8 @@ def _ensure_autobatch_stream_and_task(
         existing_stream = stream_index(board).get(batch_id) or existing_stream
         if isinstance(existing_stream, dict):
             existing_stream["novelty_target"] = novelty_target
+            if user_visible_delta:
+                existing_stream["user_visible_delta"] = user_visible_delta
 
     task_created = 0
     task_id_value = f"{batch_id}-ANALYSIS"
@@ -2023,10 +2062,11 @@ def _ensure_autobatch_stream_and_task(
                 "title": f"{title} [ANALYSIS]",
                 "role": "planner",
                 "state": STATE_READY,
-                "priority": "P2",
+                "priority": priority,
                 "scope_key": scope_key,
                 "novelty_class": novelty_class,
                 "user_value_delta_visible": user_value_delta_visible,
+                "user_visible_delta": user_visible_delta,
                 "depends_on": [],
                 "assignee": "",
                 "blocked_reason": "",
@@ -2044,6 +2084,7 @@ def _ensure_autobatch_stream_and_task(
         task_created = 1
     else:
         existing_task["state"] = STATE_READY
+        existing_task["priority"] = priority
         existing_task["depends_on"] = []
         existing_task["blocked_reason"] = ""
         existing_task["assignee"] = ""
@@ -2056,6 +2097,8 @@ def _ensure_autobatch_stream_and_task(
         existing_task["user_value_delta_visible"] = user_value_delta_visible
         if novelty_target:
             existing_task["novelty_target"] = novelty_target
+        if user_visible_delta:
+            existing_task["user_visible_delta"] = user_visible_delta
         existing_task["updated_at"] = now
     return stream_created, task_created
 
@@ -2103,7 +2146,55 @@ def _autobatch_runway_signal(board: dict, ignore_stream_ids: Iterable[str] = ())
     return {"task_count": task_count, "stream_count": stream_count}
 
 
-def _autobatch_seed(workspace_root: Path) -> Tuple[str, str]:
+def _autobatch_priority_candidates(workspace_root: Path) -> List[Tuple[str, str, str]]:
+    candidates = [
+        workspace_root / "docs/product/PRODUCT_VISION.md",
+        workspace_root / "docs/product/planning/PRODUCT_VISION.md",
+    ]
+    out: List[Tuple[str, str, str]] = []
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except Exception:
+            continue
+
+        in_frontmatter = False
+        in_priority_section = False
+        current_priority = ""
+        for idx, raw in enumerate(lines, start=1):
+            line = str(raw or "").strip()
+            if not line:
+                continue
+            if idx == 1 and line == "---":
+                in_frontmatter = True
+                continue
+            if in_frontmatter:
+                if line == "---":
+                    in_frontmatter = False
+                continue
+            if line.startswith("#"):
+                level = len(line) - len(line.lstrip("#"))
+                heading = line.lstrip("#").strip()
+                if level <= 2:
+                    in_priority_section = heading.lower() == "what the product must do very well"
+                    current_priority = ""
+                elif in_priority_section and level == 3 and heading.upper() in {"P0", "P1", "P2", "P3"}:
+                    current_priority = heading.upper()
+                elif level <= 3:
+                    current_priority = ""
+                continue
+            if in_priority_section and current_priority and line[:1] in {"-", "*"}:
+                title = re.sub(r"^[-*]\s+", "", line).strip()
+                if len(title) >= 12:
+                    rel = path.relative_to(workspace_root).as_posix()
+                    out.append((current_priority, title[:96], f"{rel}#{current_priority}"))
+                continue
+    return out
+
+
+def _autobatch_fallback_seed(workspace_root: Path) -> Tuple[str, str]:
     candidates = [
         workspace_root / "docs/product/PRODUCT_VISION.md",
         workspace_root / "docs/product/planning/PRODUCT_VISION.md",
@@ -2154,6 +2245,41 @@ def _autobatch_seed(workspace_root: Path) -> Tuple[str, str]:
     return "Planner Autonomy Batch", "none"
 
 
+def _autobatch_seed(
+    workspace_root: Path,
+    history_by_scope: dict[str, list[dict]] | None = None,
+) -> Tuple[str, str, str]:
+    ranked_candidates = _autobatch_priority_candidates(workspace_root)
+    if ranked_candidates:
+        closed_states = {"CLOSED", "DONE", "PASS", "CANCELLED", "ARCHIVED"}
+        selection_pool = []
+        history = history_by_scope or {}
+        for idx, (priority, title, vision_ref) in enumerate(ranked_candidates):
+            scope_key = _normalize_scope_key(title)
+            prior_same_scope = history.get(scope_key, [])
+            open_count = sum(
+                1
+                for item in prior_same_scope
+                if str(item.get("state", "")).strip().upper() not in closed_states
+            )
+            selection_pool.append(
+                (
+                    priority_rank(priority),
+                    open_count,
+                    len(prior_same_scope),
+                    idx,
+                    title,
+                    vision_ref,
+                    priority,
+                )
+            )
+        _, _, _, _, title, vision_ref, priority = min(selection_pool)
+        return title, vision_ref, priority
+
+    title, vision_ref = _autobatch_fallback_seed(workspace_root)
+    return title, vision_ref, "P2"
+
+
 _BATCH_ID_RE = re.compile(r"^BATCH-(\d+)$")
 _NOVELTY_CLASSES = {"net_new", "hardening", "validation", "reuse_only"}
 _STAGNATION_CLASSES = {"reuse_only", "validation"}
@@ -2202,6 +2328,13 @@ def _normalize_scope_key(value: str) -> str:
     return raw[:120] or "unknown-scope"
 
 
+def _normalize_delivery_value(value: str) -> str:
+    raw = unicodedata.normalize("NFKD", str(value or ""))
+    raw = raw.encode("ascii", "ignore").decode("ascii")
+    raw = re.sub(r"[^a-z0-9]+", " ", raw.lower())
+    return " ".join(raw.split())[:240]
+
+
 def _item_scope_key(item: dict) -> str:
     for key in ("scope_key", "scope", "goal", "objective", "title"):
         token = str(item.get(key, "")).strip()
@@ -2225,12 +2358,62 @@ def _extract_novelty_target(*, reason: str = "", item: dict | None = None) -> st
     return str(match.group(1) or "").strip()[:240]
 
 
+def _extract_user_visible_delta(*, reason: str = "", item: dict | None = None) -> str:
+    if isinstance(item, dict):
+        for key in ("user_visible_delta", "user_value_delta"):
+            token = str(item.get(key, "")).strip()
+            if token:
+                return token[:240]
+    raw = str(reason or "").strip()
+    if not raw:
+        return ""
+    match = re.search(r"(?:user_visible_delta|user_value_delta|delta)=([^;|,\n]+)", raw, re.IGNORECASE)
+    if not match:
+        return ""
+    return str(match.group(1) or "").strip()[:240]
+
+
+def _requires_distinct_value(
+    prior_same_scope: list[dict],
+    *,
+    novelty_target: str,
+    user_visible_delta: str,
+) -> tuple[bool, list[str], list[str]]:
+    recent = [item for item in prior_same_scope[-3:] if isinstance(item, dict)]
+    recent_targets = [
+        str(item.get("novelty_target", "")).strip()
+        for item in recent
+        if str(item.get("novelty_target", "")).strip()
+    ]
+    recent_deltas = [
+        str(item.get("user_visible_delta", "")).strip()
+        for item in recent
+        if str(item.get("user_visible_delta", "")).strip()
+    ]
+    if not recent:
+        return False, recent_targets, recent_deltas
+
+    current_target = _normalize_delivery_value(novelty_target)
+    current_delta = _normalize_delivery_value(user_visible_delta)
+    normalized_recent_targets = {_normalize_delivery_value(item) for item in recent_targets if item}
+    normalized_recent_deltas = {_normalize_delivery_value(item) for item in recent_deltas if item}
+
+    if not current_target or not current_delta:
+        return True, recent_targets, recent_deltas
+    if current_target in normalized_recent_targets:
+        return True, recent_targets, recent_deltas
+    if current_delta in normalized_recent_deltas:
+        return True, recent_targets, recent_deltas
+    return False, recent_targets, recent_deltas
+
+
 def _infer_novelty_class(item: dict, *, prior_same_scope: list[dict], reason: str = "") -> str:
     explicit = str(item.get("novelty_class", "")).strip().lower()
     if explicit in _NOVELTY_CLASSES:
         return explicit
 
     novelty_target = _extract_novelty_target(reason=reason, item=item)
+    user_visible_delta = _extract_user_visible_delta(reason=reason, item=item)
     context_parts = [
         str(item.get("title", "")),
         str(item.get("reason", "")),
@@ -2244,7 +2427,12 @@ def _infer_novelty_class(item: dict, *, prior_same_scope: list[dict], reason: st
         return "validation"
     if any(token in context for token in _HARDENING_HINTS):
         return "hardening"
-    if prior_same_scope and not novelty_target:
+    distinct_value_required, _, _ = _requires_distinct_value(
+        prior_same_scope,
+        novelty_target=novelty_target,
+        user_visible_delta=user_visible_delta,
+    )
+    if prior_same_scope and (not novelty_target or distinct_value_required):
         return "reuse_only"
     return "net_new"
 
@@ -2267,6 +2455,7 @@ def _apply_queue_novelty_policy(queue_obj: dict) -> tuple[bool, dict[str, list[d
         scope_key = _item_scope_key(item)
         prior_same_scope = history_by_scope.get(scope_key, [])
         novelty_target = _extract_novelty_target(item=item)
+        user_visible_delta = _extract_user_visible_delta(item=item)
         novelty_class = _infer_novelty_class(item, prior_same_scope=prior_same_scope)
         user_value_delta_visible = 1 if novelty_class == "net_new" else 0
         stagnation_alert = (
@@ -2284,12 +2473,17 @@ def _apply_queue_novelty_policy(queue_obj: dict) -> tuple[bool, dict[str, list[d
         }
         if novelty_target:
             desired_fields["novelty_target"] = novelty_target
+        if user_visible_delta:
+            desired_fields["user_visible_delta"] = user_visible_delta
         for key, value in desired_fields.items():
             if item.get(key) != value:
                 item[key] = value
                 changed = True
         if not novelty_target and "novelty_target" in item:
             item.pop("novelty_target", None)
+            changed = True
+        if not user_visible_delta and "user_visible_delta" in item:
+            item.pop("user_visible_delta", None)
             changed = True
 
         history_by_scope.setdefault(scope_key, []).append(
@@ -2298,6 +2492,8 @@ def _apply_queue_novelty_policy(queue_obj: dict) -> tuple[bool, dict[str, list[d
                 "state": str(item.get("state", "")).strip().upper(),
                 "novelty_class": novelty_class,
                 "stagnation_alert": bool(stagnation_alert),
+                "novelty_target": novelty_target,
+                "user_visible_delta": user_visible_delta,
             }
         )
 
@@ -2380,6 +2576,7 @@ def planner_autobatch(
     cooldown_s: int,
     source: str,
     workspace_root: Path,
+    allow_active_queued: bool = False,
 ) -> Dict[str, str]:
     now = now_iso()
     now_epoch = datetime.now(timezone.utc).timestamp()
@@ -2455,14 +2652,31 @@ def planner_autobatch(
         _stamp_priority_queue_projection(queue_obj)
 
     queue_policy_changed, history_by_scope = _apply_queue_novelty_policy(queue_obj)
+    active_cycle = queue_obj.get("active_cycle") if isinstance(queue_obj.get("active_cycle"), dict) else {}
+    active_batch_ids = [
+        str(item).strip().upper()
+        for item in active_cycle.get("active_batch_ids", [])
+        if str(item).strip()
+    ] if isinstance(active_cycle, dict) else []
+    board_active_cycle = board.get("active_cycle") if isinstance(board.get("active_cycle"), dict) else {}
+    if isinstance(board_active_cycle, dict):
+        active_batch_ids.extend(
+            str(item).strip().upper()
+            for item in board_active_cycle.get("active_batch_ids", [])
+            if str(item).strip()
+        )
+    active_batch_ids = list(dict.fromkeys(active_batch_ids))
     batch_id = _next_batch_id(queue_obj, board)
-    title, vision_ref = _autobatch_seed(workspace_root)
+    title, vision_ref, batch_priority = _autobatch_seed(workspace_root, history_by_scope)
     scope_key = _normalize_scope_key(title)
     recent_scope_history = history_by_scope.get(scope_key, [])
-    novelty_target = _extract_novelty_target(reason=reason)
+    novelty_target = _extract_novelty_target(reason=reason) or _extract_novelty_target(item=active_cycle)
+    user_visible_delta = _extract_user_visible_delta(reason=reason) or _extract_user_visible_delta(item=active_cycle)
     candidate_stub = {"title": title, "scope_key": scope_key, "reason": reason}
     if novelty_target:
         candidate_stub["novelty_target"] = novelty_target
+    if user_visible_delta:
+        candidate_stub["user_visible_delta"] = user_visible_delta
     novelty_class = _infer_novelty_class(candidate_stub, prior_same_scope=recent_scope_history, reason=reason)
     user_value_delta_visible = 1 if novelty_class == "net_new" else 0
 
@@ -2476,11 +2690,15 @@ def planner_autobatch(
         ),
         None,
     )
-    ignore_stream_ids = []
+    if allow_active_queued and not active_batch_ids:
+        allow_active_queued = False
+
+    ignore_stream_ids = list(active_batch_ids) if allow_active_queued else []
     if isinstance(duplicate_item, dict):
         duplicate_batch_id = str(duplicate_item.get("id", "")).strip().upper()
         if duplicate_batch_id:
             ignore_stream_ids.append(duplicate_batch_id)
+    ignore_stream_ids = list(dict.fromkeys(ignore_stream_ids))
     runway_signal = _autobatch_runway_signal(board, ignore_stream_ids=ignore_stream_ids)
     if int(runway_signal.get("task_count", 0) or 0) > 0 or int(runway_signal.get("stream_count", 0) or 0) > 0:
         return {
@@ -2490,6 +2708,73 @@ def planner_autobatch(
             "stream_created": "0",
             "task_created": "0",
             "cooldown_applied": "0",
+        }
+
+    distinct_value_required, recent_targets, recent_deltas = _requires_distinct_value(
+        recent_scope_history,
+        novelty_target=novelty_target,
+        user_visible_delta=user_visible_delta,
+    )
+    if recent_scope_history and distinct_value_required:
+        meta = queue_obj.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+            queue_obj["meta"] = meta
+            queue_policy_changed = True
+        distinct_payload = {
+            "scope_key": scope_key,
+            "recent_classes": [str(entry.get("novelty_class", "")).strip().lower() for entry in recent_scope_history[-3:]],
+            "recent_novelty_targets": recent_targets,
+            "recent_user_visible_deltas": recent_deltas,
+            "novelty_target_required": True,
+            "distinct_user_visible_delta_required": True,
+            "reason": "distinct_value_required",
+        }
+        if meta.get("stagnation_alert") != distinct_payload:
+            meta["stagnation_alert"] = distinct_payload
+            queue_policy_changed = True
+        novelty_target_workflow = _build_novelty_target_workflow(
+            batch_id=batch_id,
+            scope_key=scope_key,
+            recent_classes=distinct_payload["recent_classes"],
+            reason="distinct_value_required",
+            required_fields=[
+                "novelty_target",
+                "user_visible_delta",
+                "scope_delta",
+                "success_metric",
+            ],
+            policy="no_new_batch_without_distinct_value",
+        )
+        if meta.get("novelty_target_workflow") != novelty_target_workflow:
+            meta["novelty_target_workflow"] = novelty_target_workflow
+            queue_policy_changed = True
+        if queue_policy_changed:
+            queue_obj["updated_at"] = now
+            _stamp_priority_queue_projection(queue_obj)
+            _write_projection_json(queue_path, "priority-queue.json", queue_obj)
+        append_event(
+            board,
+            "planner_autobatch_distinct_value_required",
+            {
+                "reason": reason,
+                "source": source,
+                "scope_key": scope_key,
+                "recent_classes": ",".join(distinct_payload["recent_classes"]),
+                "recent_novelty_targets": "|".join(recent_targets[:3]),
+                "recent_user_visible_deltas": "|".join(recent_deltas[:3]),
+                "novelty_target_required": "1",
+                "distinct_user_visible_delta_required": "1",
+            },
+        )
+        return {
+            "status": "skip",
+            "reason": "distinct_value_required",
+            "batch_id": "none",
+            "stream_created": "0",
+            "task_created": "0",
+            "cooldown_applied": "0",
+            "board_changed": "1",
         }
 
     stagnation_alert = (
@@ -2549,6 +2834,7 @@ def planner_autobatch(
     if isinstance(duplicate_item, dict):
         existing_batch_id = str(duplicate_item.get("id", "")).strip().upper() or batch_id
         duplicate_item["state"] = "READY"
+        duplicate_item["priority"] = batch_priority
         duplicate_item["owner_role"] = "planner"
         duplicate_item["created_by"] = duplicate_item.get("created_by") or "planner_autonomy"
         duplicate_item["vision_ref"] = duplicate_item.get("vision_ref") or vision_ref
@@ -2558,6 +2844,8 @@ def planner_autobatch(
         duplicate_item["user_value_delta_visible"] = user_value_delta_visible
         if novelty_target:
             duplicate_item["novelty_target"] = novelty_target
+        if user_visible_delta:
+            duplicate_item["user_visible_delta"] = user_visible_delta
         duplicate_item["next_action"] = f"ouvrir {existing_batch_id}-ANALYSIS"
         duplicate_item["updated_at"] = now
         duplicate_item["dispatch_authorized"] = True
@@ -2566,11 +2854,13 @@ def planner_autobatch(
             board,
             batch_id=existing_batch_id,
             title=title,
+            priority=batch_priority,
             now=now,
             scope_key=scope_key,
             novelty_class=novelty_class,
             user_value_delta_visible=user_value_delta_visible,
             novelty_target=novelty_target,
+            user_visible_delta=user_visible_delta,
         )
         queue_policy_changed, _ = _apply_queue_novelty_policy(queue_obj)
         queue_obj["updated_at"] = now
@@ -2585,11 +2875,13 @@ def planner_autobatch(
                 "reason": reason,
                 "source": source,
                 "vision_ref": vision_ref,
+                "priority": batch_priority,
                 "duplicate_title": "1",
                 "scope_key": scope_key,
                 "novelty_class": novelty_class,
                 "stream_created": str(stream_created),
                 "task_created": str(task_created),
+                "queued_only": "1" if allow_active_queued else "0",
             },
         )
         return {
@@ -2600,6 +2892,7 @@ def planner_autobatch(
             "task_created": str(task_created),
             "cooldown_applied": "0",
             "board_changed": "1",
+            "queued_only": "1" if allow_active_queued else "0",
         }
 
     queue_obj.setdefault("items", [])
@@ -2608,7 +2901,7 @@ def planner_autobatch(
             "id": batch_id,
             "title": title,
             "state": "READY",
-            "priority": "P2",
+            "priority": batch_priority,
             "owner_role": "planner",
             "created_by": "planner_autonomy",
             "vision_ref": vision_ref,
@@ -2621,10 +2914,13 @@ def planner_autobatch(
             "dependency_policy": "single_batch",
             "created_at": now,
             "updated_at": now,
+            "queued_only": bool(allow_active_queued),
         }
     )
     if novelty_target:
         queue_obj["items"][-1]["novelty_target"] = novelty_target
+    if user_visible_delta:
+        queue_obj["items"][-1]["user_visible_delta"] = user_visible_delta
     queue_policy_changed, _ = _apply_queue_novelty_policy(queue_obj)
     queue_obj["updated_at"] = now
     queue_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2635,11 +2931,13 @@ def planner_autobatch(
         board,
         batch_id=batch_id,
         title=title,
+        priority=batch_priority,
         now=now,
         scope_key=scope_key,
         novelty_class=novelty_class,
         user_value_delta_visible=user_value_delta_visible,
         novelty_target=novelty_target,
+        user_visible_delta=user_visible_delta,
     )
 
     append_event(
@@ -2651,11 +2949,13 @@ def planner_autobatch(
             "cooldown_s": str(max(0, cooldown_s)),
             "source": source or "planner_autobatch_cli",
             "vision_ref": vision_ref,
+            "priority": batch_priority,
             "scope_key": scope_key,
             "novelty_class": novelty_class,
             "user_value_delta_visible": str(user_value_delta_visible),
             "stream_created": str(stream_created),
             "task_created": str(task_created),
+            "queued_only": "1" if allow_active_queued else "0",
         },
     )
     recompute_states(board)
@@ -2668,6 +2968,7 @@ def planner_autobatch(
         "vision_ref": vision_ref,
         "cooldown_applied": "1" if cooldown_s > 0 else "0",
         "board_changed": "1",
+        "queued_only": "1" if allow_active_queued else "0",
     }
 
 
@@ -3678,6 +3979,7 @@ def build_parser() -> argparse.ArgumentParser:
     autobatch_p.add_argument("--queue", default=str(DEFAULT_PRIORITY_QUEUE), help="Priority queue JSON path")
     autobatch_p.add_argument("--reason", default="idle_no_ready", help="Reason tag for audit event")
     autobatch_p.add_argument("--cooldown-s", type=int, default=1800, help="Minimum seconds between autobatch creations")
+    autobatch_p.add_argument("--allow-active-queued", action="store_true", help="Allow exactly one queued planner batch behind the active canonical batch")
 
     status_p = sub.add_parser("status", help="Print board status")
     status_p.add_argument("--role", default="", help="Filter by role")
@@ -3845,6 +4147,7 @@ def main() -> int:
                 cooldown_s=max(0, int(args.cooldown_s)),
                 source="planner_autobatch_cli",
                 workspace_root=Path.cwd().resolve(),
+                allow_active_queued=bool(args.allow_active_queued),
             )
             if result.get("status") == "ok":
                 save_board(board_path, board)
@@ -3853,7 +4156,8 @@ def main() -> int:
                     f"batch_id={result.get('batch_id', 'none')} "
                     f"stream_created={result.get('stream_created', '0')} "
                     f"task_created={result.get('task_created', '0')} "
-                    f"cooldown_applied={result.get('cooldown_applied', '0')}"
+                    f"cooldown_applied={result.get('cooldown_applied', '0')} "
+                    f"queued_only={result.get('queued_only', '0')}"
                 )
             else:
                 print(

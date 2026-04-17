@@ -13,6 +13,10 @@ Scope:
 - Message bus and advisory communication issues.
 - Monitor drift/staleness.
 
+Boundary:
+- This playbook is for VM-local orchestration/runtime incidents.
+- Public app-serving health on AWS EC2 is separate; use `docs/ops/EC2_APP_RUNTIME_QUICK_REFERENCE.md` and the EC2 public endpoints for product-facing proof.
+
 ## 2) Normative Rules (MUST/SHOULD/MUST NOT)
 - Troubleshooting **MUST** isolate root cause before patching.
 - Every incident response **MUST** include before/after validation evidence.
@@ -91,6 +95,7 @@ Expected:
 Access note:
 - VM-local UI/API: `http://127.0.0.1:7779/`
 - Mac host UI/API: `http://192.168.64.9:7780/`
+- Public app-serving UI/API: `http://3.98.20.77/` and `http://3.98.20.77:8080/`
 - public tunnels: disabled by default
 
 ### Deep method (for complex incidents)

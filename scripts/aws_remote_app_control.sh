@@ -9,6 +9,9 @@ AWS_APP_MONITOR_BASE_URL="${AWS_APP_MONITOR_BASE_URL:-http://${AWS_APP_HOST}:808
 AWS_EC2_INSTANCE_ID="${AWS_EC2_INSTANCE_ID:-i-0f5f483b8e25d26e0}"
 AWS_EC2_REGION="${AWS_EC2_REGION:-ca-central-1}"
 AWS_EC2_PROFILE="${AWS_EC2_PROFILE:-reda}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+PROBE_SCRIPT="${AWS_PUBLIC_RUNTIME_PROBE_SCRIPT:-${SCRIPT_DIR}/aws_public_runtime_probe.py}"
+ENSURE_UP_WOKE_INSTANCE=0
 
 resolve_key() {
   if [[ -n "${AWS_APP_SSH_KEY:-}" && -f "${AWS_APP_SSH_KEY}" ]]; then
@@ -34,7 +37,7 @@ resolve_key() {
 usage() {
   cat <<EOF
 Usage:
-  $(basename "$0") <status|remote-status|start|stop|restart|public-status|instance-status|start-instance>
+  $(basename "$0") <status|remote-status|start|stop|restart|public-status|raw-public-status|instance-status|start-instance>
 
 Defaults:
   host         ${AWS_APP_HOST}
@@ -70,6 +73,77 @@ SSH_CMD=(
   -o ServerAliveCountMax=3
   "${AWS_APP_USER}@${AWS_APP_HOST}"
 )
+
+json_field() {
+  local field="$1"
+  local payload
+  payload="$(cat)"
+  python3 - "$field" "$payload" <<'PY'
+import json
+import sys
+
+field = sys.argv[1]
+payload = json.loads(sys.argv[2])
+value = payload.get(field)
+if isinstance(value, (dict, list)):
+    print(json.dumps(value, separators=(",", ":"), sort_keys=True))
+elif value is None:
+    print("")
+else:
+    print(value)
+PY
+}
+
+probe_public_url() {
+  python3 "${PROBE_SCRIPT}" --url "$1"
+}
+
+print_maintenance_status() {
+  local app_probe_json="$1"
+  local monitor_probe_json="$2"
+  python3 - "$app_probe_json" "$monitor_probe_json" <<'PY'
+import json
+import sys
+
+app_probe = json.loads(sys.argv[1])
+monitor_probe = json.loads(sys.argv[2])
+maintenance = app_probe if app_probe.get("maintenance_active") else monitor_probe
+command = str(maintenance.get("maintenance_command") or "restart").strip() or "restart"
+age = maintenance.get("maintenance_age_s")
+message = "EC2 publication/restart in progress; treat brief 502/monitor gaps as transient."
+if isinstance(age, int):
+    message += f" age_s={age}"
+
+app_payload = {
+    "ok": False,
+    "status": "maintenance",
+    "data": {
+        "status": "maintenance",
+        "backend_up": False,
+        "reason": "runtime_restart_in_progress",
+        "command": command,
+        "age_s": age,
+        "message": message,
+    },
+}
+monitor_payload = {
+    "health": "MAINTENANCE",
+    "primary_status": "maintenance",
+    "delivery_control": {
+        "phase": "verifying_public_proof",
+        "maintenance_active": True,
+        "maintenance_reason": "runtime_restart_in_progress",
+        "maintenance_command": command,
+        "maintenance_age_s": age,
+        "ec2_reachable": True,
+    },
+    "note": message,
+}
+print(json.dumps(app_payload, separators=(",", ":"), sort_keys=True))
+print("---")
+print(json.dumps(monitor_payload, separators=(",", ":"), sort_keys=True))
+PY
+}
 
 remote_exec() {
   "${SSH_CMD[@]}" "$@"
@@ -111,15 +185,18 @@ ensure_up() {
   state="$(instance_state)"
   case "${state}" in
     running)
+      ENSURE_UP_WOKE_INSTANCE=0
       return 0
       ;;
     pending|stopping)
+      ENSURE_UP_WOKE_INSTANCE=1
       aws_cmd ec2 wait instance-running \
         --region "${AWS_EC2_REGION}" \
         --instance-ids "${AWS_EC2_INSTANCE_ID}"
       wait_for_ssh
       ;;
     stopped|stopped*)
+      ENSURE_UP_WOKE_INSTANCE=1
       aws_cmd ec2 start-instances \
         --region "${AWS_EC2_REGION}" \
         --instance-ids "${AWS_EC2_INSTANCE_ID}" >/dev/null
@@ -139,16 +216,49 @@ ensure_up() {
   esac
 }
 
+ensure_app_runtime() {
+  local app_url="${AWS_APP_PUBLIC_BASE_URL%/}/api/health"
+  local app_probe app_state
+
+  app_probe="$(probe_public_url "${app_url}")"
+  app_state="$(json_field effective_state <<<"${app_probe}")"
+
+  if [[ "${app_state}" == "ok" || "${app_state}" == "maintenance" ]]; then
+    return 0
+  fi
+
+  remote_exec "cd '${AWS_APP_DIR}' && ./finance-copilot.sh start"
+}
+
 public_status() {
-  curl -fsS "${AWS_APP_PUBLIC_BASE_URL%/}/api/health"
+  local app_url="${AWS_APP_PUBLIC_BASE_URL%/}/api/health"
+  local monitor_url="${AWS_APP_MONITOR_BASE_URL%/}/api/status?lite=1"
+  local app_probe monitor_probe app_state monitor_state
+  app_probe="$(probe_public_url "${app_url}")"
+  monitor_probe="$(probe_public_url "${monitor_url}")"
+  app_state="$(json_field effective_state <<<"${app_probe}")"
+  monitor_state="$(json_field effective_state <<<"${monitor_probe}")"
+  if [[ "${app_state}" == "ok" && "${monitor_state}" == "ok" ]]; then
+    curl -fsS "${app_url}"
+    echo
+    echo "---"
+    curl -fsS "${monitor_url}"
+    return 0
+  fi
+  if [[ "${app_state}" == "maintenance" || "${monitor_state}" == "maintenance" ]]; then
+    print_maintenance_status "${app_probe}" "${monitor_probe}"
+    return 0
+  fi
+  curl -fsS "${app_url}"
   echo
   echo "---"
-  curl -fsS "${AWS_APP_MONITOR_BASE_URL%/}/api/status?lite=1"
+  curl -fsS "${monitor_url}"
 }
 
 case "${1:-}" in
   status)
     ensure_up
+    ensure_app_runtime
     public_status
     ;;
   remote-status)
@@ -168,6 +278,11 @@ case "${1:-}" in
     remote_exec "cd '${AWS_APP_DIR}' && ./finance-copilot.sh restart"
     ;;
   public-status)
+    ensure_up
+    ensure_app_runtime
+    public_status
+    ;;
+  raw-public-status)
     public_status
     ;;
   instance-status)

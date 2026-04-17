@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-94-BATCH-94-ANALYSIS-20260416T094651Z-208"
+stream_id: "BATCH-94"
+task_id: "BATCH-94-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-04-16T09:46:51Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_doc_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T09:46:51Z"
+      ended_at_utc: "2026-04-16T09:46:51Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_doc_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "CLAIM_BATCH_94_ARCH_READY_P1776332683_26190"
+  review_ref: "runner:BATCH-94-ANALYSIS"
+  note: "source=runner | root_cause=claim_autobatch_b94_analysis_restait_in_progress_sans_preuve_planner_mergeable | fix_applied=preuve_planner_no_code_ajoutee_avec_references_architecture_canonique_et_unlock_downstream | verify=before=BATCH-94-ANALYSIS:IN_PROGRESS; after=BATCH-94-ARCH:READY; test=python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=batch_dependency_policy=single_batch;architecture_plan_ref=docs/architecture/ARCHITECTURE_MAP.md;architecture_audit=apps/api,apps/web,platform/automation;judge_parity_ref=docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md | vision_alignment=batch=BATCH-94,target=portfolio_first_brief_with_ranked_actions,impact=unlock_architecture_step_for_public_personal_finance_copilot"

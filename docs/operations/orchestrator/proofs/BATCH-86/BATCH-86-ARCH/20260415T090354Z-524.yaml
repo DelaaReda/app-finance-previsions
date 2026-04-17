@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-86-BATCH-86-ARCH-20260415T090354Z-524"
+stream_id: "BATCH-86"
+task_id: "BATCH-86-ARCH"
+role: "planner"
+produced_at_utc: "2026-04-15T09:03:54Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "git commit --only docs/operations/orchestrator/proofs/BATCH-86/BATCH-86-ARCH.md -m feat(planner):publish_B86_arch_proof"
+      rc: "0"
+      started_at_utc: "2026-04-15T09:03:54Z"
+      ended_at_utc: "2026-04-15T09:03:54Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pre-commit(local_quality_guards_passed)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-86/BATCH-86-ARCH.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "claim_batch_86_dev_01_after_arch_complete_P1776243631_333"
+  review_ref: "primary_structured:BATCH-86-ARCH"
+  note: "source=primary_structured | root_cause=BATCH-86-ARCH stayed IN_PROGRESS after the architecture proof existed but was not yet committed and completed in canonical runtime. | fix_applied=Committed the planner architecture proof and backfilled explicit completion evidence tied to ACTIVE_DOCS_INDEX and the BATCH-86 analysis architecture audit. | verify=before=BATCH-86-ARCH:IN_PROGRESS guardian_missing_architecture_plan_ref_and_audit; after=BATCH-86-ARCH complete requested with committed artifact and canonical refs; test=python3 /home/venom/analyse-financiere/platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=layer=apps/api+apps/web; imports_ok=yes; path_target=apps/api/src/domains/copilot/api/copilot.py,apps/api/src/domains/copilot/application/copilot_service.py,apps/api/src/domains/judge/application/judge_endpoint_service.py,apps/web/src/domains/forecasts/components/widgets/copilot-panel.html | vision_alignment=batch=BATCH-86; target=personal_finance_brief_ask_open_memo_without_theme_break; impact=unlock_dev_contract_hardening_on_the_active_copilot_stream"

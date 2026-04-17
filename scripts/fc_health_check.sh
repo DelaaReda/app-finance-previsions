@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# MODE: PUBLIC_VALIDATION_BY_DEFAULT
 # ============================================================
 # fc_health_check.sh — Dashboard santé du système Finance Copilot
 # Usage: bash scripts/fc_health_check.sh
@@ -16,9 +17,26 @@ fi
 MODEL_CONFIG_FILE="$ROOT/platform/config/lm_used_model_config.sh"
 [[ -f "$MODEL_CONFIG_FILE" ]] || MODEL_CONFIG_FILE="$ROOT/platform/config/model-config.sh"
 [[ -f "$MODEL_CONFIG_FILE" ]] && source "$MODEL_CONFIG_FILE" 2>/dev/null || true
+PUBLIC_APP_BASE_URL="${FC_PUBLIC_APP_BASE_URL:-http://3.98.20.77}"
+PUBLIC_MONITOR_BASE_URL="${FC_PUBLIC_MONITOR_BASE_URL:-http://3.98.20.77:8080}"
+API_BASE_URL="${FC_API_BASE_URL:-$PUBLIC_APP_BASE_URL}"
+FRONTEND_BASE_URL="${FC_FRONTEND_BASE_URL:-$PUBLIC_APP_BASE_URL}"
+MONITOR_BASE_URL="${FC_MONITOR_BASE_URL:-$PUBLIC_MONITOR_BASE_URL}"
 # Sourced config can re-enable errexit; keep health check best-effort.
 set +e
 set +u
+
+guard_public_url() {
+  local url="$1"
+  if [[ "${FC_ALLOW_LOCAL_URLS:-0}" != "1" && "$url" =~ ^https?://(127\.0\.0\.1|localhost)(:|/|$) ]]; then
+    fail "Refusing local validation URL: $url (set FC_ALLOW_LOCAL_URLS=1 to override)"
+    exit 2
+  fi
+}
+
+guard_public_url "$API_BASE_URL"
+guard_public_url "$FRONTEND_BASE_URL"
+guard_public_url "$MONITOR_BASE_URL"
 
 RUNNER_CONFIG_FILE="${RUNNER_CONFIG_FILE:-$ROOT/platform/config/runner/runner.v1.yaml}"
 [[ -f "$RUNNER_CONFIG_FILE" ]] || RUNNER_CONFIG_FILE="$ROOT/platform/config/runner/runner_config.v1.yaml"
@@ -67,39 +85,42 @@ echo -e "${BOLD}═════════════════════�
 
 # ── 1. Backend API ────────────────────────────────────────
 echo -e "\n${BOLD}[ Backend API ]${NC}"
-HEALTH=$(curl -s --max-time 3 "http://localhost:8050/api/health" 2>/dev/null)
+HEALTH=$(curl -s --max-time 3 "${API_BASE_URL%/}/api/health" 2>/dev/null)
 if [[ -n "$HEALTH" ]]; then
   STATUS=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('data', d); print(r.get('status','ok' if d.get('ok') is True else '?'))" 2>/dev/null)
   FORECASTS_TS=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('data', d); print(r.get('last_updates',{}).get('forecasts','never'))" 2>/dev/null)
   NEWS_TS=$(echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('data', d); print(r.get('last_updates',{}).get('news','never'))" 2>/dev/null)
   if [[ "$STATUS" == "ok" ]]; then
-    ok "Backend UP | forecasts: $FORECASTS_TS | news: $NEWS_TS"
+    ok "Backend UP (${API_BASE_URL}) | forecasts: $FORECASTS_TS | news: $NEWS_TS"
   else
-    fail "Backend status=$STATUS"
+    fail "Backend status=$STATUS (${API_BASE_URL})"
   fi
 else
-  fail "Backend NOT REACHABLE (port 8050)"
+  fail "Backend NOT REACHABLE (${API_BASE_URL})"
 fi
 
 # ── 2. Frontend ────────────────────────────────────────────
 echo -e "\n${BOLD}[ Frontend ]${NC}"
-FE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "http://localhost:5173/" 2>/dev/null)
+FE_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "${FRONTEND_BASE_URL%/}/" 2>/dev/null)
 if [[ "$FE_CODE" == "200" ]]; then
-  ok "Frontend UP (port 5173) HTTP $FE_CODE"
+  ok "Frontend UP (${FRONTEND_BASE_URL}) HTTP $FE_CODE"
 else
-  fail "Frontend DOWN (port 5173) — code=$FE_CODE"
+  fail "Frontend DOWN (${FRONTEND_BASE_URL}) — code=$FE_CODE"
 fi
 
 # ── 3. Monitor Contract ────────────────────────────────────
 echo -e "\n${BOLD}[ Monitor Contract ]${NC}"
-MONITOR_BASE_URL="${FC_MONITOR_BASE_URL:-http://127.0.0.1:7779}"
 MONITOR_STATUS_ENDPOINT="${FC_MONITOR_STATUS_ENDPOINT:-/api/status?lite=1}"
 MONITOR_SMOKE="$ROOT/scripts/monitor_contract_smoke.sh"
 if [[ -x "$MONITOR_SMOKE" ]]; then
   MONITOR_SUMMARY="$("$MONITOR_SMOKE" --base-url "$MONITOR_BASE_URL" 2>&1)"
   MONITOR_RC=$?
   if [[ "$MONITOR_RC" -eq 0 ]]; then
-    ok "Monitor API contract OK (${MONITOR_BASE_URL}) | ${MONITOR_SUMMARY#PASS }"
+    if [[ "$MONITOR_SUMMARY" == DEFER* ]]; then
+      warn "Monitor API contract deferred (${MONITOR_BASE_URL}) | ${MONITOR_SUMMARY}"
+    else
+      ok "Monitor API contract OK (${MONITOR_BASE_URL}) | ${MONITOR_SUMMARY#PASS }"
+    fi
   else
     fail "Monitor API contract FAILED (${MONITOR_BASE_URL}) | ${MONITOR_SUMMARY}"
   fi
@@ -111,12 +132,15 @@ fi
 # ── 3a. Critical Endpoints Contract ───────────────────────
 echo -e "\n${BOLD}[ Critical Endpoints Contract ]${NC}"
 CRITICAL_SMOKE="$ROOT/scripts/critical_endpoints_smoke.sh"
-API_BASE_URL="${FC_API_BASE_URL:-http://127.0.0.1:8050}"
 if [[ -x "$CRITICAL_SMOKE" || -f "$CRITICAL_SMOKE" ]]; then
   CRITICAL_SUMMARY="$(bash "$CRITICAL_SMOKE" --base-url "$API_BASE_URL" 2>&1)"
   CRITICAL_RC=$?
   if [[ "$CRITICAL_RC" -eq 0 ]]; then
-    ok "Critical endpoints contract OK (${API_BASE_URL})"
+    if [[ "$CRITICAL_SUMMARY" == DEFER* ]]; then
+      warn "Critical endpoints contract deferred (${API_BASE_URL}) | ${CRITICAL_SUMMARY}"
+    else
+      ok "Critical endpoints contract OK (${API_BASE_URL})"
+    fi
   else
     # NOTE: Distinguish contract schema failure from true network unreachability.
     # A schema mismatch (missing meta/status fields) is a DEV issue, NOT a runtime blocker.
@@ -168,8 +192,8 @@ fi
 
 # ── 4. Active API Data ─────────────────────────────────────
 echo -e "\n${BOLD}[ Live Data ]${NC}"
-FORECASTS=$(curl -s --max-time 3 "http://localhost:8050/api/forecasts?limit=1" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); rows=d.get('data',{}).get('rows',[]); print(len(rows))" 2>/dev/null)
-NEWS=$(curl -s --max-time 3 "http://localhost:8050/api/news/feed?limit=1" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); items=d.get('data',{}).get('items',[]); print(len(items))" 2>/dev/null)
+FORECASTS=$(curl -s --max-time 3 "${API_BASE_URL%/}/api/forecasts?limit=1" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); rows=d.get('data',{}).get('rows',[]); print(len(rows))" 2>/dev/null)
+NEWS=$(curl -s --max-time 3 "${API_BASE_URL%/}/api/news/feed?limit=1" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); items=d.get('data',{}).get('items',[]); print(len(items))" 2>/dev/null)
 [[ "${FORECASTS:-0}" -gt 0 ]] && ok "Forecasts: $FORECASTS available" || fail "Forecasts: none"
 [[ "${NEWS:-0}" -gt 0 ]] && ok "News: $NEWS available" || fail "News: none"
 
@@ -269,17 +293,17 @@ RATE_HITS="$(printf '%s' "${RATE_HITS:-0}" | tr -d '[:space:]')"
 
 # ── 10. Model Config Guard ─────────────────────────────────
 echo -e "\n${BOLD}[ Model Config ]${NC}"
-ROLE_MODEL_RAW="${TMUX_ROLE_CODEX_MODEL:-${LM_USED_ROLE_MODEL:-openai-codex/gpt-5.2}}"
+ROLE_MODEL_RAW="${TMUX_ROLE_CODEX_MODEL:-${LM_USED_ROLE_MODEL:-openai-codex/gpt-5.4}}"
 ROLE_MODEL_NORM="${ROLE_MODEL_RAW#openai-codex/}"
 case "$ROLE_MODEL_NORM" in
-  gpt-5.2|gpt-5.3-codex-spark)
+  gpt-5.2|gpt-5.3-codex-spark|gpt-5.4)
     ok "Role model configured: openai-codex/${ROLE_MODEL_NORM}"
     ;;
   gpt-5.3-spark)
-    warn "Legacy role model detected (${ROLE_MODEL_RAW}) -> should be openai-codex/gpt-5.2"
+    warn "Legacy role model detected (${ROLE_MODEL_RAW}) -> should be openai-codex/gpt-5.4"
     ;;
   *)
-    warn "Unknown role model (${ROLE_MODEL_RAW}) -> recommend openai-codex/gpt-5.2"
+    warn "Unknown role model (${ROLE_MODEL_RAW}) -> recommend openai-codex/gpt-5.4"
     ;;
 esac
 

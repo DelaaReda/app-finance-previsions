@@ -6,6 +6,14 @@ Standardiser tous les endpoints avec le même niveau de qualité que les endpoin
 Référence d'architecture cible à lire avant une refonte importante:
 - `docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md`
 
+## Règle d'exécution publique (obligatoire)
+- Depuis la VM locale, tous les appels API manuels, smokes, validations frontend, et tests d'intégration doivent passer par les endpoints publics EC2.
+- Base publique canonique actuelle:
+  - `http://3.98.20.77`
+  - `http://ec2-3-98-20-77.ca-central-1.compute.amazonaws.com`
+- Ne pas utiliser `127.0.0.1:8050`, `127.0.0.1:7779`, `127.0.0.1:5173`, `localhost`, ou d'autres listeners locaux de la VM pour valider le produit.
+- Exception unique: débogage host-local directement sur l'EC2 applicative.
+
 ## Architecture (obligatoire)
 - Les routes API sont des orchestrateurs:
   - validation des paramètres,
@@ -118,6 +126,7 @@ Règles supplémentaires:
 - Test de contrat endpoint:
   - structure stable (`ok`, `data`, champs critiques),
   - types attendus (`items` list, `stats` dict, etc.).
+- Les smokes d'intégration et les validations manuelles doivent viser la base publique EC2, pas une boucle locale VM.
 - Test de cache:
   - 2e appel même params => `cache.hit == true`.
 - Test de fallback:

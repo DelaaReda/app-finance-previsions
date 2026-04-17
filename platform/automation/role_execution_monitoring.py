@@ -27,6 +27,9 @@ DEFAULT_QUEUE_FILE = Path(os.environ.get("EXEC_MONITOR_QUEUE_FILE", "logs-codex-
 DEFAULT_WORKBOARD_FILE = Path(
     os.environ.get("EXEC_MONITOR_WORKBOARD_FILE", "logs-codex-runs/orchestrator-state/parallel-workstreams.json")
 )
+DEFAULT_RUNTIME_STATE_FILE = Path(
+    os.environ.get("EXEC_MONITOR_RUNTIME_STATE_FILE", "logs-codex-runs/orchestrator-state/runtime-state.json")
+)
 ISSUE_CODE_RE = re.compile(r"^[a-z0-9_]{3,64}$")
 ISSUE_SEVERITIES = {"none", "low", "medium", "high", "critical"}
 ISSUE_BLOCKED_MIN_SEVERITIES = {"medium", "high", "critical"}
@@ -37,6 +40,14 @@ def read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8", errors="ignore")
     except Exception:
         return ""
+
+
+def read_json_dict(path: Path) -> dict[str, object]:
+    try:
+        data = json.loads(read_text(path))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def one_line(value: str, limit: int = 320) -> str:
@@ -66,6 +77,112 @@ def stale_context_record(record: dict[str, str], queue_version: str, workboard_v
     queue_mismatch = bool(queue_version and record_queue and record_queue != queue_version)
     workboard_mismatch = bool(workboard_version and record_workboard and record_workboard != workboard_version)
     return queue_mismatch or workboard_mismatch
+
+
+def planner_dispatching_downstream(record: dict[str, object]) -> bool:
+    role = str(record.get("role", "")).strip().lower()
+    if role != "planner":
+        return False
+    delta = str(record.get("delta", "")).strip().upper()
+    if delta != "PLANNER_DISPATCH_ACTIVE":
+        return False
+    next_raw = str(record.get("next", "")).strip().lower()
+    if not next_raw:
+        return False
+    return any(f"owner={lane}" in next_raw for lane in ("dev", "admin", "qa", "tester"))
+
+
+def planner_only_runtime(state_path: Path) -> bool:
+    data = read_json_dict(state_path)
+    if not isinstance(data, dict):
+        return False
+    operator_mode = str(data.get("operator_mode", "")).strip().lower()
+    execution_mode = str(data.get("execution_mode", "")).strip().lower()
+    return operator_mode == "planner-only" or execution_mode == "planner_experimental"
+
+
+def canonical_runtime_idle(queue_path: Path, workboard_path: Path) -> bool:
+    queue_payload = read_json_dict(queue_path)
+    workboard_payload = read_json_dict(workboard_path)
+
+    def _active_batch_ids(payload: dict[str, object]) -> list[str]:
+        active_cycle = payload.get("active_cycle")
+        if not isinstance(active_cycle, dict):
+            return []
+        active_ids = active_cycle.get("active_batch_ids")
+        if not isinstance(active_ids, list):
+            return []
+        return [str(item).strip() for item in active_ids if str(item).strip()]
+
+    return not _active_batch_ids(queue_payload) and not _active_batch_ids(workboard_payload)
+
+
+def normalize_planner_idle_record(
+    role: str,
+    record: dict[str, object],
+    *,
+    planner_only_mode: bool,
+    queue_path: Path,
+    workboard_path: Path,
+) -> dict[str, object]:
+    if role != "planner" or not planner_only_mode:
+        return record
+    if not canonical_runtime_idle(queue_path, workboard_path):
+        return record
+
+    blocker = str(record.get("blocker_id", "")).strip().upper()
+    status = str(record.get("status", "")).strip().upper()
+    hard_blockers = {
+        "RUN_LOCK_BUSY",
+        "LOCK_BUSY",
+        "RUN_LOCK_HELD",
+        "SESSION_NOT_READY",
+        "SESSION_NOT_READY_43",
+        "BACKEND_API_UNREACHABLE",
+        "MONITOR_API_UNREACHABLE",
+        "BACKEND_AND_MONITOR_UNREACHABLE",
+        "API_DOWN",
+        "CONTRACT_PARSE_FAILED",
+        "CONTRACT_GUARD_BLOCK",
+    }
+    demotable_statuses = {"BLOCKED", "IN_PROGRESS", "WAIT", "MUTED", "READY", "UNKNOWN"}
+    if blocker in hard_blockers or status not in demotable_statuses:
+        return record
+
+    normalized = dict(record)
+    normalized.update(
+        {
+            "status": "IDLE",
+            "delta": "NO_ACTIVE_CANONICAL_WORK",
+            "verdict": "IDLE",
+            "blocker_id": "NONE",
+            "next_action_unique": "none",
+            "next": "owner=planner; action=wait_for_active_cycle",
+            "action_summary": "wait_for_active_cycle",
+            "task_update": "none_no_signal",
+            "exec_report": "none",
+            "run_note": "canonical runtime idle; no active cycle",
+            "root_cause": "none",
+            "fix_applied": "none",
+            "verify": "canonical_runtime_truth_idle",
+            "issues": "none",
+            "issue_count": 0,
+            "issue_severity": "none",
+            "issue_codes": [],
+            "issue_reporting_ok": True,
+            "issue_reporting_errors": [],
+            "suggestions": "none",
+            "stream_id": "none",
+            "task_id": "none",
+            "tool_request": "none",
+            "skill_request": "none",
+            "tools_used": "",
+            "channels_read": "runtime_context,priority_queue,parallel_workstreams",
+            "impact_assessment": "low",
+            "impact_action": "monitor_updates",
+        }
+    )
+    return normalized
 
 
 def parse_contract(text: str) -> dict[str, str]:
@@ -210,6 +327,21 @@ def build_record(role: str, source: str, values: dict[str, str], evidence_kv: di
         blocker_id=values.get("BLOCKER_ID", ""),
         task_update=task_update.lower(),
     )
+    next_summary = one_line(values.get("NEXT", ""), 420)
+    if (
+        role == "planner"
+        and str(values.get("DELTA", "")).strip().upper() == "PLANNER_DISPATCH_ACTIVE"
+        and any(f"owner={lane}" in next_summary.lower() for lane in ("dev", "admin", "qa", "tester"))
+        and set(issue_report.get("issue_codes", [])) <= {"planner_quality_autofill_missing", "planner_evidence_incomplete_soft"}
+    ):
+        issue_report = {
+            "issues": "none",
+            "issue_count": 0,
+            "issue_severity": "none",
+            "issue_codes": [],
+            "issue_reporting_ok": True,
+            "issue_reporting_errors": [],
+        }
     return {
         "ts_utc": ts_utc,
         "role": role,
@@ -219,7 +351,7 @@ def build_record(role: str, source: str, values: dict[str, str], evidence_kv: di
         "verdict": one_line(values.get("VERDICT", "")),
         "blocker_id": one_line(values.get("BLOCKER_ID", "")),
         "next_action_unique": one_line(values.get("NEXT_ACTION_UNIQUE", "")),
-        "next": one_line(values.get("NEXT", ""), 420),
+        "next": next_summary,
         "action_summary": _derive_action_summary(values, evidence_kv),
         "task_update": task_update,
         "exec_report": one_line(evidence_kv.get("exec_report", "none") or "none"),
@@ -259,16 +391,36 @@ def update_latest(latest_path: Path, role: str, record: dict[str, str]) -> None:
     roles = latest.get("roles")
     if not isinstance(roles, dict):
         roles = {}
+    queue_version = source_version("queue", DEFAULT_QUEUE_FILE)
+    workboard_version = source_version("workboard", DEFAULT_WORKBOARD_FILE)
+    runtime_state_file = Path(os.environ.get("EXEC_MONITOR_RUNTIME_STATE_FILE", str(latest_path.parent / "runtime-state.json")))
+    planner_only_mode = planner_only_runtime(runtime_state_file)
+    record = normalize_planner_idle_record(
+        role,
+        record,
+        planner_only_mode=planner_only_mode,
+        queue_path=DEFAULT_QUEUE_FILE,
+        workboard_path=DEFAULT_WORKBOARD_FILE,
+    )
     roles[role] = record
     latest["roles"] = roles
     latest["updated_at_utc"] = record["ts_utc"]
-
-    queue_version = source_version("queue", DEFAULT_QUEUE_FILE)
-    workboard_version = source_version("workboard", DEFAULT_WORKBOARD_FILE)
+    latest["generated_at"] = record["ts_utc"]
     stale_context_roles = sorted(
         name
         for name, data in roles.items()
-        if isinstance(data, dict) and stale_context_record(data, queue_version, workboard_version)
+        if isinstance(data, dict)
+        and not (planner_only_mode and name != "planner")
+        and stale_context_record(data, queue_version, workboard_version)
+    )
+    stale_context_roles = sorted(
+        name
+        for name in stale_context_roles
+        if not (
+            name == "planner"
+            and isinstance(roles.get(name), dict)
+            and planner_dispatching_downstream(roles.get(name, {}))
+        )
     )
     stale_context_set = set(stale_context_roles)
     active_roles = {

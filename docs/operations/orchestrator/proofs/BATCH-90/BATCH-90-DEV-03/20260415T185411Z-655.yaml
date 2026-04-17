@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-90-BATCH-90-DEV-03-20260415T185411Z-655"
+stream_id: "BATCH-90"
+task_id: "BATCH-90-DEV-03"
+role: "dev"
+produced_at_utc: "2026-04-15T18:54:11Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T18:54:11Z"
+      ended_at_utc: "2026-04-15T18:54:11Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`pytest -q apps/api/src/domains/judge/tests/test_judge_route_orchestration.py -k personal_finance_start` -> 5 passed; `bash scripts/runtime_host_check.sh` -> runtime_is_vm=1; `bash scripts/backend_regression_gate.sh` ->"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit `984aa59d6aaed50d9a8216255afffb4010b16500` (`fix(judge): keep starter actions in fallback`) proving `/api/judge/personal-finance/start` degraded responses now preserve the starter action contract."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-90-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-90-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=`get_judge_personal_finance_start_payload()` returned empty `ask`/`open` arrays on its critical fallback path, which broke the brief+ask/open UX contract exactly when the starter degraded. | fix_applied=Added `_default_personal_finance_start_payload()` in `apps/api/src/domains/judge/application/judge_endpoint_service.py`, used it for both no-upstream-data fallback and exception fallback, and ensured fallback responses s | verify=before=critical fallback for judge personal-finance starter emitted empty `ask`/`open`, so the starter could not let the user ask or open during degradation; after=degraded fallback now returns `/personal-finance/ask`, ` | architecture_check=layer=judge application service + judge route regression test only; imports_ok=yes, reused existing `CopilotStartPayload` contract and `service_response_with_metadata` envelope without adding duplicate helper layers outs | vision_alignment=batch=BATCH-90; target=personal finance copilot brief+ask/open; impact=the starter now remains explainable and actionable even when upstream copilot services degrade, removing a direct blocker on the memo-entry path inst"

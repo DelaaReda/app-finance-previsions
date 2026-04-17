@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# MODE: VM_ORCHESTRATION_EC2_APP
 # ============================================================
 # vm_wake_cleanup.sh — Nettoyage propre après réveil VM
 # Détecte le réveil (gap > 5 min), kill les zombies, relance
@@ -52,31 +53,20 @@ rm -f /tmp/fc-agent-locks/*.lock 2>/dev/null || true
 rm -f /tmp/fc_last_tick_* 2>/dev/null || true
 rm -f "$ROOT"/.tmp/openclaw-shared-locks/*.lock 2>/dev/null || true
 
-# 4. Check backend + frontend still up
-BACKEND_OK=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8050/api/health" 2>/dev/null || echo "000")
-FRONTEND_OK=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:5173/" 2>/dev/null || echo "000")
-log "Services: backend=$BACKEND_OK frontend=$FRONTEND_OK"
-
-# 5. Restart backend if down
-if [[ "$BACKEND_OK" != "200" ]]; then
-  log "Backend DOWN — attempting restart..."
-  cd "$ROOT"
-  tmux new-session -d -s "finance_backend" "bash -lc 'cd $ROOT && python3 apps/api/src/main.py 2>&1 | tee logs/backend.log'" 2>/dev/null || true
-  sleep 5
-  BACKEND_OK=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8050/api/health" 2>/dev/null || echo "000")
-  log "Backend after restart: $BACKEND_OK"
-fi
-
-# 6. Restart frontend if down
-if [[ "$FRONTEND_OK" != "200" ]]; then
-  log "Frontend DOWN — attempting restart..."
-  PAGES_DIR="$ROOT/apps/web/src/domains/forecasts/pages"
-  tmux new-session -d -s "finance_frontend" "bash -lc 'cd $PAGES_DIR && python3 -m http.server 5173 2>&1 | tee $ROOT/logs/frontend.log'" 2>/dev/null || true
-  sleep 2
-  log "Frontend restarted"
+# 4. Check public app runtime via the canonical AWS wrapper
+APP_RUNTIME_STATUS="unknown"
+if [[ -x "$ROOT/scripts/aws_remote_app_control.sh" ]]; then
+  if APP_RUNTIME_STATUS="$ROOT/scripts/aws_remote_app_control.sh status" 2>&1; then
+    log "App runtime status (AWS): ok"
+  else
+    log "App runtime status (AWS) failed: $APP_RUNTIME_STATUS"
+  fi
+else
+  APP_RUNTIME_STATUS="aws_remote_app_control_missing"
+  log "App runtime status skipped: $APP_RUNTIME_STATUS"
 fi
 
 log "=== CLEANUP COMPLETE ==="
 echo ""
-echo "VM wake cleanup done. Services: backend=$BACKEND_OK frontend=$FRONTEND_OK"
+echo "VM wake cleanup done. App runtime status follows canonical AWS control path."
 echo "Cron will restart agents at next scheduled tick."

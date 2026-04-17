@@ -10,6 +10,7 @@ superseded_by:
 Historical note:
 - This file reflects an older team-chat convention.
 - It is not a canonical runtime or planning source of truth.
+- Any `localhost:*` app examples in old messages are historical only, not current public app guidance.
 
 **Purpose**: General communication channel for ALL team members (not just admins)
 

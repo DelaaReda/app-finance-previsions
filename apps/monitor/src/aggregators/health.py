@@ -65,6 +65,8 @@ def compute_health(
     hard_blocked: bool,
     has_rate_limits: bool,
     has_rate_limited_agents: bool,
+    rate_limits_advisory: bool = False,
+    has_stale_context: bool = False,
     summary_blocker_roles: list[str] | None = None,
     scrum_health_guard: bool = True,
 ) -> str:
@@ -80,6 +82,12 @@ def compute_health(
         return "DEGRADED"
 
     if has_rate_limits or has_rate_limited_agents:
+        if rate_limits_advisory:
+            pass
+        else:
+            return "STALE"
+
+    if has_stale_context:
         return "STALE"
 
     return "OK"

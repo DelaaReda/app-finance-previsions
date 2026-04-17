@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-88-BATCH-88-ANALYSIS-20260415T113718Z-793"
+stream_id: "BATCH-88"
+task_id: "BATCH-88-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-04-15T11:37:18Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "git add docs/operations/orchestrator/proofs/BATCH-88/BATCH-88-ANALYSIS.md docs/ops/BATCH-88-ANALYSIS-ARCHITECTURE_AUDIT.md && git commit -m \"docs(planner): close BATCH-88 analysis proof (BATCH-88-ANALYSIS)\""
+      rc: "0"
+      started_at_utc: "2026-04-15T11:37:18Z"
+      ended_at_utc: "2026-04-15T11:37:18Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "git diff --check -- docs/operations/orchestrator/proofs/BATCH-88/BATCH-88-ANALYSIS.md docs/ops/BATCH-88-ANALYSIS-ARCHITECTURE_AUDIT.md"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-88/BATCH-88-ANALYSIS.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "COMPLETE_BATCH_88_ANALYSIS_P1776252756_25199"
+  review_ref: "runner:BATCH-88-ANALYSIS"
+  note: "source=runner | root_cause=BATCH-88-ANALYSIS etait en cours sans planner_artifact ni architecture_audit committe | fix_applied=creation et commit des preuves planner BATCH-88 alignant scope reuse et dependances | verify=before=parallel_workstream_context ready=0 in_progress=1 task=BATCH-88-ANALYSIS proof_count=0; after=planner_analysis_artifacts_committed_and_runtime_complete_requested; test=git_diff_check_passed_and_recent_context_confirmed | architecture_check=layer=apps_api_apps_web_platform_automation; imports_ok=yes; path_target=apps/api/src/domains/copilot/api/copilot.py,apps/api/src/domains/copilot/application/copilot_service.py,apps/web/src/domains/forecasts/components/widgets/copilot-panel.html,apps/api/runtime/copilot.sh,platform/automation/runtime/planner/planner_runtime_actions.py | vision_alignment=batch=BATCH-88; target=portfolio_first_brief_with_ranked_actions; impact=analysis_closed_and_arch_becomes_next_canonical_planner_step"

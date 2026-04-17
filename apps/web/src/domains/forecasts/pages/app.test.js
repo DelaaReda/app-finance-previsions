@@ -4856,6 +4856,56 @@ test('buildCopilotStartState normalizes brief event timing for copilot starter s
   });
 });
 
+test('buildCopilotStartState preserves brief story lines for starter surfaces', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
+  const functionSource = extractSection(
+    source,
+    'function normalizeCopilotStarterTickers(',
+    '\n\nfunction focusCopilotInput('
+  );
+  const sandbox = {
+    console,
+    Date,
+    isObject(value) {
+      return !!value && typeof value === 'object' && !Array.isArray(value);
+    },
+    toArray(value, fallback = []) {
+      return Array.isArray(value) ? value : fallback;
+    },
+    toString(value, fallback = '') {
+      return typeof value === 'string' ? value : fallback;
+    },
+    normalizeCopilotSourceLabels(value) {
+      return (Array.isArray(value) ? value : value ? [value] : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean);
+    },
+  };
+  sandbox.globalThis = sandbox;
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    `${functionSource}\nthis.buildCopilotStartState = buildCopilotStartState;`,
+    sandbox,
+    { filename: 'app.js' }
+  );
+
+  const state = sandbox.buildCopilotStartState({
+    data: {
+      copilot_start: {
+        brief_of_day: {
+          summary: 'Leadership remains concentrated in AI.',
+          what_changed_today: ['Breadth improved in semis.'],
+          what_matters_now: ['NVDA is still the cleanest setup.'],
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(state.brief.whatChangedToday)), ['Breadth improved in semis.']);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.brief.whatMattersNow)), ['NVDA is still the cleanest setup.']);
+});
+
 test('buildCopilotStartState derives ticker open actions from focus tickers', () => {
   const source = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
   const functionSource = extractSection(
@@ -4916,6 +4966,35 @@ test('buildCopilotStartState derives ticker open actions from focus tickers', ()
       { id: 'open_nvda', target: 'ticker:NVDA' },
       { id: 'open_msft', target: 'ticker:MSFT' },
     ]
+  );
+});
+
+test('renderHeroCopilotBrief surfaces story lines in hero metadata rows', () => {
+  const state = {
+    brief: {
+      title: 'Brief of the day',
+      summary: 'AI leadership still drives the tape.',
+      freshness: '2026-03-09T08:00:00Z',
+      whatChangedToday: ['Breadth improved outside the Mag 7.'],
+      whatMattersNow: ['NVDA remains the lead name to watch.'],
+      topSignals: ['Semis improving'],
+      topRisks: ['Crowded positioning'],
+      sources: ['brief_daily_snapshot'],
+    },
+    ask: [],
+    open: [],
+  };
+  const { sandbox, elements } = loadRenderHeroCopilotBriefWithHeroIds(state);
+
+  sandbox.renderHeroCopilotBrief(state);
+
+  assert.equal(
+    elements.heroBriefSignals.textContent,
+    'Changed today: Breadth improved outside the Mag 7.'
+  );
+  assert.equal(
+    elements.heroBriefRisks.textContent,
+    'Matters now: NVDA remains the lead name to watch. | Risks: Crowded positioning'
   );
 });
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# MODE: PUBLIC_VALIDATION
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -14,6 +15,15 @@ fi
 BACKEND_DIR="$ROOT/apps/api/src"
 LIVE_CHECK=1
 PYTEST_TARGETS=()
+PUBLIC_API_BASE_URL="${FC_API_BASE_URL:-${FC_PUBLIC_APP_BASE_URL:-http://3.98.20.77}}"
+
+guard_public_url() {
+  local url="$1"
+  if [[ "${FC_ALLOW_LOCAL_URLS:-0}" != "1" && "$url" =~ ^https?://(127\.0\.0\.1|localhost)(:|/|$) ]]; then
+    echo "BLOCKED: refusing local validation URL: $url (set FC_ALLOW_LOCAL_URLS=1 to override)"
+    exit 2
+  fi
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -73,6 +83,11 @@ echo "== BACKEND REGRESSION GATE =="
 echo "backend_dir=$BACKEND_DIR"
 echo "pytest_bin=$PYTEST_BIN"
 echo "pytest_targets=${PYTEST_TARGETS[*]}"
+echo "live_api_base_url=$PUBLIC_API_BASE_URL"
+
+if [[ "$LIVE_CHECK" -eq 1 ]]; then
+  guard_public_url "$PUBLIC_API_BASE_URL"
+fi
 
 pushd "$BACKEND_DIR" >/dev/null
 
@@ -85,10 +100,10 @@ PYTHONPATH="$PYTHONPATH_PREFIX" "$PYTEST_BIN" -q "${PYTEST_TARGETS[@]}"
 
 if [[ "$LIVE_CHECK" -eq 1 ]]; then
   if command -v curl >/dev/null 2>&1; then
-    if curl -fsS --max-time 5 "http://localhost:8050/api/health" >/dev/null 2>&1; then
+    if curl -fsS --max-time 5 "${PUBLIC_API_BASE_URL%/}/api/health" >/dev/null 2>&1; then
       echo "health=UP"
-      check_endpoint "stocks_prices" "http://localhost:8050/api/stocks/prices?ticker=AAPL&limit=2" 3 12
-      check_endpoint "news_feed" "http://localhost:8050/api/news/feed?limit=1" 3 12
+      check_endpoint "stocks_prices" "${PUBLIC_API_BASE_URL%/}/api/stocks/prices?ticker=AAPL&limit=2" 3 12
+      check_endpoint "news_feed" "${PUBLIC_API_BASE_URL%/}/api/news/feed?limit=1" 3 12
       echo "live_endpoints=OK"
     else
       echo "health=DOWN (live endpoint checks skipped)"

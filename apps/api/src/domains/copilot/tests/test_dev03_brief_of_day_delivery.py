@@ -28,7 +28,6 @@ if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
 from domains.copilot.api.copilot import router
-from storage import io as storage_io
 
 
 def _client() -> TestClient:
@@ -47,7 +46,7 @@ class TestDEV03BriefOfDayContract:
     def test_brief_of_day_present_with_required_fields(self, monkeypatch):
         """
         DEV-03: Brief of day must be present with all required fields.
-        
+
         Required fields:
         - summary: string < 200 words
         - market_sentiment: BULLISH/BEARISH/NEUTRAL/UNKNOWN
@@ -57,10 +56,30 @@ class TestDEV03BriefOfDayContract:
         - freshness: ISO timestamp
         - source: list of strings
         """
-        # Mock brief snapshot
-        mock_brief = {
-            "data": {
-                "daily": {
+        mock_context = {
+            "daily_brief": {
+                "summary": "Markets steady with bullish bias. Tech leads while rates stabilize.",
+                "market_sentiment": "BULLISH",
+                "top_signals": [
+                    {"name": "NVDA guidance", "value": "beat", "signal": "positive"},
+                    {"name": "VIX", "value": "14.2", "signal": "low_volatility"},
+                ],
+                "top_risks": [
+                    {"name": "CPI release", "value": "tomorrow", "signal": "watch"},
+                ],
+                "macro_signals": [
+                    {"name": "DXY", "value": "103.5", "signal": "neutral"},
+                ],
+                "sector_rotation": {
+                    "top": ["Semiconductors", "Tech"],
+                    "bottom": ["Utilities", "Staples"],
+                },
+                "generated_at": "2026-03-23T08:30:00Z",
+                "freshness": "2026-03-23T08:30:00Z",
+                "source": ["brief_daily_generator", "forecasts_snapshot"],
+            },
+            "copilot_start": {
+                "brief_of_day": {
                     "summary": "Markets steady with bullish bias. Tech leads while rates stabilize.",
                     "market_sentiment": "BULLISH",
                     "top_signals": [
@@ -70,24 +89,24 @@ class TestDEV03BriefOfDayContract:
                     "top_risks": [
                         {"name": "CPI release", "value": "tomorrow", "signal": "watch"},
                     ],
-                    "macro_signals": [
-                        {"name": "DXY", "value": "103.5", "signal": "neutral"},
-                    ],
-                    "sector_rotation": {
-                        "top": ["Semiconductors", "Tech"],
-                        "bottom": ["Utilities", "Staples"],
-                    },
                     "generated_at": "2026-03-23T08:30:00Z",
                     "freshness": "2026-03-23T08:30:00Z",
                     "source": ["brief_daily_generator", "forecasts_snapshot"],
-                }
-            }
+                },
+                "ask": [],
+                "open": [],
+            },
+            "allocation_drift_alerts": {"active": False, "alerts": [], "weights_analyzed": {}},
+            "playbook_context": {"guardrails": []},
         }
 
-        def mock_load_json(key):
-            return mock_brief if key == "brief_daily" else None
+        async def mock_build_context_payload(context_service_cls=None, scope=None):
+            return mock_context
 
-        monkeypatch.setattr(storage_io, "load_json", mock_load_json)
+        monkeypatch.setattr(
+            "domains.copilot.application.copilot_service.build_context_payload",
+            mock_build_context_payload,
+        )
 
         client = _client()
         response = client.get("/api/copilot/start")
@@ -137,13 +156,43 @@ class TestDEV03BriefOfDayContract:
     def test_brief_of_day_fallback_when_no_snapshot(self, monkeypatch):
         """
         DEV-03: Fallback brief must work when no snapshot available.
-        
+
         Even fallback must satisfy the contract.
         """
-        def mock_load_json_empty(key):
-            return None
+        mock_fallback_context = {
+            "daily_brief": {
+                "summary": "No market data available.",
+                "market_sentiment": "UNKNOWN",
+                "top_signals": [],
+                "top_risks": [],
+                "generated_at": "2026-03-23T09:00:00Z",
+                "freshness": "2026-03-23T09:00:00Z",
+                "source": ["fallback"],
+            },
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "No market data available.",
+                    "market_sentiment": "UNKNOWN",
+                    "top_signals": [],
+                    "top_risks": [],
+                    "generated_at": "2026-03-23T09:00:00Z",
+                    "freshness": "2026-03-23T09:00:00Z",
+                    "source": ["fallback"],
+                },
+                "ask": [],
+                "open": [],
+            },
+            "allocation_drift_alerts": {"active": False, "alerts": [], "weights_analyzed": {}},
+            "playbook_context": {"guardrails": []},
+        }
 
-        monkeypatch.setattr(storage_io, "load_json", mock_load_json_empty)
+        async def mock_build_context_payload(context_service_cls=None, scope=None):
+            return mock_fallback_context
+
+        monkeypatch.setattr(
+            "domains.copilot.application.copilot_service.build_context_payload",
+            mock_build_context_payload,
+        )
 
         client = _client()
         response = client.get("/api/copilot/start")
@@ -170,14 +219,23 @@ class TestDEV03BriefOfDayContract:
     def test_ask_and_open_entry_points_present(self, monkeypatch):
         """
         DEV-03: Entry points for ask and open actions must be present.
-        
+
         The copilot must let the user:
         - Ask questions (ask entry points)
         - Open copilot/views (open entry points)
         """
-        mock_brief = {
-            "data": {
-                "daily": {
+        mock_context = {
+            "daily_brief": {
+                "summary": "Test brief",
+                "market_sentiment": "NEUTRAL",
+                "top_signals": [],
+                "top_risks": [],
+                "generated_at": "2026-03-23T09:00:00Z",
+                "freshness": "2026-03-23T09:00:00Z",
+                "source": ["test"],
+            },
+            "copilot_start": {
+                "brief_of_day": {
                     "summary": "Test brief",
                     "market_sentiment": "NEUTRAL",
                     "top_signals": [],
@@ -185,14 +243,21 @@ class TestDEV03BriefOfDayContract:
                     "generated_at": "2026-03-23T09:00:00Z",
                     "freshness": "2026-03-23T09:00:00Z",
                     "source": ["test"],
-                }
-            }
+                },
+                "ask": [],
+                "open": [],
+            },
+            "allocation_drift_alerts": {"active": False, "alerts": [], "weights_analyzed": {}},
+            "playbook_context": {"guardrails": []},
         }
 
-        def mock_load_json(key):
-            return mock_brief if key == "brief_daily" else None
+        async def mock_build_context_payload(context_service_cls=None, scope=None):
+            return mock_context
 
-        monkeypatch.setattr(storage_io, "load_json", mock_load_json)
+        monkeypatch.setattr(
+            "domains.copilot.application.copilot_service.build_context_payload",
+            mock_build_context_payload,
+        )
 
         client = _client()
         response = client.get("/api/copilot/start")
@@ -228,9 +293,18 @@ class TestDEV03BriefOfDayContract:
         """
         DEV-03: Brief must work with ticker scope filtering.
         """
-        mock_brief = {
-            "data": {
-                "daily": {
+        mock_context = {
+            "daily_brief": {
+                "summary": "NVDA leads semiconductor rally with +5% gain.",
+                "market_sentiment": "BULLISH",
+                "top_signals": [{"name": "NVDA", "value": "+5%", "signal": "positive"}],
+                "top_risks": [],
+                "generated_at": "2026-03-23T10:00:00Z",
+                "freshness": "2026-03-23T10:00:00Z",
+                "source": ["scoped_brief"],
+            },
+            "copilot_start": {
+                "brief_of_day": {
                     "summary": "NVDA leads semiconductor rally with +5% gain.",
                     "market_sentiment": "BULLISH",
                     "top_signals": [{"name": "NVDA", "value": "+5%", "signal": "positive"}],
@@ -238,14 +312,22 @@ class TestDEV03BriefOfDayContract:
                     "generated_at": "2026-03-23T10:00:00Z",
                     "freshness": "2026-03-23T10:00:00Z",
                     "source": ["scoped_brief"],
-                }
-            }
+                },
+                "ask": [],
+                "open": [],
+            },
+            "scope_tickers": ["MSFT", "NVDA"],
+            "allocation_drift_alerts": {"active": False, "alerts": [], "weights_analyzed": {}},
+            "playbook_context": {"guardrails": []},
         }
 
-        def mock_load_json(key):
-            return mock_brief if key == "brief_daily" else None
+        async def mock_build_context_payload(context_service_cls=None, scope=None):
+            return mock_context
 
-        monkeypatch.setattr(storage_io, "load_json", mock_load_json)
+        monkeypatch.setattr(
+            "domains.copilot.application.copilot_service.build_context_payload",
+            mock_build_context_payload,
+        )
 
         client = _client()
         response = client.get("/api/copilot/start?tickers=nvda&tickers=msft")
@@ -700,16 +782,24 @@ class TestDEV03IntegrationProof:
     def test_full_copilot_flow_brief_then_ask(self, monkeypatch):
         """
         DEV-03: Full user flow - start with brief, then ask question.
-        
+
         User journey:
         1. Open copilot → see brief of day
         2. Ask question about portfolio
         3. Get answer with verdict
         """
-        # Mock brief
-        mock_brief = {
-            "data": {
-                "daily": {
+        mock_context = {
+            "daily_brief": {
+                "summary": "Markets steady. Tech leads.",
+                "market_sentiment": "BULLISH",
+                "top_signals": [{"name": "Tech rally", "value": "strong"}],
+                "top_risks": [{"name": "CPI tomorrow", "value": "watch"}],
+                "generated_at": "2026-03-23T11:00:00Z",
+                "freshness": "2026-03-23T11:00:00Z",
+                "source": ["integration_test"],
+            },
+            "copilot_start": {
+                "brief_of_day": {
                     "summary": "Markets steady. Tech leads.",
                     "market_sentiment": "BULLISH",
                     "top_signals": [{"name": "Tech rally", "value": "strong"}],
@@ -717,14 +807,21 @@ class TestDEV03IntegrationProof:
                     "generated_at": "2026-03-23T11:00:00Z",
                     "freshness": "2026-03-23T11:00:00Z",
                     "source": ["integration_test"],
-                }
-            }
+                },
+                "ask": [],
+                "open": [],
+            },
+            "allocation_drift_alerts": {"active": False, "alerts": [], "weights_analyzed": {}},
+            "playbook_context": {"guardrails": []},
         }
 
-        def mock_load_json(key):
-            return mock_brief if key == "brief_daily" else None
+        async def mock_build_context_payload(context_service_cls=None, scope=None):
+            return mock_context
 
-        monkeypatch.setattr(storage_io, "load_json", mock_load_json)
+        monkeypatch.setattr(
+            "domains.copilot.application.copilot_service.build_context_payload",
+            mock_build_context_payload,
+        )
 
         client = _client()
 
@@ -758,12 +855,21 @@ class TestDEV03IntegrationProof:
     def test_personal_finance_namespace_alias(self, monkeypatch):
         """
         DEV-03: Personal finance namespace alias must work.
-        
+
         /api/personal-finance/start should work as alias for /api/copilot/start
         """
-        mock_brief = {
-            "data": {
-                "daily": {
+        mock_context = {
+            "daily_brief": {
+                "summary": "Personal finance brief",
+                "market_sentiment": "NEUTRAL",
+                "top_signals": [],
+                "top_risks": [],
+                "generated_at": "2026-03-23T12:00:00Z",
+                "freshness": "2026-03-23T12:00:00Z",
+                "source": ["personal_finance_test"],
+            },
+            "copilot_start": {
+                "brief_of_day": {
                     "summary": "Personal finance brief",
                     "market_sentiment": "NEUTRAL",
                     "top_signals": [],
@@ -771,14 +877,21 @@ class TestDEV03IntegrationProof:
                     "generated_at": "2026-03-23T12:00:00Z",
                     "freshness": "2026-03-23T12:00:00Z",
                     "source": ["personal_finance_test"],
-                }
-            }
+                },
+                "ask": [],
+                "open": [],
+            },
+            "allocation_drift_alerts": {"active": False, "alerts": [], "weights_analyzed": {}},
+            "playbook_context": {"guardrails": []},
         }
 
-        def mock_load_json(key):
-            return mock_brief if key == "brief_daily" else None
+        async def mock_build_context_payload(context_service_cls=None, scope=None):
+            return mock_context
 
-        monkeypatch.setattr(storage_io, "load_json", mock_load_json)
+        monkeypatch.setattr(
+            "domains.copilot.application.copilot_service.build_context_payload",
+            mock_build_context_payload,
+        )
 
         client = _client()
         response = client.get("/api/personal-finance/start")

@@ -9,6 +9,7 @@ from typing import Dict, Any
 from unittest.mock import patch, MagicMock
 import pandas as pd
 from datetime import datetime, timezone
+import os
 
 
 class TestFetchLiveMarketIndicators:
@@ -27,35 +28,37 @@ class TestFetchLiveMarketIndicators:
             'Close': [18.5]
         }, index=pd.date_range('2026-03-24', periods=1))
         
-        with patch('domains.copilot.application.copilot_service.get_price_history') as mock_get_price:
-            mock_get_price.side_effect = lambda symbol, **kwargs: (
-                mock_vix_df if symbol == '^VIX' else 
-                mock_spy_df if symbol == 'SPY' else
-                mock_spy_df if symbol == 'QQQ' else None
-            )
-            
-            result = _fetch_live_market_indicators()
-            
-            assert result['vix'] == 18.5
-            assert result['spy_change'] == pytest.approx(1.11, rel=0.01)
-            assert result['qqq_change'] == pytest.approx(1.11, rel=0.01)
-            assert result['market_status'] in ['open', 'closed', 'unknown']
-            assert result['fetched_at'] is not None
-            assert result['source'] == 'live_market_data'
-            assert result.get('degraded') == False
+        with patch.dict(os.environ, {"FC_COPILOT_LIVE_MARKET_DATA": "1"}):
+            with patch('domains.copilot.application.copilot_service.get_price_history') as mock_get_price:
+                mock_get_price.side_effect = lambda symbol, **kwargs: (
+                    mock_vix_df if symbol == '^VIX' else 
+                    mock_spy_df if symbol == 'SPY' else
+                    mock_spy_df if symbol == 'QQQ' else None
+                )
+                
+                result = _fetch_live_market_indicators()
+                
+                assert result['vix'] == 18.5
+                assert result['spy_change'] == pytest.approx(1.11, rel=0.01)
+                assert result['qqq_change'] == pytest.approx(1.11, rel=0.01)
+                assert result['market_status'] in ['open', 'closed', 'unknown']
+                assert result['fetched_at'] is not None
+                assert result['source'] == 'live_market_data'
+                assert result.get('degraded') == False
 
     def test_fetch_live_market_indicators_fallback_when_service_unavailable(self):
         """Should return fallback when get_price_history is not available."""
-        with patch('domains.copilot.application.copilot_service.get_price_history', None):
-            from domains.copilot.application.copilot_service import _fetch_live_market_indicators
-            
-            result = _fetch_live_market_indicators()
-            
-            assert result['vix'] is None
-            assert result['spy_change'] is None
-            assert result['qqq_change'] is None
-            assert result['degraded'] == True
-            assert 'Live data fetch failed' in result.get('degraded_reason', '')
+        with patch.dict(os.environ, {"FC_COPILOT_LIVE_MARKET_DATA": "1"}):
+            with patch('domains.copilot.application.copilot_service.get_price_history', None):
+                from domains.copilot.application.copilot_service import _fetch_live_market_indicators
+                
+                result = _fetch_live_market_indicators()
+                
+                assert result['vix'] is None
+                assert result['spy_change'] is None
+                assert result['qqq_change'] is None
+                assert result['degraded'] == True
+                assert 'Live data fetch failed' in result.get('degraded_reason', '')
 
     def test_fetch_live_market_indicators_partial_data(self):
         """Should handle partial data fetch (some tickers fail)."""
@@ -65,19 +68,20 @@ class TestFetchLiveMarketIndicators:
             'Close': [450.0, 455.0]
         }, index=pd.date_range('2026-03-23', periods=2))
         
-        with patch('domains.copilot.application.copilot_service.get_price_history') as mock_get_price:
-            # Only SPY succeeds, VIX and QQQ fail
-            mock_get_price.side_effect = lambda symbol, **kwargs: (
-                mock_spy_df if symbol == 'SPY' else None
-            )
-            
-            result = _fetch_live_market_indicators()
-            
-            assert result['vix'] is None
-            assert result['spy_change'] == pytest.approx(1.11, rel=0.01)
-            assert result['qqq_change'] is None
-            # Should not be marked as fully degraded since we got some data
-            assert result.get('degraded') == False
+        with patch.dict(os.environ, {"FC_COPILOT_LIVE_MARKET_DATA": "1"}):
+            with patch('domains.copilot.application.copilot_service.get_price_history') as mock_get_price:
+                # Only SPY succeeds, VIX and QQQ fail
+                mock_get_price.side_effect = lambda symbol, **kwargs: (
+                    mock_spy_df if symbol == 'SPY' else None
+                )
+                
+                result = _fetch_live_market_indicators()
+                
+                assert result['vix'] is None
+                assert result['spy_change'] == pytest.approx(1.11, rel=0.01)
+                assert result['qqq_change'] is None
+                # Should not be marked as fully degraded since we got some data
+                assert result.get('degraded') == False
 
     def test_fetch_live_market_indicators_empty_dataframe(self):
         """Should handle empty dataframes gracefully."""
@@ -85,15 +89,16 @@ class TestFetchLiveMarketIndicators:
         
         empty_df = pd.DataFrame()
         
-        with patch('domains.copilot.application.copilot_service.get_price_history') as mock_get_price:
-            mock_get_price.return_value = empty_df
-            
-            result = _fetch_live_market_indicators()
-            
-            assert result['vix'] is None
-            assert result['spy_change'] is None
-            assert result['qqq_change'] is None
-            assert result['degraded'] == True
+        with patch.dict(os.environ, {"FC_COPILOT_LIVE_MARKET_DATA": "1"}):
+            with patch('domains.copilot.application.copilot_service.get_price_history') as mock_get_price:
+                mock_get_price.return_value = empty_df
+                
+                result = _fetch_live_market_indicators()
+                
+                assert result['vix'] is None
+                assert result['spy_change'] is None
+                assert result['qqq_change'] is None
+                assert result['degraded'] == True
 
 
 class TestEnhanceBriefWithLiveData:
@@ -217,20 +222,21 @@ class TestLoadDailyBriefPayloadWithLiveData:
         mock_spy_df = pd.DataFrame({'Close': [450.0, 455.0]})
         mock_vix_df = pd.DataFrame({'Close': [18.0]})
         
-        with patch('domains.copilot.application.copilot_service.storage_io') as mock_io:
-            mock_io.load_json.return_value = mock_brief_snapshot
-            
-            with patch('domains.copilot.application.copilot_service.get_price_history') as mock_price:
-                mock_price.side_effect = lambda symbol, **kwargs: (
-                    mock_vix_df if symbol == '^VIX' else mock_spy_df
-                )
+        with patch.dict(os.environ, {"FC_COPILOT_LIVE_MARKET_DATA": "1"}):
+            with patch('domains.copilot.application.copilot_service.storage_io') as mock_io:
+                mock_io.load_json.return_value = mock_brief_snapshot
                 
-                result = _load_daily_brief_payload()
-                
-                assert result['summary'] is not None
-                assert result['market_sentiment'] == 'BULLISH'
-                # Live data should be included
-                assert 'live_market_data' in result or 'live_market_data' in str(result.get('source', []))
+                with patch('domains.copilot.application.copilot_service.get_price_history') as mock_price:
+                    mock_price.side_effect = lambda symbol, **kwargs: (
+                        mock_vix_df if symbol == '^VIX' else mock_spy_df
+                    )
+                    
+                    result = _load_daily_brief_payload()
+                    
+                    assert result['summary'] is not None
+                    assert result['market_sentiment'] == 'BULLISH'
+                    # Live data should be included
+                    assert 'live_market_data' in result or 'live_market_data' in str(result.get('source', []))
 
     def test_load_daily_brief_fallback_when_no_snapshot(self):
         """Should return fallback when no snapshot available."""

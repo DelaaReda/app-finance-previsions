@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-92-BATCH-92-DEV-03-20260416T073623Z-247"
+stream_id: "BATCH-92"
+task_id: "BATCH-92-DEV-03"
+role: "dev"
+produced_at_utc: "2026-04-16T07:36:23Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T07:36:23Z"
+      ended_at_utc: "2026-04-16T07:36:23Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`pytest apps/api/src/domains/copilot/tests/test_personal_finance_start_judge_rescue.py -q`; `pytest apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py -q`; `scripts/backend_regression_gate.sh domai"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "`GET /api/copilot/start` and `GET /api/personal-finance/start` now share the same Judge-backed rescue path, with namespace-correct ask/open/ranked-action targets proven by `apps/api/src/domains/copilot/tests/test_persona"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-92-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-92-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=`/api/copilot/start` stopped at the local never-empty fallback while only the personal-finance alias had judge-rescue coverage, so the primary brief/ask/open entrypoint could stay stuck on `No daily brief available yet.` | fix_applied=Added a shared Judge rescue helper in `apps/api/src/domains/copilot/api/copilot.py`, normalized Judge `/personal-finance/*` actions back to `/copilot/*` for the base route, reused the helper from the personal-finance ali | verify=before=public EC2 `GET /api/copilot/start?tickers=NVDA` and `GET /api/personal-finance/start?tickers=NVDA` returned `fallback_used=copilot_start_never_empty` with `No daily brief available yet.` while `GET /api/judge/per | architecture_check=layer=API route adapter rescue only; imports_ok=reused existing `services.judge_endpoint_service`/`domains.judge.application.judge_endpoint_service` with no new service layer; path_target=`apps/api/src/domains/copilot/*` | vision_alignment=batch=BATCH-92; target=brief-of-day starter parity for the main copilot ask/open path; impact=the user-visible starter can now fall through to the richer Judge brief instead of exposing an empty local fallback when conte"

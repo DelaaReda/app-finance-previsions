@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-85-BATCH-85-GOV_REVIEW-20260415T080721Z-197"
+stream_id: "BATCH-85"
+task_id: "BATCH-85-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-04-15T08:07:21Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role planner --task BATCH-85-GOV_REVIEW"
+      rc: "0"
+      started_at_utc: "2026-04-15T08:07:21Z"
+      ended_at_utc: "2026-04-15T08:07:21Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_gov_review_runtime_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_COMPLETE_BATCH-85-GOV_REVIEW_P1776240239_20646"
+  review_ref: "runner:BATCH-85-GOV_REVIEW"
+  note: "source=runner | root_cause=GOV_REVIEW remained IN_PROGRESS after BATCH-85-ADMIN-01 reached DONE and the final planner closure was still pending | fix_applied=Planner completed the canonical GOV_REVIEW step after validating the downstream DEV/ADMIN proof chain and the product target in docs/product/PRODUCT_VISION.md#One sentence | verify=before=BATCH-85-GOV_REVIEW:IN_PROGRESS depends_on=BATCH-85-ADMIN-01; after=BATCH-85-GOV_REVIEW:DONE and batch ready for closure; test=depends_done:BATCH-85-ADMIN-01+runtime_queue_refresh | architecture_check=layer=planner runtime governance; imports_ok=true; path_target=apps/api/src,apps/web/src | vision_alignment=batch=BATCH-85; target=brief+ask/open personal finance copilot per docs/product/PRODUCT_VISION.md#One sentence; impact=closes governance after the validated app slice proof"

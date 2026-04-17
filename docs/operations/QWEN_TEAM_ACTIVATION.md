@@ -1,5 +1,9 @@
 # Activation Équipe Qwen - Procédure d'Urgence
 
+Historical note:
+- This document reflects an older migration/recovery phase.
+- Any `localhost:*` app example below is historical only, not current public app guidance.
+
 **Date:** 2026-02-28 05:15 EST  
 **Motif:** Limites Codex Pro épuisées - API rate limit  
 **Status:** ⚠️ EN ATTENTE VALIDATION

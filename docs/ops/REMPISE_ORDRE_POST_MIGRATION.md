@@ -11,6 +11,7 @@ superseded_by:
 Historical note:
 - This file reflects a post-migration recovery moment.
 - It is background only and not the current operational source of truth.
+- The runtime statuses below describe the old local-VM app-serving period and are no longer the current infra model.
 
 **Date:** 2026-02-28  
 **Contexte:** Plusieurs agents ont travaillé après la grosse migration Feb 27–28. Audit complet effectué pour identifier ce qui doit être corrigé.

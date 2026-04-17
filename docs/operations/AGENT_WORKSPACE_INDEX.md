@@ -30,6 +30,17 @@ For the shortest current doc set, start with `docs/ops/CURRENT_ARCHITECTURE_ENTR
 ### Canonical workspace root
 - `/home/venom/analyse-financiere`
 
+### Public app-serving runtime
+- Canonical app runtime reference: `/home/venom/analyse-financiere/docs/ops/EC2_APP_RUNTIME_QUICK_REFERENCE.md`
+- Public frontend: `http://3.98.20.77/`
+- Public API base: `http://3.98.20.77/api/`
+- Public monitor: `http://3.98.20.77:8080/`
+- Canonical VM-side app control wrapper: `/home/venom/analyse-financiere/scripts/aws_remote_app_control.sh`
+- Mac <-> UTM VM = shared workspace view of the same repo
+- This shared workspace is one sync layer only; app publication is separate
+- Canonical app publication path: shared workspace -> AWS only; manual by default; canonical operator path is the Mac side
+- If the operator explicitly launches the same publication wrapper from the UTM VM, it still publishes the same shared workspace snapshot, not VM-local orchestration state
+
 ### Core orchestration state
 - Runtime mutable state root: `/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/`
 - Runtime state file: `/home/venom/analyse-financiere/logs-codex-runs/orchestrator-state/runtime-state.json`
@@ -52,6 +63,11 @@ For the shortest current doc set, start with `docs/ops/CURRENT_ARCHITECTURE_ENTR
 - Endpoint architecture target: `/home/venom/analyse-financiere/docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md`
 
 ## 4) Runtime Behavior and Edge Cases
+- The UTM VM remains the canonical orchestration host.
+- The public app-serving stack runs on AWS EC2 and must not be restarted locally on the UTM VM during normal operations.
+- App changes are not auto-published from the UTM VM; public app state reflects only the last completed shared-workspace -> AWS publication.
+- Missing planner/orchestration artifacts on EC2 are normal because the EC2 host receives app-serving code/support, not local orchestration state/history.
+- VM-side endpoint checks should target the EC2 public endpoints or the canonical AWS control wrapper, not local loopback app ports.
 - Compatibility alias `/home/venom/analyse-financiere/docs/orchestrator-ops` may exist and be readable.
 - Canonical mutable runtime writes must target `logs-codex-runs/orchestrator-state/`.
 - `docs/operations/orchestrator` remains readable for compatibility and human-facing evidence.

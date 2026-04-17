@@ -14,6 +14,10 @@ Define reliability guarantees for the current orchestration model:
 
 This specification replaces older multi-lane target assumptions.
 
+Boundary:
+- This specification governs VM-local orchestration reliability.
+- Public app-serving health on AWS EC2 is separate and must be judged from the EC2 public endpoints, not from VM-local loopback listeners.
+
 ## Normative Rules
 
 ### Scheduling
@@ -158,6 +162,7 @@ Primary checks:
 Access policy:
 - VM-local monitor: `http://127.0.0.1:7779/`
 - host-facing monitor: `http://192.168.64.9:7780/`
+- public app-serving checks: `http://3.98.20.77/` and `http://3.98.20.77:8080/`
 - public tunnels are disabled by default and are not reliability primitives
 
 Canonical orchestrator sources:

@@ -5,6 +5,10 @@ Define what "ready" means for the current planner-orchestrator runtime.
 
 ## Ready Means
 - runtime is on the VM workspace `/home/venom/analyse-financiere`
+- app-serving runtime is on the AWS EC2 host, not on the UTM VM
+- Mac and the UTM VM share the same workspace view; this is local workspace sharing, not public app publication
+- public app state reflects only the last successful shared-workspace -> AWS publication
+- canonical operator path is Mac-side publication; if the operator explicitly launches the same wrapper from the UTM VM, it still publishes the shared workspace snapshot, not VM-local orchestration state
 - `planner` scheduled lane is healthy
 - role sessions are fresh: stale tmux/Codex resume state does not survive a VM resume or prompt/workspace drift
 - role sessions are rooted in `/home/venom/analyse-financiere`; foreign or deleted workdirs do not count as ready
@@ -45,6 +49,10 @@ These capabilities do not need to exist as scheduled cron lanes in target mode.
 ## Operator Checks
 ```bash
 bash scripts/runtime_host_check.sh
+scripts/aws_remote_app_control.sh instance-status
+scripts/aws_remote_app_control.sh public-status
+curl -s http://3.98.20.77/api/health | jq '{status,version}'
+curl -s http://3.98.20.77:8080/api/status?lite=1 | jq '{health,primary_status,product_runtime}'
 cat logs-codex-runs/monitor-lan-url.txt
 bash scripts/fc_doctor.sh --json | jq '.checks.sessions,.checks.providers'
 curl -s http://127.0.0.1:7779/api/status?lite=1 | jq '{health,execution_mode,core_roles,planner_subagents}'
@@ -57,6 +65,10 @@ python3 -m pytest -q \
 
 Expected:
 - `runtime_is_vm=1`
+- EC2 instance reachable or wakeable through `scripts/aws_remote_app_control.sh`
+- public app endpoints reachable on AWS EC2
+- VM-local `127.0.0.1:7779` / `7780` checks are orchestration/control-plane checks only, not public app proof
+- agents do not assume auto-sync from the UTM VM or the Mac to AWS
 - planner healthy
 - stale role session artifacts recycled after large VM resume gaps
 - no placeholder or shell-only tmux session is counted as an active lane without fresh execution proof
@@ -68,6 +80,7 @@ Expected:
 - Legacy `po_scrum_master` and multi-lane readiness language is historical only.
 - Compatibility scripts may still exist, but they are not the readiness target.
 - Public tunnel URLs are no longer canonical readiness signals.
+- The UTM VM is not the canonical app-serving host; local loopback app listeners do not count as public app readiness.
 - `planner` and `dev` use `gpt-5.3-codex-spark` with `high` reasoning as the secondary Codex fallback before `qwen`.
 - `RUN_LOCK_BUSY` on planner ticks is cadence/backpressure only; it must not be treated as proof that a stale non-active-cycle stream is still canonical.
 

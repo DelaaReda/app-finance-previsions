@@ -14,7 +14,7 @@
   },
   "roles": {
     "planner": {
-      "model": "gpt-5.3-codex-spark",
+      "model": "gpt-5.4",
       "thinking": "high",
       "resume": 1,
       "rate_limit_precheck": 0,
@@ -23,8 +23,8 @@
       "tick_timeout_seconds": 420
     },
     "dev": {
-      "model": "gpt-5.3-codex-spark",
-      "thinking": "medium",
+      "model": "gpt-5.4",
+      "thinking": "high",
       "resume": 1,
       "rate_limit_precheck": 0,
       "prompt_timeout_seconds": 300,
@@ -39,8 +39,8 @@
       }
     },
     "admin": {
-      "model": "gpt-5.3-codex-spark",
-      "thinking": "medium",
+      "model": "gpt-5.4",
+      "thinking": "high",
       "resume": 1,
       "rate_limit_precheck": 0,
       "prompt_timeout_seconds": 360,
@@ -48,8 +48,8 @@
       "tick_timeout_seconds": 540
     },
     "scrum_master": {
-      "model": "gpt-5.3-codex-spark",
-      "thinking": "medium",
+      "model": "gpt-5.4",
+      "thinking": "high",
       "resume": 1,
       "rate_limit_precheck": 0,
       "prompt_timeout_seconds": 300,

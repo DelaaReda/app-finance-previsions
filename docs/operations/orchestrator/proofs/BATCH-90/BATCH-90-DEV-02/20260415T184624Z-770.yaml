@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-90-BATCH-90-DEV-02-20260415T184624Z-770"
+stream_id: "BATCH-90"
+task_id: "BATCH-90-DEV-02"
+role: "dev"
+produced_at_utc: "2026-04-15T18:46:24Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T18:46:24Z"
+      ended_at_utc: "2026-04-15T18:46:24Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`node --test apps/web/src/domains/forecasts/components/widgets/copilot-integration.test.js apps/web/src/domains/forecasts/components/widgets/test_dev02_copilot_integration.js apps/web/src/domains/forecasts/pages/personal"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "targeted green test run for the personal-finance frontend slice: `node --test apps/web/src/domains/forecasts/components/widgets/copilot-integration.test.js apps/web/src/domains/forecasts/components/widgets/test_dev02_cop"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-90-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-90-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=`apps/web/src/domains/forecasts/components/widgets/copilot-integration.test.js` still asserted a hard-coded `/api/copilot/start` string even though the shared widget had already moved to `getCopilotApiBase()` + namespace | fix_applied=Patched the stale assertion to check for `getCopilotApiBase`, `getCopilotNamespace`, and `${getCopilotApiBase()}/${namespace}/start` instead of the legacy hard-coded route. Committed the change. | verify=before=targeted frontend test run failed on stale assertion `Must wire to backend API` in `copilot-integration.test.js`; after=all 26 targeted tests passed with the namespace-aware contract assertion; test=`node --test a | architecture_check=layer=test contract only; imports_ok=yes, no production import graph changes; path_target=apps/web/src/domains/forecasts/components/widgets/copilot-integration.test.js | vision_alignment=batch=BATCH-90; target=personal finance copilot brief+ask/open frontend path; impact=removes a false-negative test blocker while preserving the existing shared widget reuse strategy for the personal-finance start experie"

@@ -92,6 +92,13 @@ model_for_role() {
   printf '%s\n' "${!varname:-${ROLE_CODEX_MODEL}}"
 }
 
+thinking_for_role() {
+  local role="$1"
+  local varname="LM_ROLE_${role^^}_THINKING"
+  varname="${varname//-/_}"
+  normalize_reasoning_level "${!varname:-${ROLE_THINKING}}"
+}
+
 mkdir -p "${BACKUP_DIR}"
 cp /home/venom/.openclaw/cron/jobs.json "${BACKUP_DIR}/jobs.${TS}.json"
 with_admin_lock openclaw cron list --json > "${BACKUP_DIR}/list.${TS}.json"
@@ -106,7 +113,7 @@ msg_for_role() {
   cat <<EOF
 Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.
 Never call send/message/delivery actions.
-Command: TMUX_ROLE_AGENT_BIN=${ROLE_AGENT_BIN} TMUX_ROLE_RETRY_ENGINE_DEFAULT=${ROLE_RETRY_ENGINE_DEFAULT} PROMPT_TIMEOUT_SECONDS=${ROLE_PROMPT_TIMEOUT_SECONDS} RETRY_PROMPT_TIMEOUT_SECONDS=${ROLE_RETRY_PROMPT_TIMEOUT_SECONDS} TMUX_ROLE_RECOVERY_THRESHOLD=${ROLE_RECOVERY_THRESHOLD} TMUX_ROLE_NO_DELTA_THRESHOLD=${ROLE_NO_DELTA_THRESHOLD} TMUX_ROLE_STALL_ABORT_SECONDS=${ROLE_STALL_ABORT_SECONDS} SKIP_RETRY_ON_TIMEOUT=${ROLE_SKIP_RETRY_ON_TIMEOUT} TMUX_ROLE_CODEX_EXEC_FALLBACK=${ROLE_CODEX_EXEC_FALLBACK} TMUX_ROLE_CODEX_MODEL=${role_model} TMUX_ROLE_CODEX_EXEC_RESUME=${ROLE_CODEX_EXEC_RESUME} TMUX_ROLE_MIN_REFLECTION_PASSES=${ROLE_MIN_REFLECTION_PASSES} TMUX_ROLE_ALLOW_FILE_EDITS=${ROLE_ALLOW_FILE_EDITS} bash scripts/cron_tmux_role_runner.sh ${role_runner_arg}
+Command: cd ${WORKDIR} && TMUX_ROLE_AGENT_BIN=${ROLE_AGENT_BIN} TMUX_ROLE_RETRY_ENGINE_DEFAULT=${ROLE_RETRY_ENGINE_DEFAULT} PROMPT_TIMEOUT_SECONDS=${ROLE_PROMPT_TIMEOUT_SECONDS} RETRY_PROMPT_TIMEOUT_SECONDS=${ROLE_RETRY_PROMPT_TIMEOUT_SECONDS} TMUX_ROLE_RECOVERY_THRESHOLD=${ROLE_RECOVERY_THRESHOLD} TMUX_ROLE_NO_DELTA_THRESHOLD=${ROLE_NO_DELTA_THRESHOLD} TMUX_ROLE_STALL_ABORT_SECONDS=${ROLE_STALL_ABORT_SECONDS} SKIP_RETRY_ON_TIMEOUT=${ROLE_SKIP_RETRY_ON_TIMEOUT} TMUX_ROLE_CODEX_EXEC_FALLBACK=${ROLE_CODEX_EXEC_FALLBACK} TMUX_ROLE_CODEX_MODEL=${role_model} TMUX_ROLE_CODEX_EXEC_RESUME=${ROLE_CODEX_EXEC_RESUME} TMUX_ROLE_MIN_REFLECTION_PASSES=${ROLE_MIN_REFLECTION_PASSES} TMUX_ROLE_ALLOW_FILE_EDITS=${ROLE_ALLOW_FILE_EDITS} bash scripts/cron_tmux_role_runner.sh ${role_runner_arg}
 EOF
 }
 
@@ -123,8 +130,10 @@ upsert_existing() {
   local agent_id
   local msg
   local role_model
+  local role_thinking
   agent_id="$(agent_for_role "${role}")"
   role_model="$(model_for_role "${role}")"
+  role_thinking="$(thinking_for_role "${role}")"
   msg="$(msg_for_role "${role}" "${role_model}")"
   with_admin_lock openclaw cron edit "${id}" \
     --name "${name}" \
@@ -132,7 +141,7 @@ upsert_existing() {
     --agent "${agent_id}" \
     --every "${every}" \
     --model "${role_model}" \
-    --thinking "$ROLE_THINKING" \
+    --thinking "$role_thinking" \
     --session isolated \
     --no-deliver \
     --wake now \
@@ -164,8 +173,10 @@ upsert_by_name() {
   local id
   local msg
   local role_model
+  local role_thinking
   agent_id="$(agent_for_role "${role}")"
   role_model="$(model_for_role "${role}")"
+  role_thinking="$(thinking_for_role "${role}")"
   msg="$(msg_for_role "${role}" "${role_model}")"
   id="$(find_job_id_by_name "${name}" || true)"
   if [[ -n "${id}" ]]; then
@@ -175,7 +186,7 @@ upsert_by_name() {
       --agent "${agent_id}" \
       --every "${every}" \
       --model "${role_model}" \
-      --thinking "$ROLE_THINKING" \
+      --thinking "$role_thinking" \
       --session isolated \
       --no-deliver \
       --wake now \
@@ -188,7 +199,7 @@ upsert_by_name() {
       --agent "${agent_id}" \
       --every "${every}" \
       --model "${role_model}" \
-      --thinking "$ROLE_THINKING" \
+      --thinking "$role_thinking" \
       --session isolated \
       --no-deliver \
       --wake now \

@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from apps.monitor.collectors.runtime_collectors import collect_queue_workboard
 from planning.plane.plane_planning import build_plane_planning_snapshot
+from runtime.truth.public_runtime_probe import probe_public_surface
 from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
 
 
@@ -91,6 +92,17 @@ def _provider_plane_snapshot(kind: str) -> dict[str, Any]:
 def _doctor_surface(doctor_payload: dict[str, Any], name: str) -> dict[str, Any]:
     raw = doctor_payload.get(name)
     return raw if isinstance(raw, dict) else {}
+
+
+def _app_only_monitor_host(payload: dict[str, Any]) -> bool:
+    monitor_host = payload.get("monitor_host")
+    if isinstance(monitor_host, dict):
+        profile = str(monitor_host.get("profile", "") or "").strip().lower()
+        control_plane_location = str(monitor_host.get("control_plane_location", "") or "").strip().lower()
+        if profile == "app_only" or control_plane_location == "remote_vm":
+            return True
+    token = str(os.environ.get("FC_CONTROL_PLANE_LOCATION", "") or "").strip().lower()
+    return token in {"remote", "remote_vm", "aws_ec2_app", "ec2_app_host"}
 
 
 def _systemd_unit_probe(unit: str, verb: str) -> dict[str, Any]:
@@ -179,6 +191,76 @@ def _collector_queue_summary(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _merge_product_delivery_state_with_live_runtime(
+    product_delivery_state: dict[str, Any],
+    *,
+    backend_status: str,
+) -> dict[str, Any]:
+    if not isinstance(product_delivery_state, dict):
+        product_delivery_state = {}
+    merged = dict(product_delivery_state)
+    active_batch_id = str(merged.get("active_batch_id") or "").strip() or None
+    live_ec2_reachable = _normalize_status(backend_status) == "ok"
+    public_proof_status = _normalize_status(merged.get("public_proof_status"), "unknown")
+    product_done = bool(merged.get("product_done", False))
+    user_visible_delta_confirmed = bool(merged.get("user_visible_delta_confirmed", False))
+    last_meaningful_delta_at = str(merged.get("last_meaningful_delta_at") or "").strip()
+    maintenance_active = bool(merged.get("maintenance_active", False))
+
+    merged["ec2_reachable"] = bool(live_ec2_reachable or maintenance_active)
+    if not live_ec2_reachable and maintenance_active:
+        if public_proof_status == "error":
+            merged["public_proof_status"] = "degraded"
+        if active_batch_id:
+            if product_done or (public_proof_status == "ok" and user_visible_delta_confirmed):
+                merged["product_done"] = True
+                merged["phase"] = "product_done_ops_dirty"
+                merged["freeze_reason"] = "none"
+                merged["next_batch_eligible"] = True
+            elif last_meaningful_delta_at:
+                merged["phase"] = "verifying_public_proof"
+                merged["freeze_reason"] = "waiting_public_proof"
+                merged["next_batch_eligible"] = False
+            else:
+                merged["phase"] = "active_delivery"
+                merged["freeze_reason"] = "none"
+                merged["next_batch_eligible"] = False
+        else:
+            merged["phase"] = "idle_ready_for_next_batch"
+            merged["freeze_reason"] = "none"
+            merged["next_batch_eligible"] = True
+        return merged
+    if not live_ec2_reachable and (active_batch_id or last_meaningful_delta_at or product_done):
+        merged["phase"] = "external_outage"
+        merged["freeze_reason"] = "external_outage"
+        merged["next_batch_eligible"] = False
+        if public_proof_status != "ok":
+            merged["public_proof_status"] = "error"
+        return merged
+
+    if active_batch_id:
+        if product_done or (public_proof_status == "ok" and user_visible_delta_confirmed):
+            merged["product_done"] = True
+            merged["phase"] = "product_done_ops_dirty"
+            merged["freeze_reason"] = "none"
+            merged["next_batch_eligible"] = True
+        elif last_meaningful_delta_at:
+            if public_proof_status == "error":
+                merged["public_proof_status"] = "degraded"
+            merged["phase"] = "verifying_public_proof"
+            merged["freeze_reason"] = "waiting_public_proof"
+            merged["next_batch_eligible"] = False
+        else:
+            merged["phase"] = "active_delivery"
+            merged["freeze_reason"] = "none"
+            merged["next_batch_eligible"] = False
+    else:
+        merged["phase"] = "idle_ready_for_next_batch"
+        merged["freeze_reason"] = "none" if live_ec2_reachable or product_done or public_proof_status == "ok" else "no_active_batch"
+        merged["next_batch_eligible"] = bool(live_ec2_reachable or product_done or public_proof_status == "ok")
+    return merged
+
+
 def build_status_snapshot(
     root: Path,
     status_builder: Callable[[], dict[str, Any]],
@@ -191,33 +273,55 @@ def build_status_snapshot(
 
     checks = _doctor_checks(payload)
     doctor_payload = _doctor_payload(payload)
-    runtime_truth_snapshot = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24)
-    event_store_primary = bool(runtime_truth_snapshot.get("event_store_primary", False))
     doctor_overall_status = _normalize_status(
         doctor_payload.get("overall_status") or doctor_payload.get("status"),
         "unknown",
     )
     runtime_execution_mode = str(((payload.get("runtime_state") or {}) if isinstance(payload.get("runtime_state"), dict) else {}).get("execution_mode", "") or "").strip()
+    app_only_monitor_host = _app_only_monitor_host(payload)
     providers = checks.get("providers")
     if not isinstance(providers, dict):
         providers = {}
-    backend_base_url = str(providers.get("api_base", "http://127.0.0.1:8050") or "http://127.0.0.1:8050").strip() or "http://127.0.0.1:8050"
+    default_public_app = str(
+        os.environ.get("FC_API_BASE_URL")
+        or os.environ.get("FC_PUBLIC_APP_BASE_URL")
+        or "http://3.98.20.77"
+    ).strip() or "http://3.98.20.77"
+    backend_base_url = str(providers.get("api_base", default_public_app) or default_public_app).strip() or default_public_app
     backend_probe_candidates = (
         f"{backend_base_url.rstrip('/')}/api/status",
         f"{backend_base_url.rstrip('/')}/api/health",
     )
     backend_probe_url = backend_probe_candidates[0]
     backend_probe_ok = False
+    backend_probe: dict[str, Any] = {}
     for candidate in backend_probe_candidates:
         backend_probe_url = candidate
-        if _probe_http_ok(candidate):
-            backend_probe_ok = True
+        backend_probe = probe_public_surface(candidate, timeout_s=1.5)
+        if backend_probe.get("http_ok") or backend_probe.get("maintenance_active"):
+            backend_probe_ok = bool(backend_probe.get("http_ok"))
             break
+    backend_probe_maintenance = bool(backend_probe.get("maintenance_active"))
     backend_status = "ok" if bool(providers.get("api_reachable_effective") or providers.get("api_health_ok")) else ("ok" if backend_probe_ok else "degraded")
     frontend_url = str(
-        os.environ.get("FC_FRONTEND_STATUS_URL", "http://127.0.0.1:5173/") or "http://127.0.0.1:5173/"
-    ).strip() or "http://127.0.0.1:5173/"
+        os.environ.get("FC_FRONTEND_STATUS_URL")
+        or os.environ.get("FC_PUBLIC_APP_BASE_URL")
+        or "http://3.98.20.77/"
+    ).strip() or "http://3.98.20.77/"
     frontend_status = "ok" if _probe_http_ok(frontend_url) else "degraded"
+    runtime_truth_snapshot = build_runtime_truth_snapshot(
+        root,
+        state_limit=12,
+        event_limit=24,
+        ec2_reachable=True if (backend_probe_ok or backend_probe_maintenance) else False,
+        public_probe_status="ok" if backend_probe_ok else ("degraded" if backend_probe_maintenance else "error"),
+        maintenance_active=backend_probe_maintenance,
+        maintenance_details=backend_probe,
+    )
+    event_store_primary = bool(runtime_truth_snapshot.get("event_store_primary", False))
+    delivery_state = runtime_truth_snapshot.get("product_delivery_state")
+    if not isinstance(delivery_state, dict):
+        delivery_state = {}
     doctor_app_runtime = _doctor_surface(doctor_payload, "app_runtime")
     doctor_app_status = _normalize_status(doctor_app_runtime.get("status"))
     doctor_backend_status = _normalize_status(
@@ -287,7 +391,7 @@ def build_status_snapshot(
     payload["doctor_overall_status"] = doctor_overall_status
     payload["doctor_overall_status_source"] = "fc_doctor"
     doctor_agentic_runtime = _doctor_surface(doctor_payload, "agentic_runtime")
-    payload["agentic_runtime"] = {
+    agentic_runtime_payload = {
         "status": _normalize_status(
             doctor_agentic_runtime.get("status"),
             "ok" if event_store_primary and runtime_execution_mode else _aggregate_status(
@@ -301,6 +405,20 @@ def build_status_snapshot(
         "scheduler_authority": _normalize_status(doctor_agentic_runtime.get("scheduler_authority"), "ok" if runtime_execution_mode else _check_status(checks, "scheduler_authority")),
         "sessions": _normalize_status(doctor_agentic_runtime.get("sessions"), _check_status(checks, "sessions")),
     }
+    if app_only_monitor_host:
+        payload["agentic_runtime"] = {
+            "status": "ok",
+            "source": "remote_vm_advisory",
+            "runtime_truth": "ok",
+            "scheduler_authority": "ok",
+            "sessions": "ok",
+            "advisory_only": True,
+            "control_plane_location": "remote_vm",
+            "note": "Remote orchestration control-plane checks are advisory on this app-only host.",
+            "remote_snapshot": agentic_runtime_payload,
+        }
+    else:
+        payload["agentic_runtime"] = agentic_runtime_payload
 
     planning_detail = _doctor_surface(doctor_payload, "planning_plane")
     fallback_planning_detail = build_plane_planning_snapshot(root) if not planning_detail else {}
@@ -318,6 +436,18 @@ def build_status_snapshot(
     openclaw_gateway = doctor_payload.get("openclaw_gateway")
     if isinstance(openclaw_gateway, dict):
         payload["openclaw_gateway"] = _normalize_openclaw_gateway(openclaw_gateway)
+    if app_only_monitor_host:
+        remote_openclaw_gateway = payload.get("openclaw_gateway", {})
+        if not isinstance(remote_openclaw_gateway, dict):
+            remote_openclaw_gateway = {}
+        payload["openclaw_gateway"] = {
+            "status": "ok",
+            "source": "remote_vm_advisory",
+            "advisory_only": True,
+            "control_plane_location": "remote_vm",
+            "note": "OpenClaw lives on the orchestration host and is advisory on this app-only host.",
+            "remote_snapshot": remote_openclaw_gateway,
+        }
     payload["worker_orphan_count"] = int(doctor_payload.get("worker_orphan_count", 0) or 0)
     worker_orphans = doctor_payload.get("worker_orphans", [])
     if isinstance(worker_orphans, list):
@@ -325,6 +455,24 @@ def build_status_snapshot(
 
     payload.setdefault("layers", {})
     payload["layers"]["service"] = "status_service.v3"
+    delivery_control = payload.get("delivery_control")
+    if not isinstance(delivery_control, dict):
+        delivery_control = {}
+        payload["delivery_control"] = delivery_control
+    delivery_control["product_delivery_state"] = delivery_state
+    for field in (
+        "phase",
+        "product_done",
+        "ops_clean",
+        "next_batch_eligible",
+        "ec2_reachable",
+        "freeze_reason",
+        "maintenance_active",
+        "maintenance_reason",
+        "maintenance_command",
+        "maintenance_age_s",
+    ):
+        delivery_control[field] = delivery_state.get(field)
     payload["status_semantics"] = {
         "overall_status": {
             "field": "doctor_overall_status",
@@ -356,6 +504,18 @@ def build_status_snapshot(
             "product_runtime.status remains the app-first user-facing runtime signal."
         ),
     }
+    if app_only_monitor_host:
+        payload["health"] = str(payload["product_runtime"]["status"] or "unknown").upper()
+        payload["status_semantics"]["agentic_runtime"]["advisory_only"] = True
+        payload["status_semantics"]["note"] = (
+            "doctor_overall_status tracks control-plane health; on the EC2 app-only host, "
+            "agentic/planning/operator surfaces are advisory and public health follows product_runtime.status."
+        )
+        payload["issue_publication_gap_roles"] = []
+        issue_reporting = payload.get("issue_reporting")
+        if isinstance(issue_reporting, dict):
+            issue_reporting["roles_missing_report"] = []
+            issue_reporting["advisory_only"] = True
     collector_snapshot = collect_queue_workboard(root)
     queue_summary = _collector_queue_summary(collector_snapshot)
     queue_payload = payload.get("queue")
@@ -366,6 +526,30 @@ def build_status_snapshot(
     queue_payload.setdefault("active_cycle", queue_summary["active_cycle"])
     if payload.get("active_batch") in {None, ""}:
         payload["active_batch"] = queue_summary["active_batch"]
+    product_delivery_state = _merge_product_delivery_state_with_live_runtime(
+        runtime_truth_snapshot.get("product_delivery_state", {}) if isinstance(runtime_truth_snapshot, dict) else {},
+        backend_status=effective_backend_status,
+    )
+    if payload.get("active_batch") in {None, ""}:
+        payload["active_batch"] = product_delivery_state.get("active_batch_id")
+    delivery_control = payload.get("delivery_control")
+    if not isinstance(delivery_control, dict):
+        delivery_control = {}
+        payload["delivery_control"] = delivery_control
+    delivery_control["product_delivery_state"] = product_delivery_state
+    for field in (
+        "phase",
+        "product_done",
+        "ops_clean",
+        "next_batch_eligible",
+        "ec2_reachable",
+        "freeze_reason",
+        "maintenance_active",
+        "maintenance_reason",
+        "maintenance_command",
+        "maintenance_age_s",
+    ):
+        delivery_control[field] = product_delivery_state.get(field)
     agents_payload = payload.get("agents")
     if not isinstance(agents_payload, dict):
         agents_payload = {}

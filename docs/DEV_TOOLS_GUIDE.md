@@ -1,7 +1,7 @@
 # 🛠️ DEV TOOLS GUIDE — Finance Copilot Agents
 
 Guide de référence pour tous les outils disponibles dans le workspace.
-Chaque commande a été **testée et validée** sur cette VM (2026-03-01).
+Depuis 2026-04-16, la VM sert l’orchestration seulement. L’app publique est servie sur AWS EC2.
 
 ---
 
@@ -12,8 +12,8 @@ Le browser Chromium est toujours actif (CDP port 18800). Utilise-le pour valider
 ### Workflow type QA/Frontend
 
 ```bash
-# 1. Naviguer vers l'app
-openclaw browser navigate "http://localhost:5173/"
+# 1. Naviguer vers l'app publique
+openclaw browser navigate "http://3.98.20.77/"
 
 # 2. Attendre le chargement complet
 openclaw browser wait --load domcontentloaded
@@ -70,41 +70,41 @@ openclaw browser errors
 
 ## 2. API Backend (curl)
 
-Backend disponible sur `http://localhost:8050`
+Backend public disponible sur `http://3.98.20.77/api`
 
 ### Endpoints principaux
 
 ```bash
 # Health check
-curl -s "http://localhost:8050/api/health" | python3 -m json.tool
+curl -s "http://3.98.20.77/api/health" | python3 -m json.tool
 
 # News (460+ articles)
-curl -s "http://localhost:8050/api/news/feed?limit=5" | python3 -m json.tool
+curl -s "http://3.98.20.77/api/news/feed?limit=5" | python3 -m json.tool
 
 # Forecasts (20 prédictions)
-curl -s "http://localhost:8050/api/forecasts?limit=5" | python3 -m json.tool
+curl -s "http://3.98.20.77/api/forecasts?limit=5" | python3 -m json.tool
 
 # Prix actions avec historique
-curl -s "http://localhost:8050/api/stocks/prices" | python3 -m json.tool
+curl -s "http://3.98.20.77/api/stocks/prices" | python3 -m json.tool
 
 # KPIs dashboard
-curl -s "http://localhost:8050/api/dashboard/kpis" | python3 -m json.tool
+curl -s "http://3.98.20.77/api/dashboard/kpis" | python3 -m json.tool
 
 # Backtests
-curl -s "http://localhost:8050/api/backtests" | python3 -m json.tool
+curl -s "http://3.98.20.77/api/backtests" | python3 -m json.tool
 
 # Judge AI (multi-model)
-curl -s "http://localhost:8050/api/judge" | python3 -m json.tool
+curl -s "http://3.98.20.77/api/judge" | python3 -m json.tool
 
 # Top movers (bug connu: change_percent=0.0 — utiliser /api/stocks/prices à la place)
-curl -s "http://localhost:8050/api/stocks/top" | python3 -m json.tool
+curl -s "http://3.98.20.77/api/stocks/top" | python3 -m json.tool
 ```
 
 ### Vérifications clés
 
 ```bash
 # Vérifier qualité données forecasts
-curl -s "http://localhost:8050/api/forecasts?limit=20" | python3 -c "
+curl -s "http://3.98.20.77/api/forecasts?limit=20" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 forecasts = data.get('forecasts', [])
@@ -115,7 +115,7 @@ for f in high_conf[:3]:
 "
 
 # Vérifier change_percent réels
-curl -s "http://localhost:8050/api/stocks/prices" | python3 -c "
+curl -s "http://3.98.20.77/api/stocks/prices" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 for ticker, info in data.get('prices',{}).items():
@@ -172,7 +172,7 @@ bash scripts/agent_health.sh
 # Dashboard en temps réel (rafraîchi toutes les 15s)
 bash scripts/agent_health.sh --watch
 
-# Nettoyage après réveil VM
+# Nettoyage après réveil VM et revalidation du contrôle AWS
 bash scripts/vm_wake_cleanup.sh
 
 # Forcer le nettoyage
@@ -255,6 +255,5 @@ Avant de marquer une tâche DONE, vérifier :
 - [ ] `git log --oneline -3` montre ton commit
 - [ ] `openclaw browser errors` → 0 erreurs critiques
 - [ ] `openclaw browser console | grep "\[API\]"` → data live confirmée
-- [ ] `curl http://localhost:8050/api/health` → HTTP 200
-- [ ] `curl http://localhost:5173/` → HTTP 200
-
+- [ ] `curl http://3.98.20.77/api/health` → HTTP 200
+- [ ] `curl http://3.98.20.77/` → HTTP 200

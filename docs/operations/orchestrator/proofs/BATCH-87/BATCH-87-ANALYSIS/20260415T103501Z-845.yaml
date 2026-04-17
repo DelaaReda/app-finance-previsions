@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-87-BATCH-87-ANALYSIS-20260415T103501Z-845"
+stream_id: "BATCH-87"
+task_id: "BATCH-87-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-04-15T10:35:01Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "git add docs/operations/orchestrator/proofs/BATCH-87/BATCH-87-ANALYSIS.md docs/ops/BATCH-87-ANALYSIS-ARCHITECTURE_AUDIT.md && git commit -m 'docs(planner): close BATCH-87 analysis proof (BATCH-87-ANALYSIS)'"
+      rc: "0"
+      started_at_utc: "2026-04-15T10:35:01Z"
+      ended_at_utc: "2026-04-15T10:35:01Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pre-commit"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-87/BATCH-87-ANALYSIS.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "claim_B87_ARCH_P1776249024_29818"
+  review_ref: "runner:BATCH-87-ANALYSIS"
+  note: "source=runner | root_cause=BATCH-87-ANALYSIS etait en cours sans architecture_plan_ref ni architecture_audit | fix_applied=preuve planner committee avec artefact d analyse et audit d architecture relies au flux canonique | verify=before=BATCH-87-ANALYSIS:IN_PROGRESS proof_count=0; after=analysis_artifact_committed_and_complete_requested; test=parallel_workstream_context_and_pre_commit_passed | architecture_check=layer=apps_api_apps_web_platform_automation; imports_ok=yes; path_target=apps/api/src/domains/copilot/api/copilot.py,apps/web/src/domains/forecasts/components/widgets/copilot-panel.html,platform/automation/runtime/planner/planner_runtime_actions.py | vision_alignment=batch=BATCH-87; target=portfolio_first_brief_with_ranked_actions; impact=analysis_closed_and_arch_is_the_next_canonical_step"

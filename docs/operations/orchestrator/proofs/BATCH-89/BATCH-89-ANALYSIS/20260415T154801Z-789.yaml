@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-89-BATCH-89-ANALYSIS-20260415T154801Z-789"
+stream_id: "BATCH-89"
+task_id: "BATCH-89-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-04-15T15:48:01Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role planner --task BATCH-89-ANALYSIS"
+      rc: "0"
+      started_at_utc: "2026-04-15T15:48:01Z"
+      ended_at_utc: "2026-04-15T15:48:01Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_runtime_no_code_change)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-89/BATCH-89-ANALYSIS.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_COMPLETE_BATCH-89-ANALYSIS_P1776267932_16722"
+  review_ref: "runner:BATCH-89-ANALYSIS"
+  note: "source=runner | root_cause=BATCH-89-ANALYSIS stayed IN_PROGRESS with proof_count=0 despite a planner architecture proof and audit already prepared | fix_applied=planner backfilled the canonical proof payload and completed ANALYSIS to unblock the architecture step | verify=before=planner_context_ready0_inprogress1_task_B89_ANALYSIS,after=complete_requested_and_ARCH_should_be_next,test=python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=layer=application+frontend+runtime+automation; imports_ok=yes; path_target=apps/api/src/domains/copilot,apps/web/src,apps/api/runtime,platform/automation | vision_alignment=batch=BATCH-89,target=portfolio_first_brief_with_ranked_actions,impact=unlock_architecture_contract_before_dev_dispatch"

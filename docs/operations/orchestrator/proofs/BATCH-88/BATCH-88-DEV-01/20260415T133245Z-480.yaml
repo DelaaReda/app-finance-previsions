@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-88-BATCH-88-DEV-01-20260415T133245Z-480"
+stream_id: "BATCH-88"
+task_id: "BATCH-88-DEV-01"
+role: "dev"
+produced_at_utc: "2026-04-15T13:32:45Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T13:32:45Z"
+      ended_at_utc: "2026-04-15T13:32:45Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "pytest apps/api/src/domains/judge/tests/test_judge_route_orchestration.py -k \"personal_finance_start_service\""
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "[`packages/contracts/copilot_v1.py`](/home/venom/analyse-financiere/packages/contracts/copilot_v1.py), [`apps/api/src/domains/judge/application/judge_endpoint_service.py`](/home/venom/analyse-financiere/apps/api/src/doma"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-88-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-88-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=DEV-01 required personal finance start output parity via shared contract and ask/open-first ranked action, but judge start payload did not yet provide a ranked action field nor validate against the new copilot contract. | fix_applied=1) Added shared Copilot contract import and start-contract validation hook in `apps/api/src/domains/judge/application/judge_endpoint_service.py`. 2) Added `_pick_ranked_action` helper and included `ranked_action` in the  | verify=before=judge personal-finance start payload emitted brief_of_day/ask/open only; no shared contract guard in judge facade. after=payload now includes ranked_action (first ask/open action after normalization) and is valida | architecture_check=layer=api_service_orchestration, imports_ok=true, path_target=apps/api/src/domains/judge/application/judge_endpoint_service.py | vision_alignment=batch=BATCH-88, target=Build personal finance copilot start with brief-of-day + ask/open flow and [DEV-01], impact=contract-aware judge facade now emits ranked action and validates start shape via reusable `CopilotStartP"

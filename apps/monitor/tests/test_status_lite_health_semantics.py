@@ -129,6 +129,30 @@ class MonitorStatusLiteHealthSemanticsTests(unittest.TestCase):
         self.assertEqual(payload.get("doctor_overall_status"), "ok")
         self.assertEqual(payload.get("health"), "OK")
 
+    def test_doctor_snapshot_cold_cache_warms_even_when_refresh_is_deferred(self) -> None:
+        self.module._DOCTOR_CACHE["payload"] = None
+        self.module._DOCTOR_CACHE["ts"] = 0.0
+        fake = mock.Mock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "status": "ok",
+                    "generated_at": "2026-04-16T00:00:00Z",
+                    "checks": {},
+                    "meta": {"schema_version": "doctor.v1"},
+                }
+            ),
+            stderr="",
+        )
+
+        with mock.patch.object(self.module, "DOCTOR_PY_FILE", REPO_ROOT / "platform" / "automation" / "fc_doctor.py"), mock.patch.object(
+            self.module.subprocess, "run", return_value=fake
+        ):
+            payload = self.module.doctor_snapshot(force_refresh=False, allow_refresh=False)
+
+        self.assertEqual(payload.get("status"), "ok")
+        self.assertEqual((self.module._DOCTOR_CACHE.get("payload") or {}).get("status"), "ok")
+
 
 if __name__ == "__main__":
     unittest.main()

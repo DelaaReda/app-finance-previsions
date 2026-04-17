@@ -14,6 +14,70 @@ WORKSTREAM = ROOT / "platform" / "automation" / "compat" / "projections" / "para
 
 
 class QueueSyncTests(unittest.TestCase):
+    def test_sync_priority_publishes_workstreams_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            board_path = Path(td) / "parallel-workstreams.json"
+            queue_path = Path(td) / "priority-queue.json"
+
+            board = {
+                "version": 1,
+                "updated_at": "2026-03-04T00:00:00Z",
+                "sprint": {"id": "S-TEST", "goal": "queue sync alias"},
+                "roles": {},
+                "streams": [
+                    {"id": "BATCH-95", "state": "READY_DEV", "updated_at": "2026-03-04T00:00:00Z"},
+                ],
+                "tasks": [
+                    {
+                        "id": "BATCH-95-DEV-03",
+                        "stream_id": "BATCH-95",
+                        "role": "dev",
+                        "priority": "P1",
+                        "state": "READY_DEV",
+                        "depends_on": [],
+                        "created_at": "2026-03-04T00:00:00Z",
+                        "updated_at": "2026-03-04T00:00:00Z",
+                    },
+                ],
+                "handoffs": [],
+                "events": [],
+            }
+            queue = {
+                "items": [
+                    {
+                        "id": "BATCH-95",
+                        "title": "BATCH-95",
+                        "state": "READY_DEV",
+                        "depends_on": [],
+                    }
+                ]
+            }
+            board_path.write_text(json.dumps(board, ensure_ascii=True) + "\n", encoding="utf-8")
+            queue_path.write_text(json.dumps(queue, ensure_ascii=True) + "\n", encoding="utf-8")
+
+            cp = subprocess.run(
+                [
+                    sys.executable,
+                    str(WORKSTREAM),
+                    "--board",
+                    str(board_path),
+                    "sync-priority",
+                    "--queue",
+                    str(queue_path),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+
+            board_after = json.loads(board_path.read_text(encoding="utf-8"))
+            self.assertIn("workstreams", board_after)
+            self.assertEqual(len(board_after["workstreams"]), len(board_after["streams"]))
+            self.assertEqual(board_after["workstreams"][0]["id"], "BATCH-95")
+            self.assertEqual(board_after["workstreams"][0]["state"], board_after["streams"][0]["state"])
+
     def test_sync_priority_uses_task_truth_when_stream_metadata_is_stale(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             board_path = Path(td) / "parallel-workstreams.json"
@@ -421,6 +485,152 @@ class QueueSyncTests(unittest.TestCase):
                 ["BATCH-24", "BATCH-23"],
             )
 
+    def test_reconcile_state_reopens_closed_queue_item_when_stream_is_in_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            board_path = Path(td) / "parallel-workstreams.json"
+            queue_path = Path(td) / "priority-queue.json"
+
+            active_cycle = {
+                "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
+                "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
+                "dispatch_namespace": "BATCH",
+                "active_batch_ids": ["BATCH-89"],
+                "recent_completed_batch_ids": ["BATCH-88"],
+            }
+            board = {
+                "version": 1,
+                "updated_at": "2026-04-15T17:00:00Z",
+                "active_cycle": dict(active_cycle),
+                "sprint": {"id": "S-TEST", "goal": "reopen stale closed queue item"},
+                "roles": {},
+                "streams": [{"id": "BATCH-89", "state": "IN_PROGRESS"}],
+                "tasks": [
+                    {
+                        "id": "BATCH-89-GOV_REVIEW",
+                        "stream_id": "BATCH-89",
+                        "role": "planner",
+                        "priority": "P2",
+                        "state": "IN_PROGRESS",
+                        "depends_on": ["BATCH-89-ADMIN-01"],
+                        "created_at": "2026-04-15T16:56:06Z",
+                        "updated_at": "2026-04-15T17:00:00Z",
+                    }
+                ],
+                "handoffs": [],
+                "events": [],
+            }
+            queue = {
+                "updated_at": "2026-04-15T17:00:00Z",
+                "active_cycle": dict(active_cycle),
+                "items": [
+                    {
+                        "id": "BATCH-89",
+                        "title": "Batch 89",
+                        "state": "CLOSED",
+                        "closed_at": "2026-04-15T17:00:00Z",
+                        "depends_on": [],
+                    }
+                ],
+            }
+            board_path.write_text(json.dumps(board, ensure_ascii=True) + "\n", encoding="utf-8")
+            queue_path.write_text(json.dumps(queue, ensure_ascii=True) + "\n", encoding="utf-8")
+
+            cp = subprocess.run(
+                [
+                    sys.executable,
+                    str(WORKSTREAM),
+                    "--board",
+                    str(board_path),
+                    "reconcile-state",
+                    "--queue",
+                    str(queue_path),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+            self.assertIn("RECONCILE_OK", cp.stdout)
+            self.assertIn("queue_synced=1", cp.stdout)
+
+            queue_after = json.loads(queue_path.read_text(encoding="utf-8"))
+            self.assertEqual(queue_after["items"][0]["state"], "IN_PROGRESS")
+            self.assertEqual(queue_after["items"][0].get("closed_at"), "")
+
+    def test_reconcile_state_backfills_closed_at_for_closed_queue_item(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            board_path = Path(td) / "parallel-workstreams.json"
+            queue_path = Path(td) / "priority-queue.json"
+
+            active_cycle = {
+                "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
+                "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
+                "dispatch_namespace": "BATCH",
+                "active_batch_ids": [],
+                "recent_completed_batch_ids": ["BATCH-88"],
+            }
+            board = {
+                "version": 1,
+                "updated_at": "2026-04-15T17:00:00Z",
+                "active_cycle": dict(active_cycle),
+                "sprint": {"id": "S-TEST", "goal": "backfill closed_at on closed queue item"},
+                "roles": {},
+                "streams": [{"id": "BATCH-89", "state": "DONE"}],
+                "tasks": [
+                    {
+                        "id": "BATCH-89-GOV_REVIEW",
+                        "stream_id": "BATCH-89",
+                        "role": "planner",
+                        "priority": "P2",
+                        "state": "DONE",
+                        "depends_on": ["BATCH-89-ADMIN-01"],
+                        "created_at": "2026-04-15T16:56:06Z",
+                        "updated_at": "2026-04-15T17:00:00Z",
+                    }
+                ],
+                "handoffs": [],
+                "events": [],
+            }
+            queue = {
+                "updated_at": "2026-04-15T17:00:00Z",
+                "active_cycle": dict(active_cycle),
+                "items": [
+                    {
+                        "id": "BATCH-89",
+                        "title": "Batch 89",
+                        "state": "CLOSED",
+                        "closed_at": "",
+                        "depends_on": [],
+                    }
+                ],
+            }
+            board_path.write_text(json.dumps(board, ensure_ascii=True) + "\n", encoding="utf-8")
+            queue_path.write_text(json.dumps(queue, ensure_ascii=True) + "\n", encoding="utf-8")
+
+            cp = subprocess.run(
+                [
+                    sys.executable,
+                    str(WORKSTREAM),
+                    "--board",
+                    str(board_path),
+                    "reconcile-state",
+                    "--queue",
+                    str(queue_path),
+                ],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+            self.assertIn("RECONCILE_OK", cp.stdout)
+            self.assertIn("queue_synced=1", cp.stdout)
+
+            queue_after = json.loads(queue_path.read_text(encoding="utf-8"))
+            self.assertEqual(queue_after["items"][0]["state"], "CLOSED")
+            self.assertTrue(queue_after["items"][0].get("closed_at"))
+
     def test_sync_priority_refreshes_queue_next_action_from_stream_truth(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             board_path = Path(td) / "parallel-workstreams.json"
@@ -558,7 +768,7 @@ class QueueSyncTests(unittest.TestCase):
                     "--queue",
                     str(queue_path),
                     "--reason",
-                    "idle_no_ready",
+                    "idle_no_ready; novelty_target=portfolio_first_brief; user_visible_delta=opens a ranked portfolio action memo",
                     "--cooldown-s",
                     "0",
                 ],
@@ -573,6 +783,182 @@ class QueueSyncTests(unittest.TestCase):
             queue_after = json.loads(queue_path.read_text(encoding="utf-8"))
             self.assertEqual(queue_after["items"][0]["title"], "Build a personal finance copilot that starts with a brief of the day.")
             self.assertNotEqual(queue_after["items"][0]["title"], "status: canonical")
+
+    def test_planner_autobatch_prefers_p0_vision_priority_over_one_sentence(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            docs_root = root / "docs"
+            board_path = root / "parallel-workstreams.json"
+            queue_path = root / "priority-queue.json"
+            board = {
+                "version": 1,
+                "updated_at": "2026-04-16T00:00:00Z",
+                "roles": {},
+                "streams": [],
+                "tasks": [],
+                "handoffs": [],
+                "events": [],
+            }
+            queue = {"version": 1, "updated_at": "2026-04-16T00:00:00Z", "items": [], "meta": {}}
+            board_path.write_text(json.dumps(board, ensure_ascii=True) + "\n", encoding="utf-8")
+            queue_path.write_text(json.dumps(queue, ensure_ascii=True) + "\n", encoding="utf-8")
+            (docs_root / "product").mkdir(parents=True, exist_ok=True)
+            (docs_root / "product" / "PRODUCT_VISION.md").write_text(
+                "\n".join(
+                    [
+                        "# Finance Copilot Product Vision",
+                        "",
+                        "## One sentence",
+                        "Build a personal finance copilot that starts with a brief of the day.",
+                        "",
+                        "## What the product must do very well",
+                        "### P0",
+                        "- show what changed today and what matters now",
+                        "- support a strong deep dive on a ticker/theme/question",
+                        "### P1",
+                        "- multi-asset forecasts with short justification",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            cp = subprocess.run(
+                [
+                    sys.executable,
+                    str(WORKSTREAM),
+                    "--board",
+                    str(board_path),
+                    "planner-autobatch",
+                    "--queue",
+                    str(queue_path),
+                    "--reason",
+                    "idle_no_ready; novelty_target=portfolio_first_brief; user_visible_delta=opens a ranked portfolio action memo",
+                    "--cooldown-s",
+                    "0",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+            self.assertIn("AUTOBATCH_OK", cp.stdout)
+
+            queue_after = json.loads(queue_path.read_text(encoding="utf-8"))
+            item = queue_after["items"][0]
+            self.assertEqual(item["title"], "show what changed today and what matters now")
+            self.assertEqual(item["priority"], "P0")
+            self.assertEqual(item["vision_ref"], "docs/product/PRODUCT_VISION.md#P0")
+
+            board_after = json.loads(board_path.read_text(encoding="utf-8"))
+            stream = next(stream for stream in board_after["streams"] if str(stream.get("id", "")) == "BATCH-01")
+            task = next(task for task in board_after["tasks"] if str(task.get("id", "")) == "BATCH-01-ANALYSIS")
+            self.assertEqual(stream["priority"], "P0")
+            self.assertEqual(task["priority"], "P0")
+
+    def test_planner_autobatch_allow_active_queued_queues_next_priority_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            docs_root = root / "docs"
+            board_path = root / "parallel-workstreams.json"
+            queue_path = root / "priority-queue.json"
+            active_title = "show what changed today and what matters now"
+            next_title = "support a strong deep dive on a ticker/theme/question"
+            board = {
+                "version": 1,
+                "updated_at": "2026-04-16T00:00:00Z",
+                "active_cycle": {"active_batch_ids": ["BATCH-89"]},
+                "roles": {},
+                "streams": [
+                    {"id": "BATCH-89", "title": active_title, "priority": "P0", "state": "IN_PROGRESS"},
+                ],
+                "tasks": [
+                    {
+                        "id": "BATCH-89-DEV-01",
+                        "stream_id": "BATCH-89",
+                        "role": "dev",
+                        "priority": "P0",
+                        "state": "IN_PROGRESS",
+                        "depends_on": [],
+                        "created_at": "2026-04-16T00:00:00Z",
+                        "updated_at": "2026-04-16T00:00:00Z",
+                    }
+                ],
+                "handoffs": [],
+                "events": [],
+            }
+            queue = {
+                "version": 1,
+                "updated_at": "2026-04-16T00:00:00Z",
+                "active_cycle": {"active_batch_ids": ["BATCH-89"]},
+                "items": [
+                    {
+                        "id": "BATCH-89",
+                        "title": active_title,
+                        "state": "IN_PROGRESS",
+                        "priority": "P0",
+                        "scope_key": "show-what-changed-today-and-what-matters-now",
+                    }
+                ],
+                "meta": {},
+            }
+            board_path.write_text(json.dumps(board, ensure_ascii=True) + "\n", encoding="utf-8")
+            queue_path.write_text(json.dumps(queue, ensure_ascii=True) + "\n", encoding="utf-8")
+            (docs_root / "product").mkdir(parents=True, exist_ok=True)
+            (docs_root / "product" / "PRODUCT_VISION.md").write_text(
+                "\n".join(
+                    [
+                        "# Finance Copilot Product Vision",
+                        "",
+                        "## What the product must do very well",
+                        "### P0",
+                        f"- {active_title}",
+                        f"- {next_title}",
+                        "### P1",
+                        "- multi-asset forecasts with short justification",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            cp = subprocess.run(
+                [
+                    sys.executable,
+                    str(WORKSTREAM),
+                    "--board",
+                    str(board_path),
+                    "planner-autobatch",
+                    "--queue",
+                    str(queue_path),
+                    "--reason",
+                    "planner_active_cycle_queue_next",
+                    "--cooldown-s",
+                    "0",
+                    "--allow-active-queued",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+            self.assertIn("AUTOBATCH_OK", cp.stdout)
+            self.assertIn("batch_id=BATCH-90", cp.stdout)
+
+            queue_after = json.loads(queue_path.read_text(encoding="utf-8"))
+            self.assertEqual([item["id"] for item in queue_after["items"]], ["BATCH-89", "BATCH-90"])
+            self.assertEqual(queue_after["items"][1]["title"], next_title)
+            self.assertEqual(queue_after["items"][1]["priority"], "P0")
+            self.assertTrue(queue_after["items"][1]["queued_only"])
+
+            board_after = json.loads(board_path.read_text(encoding="utf-8"))
+            stream = next(stream for stream in board_after["streams"] if str(stream.get("id", "")) == "BATCH-90")
+            task = next(task for task in board_after["tasks"] if str(task.get("id", "")) == "BATCH-90-ANALYSIS")
+            self.assertEqual(stream["title"], next_title)
+            self.assertEqual(stream["priority"], "P0")
+            self.assertEqual(task["priority"], "P0")
 
     def test_validate_blocks_when_queue_contains_cross_batch_dependencies(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -738,6 +1124,97 @@ class QueueSyncTests(unittest.TestCase):
             self.assertEqual(len(analysis_tasks), 1)
             self.assertEqual(str(analysis_tasks[0].get("state", "")).upper(), "READY_PLANNER")
             self.assertEqual(str(analysis_tasks[0].get("role", "")).lower(), "planner")
+
+    def test_planner_autobatch_inherits_active_cycle_novelty_target(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            docs_root = root / "docs"
+            board_path = root / "parallel-workstreams.json"
+            queue_path = root / "priority-queue.json"
+            board = {
+                "version": 1,
+                "updated_at": "2026-04-16T00:00:00Z",
+                "sprint": {"id": "S-TEST", "goal": "autobatch"},
+                "roles": {},
+                "streams": [],
+                "tasks": [],
+                "handoffs": [],
+                "events": [],
+            }
+            queue = {
+                "version": 1,
+                "updated_at": "2026-04-16T00:00:00Z",
+                "active_cycle": {
+                    "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
+                    "active_batch_ids": [],
+                    "recent_completed_batch_ids": ["BATCH-90", "BATCH-89"],
+                    "novelty_target": "portfolio_first_brief_with_ranked_actions",
+                    "user_visible_delta": "daily brief surfaces the top portfolio or watchlist action and opens an investment memo in one click",
+                },
+                "items": [
+                    {
+                        "id": "BATCH-89",
+                        "title": "Build a personal finance copilot that starts with a brief of the day.",
+                        "state": "CLOSED",
+                        "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day",
+                        "novelty_class": "reuse_only",
+                        "delivery_kind": "reuse_only",
+                        "user_value_delta_visible": 0,
+                    },
+                    {
+                        "id": "BATCH-90",
+                        "title": "Build a personal finance copilot that starts with a brief of the day.",
+                        "state": "CLOSED",
+                        "scope_key": "build-a-personal-finance-copilot-that-starts-with-a-brief-of-the-day",
+                        "novelty_class": "reuse_only",
+                        "delivery_kind": "reuse_only",
+                        "user_value_delta_visible": 0,
+                    },
+                ],
+                "meta": {},
+            }
+            board_path.write_text(json.dumps(board, ensure_ascii=True) + "\n", encoding="utf-8")
+            queue_path.write_text(json.dumps(queue, ensure_ascii=True) + "\n", encoding="utf-8")
+            (docs_root / "product").mkdir(parents=True, exist_ok=True)
+            (docs_root / "product" / "PRODUCT_VISION.md").write_text(
+                "\n".join(
+                    [
+                        "# Finance Copilot Product Vision",
+                        "",
+                        "Build a personal finance copilot that starts with a brief of the day.",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            cp = subprocess.run(
+                [
+                    sys.executable,
+                    str(WORKSTREAM),
+                    "--board",
+                    str(board_path),
+                    "planner-autobatch",
+                    "--queue",
+                    str(queue_path),
+                    "--reason",
+                    "planner_always_active",
+                    "--cooldown-s",
+                    "0",
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+            self.assertIn("AUTOBATCH_OK", cp.stdout)
+            self.assertIn("batch_id=BATCH-91", cp.stdout)
+
+            queue_after = json.loads(queue_path.read_text(encoding="utf-8"))
+            self.assertEqual(queue_after["items"][-1]["id"], "BATCH-91")
+            self.assertEqual(queue_after["items"][-1].get("novelty_target"), "portfolio_first_brief_with_ranked_actions")
+            self.assertEqual(queue_after["items"][-1].get("user_value_delta_visible"), 1)
 
     def test_sync_priority_preserves_autobatch_analysis_without_backfilling_upstream_plan(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -906,7 +1383,7 @@ class QueueSyncTests(unittest.TestCase):
                     "--queue",
                     str(queue_path),
                     "--reason",
-                    "idle_no_ready",
+                    "idle_no_ready; novelty_target=portfolio_first_brief; user_visible_delta=opens a ranked portfolio action memo",
                     "--cooldown-s",
                     "0",
                 ],

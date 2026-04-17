@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-96-BATCH-96-DEV-03-20260417T002907Z-807"
+stream_id: "BATCH-96"
+task_id: "BATCH-96-DEV-03"
+role: "dev"
+produced_at_utc: "2026-04-17T00:29:07Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope show what changed today and what matters now [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "layer=api"
+    - "imports_ok=yes"
+    - "path_target=public_before=`get_http://3.98.20.77/api/judge/personal-finance/start?tickers=nvda`_->_`{what_changed_today:null"
+    - "what_matters_now:null}`"
+    - "local_after=`get_judge_personal_finance_start_payload(tickers=['nvda'])`_->_`{what"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-17T00:29:07Z"
+      ended_at_utc: "2026-04-17T00:29:07Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`python3 -m pytest apps/api/src/domains/judge/tests/test_judge_route_orchestration.py -k 'personal_finance_start_service and (backfills_story_lines or rewrites_scope_focus_asks or includes_ranked_action or fills_missing_"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "public_before=`GET http://3.98.20.77/api/judge/personal-finance/start?tickers=NVDA` -> `{what_changed_today:null,what_matters_now:null}`; local_after=`get_judge_personal_finance_start_payload(tickers=['NVDA'])` -> `{what"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-96-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-96-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=`get_judge_personal_finance_start_payload()` reused `copilot_start.brief_of_day` directly, so the judge starter path never ran the shared brief story-line normalizer that the copilot starter already used; public EC2 ther | fix_applied=Updated `apps/api/src/domains/judge/application/judge_endpoint_service.py` to reuse `copilot_service._ensure_brief_story_lines()` before assembling the judge starter response, and added a regression in `apps/api/src/doma | verify=before=public `GET http://3.98.20.77/api/judge/personal-finance/start?tickers=NVDA` returned `brief_of_day.what_changed_today=null` and `brief_of_day.what_matters_now=null`; after=local committed judge starter service re | architecture_check=layer=judge_application_service+judge_route_regression_tests; imports_ok=yes (reused existing `copilot_service._ensure_brief_story_lines` and existing judge test module, no duplicate helper added); path_target=`apps/api/ | vision_alignment=batch=BATCH-96; target=show_what_changed_today_and_what_matters_now; impact=the judge-backed personal-finance starter now surfaces explicit today/now story lines on the same brief+ask entry contract instead of leaving th"

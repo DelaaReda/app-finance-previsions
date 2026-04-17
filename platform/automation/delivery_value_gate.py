@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import time
@@ -21,10 +22,8 @@ ARTIFACT_KEYS = {
     "scrum_master": "scrum_artifact",
 }
 STRICT_DELIVERY_ROLES = {"dev", "admin"}
-RUNTIME_GATE_URLS = (
-    "http://127.0.0.1:8050/api/health",
-    "http://127.0.0.1:7779/api/status",
-)
+DEFAULT_PUBLIC_APP_BASE_URL = "http://3.98.20.77"
+DEFAULT_PUBLIC_MONITOR_BASE_URL = "http://3.98.20.77:8080"
 
 
 @dataclass
@@ -183,6 +182,24 @@ def _is_doc_only(ev: dict[str, str]) -> bool:
     )
 
 
+def _tests_run_passed(raw: str) -> bool:
+    text = str(raw or "").strip().lower()
+    if _is_placeholder(text):
+        return False
+    return ":pass" in text or "result=pass" in text or text.endswith(" pass")
+
+
+def _qa_proof_valid(raw: str, ev: dict[str, str] | None = None) -> bool:
+    if not _has_required_kv_markers(raw, ("test", "result"), ev):
+        return False
+    text = str(raw or "").strip().lower()
+    if "result=pass" in text:
+        return True
+    if isinstance(ev, dict) and str(ev.get("result", "") or "").strip().lower() == "pass":
+        return True
+    return False
+
+
 def _planner_doc_autofill(ev: dict[str, str], values: dict[str, str]) -> dict[str, str]:
     artifact = _artifact_value("planner", ev)
     stream_id = str(ev.get("stream_id", "") or "").strip()
@@ -264,7 +281,20 @@ def _delivery_fingerprint(role: str, values: dict[str, str], ev: dict[str, str])
 
 def _runtime_probes_ok() -> bool:
     try:
-        for url in RUNTIME_GATE_URLS:
+        app_base = str(
+            os.environ.get("FC_API_BASE_URL")
+            or os.environ.get("FC_PUBLIC_APP_BASE_URL")
+            or DEFAULT_PUBLIC_APP_BASE_URL
+        ).strip() or DEFAULT_PUBLIC_APP_BASE_URL
+        monitor_base = str(
+            os.environ.get("FC_MONITOR_BASE_URL")
+            or os.environ.get("FC_PUBLIC_MONITOR_BASE_URL")
+            or DEFAULT_PUBLIC_MONITOR_BASE_URL
+        ).strip() or DEFAULT_PUBLIC_MONITOR_BASE_URL
+        for url in (
+            f"{app_base.rstrip('/')}/api/health",
+            f"{monitor_base.rstrip('/')}/api/status",
+        ):
             req = Request(url, headers={"Accept": "application/json"})
             with urlopen(req, timeout=1.5) as resp:
                 status = int(getattr(resp, "status", 0) or 0)
@@ -317,6 +347,10 @@ def evaluate_contract(text: str, config: GateConfig, now_epoch: int | None = Non
     if config.role in STRICT_DELIVERY_ROLES and not _is_doc_only(ev):
         if not _commit_sha_valid(ev.get("commit_sha", "")):
             missing.append("commit_sha")
+        if not _tests_run_passed(ev.get("tests_run", "")):
+            missing.append("tests_run_pass")
+        if not _qa_proof_valid(ev.get("qa_proof", ""), ev):
+            missing.append("qa_proof")
     runtime_delivery_required = config.role in STRICT_DELIVERY_ROLES and not _is_doc_only(ev)
     runtime_ok = True if not runtime_delivery_required else _runtime_probes_ok()
 

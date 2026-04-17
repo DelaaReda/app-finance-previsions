@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import os
 import subprocess
 import sys
@@ -10,8 +11,14 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 GUARD = ROOT / "scripts" / "role_contract_guard.py"
+GUARD_MODULE_PATH = ROOT / "platform" / "policies" / "role_contract_guard.py"
+GUARD_SPEC = importlib.util.spec_from_file_location("role_contract_guard_local", GUARD_MODULE_PATH)
+assert GUARD_SPEC and GUARD_SPEC.loader
+GUARD_MODULE = importlib.util.module_from_spec(GUARD_SPEC)
+sys.modules["role_contract_guard_local"] = GUARD_MODULE
+GUARD_SPEC.loader.exec_module(GUARD_MODULE)
 
 
 def _normalize_issue_report_payload(payload: str) -> str:
@@ -149,6 +156,24 @@ def run_guard(
 
 
 class RoleContractGuardTests(unittest.TestCase):
+    def test_runtime_probe_defaults_follow_public_ec2_bases(self) -> None:
+        with unittest.mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(GUARD_MODULE._default_api_base_url(), "http://3.98.20.77")
+            self.assertEqual(GUARD_MODULE._default_monitor_base_url(), "http://3.98.20.77:8080")
+
+        with unittest.mock.patch.dict(
+            os.environ,
+            {
+                "FC_PUBLIC_APP_BASE_URL": "http://public-app.example",
+                "FC_PUBLIC_MONITOR_BASE_URL": "http://public-monitor.example",
+                "FC_API_BASE_URL": "http://explicit-api.example",
+                "FC_MONITOR_BASE_URL": "http://explicit-monitor.example",
+            },
+            clear=True,
+        ):
+            self.assertEqual(GUARD_MODULE._default_api_base_url(), "http://explicit-api.example")
+            self.assertEqual(GUARD_MODULE._default_monitor_base_url(), "http://explicit-monitor.example")
+
     def test_accepts_valid_planner_contract_and_injects_versions(self) -> None:
         payload = "\n".join(
             [
@@ -183,6 +208,36 @@ class RoleContractGuardTests(unittest.TestCase):
         self.assertIn("BLOCKER_ID: NONE", cp.stdout)
         self.assertIn("queue_version=queue_v_test", cp.stdout)
         self.assertIn("workboard_version=workboard_v_test", cp.stdout)
+
+    def test_incomplete_dev_contract_restores_canonical_scope_from_workboard(self) -> None:
+        cp = run_guard(
+            "STATUS: IN_PROGRESS\n",
+            role="dev",
+            allow_file_edits="1",
+            workboard_has_work="1",
+            workboard_has_in_progress="1",
+            queue_state="IN_PROGRESS",
+            workboard_payload={
+                "active_cycle": {"active_batch_ids": ["BATCH-95"]},
+                "tasks": [
+                    {
+                        "id": "BATCH-95-DEV-02",
+                        "stream_id": "BATCH-95",
+                        "role": "dev",
+                        "state": "IN_PROGRESS",
+                        "updated_at": "2026-04-16T12:01:11Z",
+                    }
+                ],
+            },
+        )
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("STATUS: IN_PROGRESS", cp.stdout)
+        self.assertIn("DELTA: CONTRACT_SCOPE_AUTOFILL", cp.stdout)
+        self.assertIn("task_update=claim", cp.stdout)
+        self.assertIn("stream_id=BATCH-95", cp.stdout)
+        self.assertIn("task_id=BATCH-95-DEV-02", cp.stdout)
+        self.assertIn("scope_autofill=canonical_workboard", cp.stdout)
+        self.assertIn("NEXT: owner=dev; action=claim_or_progress BATCH-95-DEV-02", cp.stdout)
 
     def test_issue_report_valid_none_contract_passes(self) -> None:
         payload = "\n".join(
@@ -256,6 +311,45 @@ class RoleContractGuardTests(unittest.TestCase):
         self.assertIn("BLOCKER_ID: NONE", cp.stdout)
         self.assertIn("planner_quality_autofix=1", cp.stdout)
         self.assertIn("planner_quality_missing=", cp.stdout)
+
+    def test_planner_architecture_check_is_autofilled_from_plan_ref(self) -> None:
+        payload = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: PLANNER_DISPATCH_ACTIVE",
+                (
+                    "EVIDENCE: task_update=analysis_only; lock_check=ok; "
+                    "run_note=planner backfill evidence avant dispatch dev canonique; "
+                    "planner_artifact=docs/architecture/ARCHITECTURE_MAP.md; "
+                    "architecture_plan_ref=docs/architecture/ARCHITECTURE_MAP.md; "
+                    "stream_id=BATCH-95; task_id=BATCH-95-ARCH; "
+                    "root_cause=cause=quality_backfill_required; "
+                    "fix_applied=fix=backfill_evidence_fields; "
+                    "verify=before=quality_fields_missing; after=quality_fields_backfilled; test=contract_guard_precheck; "
+                    "reuse_check=NONE(no_direct_reuse_this_tick); "
+                    "vision_alignment=batch=BATCH-95; target=planner_quality_backfill; impact=maintain_delivery_flow; "
+                    "issues=none; issue_count=0; issue_severity=none"
+                ),
+                "RISKS: none",
+                "NEXT: owner=dev; action=continue BATCH-95-DEV-01 via capability dispatch",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: PLANNER_ARCH_AUTOFILL_UTEST",
+            ]
+        )
+        cp = run_guard(
+            payload,
+            role="planner",
+            allow_file_edits="1",
+            workboard_has_work="1",
+            workboard_has_in_progress="1",
+            queue_state="IN_PROGRESS",
+            env_extra={"PLANNER_QUALITY_SOFT_ENFORCE": "1"},
+            normalize_issue_report=False,
+        )
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("architecture_check=layer=platform; imports_ok=yes; path_target=docs/architecture/ARCHITECTURE_MAP.md", cp.stdout)
+        self.assertNotIn("planner_quality_missing=architecture_check", cp.stdout)
 
     def test_issue_report_missing_fields_blocks(self) -> None:
         payload = "\n".join(

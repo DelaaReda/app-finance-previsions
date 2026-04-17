@@ -73,13 +73,13 @@ CODEX_STARTUP_NOISE_MARKERS = (
     "worker quit with fatal",
     "reconnecting...",
 )
-SECONDARY_CODEX_DEFAULT_MODEL = "gpt-5.3-codex-spark"
+SECONDARY_CODEX_DEFAULT_MODEL = "gpt-5.4"
 SECONDARY_CODEX_DEFAULT_THINKING = "high"
 CANONICAL_RUNTIME_WORKSPACE = Path("/home/venom/analyse-financiere")
 ROLE_MODELS = {
-    "dev": ("codex-full/gpt-5.4", "medium", "danger-full-access"),
-    "admin": ("codex-full/gpt-5.4", "medium", "danger-full-access"),
-    "scrum_master": ("codex-full/gpt-5.4", "medium", "danger-full-access"),
+    "dev": ("codex-full/gpt-5.4", "high", "danger-full-access"),
+    "admin": ("codex-full/gpt-5.4", "high", "danger-full-access"),
+    "scrum_master": ("codex-full/gpt-5.4", "high", "danger-full-access"),
 }
 ROLE_TASK_KINDS = {
     "dev": {"delivery", "implementation", "verification", "targeted_fix"},
@@ -223,6 +223,9 @@ def _normalized_retryable_backend_issue(text: Any) -> str:
     token = " ".join(str(text or "").strip().split())
     if not token:
         return "invalid_subagent_result:structured_output_missing"
+    if _looks_like_rate_limited(token):
+        cached_reason = _active_rate_limit_reason(("codex", "global"))
+        return cached_reason or _compact(token, 160)
     if _looks_like_startup_noise(token):
         return "invalid_subagent_result:start_banner_only"
     return "invalid_subagent_result:structured_output_missing"
@@ -1459,7 +1462,7 @@ def _role_runtime_defaults(config: PlannerSubagentConfig, target_role: str) -> t
     cfg = _read_json(cfg_path, {})
     roles = cfg.get("roles", {}) if isinstance(cfg, dict) else {}
     role_cfg = roles.get(target_role, {}) if isinstance(roles, dict) else {}
-    model_default, thinking_default, sandbox_default = ROLE_MODELS.get(target_role, ("gpt-5.3-codex-spark", "medium", "workspace-write"))
+    model_default, thinking_default, sandbox_default = ROLE_MODELS.get(target_role, ("gpt-5.4", "high", "workspace-write"))
     model = str(role_cfg.get("model", model_default) or model_default).strip()
     thinking = str(role_cfg.get("thinking", thinking_default) or thinking_default).strip()
     sandbox = sandbox_default
@@ -1544,40 +1547,33 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         f"OWNER_TASK_ID={owner_task_id}\n"
         f"TASK_KIND={task_kind}\n"
         "MODE=planner_capability\n"
-        "Operating model:\n"
-        "- Planner owns orchestration truth. You are a capability inside OWNER_TASK_ID, not a standalone scheduler.\n"
-        "- Stay inside the owner task. No repo-wide audit and no queue/workboard mutation.\n"
-        "- Prioritize the smallest in-scope change that ships user-visible value now or removes the next delivery blocker.\n"
-        "- You may change code, config, docs, prompts, proofs, or task artifacts when that is the shortest path to delivery.\n"
-        "- Work locally by default; use at most one bounded native Codex helper only if clearly faster.\n"
-        "- If blocked, return the exact next planner action.\n"
-        "Output contract:\n"
-        "- Return exactly one JSON object, with no markdown, no code fence, and no prose before or after.\n"
-        "- Required keys: status, summary, root_cause, fix_applied, artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment, recommended_next, blocking_issue.\n"
-        "- status must be completed, blocked, or failed.\n"
-        "- If work shipped or verification passed: blocking_issue=none and recommended_next=planner_merge_result.\n"
-        "- If blocked: status=blocked, blocking_issue=<concrete blocker>, recommended_next=<exact planner action>.\n"
-        "- Use 'none' or 'SKIP(reason)' explicitly when a field does not apply.\n"
+        "Return exactly one JSON object only with keys: status, summary, root_cause, fix_applied, artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment, recommended_next, blocking_issue.\n"
+        "First non-whitespace byte must be { and last must be }. No markdown, no prose before/after, no kickoff/progress chatter, no shell/banner echo.\n"
+        "summary must be final outcome only, never a plan, progress note, or \"I will...\".\n"
+        "status=completed|blocked|failed. blocked=in-scope blocker; failed=tool/runtime failure. If shipped or verified, set blocking_issue=none and recommended_next=planner_merge_result.\n"
+        "blocked/failed require concrete blocking_issue + recommended_next. Use none or SKIP(reason) only when a field truly does not apply.\n"
+        "You are a capability inside OWNER_TASK_ID, not a scheduler. No queue/workboard mutation, no repo-wide audit, no broad repo hygiene.\n"
+        "Target the smallest in-scope fix or proof for the Finance Copilot brief+ask path or its next delivery blocker.\n"
+        "Read minimum context with rg/sed/tail for large files. As soon as you have proof or a real blocker, emit the final JSON immediately.\n"
+        "Work on the narrowest file/test set that can unblock OWNER_TASK_ID.\n"
         f"Planner instruction: {message.strip()}\n"
     )
     if target_role == "dev":
         return common + (
             "Dev role:\n"
-            "- Deliver one minimal slice or one targeted verification tied directly to the owner task.\n"
-            "- Prefer existing modules and task notes over architecture exploration.\n"
-            "- Prefer targeted tests only.\n"
-            "- If you changed code or config, commit it and return the real commit_sha; otherwise use SKIP(reason).\n"
-            "- verify must include before=..., after=..., test=...\n"
-            "- architecture_check must include layer=..., imports_ok=..., path_target=...\n"
-            "- vision_alignment must include batch=..., target=..., impact=...\n"
+            "- Default to code/config/tests inside the task path; touch docs/prompts only when the task notes make them part of the delivery slice.\n"
+            "- Reuse existing modules, services, and contracts before creating new helpers or files.\n"
+            "- verify=before=...; after=...; test=...\n"
+            "- architecture_check=layer=...; imports_ok=...; path_target=...\n"
+            "- vision_alignment=batch=...; target=...; impact=...\n"
         )
     if target_role == "admin":
         return common + (
             "Admin role:\n"
-            "- Handle runtime truth, observability, orchestration drift, stale locks, dispatch/collect failures, or broken execution paths that block product delivery.\n"
-            "- Patch scripts, config, prompts, or control-plane code directly when that is the shortest unblock.\n"
-            "- Prefer the narrowest fix that resumes delivery, collect, QA, or dispatch for the active priority path within one planner tick.\n"
-            "- Prefer reversible fixes and concrete verification.\n"
+            "- Handle runtime truth, orchestration drift, stale locks, dispatch/collect failures, or broken execution paths blocking delivery.\n"
+            "- VM UTM runtime truth = control-plane truth; EC2 public app runtime = product truth. Queue/workboard/monitor stay projections; on EC2 app-only, planner-gap / issue_publication_gap and missing `executors-monitoring-latest.json` / `agent-iteration-issues*` stay advisory.\n"
+            "- Use runtime helpers first; patch control-plane only if helpers are insufficient.\n"
+            "- Prefer the narrowest reversible fix that resumes delivery, collect, QA, or dispatch within one planner tick.\n"
             "- If it is not a runtime/control-plane issue, set recommended_next=planner_route_to_dev_or_scrum and say why.\n"
         )
     return common + (
@@ -1586,7 +1582,6 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         "- You may edit task-scoped docs, proofs, handoff notes, prompts, memory, coordination artifacts, acceptance criteria, dependency notes, or narrow supporting config/spec text when that increases deliverability.\n"
         "- Prefer small changes that remove ambiguity, improve handoff quality, strengthen acceptance criteria, or fix stale orchestration guidance.\n"
         "- Aim to make the next dev/admin move obvious, bounded, and mergeable.\n"
-        "- Use one bounded helper only if that removes ambiguity faster than doing the work yourself.\n"
         "- Do not edit queue/workboard/contracts directly, and do not take over deep dev/admin implementation unless planner reroutes the task.\n"
         "- Return one precise unblock action, or a small coordination artifact plus the next planner action.\n"
     )
@@ -1598,6 +1593,30 @@ def _parse_result_payload(raw_text: str, subagent_id: str, target_role: str, own
     if text:
         payload = _extract_last_json_object(text)
         if not payload:
+            if _looks_like_rate_limited(text):
+                rate_limit_issue = _active_rate_limit_reason(("codex", "global")) or _compact(text, 160)
+                return PlannerSubagentResult(
+                    subagent_id=subagent_id,
+                    target_role=target_role,
+                    owner_task_id=owner_task_id,
+                    parent_role=parent_role,
+                    task_kind=task_kind,
+                    status="failed",
+                    summary=rate_limit_issue,
+                    root_cause="codex_exec_rate_limit",
+                    fix_applied="none",
+                    artifact="none",
+                    verify="none",
+                    raw_output_ref="",
+                    backend=backend,
+                    files_touched="none",
+                    tests_run="SKIP(no_tests)",
+                    commit_sha="none",
+                    architecture_check="none",
+                    vision_alignment="none",
+                    recommended_next="planner_retry_with_secondary_codex_or_wait_for_quota",
+                    blocking_issue=rate_limit_issue,
+                )
             line0 = str(text.splitlines()[0] if text.splitlines() else text).strip()
             normalized_issue = ""
             if line0.startswith("invalid_subagent_result:"):
@@ -2353,6 +2372,8 @@ def collect_subagent(config: PlannerSubagentConfig, role: str, subagent_id: str,
         if subagent_id and record.subagent_id == subagent_id:
             target = record
             break
+        if subagent_id:
+            continue
         if owner_task_id and record.owner_task_id == owner_task_id and record.parent_role == canonical_role(role):
             target = record
     if target is None:
@@ -2469,6 +2490,33 @@ def collect_subagent(config: PlannerSubagentConfig, role: str, subagent_id: str,
         _save_registry(config.registry_path, records)
     payload["mergeable"] = mergeable
     payload["ok"] = bool(mergeable and semantic_success)
+    if mark_merged and bool(payload.get("ok")):
+        try:
+            capability_task = CapabilityTask(
+                batch_id=_planner_batch_id(target.owner_task_id),
+                task_id=target.owner_task_id,
+                task_kind=target.task_kind,
+                owner_role=target.parent_role,
+                target_role=target.target_role,
+                backend=str(payload.get("backend") or target.backend or ""),
+                queue_snapshot_ref=str(resolve_orchestrator_read_path(config.root, "priority-queue.json")),
+                workboard_snapshot_ref=str(resolve_orchestrator_read_path(config.root, "parallel-workstreams.json")),
+                metadata={
+                    "subagent_id": target.subagent_id,
+                    "backend_requested": str(target.backend or ""),
+                    "backend_route_reason": str(target.metadata.get("backend_route_reason", "")).strip(),
+                    "backend_cooldown_until": str(target.metadata.get("backend_cooldown_until", "")).strip(),
+                    "provider_policy_plane": "model_plane",
+                    "operator_plane": "openclaw",
+                },
+            )
+            PlannerGraphRuntime(config.root).observe_merge(
+                capability_task,
+                True,
+                note=str(payload.get("summary") or payload.get("recommended_next") or "merged"),
+            )
+        except Exception:
+            pass
     if invalid_reason != "none" and not _meaningful_issue(payload.get("blocking_issue")):
         payload["blocking_issue"] = invalid_reason
     elif not payload["ok"] and not _meaningful_issue(payload.get("blocking_issue")):

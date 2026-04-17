@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-94-BATCH-94-DEV-03-20260416T104206Z-336"
+stream_id: "BATCH-94"
+task_id: "BATCH-94-DEV-03"
+role: "dev"
+produced_at_utc: "2026-04-16T10:42:06Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T10:42:06Z"
+      ended_at_utc: "2026-04-16T10:42:06Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "FAIL"
+      evidence: "PASS targeted pytest for intelligence_service cache + judge ranked_action contract; PASS local python proof of personal-finance target rewrite; FAIL `bash platform/policies/backend_regression_gate.sh` due unrelated pre-e"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit 3c6253e3de0c80bc703e282bea54d157c40c569c (`fix(judge): add copilot starter ask targets`)"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-94-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-94-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=apps/api/src/domains/judge/application/intelligence_service.py built starter ask items as prompt-only rows without target/kind metadata, so downstream judge/copilot start payloads could not treat them as actionable ask e | fix_applied=Added explicit kind/target metadata to built-in starter ask items, brief-derived ask suggestions, and starter open items in intelligence_service; added regression assertions in apps/api/src/domains/judge/tests/test_intel | verify=before=public EC2 `GET http://3.98.20.77/api/personal-finance/start?tickers=NVDA` returned ask items without targets and `ranked_action.target=market`; after=local intelligence_service starter payload plus judge namespac | architecture_check=layer=domains.judge.application starter-payload builder feeding judge_endpoint_service/copilot start contracts; imports_ok=true; path_target=apps/api/src/domains/judge/application/intelligence_service.py | vision_alignment=batch=BATCH-94; target=brief-first personal finance copilot with ask/open entry; impact=restores actionable ask metadata so the starter can drive the user from the daily brief into `/personal-finance/ask` instead of prio"

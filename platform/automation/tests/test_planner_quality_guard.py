@@ -86,6 +86,24 @@ NEXT_ACTION_UNIQUE: PLANNER_QUALITY_COMPLETE_TEST
         self.assertEqual(values.get("STATUS"), "IN_PROGRESS")
         self.assertIn("planner_evidence_incomplete_soft", values.get("EVIDENCE", ""))
 
+    def test_dispatch_handoff_autofills_quality_fields_for_downstream_owner(self) -> None:
+        payload = """STATUS: IN_PROGRESS
+DELTA: PLANNER_DISPATCH_ACTIVE
+EVIDENCE: task_update=handoff; lock_check=ok; run_note=planner dispatch dev suivant sur batch canonique; stream_id=BATCH-95; task_id=BATCH-95-DEV-02; planner_artifact=docs/architecture/ARCHITECTURE_MAP.md; issues=none; issue_count=0; issue_severity=none
+RISKS: low
+NEXT: owner=dev; action=continue BATCH-95-DEV-02 via capability dispatch
+VERDICT: GO_WITH_CAUTION
+BLOCKER_ID: NONE
+NEXT_ACTION_UNIQUE: PLANNER_DISPATCH_HANDOFF_AUTOFILL_TEST
+"""
+        values = self._run_guard(payload)
+        evidence = values.get("EVIDENCE", "")
+        self.assertIn("root_cause=cause=planner_dispatch_quality_autofill", evidence)
+        self.assertIn("fix_applied=fix=planner_dispatched_canonical_downstream_lane", evidence)
+        self.assertIn("reuse_check=NONE(planner_dispatch_doc_only)", evidence)
+        self.assertIn("architecture_check=layer=platform; imports_ok=yes; path_target=docs/architecture/ARCHITECTURE_MAP.md", evidence)
+        self.assertIn("vision_alignment=batch=BATCH-95; target=dispatch_batch_95_dev_02; impact=continue_delivery_flow", evidence)
+
 
 if __name__ == "__main__":
     unittest.main()

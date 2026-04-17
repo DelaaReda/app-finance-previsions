@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-95-BATCH-95-DEV-03-20260416T225031Z-842"
+stream_id: "BATCH-95"
+task_id: "BATCH-95-DEV-03"
+role: "dev"
+produced_at_utc: "2026-04-16T22:50:31Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "layer=api"
+    - "imports_ok=yes"
+    - "path_target=http://3.98.20.77/api/health_returned_ok"
+    - "and_http://3.98.20.77/api/copilot/start?tickers=nvda_plus_/api/personal-finance/start?tickers=nvda_and_/api/judge/personal-finance/start?tickers=nvda&debug=true_returned_brief_of"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T22:50:31Z"
+      ended_at_utc: "2026-04-16T22:50:31Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "scripts/backend_regression_gate.sh --no-live domains/copilot/tests/test_dev03_brief_of_day_delivery.py domains/judge/tests/test_judge_route_orchestration.py::test_judge_personal_finance_start_service_promotes_scope_ticke"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "http://3.98.20.77/api/health returned ok, and http://3.98.20.77/api/copilot/start?tickers=NVDA plus /api/personal-finance/start?tickers=NVDA and /api/judge/personal-finance/start?tickers=NVDA&debug=true returned brief_of"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-95-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-95-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=The EC2 app instance was running but backend/frontend/monitor services were stopped, so public app-serving endpoints returned 502 before any brief+ask/open validation could run. | fix_applied=Restarted the EC2 app-serving stack with scripts/aws_remote_app_control.sh start from the VM runtime path, then revalidated the public starter endpoints; no repository code/config change was required for this unblock. | verify=before=public EC2 /api/health, /api/copilot/start?tickers=NVDA, /api/personal-finance/start?tickers=NVDA, and /api/judge/personal-finance/start?tickers=NVDA all returned 502 while finance-copilot remote-status showed Bac | architecture_check=layer=runtime_validation_only; imports_ok=SKIP(no_code_change); path_target=public EC2 app-serving endpoints via scripts/aws_remote_app_control.sh and 3.98.20.77/api/*. | vision_alignment=batch=BATCH-95; target=brief+ask/open public starter path; impact=restored the user-visible daily brief bootstrap and immediate ask/open entry points on the canonical EC2 runtime without widening scope."

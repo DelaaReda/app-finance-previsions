@@ -6,8 +6,9 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT"
-API_BASE="http://localhost:8050/api"
-FRONTEND_PORT=5173
+PUBLIC_APP_BASE_URL="${FC_API_BASE_URL:-${FC_PUBLIC_APP_BASE_URL:-http://3.98.20.77}}"
+API_BASE="${PUBLIC_APP_BASE_URL%/}/api"
+FRONTEND_URL="${FC_FRONTEND_BASE_URL:-${FC_PUBLIC_APP_BASE_URL:-http://3.98.20.77}}"
 
 usage() {
   cat <<'EOF'
@@ -15,14 +16,13 @@ Finance Copilot Dev Tools — available commands:
 
   BACKEND
     status          Check backend health + data freshness
-    restart         Restart backend via systemd
-    logs            Tail backend logs (last 50 lines)
+    restart         Restart public app stack via AWS wrapper
+    logs            Show canonical app control hint
     test-api        Test all main API endpoints
     refresh-data    Trigger forecast + news refresh jobs
 
   FRONTEND  
-    frontend-status Check if frontend server is up
-    open-browser    Open the app in a browser (xdg-open)
+    frontend-status Check if public frontend is up
 
   WORKBOARD
     board           Show workboard status (all roles)
@@ -65,19 +65,17 @@ for k, v in lu.items():
 }
 
 backend_restart() {
-  echo "Restarting backend..."
-  systemctl --user restart finance-backend
-  sleep 3
-  if systemctl --user is-active finance-backend >/dev/null 2>&1; then
-    echo "✅ Backend restarted"
+  echo "Restarting public app stack..."
+  if bash "$ROOT/scripts/aws_remote_app_control.sh" restart; then
+    echo "✅ Public app stack restarted"
     backend_status
   else
-    echo "❌ Restart failed — check: journalctl --user -u finance-backend -n 30"
+    echo "❌ Restart failed — check aws_remote_app_control output"
   fi
 }
 
 backend_logs() {
-  journalctl --user -u finance-backend -n ${1:-50} --no-pager
+  echo "Use: bash scripts/aws_remote_app_control.sh status"
 }
 
 test_api() {
@@ -158,11 +156,11 @@ PY
 }
 
 frontend_status() {
-  if curl -fsS --max-time 3 "http://localhost:$FRONTEND_PORT" >/dev/null 2>&1; then
-    echo "✅ Frontend UP at http://localhost:$FRONTEND_PORT"
+  if curl -fsS --max-time 3 "$FRONTEND_URL" >/dev/null 2>&1; then
+    echo "✅ Frontend UP at $FRONTEND_URL"
   else
-    echo "❌ Frontend DOWN on port $FRONTEND_PORT"
-    echo "To start: cd apps/web/src/domains/forecasts/pages && python3 -m http.server $FRONTEND_PORT &"
+    echo "❌ Frontend DOWN at $FRONTEND_URL"
+    echo "To restart the public app stack: bash scripts/aws_remote_app_control.sh restart"
   fi
 }
 

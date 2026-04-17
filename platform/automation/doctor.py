@@ -480,7 +480,7 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
     planner_dispatch: dict[str, Any] = {}
     guard_module = _load_product_priority_guard(root)
     if guard_module is not None:
-        api_base = os.environ.get("FC_API_BASE_URL", "http://127.0.0.1:8050")
+        api_base = _default_api_base_url()
         try:
             product_value = guard_module.build_product_value_metrics(root, api_base_url=api_base, timeout_s=0.6)
             if (product_value.get("priority_guard") or {}).get("status") == "blocked":
@@ -579,7 +579,7 @@ def build_payload(root: Path, state_dir: Path) -> dict[str, Any]:
             "runtime_truth": runtime_truth,
             "runtime_truth_source": "sqlite" if event_store_primary else "fallback",
             "event_store_primary": event_store_primary,
-            "projection_secondary_only": event_store_primary,
+            "projection_secondary_only": not event_store_primary,
             "legacy_registry_secondary_only": True,
             "queue_summary": queue_summary,
             "workboard_summary": workboard_summary,

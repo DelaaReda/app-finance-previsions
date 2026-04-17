@@ -73,6 +73,13 @@ active_subagent_ids = snapshot.get("active_subagent_ids") if isinstance(snapshot
 subagent_progress_age = int(snapshot.get("subagent_progress_age_s", -1) or -1)
 if subagent_progress_age < 0:
     subagent_progress_age = None
+snapshot_active_cycle = snapshot.get("active_cycle") if isinstance(snapshot.get("active_cycle"), dict) else {}
+snapshot_active_batch_ids = [
+    str(item).strip().upper()
+    for item in (snapshot_active_cycle.get("active_batch_ids") if isinstance(snapshot_active_cycle.get("active_batch_ids"), list) else [])
+    if str(item).strip()
+]
+snapshot_runtime_actionable = bool(snapshot.get("runtime_actionable"))
 active_strategy_task = snapshot.get("active_planner_task") if isinstance(snapshot.get("active_planner_task"), dict) else {}
 if not str(active_strategy_task.get("task_id", "")).strip() or str(active_strategy_task.get("task_id", "")).strip() == "none":
     active_strategy_task = None
@@ -113,6 +120,29 @@ recommendations = [str(item).strip() for item in recommendations if str(item).st
 summary = guardian.get("summary") if isinstance(guardian.get("summary"), dict) else {}
 next_action = str(summary.get("next_action_unique") or "").strip() or "none"
 guardian_level = str(guardian.get("level") or "unknown").strip().lower() or "unknown"
+canonical_active_task_id = str(summary.get("canonical_active_task_id") or "").strip()
+if canonical_active_task_id.lower() == "none":
+    canonical_active_task_id = ""
+canonical_active_task_role = str(summary.get("canonical_active_task_role") or "").strip().lower()
+if canonical_active_task_role == "none":
+    canonical_active_task_role = ""
+canonical_active_task_state = str(summary.get("canonical_active_task_state") or "").strip().upper()
+if canonical_active_task_state == "NONE":
+    canonical_active_task_state = ""
+canonical_downstream_active = bool(
+    canonical_active_task_id
+    and canonical_active_task_role
+    and canonical_active_task_role != "planner"
+)
+canonical_collect_message = ""
+if canonical_downstream_active:
+    canonical_collect_message = (
+        "Priorite absolue: tache canonique active "
+        f"{canonical_active_task_id} ({canonical_active_task_role}/{canonical_active_task_state or 'UNKNOWN'}). "
+        "Collect via planner_subagent_manager.py collect; si ack pending, utilise "
+        "planner_runtime_actions.py handoff-ack|handoff-close; sinon corrige la route bloquante. "
+        "Pas de claim planner, pas d analysis_only, pas de planner-autobatch tant qu elle n a pas transitionne."
+    )
 non_blocking_guardian_issues = {
     "dependency_policy_not_enforced",
     "architecture_ref_not_canonical",
@@ -121,6 +151,22 @@ non_blocking_guardian_issues = {
     "missing_vision_alignment",
 }
 blocking_issues = [item for item in issues if item not in non_blocking_guardian_issues]
+snapshot_no_actionable_work = (
+    not snapshot_active_batch_ids
+    and not snapshot_runtime_actionable
+    and not active_subagent_ids
+    and active_strategy_task is None
+    and ready_planner_task is None
+    and dev_ready_count == 0
+)
+guardian_runtime_idle_override = snapshot_no_actionable_work and bool(issues)
+if guardian_runtime_idle_override:
+    issues = []
+    recommendations = []
+    summary = {}
+    next_action = "none"
+    guardian_level = "idle"
+    blocking_issues = []
 
 try:
     state = json.loads(state_file.read_text(encoding="utf-8", errors="ignore"))
@@ -174,11 +220,22 @@ elif ready_planner_task is not None:
     mode = "CLAIM_PLANNER_TASK"
     action = "kick"
     reason = "planner_ready_needs_claim"
-    if issues or dev_ready_count > 0:
+    if canonical_downstream_active:
+        mode = "COLLECT_ACTIVE_CAPABILITY"
+        reason = "canonical_downstream_requires_collect"
+        prompt_mode = "custom"
+        message = (
+            f"planner_companion relaunch: mode={mode} ready_planner_task={contract['task_id']} "
+            f"canonical_task={canonical_active_task_id} next={next_action}. "
+            f"{canonical_collect_message}"
+        )
+    elif issues or dev_ready_count > 0:
         prompt_mode = "custom"
         message = (
             f"planner_companion relaunch: mode={mode} task_id={contract['task_id']} "
-            f"stream_id={contract['stream_id']} ready_dev={dev_ready_count} next={next_action}."
+            f"stream_id={contract['stream_id']} ready_dev={dev_ready_count} next={next_action}. "
+            "Priorise un delta livrable maintenant: API/contrat partage ou comportement user-visible "
+            "verifiable sur EC2 public, pas d'analyse passive."
         )
     if contract_age is not None and contract_age < idle_stale_s and not issues and dev_ready_count == 0:
         action = "skip"
@@ -189,10 +246,20 @@ elif dev_ready_count > 0:
     action = "kick"
     reason = "dev_ready_requires_dispatch"
     prompt_mode = "custom"
-    message = (
-        f"planner_companion relaunch: mode={mode} dev_ready_count={dev_ready_count} "
-        f"next={next_action}. Lancer la capability utile maintenant."
-    )
+    if canonical_downstream_active:
+        mode = "COLLECT_ACTIVE_CAPABILITY"
+        reason = "canonical_downstream_requires_collect"
+        message = (
+            f"planner_companion relaunch: mode={mode} dev_ready_count={dev_ready_count} "
+            f"canonical_task={canonical_active_task_id} next={next_action}. "
+            f"{canonical_collect_message}"
+        )
+    else:
+        message = (
+            f"planner_companion relaunch: mode={mode} dev_ready_count={dev_ready_count} "
+            f"next={next_action}. Lancer la capability utile maintenant et viser un delta "
+            "user-visible ou API mergeable prouve sur EC2 public."
+        )
 elif issues:
     if guardian_level == "green" and not blocking_issues:
         mode = "WAIT_RUNTIME"
@@ -207,7 +274,8 @@ elif issues:
         message = (
             f"planner_companion relaunch: mode={mode} guardian_level={guardian_level} "
             f"issues={','.join(issues[:4])} next={next_action}. "
-            f"{recommendations[0] if recommendations else 'Corriger le blocker d orchestration courant.'}"
+            f"{recommendations[0] if recommendations else 'Corriger le blocker d orchestration courant.'} "
+            "Une fois le blocage leve, reprendre immediatement la livraison utile plutot que rester en maintenance."
         )
 elif guardian_age is not None and guardian_age > 7200 and contract_age is not None and contract_age > idle_stale_s:
     mode = "REPAIR_ORCHESTRATION"
@@ -250,6 +318,7 @@ result = {
     "registry_file": str(registry_path) if registry_path else "none",
     "events_file": str(events_path) if events_path else "none",
     "guardian_level": guardian_level,
+    "guardian_runtime_idle_override": int(guardian_runtime_idle_override),
     "guardian_age_s": guardian_age if guardian_age is not None else -1,
     "contract_age_s": contract_age if contract_age is not None else -1,
     "subagent_progress_age_s": subagent_progress_age if subagent_progress_age is not None else -1,

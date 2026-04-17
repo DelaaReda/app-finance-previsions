@@ -6064,6 +6064,14 @@ function buildCopilotStartHtml(state) {
   const sentiment = escapeHtml(toString(brief.marketRegime || brief.marketSentiment, 'UNKNOWN').replace(/_/g, ' '));
   const summary = escapeHtml(toString(brief.summary, 'No daily brief available yet.')).replace(/\n/g, '<br/>');
   const updated = escapeHtml(brief.freshness ? formatRelativeTime(brief.freshness) : 'just now');
+  const whatChangedToday = normalizeCopilotStartList(brief.whatChangedToday || brief.what_changed_today);
+  const whatChangedTodayHtml = whatChangedToday.length
+    ? `<p style="margin-top: 8px;"><strong>What changed today:</strong> ${whatChangedToday.map((item) => escapeHtml(item)).join(' • ')}</p>`
+    : '';
+  const whatMattersNow = normalizeCopilotStartList(brief.whatMattersNow || brief.what_matters_now);
+  const whatMattersNowHtml = whatMattersNow.length
+    ? `<p style="margin-top: 8px;"><strong>What matters now:</strong> ${whatMattersNow.map((item) => escapeHtml(item)).join(' • ')}</p>`
+    : '';
   const signals = brief.topSignals.length
     ? `<p style="margin-top: 8px;"><strong>Signals:</strong> ${brief.topSignals.map((item) => escapeHtml(item)).join(' • ')}</p>`
     : '';
@@ -6096,6 +6104,8 @@ function buildCopilotStartHtml(state) {
   return `
     <p><strong>${title}</strong> • ${sentiment} • Updated ${updated}</p>
     <p style="margin-top: 8px;">${summary}</p>
+    ${whatChangedTodayHtml}
+    ${whatMattersNowHtml}
     ${signals}
     ${opportunities}
     ${risks}

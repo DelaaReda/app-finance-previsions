@@ -1,0 +1,56 @@
+{
+  "conversation_id": "20c2e52a0f9dfd75",
+  "schema_version": "copilot_conversation_v1",
+  "created_at": "2026-04-16T10:40:18.825666Z",
+  "updated_at": "2026-04-16T10:40:18.833643Z",
+  "title": "Tech portfolio rebalance?",
+  "context": {
+    "tickers": [
+      "AAPL",
+      "MSFT"
+    ],
+    "scope": {
+      "portfolio_id": "port_tech_rebalance"
+    },
+    "portfolio_id": "port_tech_rebalance"
+  },
+  "messages": [
+    {
+      "message_id": "msg_001",
+      "role": "user",
+      "content": "Tech portfolio rebalance?",
+      "timestamp": "2026-04-16T10:40:18.825666Z",
+      "metadata": {
+        "tickers": [
+          "AAPL",
+          "MSFT"
+        ],
+        "scope": {
+          "portfolio_id": "port_tech_rebalance"
+        }
+      }
+    },
+    {
+      "message_id": "msg_002",
+      "role": "assistant",
+      "content": "Reduce AAPL, add to MSFT.",
+      "timestamp": "2026-04-16T10:40:18.833643Z",
+      "metadata": {
+        "verdict": "sell",
+        "confidence": 0.75,
+        "horizon": "1w",
+        "tickers": [
+          "AAPL",
+          "MSFT"
+        ]
+      }
+    }
+  ],
+  "message_count": 2,
+  "metadata": {
+    "entrypoint": "copilot_ask"
+  },
+  "source": [
+    "copilot_conversation_service"
+  ]
+}

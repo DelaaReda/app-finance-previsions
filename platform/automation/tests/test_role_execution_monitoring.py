@@ -183,6 +183,131 @@ class RoleExecutionMonitoringTests(unittest.TestCase):
             self.assertEqual(latest["summary"]["issues_open"], 0)
             self.assertIn("backend_engineer", latest["summary"]["stale_context_roles"])
 
+    def test_planner_only_mode_ignores_capability_role_stale_context_and_sets_generated_at(self) -> None:
+        payload = "\n".join(
+            [
+                "STATUS: PASS",
+                "DELTA: NO_DELTA",
+                (
+                    "EVIDENCE: exec_report=planner_capability_runtime_owned; issues=none; issue_count=0; "
+                    "issue_severity=none; stream_id=BATCH-89; task_id=BATCH-89-DEV-01; tool_request=none; "
+                    "skill_request=none; channels_read=runtime_context; impact_assessment=low; "
+                    "impact_action=wait_for_planner_collect; queue_version=queue_123_olddeadbeef; "
+                    "workboard_version=workboard_123_olddeadbeef"
+                ),
+                "RISKS: none",
+                "NEXT: owner=planner; action=collect capability result",
+                "VERDICT: PASS",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: DEV_PLANNER_ONLY_STALE_CONTEXT_UTEST",
+            ]
+        )
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            payload_file = root / "payload.txt"
+            latest_file = root / "docs" / "executors-monitoring-latest.json"
+            events_file = root / "logs" / "events.jsonl"
+            tool_md_file = root / "docs" / "AGENT_TOOL_REQUESTS.md"
+            tool_events_file = root / "docs" / "agent-tool-requests.jsonl"
+            state_dir = root / "state"
+            queue_file = root / "docs" / "priority-queue.json"
+            workboard_file = root / "docs" / "parallel-workstreams.json"
+            runtime_state_file = root / "docs" / "runtime-state.json"
+
+            queue_file.parent.mkdir(parents=True, exist_ok=True)
+            queue_file.write_text('{"items":[]}\n', encoding="utf-8")
+            workboard_file.write_text('{"tasks":[]}\n', encoding="utf-8")
+            runtime_state_file.write_text(
+                json.dumps({"operator_mode": "planner-only", "execution_mode": "planner_experimental"}) + "\n",
+                encoding="utf-8",
+            )
+            payload_file.write_text(payload, encoding="utf-8")
+
+            cmd = [
+                sys.executable,
+                str(MONITOR),
+                "dev",
+                "unit_test",
+                str(payload_file),
+                str(latest_file),
+                str(events_file),
+                str(tool_md_file),
+                str(tool_events_file),
+                str(state_dir),
+            ]
+            env = os.environ.copy()
+            env["EXEC_MONITOR_QUEUE_FILE"] = str(queue_file)
+            env["EXEC_MONITOR_WORKBOARD_FILE"] = str(workboard_file)
+            env["EXEC_MONITOR_RUNTIME_STATE_FILE"] = str(runtime_state_file)
+
+            run = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=False, env=env)
+            self.assertEqual(run.returncode, 0, msg=run.stderr)
+
+            latest = json.loads(latest_file.read_text(encoding="utf-8"))
+            self.assertEqual(latest["summary"]["stale_context_open"], 0)
+            self.assertEqual(latest["summary"]["stale_context_roles"], [])
+            self.assertEqual(latest["generated_at"], latest["updated_at_utc"])
+
+    def test_planner_dispatching_downstream_is_not_counted_as_stale_context(self) -> None:
+        payload = "\n".join(
+            [
+                "STATUS: IN_PROGRESS",
+                "DELTA: PLANNER_DISPATCH_ACTIVE",
+                (
+                    "EVIDENCE: task_update=analysis_only; exec_report=dispatch_downstream; "
+                    "issues=planner_evidence_incomplete_soft; issue_count=1; issue_severity=low; stream_id=BATCH-95; "
+                    "task_id=BATCH-95-ARCH; tool_request=none; skill_request=none; "
+                    "channels_read=runtime_context; impact_assessment=low; impact_action=monitor_updates; "
+                    "queue_version=queue_123_olddeadbeef; workboard_version=workboard_123_olddeadbeef"
+                ),
+                "RISKS: none",
+                "NEXT: owner=dev; action=continue BATCH-95-DEV-01 via capability dispatch",
+                "VERDICT: GO_WITH_CAUTION",
+                "BLOCKER_ID: NONE",
+                "NEXT_ACTION_UNIQUE: PLANNER_DISPATCH_ACTIVE_BATCH-95-DEV-01",
+            ]
+        )
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            payload_file = root / "payload.txt"
+            latest_file = root / "docs" / "executors-monitoring-latest.json"
+            events_file = root / "logs" / "events.jsonl"
+            tool_md_file = root / "docs" / "AGENT_TOOL_REQUESTS.md"
+            tool_events_file = root / "docs" / "agent-tool-requests.jsonl"
+            state_dir = root / "state"
+            queue_file = root / "docs" / "priority-queue.json"
+            workboard_file = root / "docs" / "parallel-workstreams.json"
+
+            queue_file.parent.mkdir(parents=True, exist_ok=True)
+            queue_file.write_text('{"items":[]}\n', encoding="utf-8")
+            workboard_file.write_text('{"tasks":[]}\n', encoding="utf-8")
+            payload_file.write_text(payload, encoding="utf-8")
+
+            cmd = [
+                sys.executable,
+                str(MONITOR),
+                "planner",
+                "unit_test",
+                str(payload_file),
+                str(latest_file),
+                str(events_file),
+                str(tool_md_file),
+                str(tool_events_file),
+                str(state_dir),
+            ]
+            env = os.environ.copy()
+            env["EXEC_MONITOR_QUEUE_FILE"] = str(queue_file)
+            env["EXEC_MONITOR_WORKBOARD_FILE"] = str(workboard_file)
+
+            run = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=False, env=env)
+            self.assertEqual(run.returncode, 0, msg=run.stderr)
+
+            latest = json.loads(latest_file.read_text(encoding="utf-8"))
+            self.assertEqual(latest["summary"]["stale_context_open"], 0)
+            self.assertEqual(latest["summary"]["stale_context_roles"], [])
+            self.assertEqual(latest["roles"]["planner"]["issue_count"], 0)
+            self.assertEqual(latest["roles"]["planner"]["issues"], "none")
+
     def test_issue_reporting_fields_are_persisted_and_summarized(self) -> None:
         payload = "\n".join(
             [
@@ -247,6 +372,77 @@ class RoleExecutionMonitoringTests(unittest.TestCase):
             self.assertEqual(rows[0]["issue_count"], 2)
             self.assertEqual(rows[0]["issue_severity"], "high")
             self.assertEqual(rows[0]["issue_codes"], ["agent_rate_limit_codex", "upstream_timeout"])
+
+    def test_planner_record_demotes_to_idle_when_canonical_runtime_has_no_active_cycle(self) -> None:
+        payload = "\n".join(
+            [
+                "STATUS: BLOCKED",
+                "DELTA: PLANNER_RUNTIME_ACTIONS_FAILED",
+                (
+                    "EVIDENCE: task_update=blocked; exec_report=runtime_actions_failed; "
+                    "issues=planner_runtime_actions_failed; issue_count=1; issue_severity=high; "
+                    "stream_id=BATCH-94; task_id=BATCH-94-ARCH; tool_request=none; skill_request=none; "
+                    "channels_read=runtime_context; impact_assessment=high; impact_action=sync_cross_role"
+                ),
+                "RISKS: runtime blocked",
+                "NEXT: owner=planner; action=repair runtime actions",
+                "VERDICT: BLOCKED",
+                "BLOCKER_ID: PLANNER_RUNTIME_ACTIONS_FAILED",
+                "NEXT_ACTION_UNIQUE: PLANNER_RUNTIME_ACTIONS_FAILED",
+            ]
+        )
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            payload_file = root / "payload.txt"
+            latest_file = root / "docs" / "executors-monitoring-latest.json"
+            events_file = root / "logs" / "events.jsonl"
+            tool_md_file = root / "docs" / "AGENT_TOOL_REQUESTS.md"
+            tool_events_file = root / "docs" / "agent-tool-requests.jsonl"
+            state_dir = root / "state"
+            queue_file = root / "docs" / "priority-queue.json"
+            workboard_file = root / "docs" / "parallel-workstreams.json"
+            runtime_state_file = root / "docs" / "runtime-state.json"
+
+            queue_file.parent.mkdir(parents=True, exist_ok=True)
+            queue_file.write_text(json.dumps({"items": [], "active_cycle": {"active_batch_ids": []}}), encoding="utf-8")
+            workboard_file.write_text(
+                json.dumps({"tasks": [], "active_cycle": {"active_batch_ids": []}}),
+                encoding="utf-8",
+            )
+            runtime_state_file.write_text(
+                json.dumps({"operator_mode": "planner-only", "execution_mode": "planner_experimental"}) + "\n",
+                encoding="utf-8",
+            )
+            payload_file.write_text(payload, encoding="utf-8")
+
+            cmd = [
+                sys.executable,
+                str(MONITOR),
+                "planner",
+                "unit_test",
+                str(payload_file),
+                str(latest_file),
+                str(events_file),
+                str(tool_md_file),
+                str(tool_events_file),
+                str(state_dir),
+            ]
+            env = os.environ.copy()
+            env["EXEC_MONITOR_QUEUE_FILE"] = str(queue_file)
+            env["EXEC_MONITOR_WORKBOARD_FILE"] = str(workboard_file)
+            env["EXEC_MONITOR_RUNTIME_STATE_FILE"] = str(runtime_state_file)
+
+            run = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=False, env=env)
+            self.assertEqual(run.returncode, 0, msg=run.stderr)
+
+            latest = json.loads(latest_file.read_text(encoding="utf-8"))
+            planner = latest["roles"]["planner"]
+            self.assertEqual(planner["status"], "IDLE")
+            self.assertEqual(planner["delta"], "NO_ACTIVE_CANONICAL_WORK")
+            self.assertEqual(planner["verdict"], "IDLE")
+            self.assertEqual(planner["blocker_id"], "NONE")
+            self.assertEqual(planner["next"], "owner=planner; action=wait_for_active_cycle")
+            self.assertEqual(planner["issues"], "none")
 
     def test_action_summary_falls_back_to_run_note(self) -> None:
         payload = "\n".join(

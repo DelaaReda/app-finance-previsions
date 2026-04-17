@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-86-BATCH-86-ANALYSIS-20260415T081823Z-288"
+stream_id: "BATCH-86"
+task_id: "BATCH-86-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-04-15T08:18:23Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "git add docs/ops/BATCH-86-ANALYSIS-ARCHITECTURE_AUDIT.md && git commit -m feat(planner)_BATCH-86-ANALYSIS_audit"
+      rc: "0"
+      started_at_utc: "2026-04-15T08:18:23Z"
+      ended_at_utc: "2026-04-15T08:18:23Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_doc_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/BATCH-86-ANALYSIS-ARCHITECTURE_AUDIT.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "CLAIM_BATCH_86_ARCH_P1776240835_16850"
+  review_ref: "runner:BATCH-86-ANALYSIS"
+  note: "source=runner | root_cause=Planner autobatch created BATCH-86-ANALYSIS without a committed architecture audit tied to canonical apps/api and apps/web surfaces | fix_applied=Added docs/ops/BATCH-86-ANALYSIS-ARCHITECTURE_AUDIT.md to anchor the stream to copilot and judge backend reuse plus the existing copilot panel UI | verify=before=BATCH-86-ANALYSIS:IN_PROGRESS proof_count=0 guardian_missing_architecture_refs; after=analysis_audit_committed and complete_requested so BATCH-86-ARCH can unblock; test=python3 /home/venom/analyse-financiere/platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=layer=apps/api+apps/web; imports_ok=yes; path_target=apps/api/src/domains/copilot/api/copilot.py,apps/api/src/domains/copilot/application/copilot_service.py,apps/api/src/domains/judge/application/judge_endpoint_service.py,apps/web/src/domains/forecasts/components/widgets/copilot-panel.html | vision_alignment=batch=BATCH-86; target=personal_finance_brief_ask_open_memo_without_theme_break; impact=unlock_arch_with_canonical_reuse_boundaries"

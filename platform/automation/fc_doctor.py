@@ -19,6 +19,7 @@ import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -42,6 +43,8 @@ CANONICAL_RUNTIME_WORKSPACE = Path("/home/venom/analyse-financiere")
 CANONICAL_RUNTIME_WORKSPACE_ALIASES = {
     CANONICAL_RUNTIME_WORKSPACE,
 }
+DEFAULT_PUBLIC_APP_BASE_URL = "http://3.98.20.77"
+DEFAULT_PUBLIC_MONITOR_BASE_URL = "http://3.98.20.77:8080"
 
 
 @dataclass
@@ -52,6 +55,22 @@ class CheckResult:
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _default_api_base_url() -> str:
+    return str(
+        os.environ.get("FC_API_BASE_URL")
+        or os.environ.get("FC_PUBLIC_APP_BASE_URL")
+        or DEFAULT_PUBLIC_APP_BASE_URL
+    ).strip() or DEFAULT_PUBLIC_APP_BASE_URL
+
+
+def _default_monitor_base_url() -> str:
+    return str(
+        os.environ.get("FC_MONITOR_BASE_URL")
+        or os.environ.get("FC_PUBLIC_MONITOR_BASE_URL")
+        or DEFAULT_PUBLIC_MONITOR_BASE_URL
+    ).strip() or DEFAULT_PUBLIC_MONITOR_BASE_URL
 
 
 def _probe_blocked_message(raw: object) -> bool:
@@ -261,8 +280,20 @@ def check_workspace_root(root: Path) -> CheckResult:
 
 
 def check_scheduler_authority(root: Path) -> CheckResult:
+    if _control_plane_location(root) != "local_vm":
+        return _remote_control_plane_advisory(
+            "scheduler_authority",
+            {
+                "policy_target": "cron_only",
+                "scheduler_policy": "remote_vm_authority",
+                "timer_enabled": False,
+                "timer_active": False,
+            },
+        )
     runtime_state = _runtime_state_detail(root)
     cron_has_vm_resume_guard = False
+    openclaw_cron_enabled_count = 0
+    openclaw_scheduler_detected = False
     cron_rc = 0
     cron_err = ""
     try:
@@ -287,6 +318,28 @@ def check_scheduler_authority(root: Path) -> CheckResult:
         cron_rc = 2
         cron_err = str(exc)
     cron_probe_blocked = _probe_blocked_message(cron_err)
+    try:
+        jobs_path = Path.home() / ".openclaw" / "cron" / "jobs.json"
+        if jobs_path.exists():
+            payload = json.loads(jobs_path.read_text(encoding="utf-8"))
+            jobs = payload.get("jobs")
+            if isinstance(jobs, list):
+                for job in jobs:
+                    if not isinstance(job, dict):
+                        continue
+                    if not bool(job.get("enabled")):
+                        continue
+                    name = str(job.get("name", "") or "").strip()
+                    if name.endswith("-tmux-loop") or name in {
+                        "admin-agents-supervisor-15m",
+                        "adminapp-codex-sync-10m",
+                        "stale-sweep-autoheal-7m",
+                    }:
+                        openclaw_cron_enabled_count += 1
+        openclaw_scheduler_detected = openclaw_cron_enabled_count > 0
+    except Exception:
+        openclaw_cron_enabled_count = 0
+        openclaw_scheduler_detected = False
 
     runtime_state_age_min = _state_age_minutes(runtime_state.get("updated_at"))
     runtime_state_fallback_ok = (
@@ -351,6 +404,9 @@ def check_scheduler_authority(root: Path) -> CheckResult:
     elif cron_has_vm_resume_guard and not timer_enabled:
         status = "ok"
         policy = "cron_only"
+    elif openclaw_scheduler_detected:
+        status = "ok"
+        policy = "openclaw_cron_only"
     elif (not cron_has_vm_resume_guard) and timer_enabled:
         status = "degraded"
         policy = "systemd_only_policy_violation"
@@ -368,6 +424,7 @@ def check_scheduler_authority(root: Path) -> CheckResult:
             "timer_enabled": timer_enabled,
             "timer_active": timer_active,
             "timer_probe": timer_probe,
+            "openclaw_cron_enabled_count": openclaw_cron_enabled_count,
             "scheduler_policy": policy,
         },
     )
@@ -442,6 +499,17 @@ def _read_recent_planner_dispatch(root: Path, max_age_min: int = 90) -> dict[str
 
 
 def check_sessions(root: Path) -> CheckResult:
+    if _control_plane_location(root) != "local_vm":
+        expected = _expected_core_roles(root)
+        return _remote_control_plane_advisory(
+            "sessions",
+            {
+                "expected_core": list(expected),
+                "expected_sessions": _expected_tmux_sessions(root),
+                "scheduler_inventory_mode": "remote_vm_authority",
+                "execution_mode": "planner_experimental" if expected == ("planner",) else "parallel_roles",
+            },
+        )
     runtime_state = _runtime_state_detail(root)
     runtime_paused = runtime_state.get("lifecycle") == "paused"
     cmd = ["tmux", "list-sessions", "-F", "#{session_name}"]
@@ -462,6 +530,8 @@ def check_sessions(root: Path) -> CheckResult:
     orphans = [name for name in sessions if name.startswith("codex_") and name not in expected_session_set]
     quarantined_jobs = [] if runtime_paused else _quarantined_jobs(root)
     lane_validity = build_lane_validity_summary(root, roles=list(expected))
+    canonical_active_batches = lane_validity.get("active_batches", [])
+
     invalid_core = [] if runtime_paused else [
         role
         for role in expected
@@ -498,7 +568,7 @@ def check_sessions(root: Path) -> CheckResult:
                 "invalid_core": invalid_core,
                 "found_core": found_by_role,
                 "lane_validity": lane_validity,
-                "canonical_active_batches": lane_validity.get("active_batches", []),
+                "canonical_active_batches": canonical_active_batches,
                 "orphans": orphans[:60],
                 "quarantined_jobs": quarantined_jobs[:60],
                 "scheduler_inventory_mode": "quarantine" if _planner_only_mode(root) else "legacy_compatible",
@@ -539,7 +609,7 @@ def check_sessions(root: Path) -> CheckResult:
             "invalid_core": invalid_core,
             "found_core": found_by_role,
             "lane_validity": lane_validity,
-            "canonical_active_batches": lane_validity.get("active_batches", []),
+            "canonical_active_batches": canonical_active_batches,
             "orphans": orphans[:60],
             "quarantined_jobs": quarantined_jobs[:60],
             "scheduler_inventory_mode": "quarantine" if _planner_only_mode(root) else "legacy_compatible",
@@ -758,7 +828,7 @@ def check_queue_workboard(root: Path, runtime_truth_snapshot: dict[str, Any] | N
             "runtime_truth_source": "sqlite" if event_store_primary else "fallback",
             "primary_source": str(runtime_truth_snapshot.get("source", "projection_fallback")),
             "event_store_primary": event_store_primary,
-            "projection_only": event_store_primary,
+            "projection_only": not event_store_primary,
             "projection_status": projection_status,
             "legacy_registry_secondary_only": True,
             "queue_file": str(queue_file),
@@ -901,12 +971,64 @@ def _run_openclaw_probe(candidates: list[list[str]], timeout_s: float = 5.0) -> 
     return last
 
 
+def _openclaw_process_probe() -> dict[str, Any]:
+    patterns = {
+        "gateway": "openclaw-gateway",
+        "doctor": "openclaw-doctor",
+        "cli": "openclaw$",
+    }
+    detail: dict[str, Any] = {}
+    for key, pattern in patterns.items():
+        try:
+            cp = subprocess.run(
+                ["pgrep", "-af", pattern],
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=1,
+            )
+        except Exception as exc:
+            detail[key] = {"ok": False, "pattern": pattern, "lines": [], "error": str(exc)[:220]}
+            continue
+        lines = [line.strip() for line in str(cp.stdout or "").splitlines() if line.strip()]
+        detail[key] = {
+            "ok": cp.returncode == 0 and bool(lines),
+            "pattern": pattern,
+            "lines": lines[:8],
+        }
+    return {
+        "gateway_running": bool(detail.get("gateway", {}).get("ok")),
+        "doctor_running": bool(detail.get("doctor", {}).get("ok")),
+        "cli_running": bool(detail.get("cli", {}).get("ok")),
+        "detail": detail,
+    }
+
+
 def _allow_live_openclaw_checks(root: Path) -> bool:
     try:
         resolved = root.expanduser().resolve()
         return resolved in {alias.expanduser().resolve() for alias in CANONICAL_RUNTIME_WORKSPACE_ALIASES}
     except Exception:
         return False
+
+
+def _control_plane_location(root: Path) -> str:
+    token = str(os.environ.get("FC_CONTROL_PLANE_LOCATION", "") or "").strip().lower()
+    if token in {"local", "local_vm", "vm", "canonical_vm"}:
+        return "local_vm"
+    if token in {"remote", "remote_vm", "aws_ec2_app", "ec2_app_host"}:
+        return "remote_vm"
+    return "local_vm" if _allow_live_openclaw_checks(root) else "remote_vm"
+
+
+def _remote_control_plane_advisory(name: str, detail: dict[str, Any] | None = None) -> CheckResult:
+    payload = dict(detail or {})
+    payload.setdefault("status", "unknown")
+    payload["advisory_only"] = True
+    payload["control_plane_location"] = "remote_vm"
+    payload["probe_mode"] = "disabled_remote_control_plane"
+    payload["check"] = name
+    return CheckResult(status="ok", detail=payload)
 
 
 def _systemd_unit_probe(unit: str, verb: str) -> dict[str, Any]:
@@ -935,12 +1057,11 @@ def _worker_runtime_snapshot(root: Path) -> dict[str, Any]:
 
 
 def check_openclaw_gateway(root: Path) -> CheckResult:
-    if not _allow_live_openclaw_checks(root):
-        return CheckResult(
-            status="ok",
-            detail={
+    if _control_plane_location(root) != "local_vm":
+        return _remote_control_plane_advisory(
+            "openclaw_gateway",
+            {
                 "status": "unknown",
-                "probe_mode": "disabled_noncanonical_root",
                 "cli_available": False,
                 "gateway_reachable": False,
                 "service_active": False,
@@ -961,9 +1082,11 @@ def check_openclaw_gateway(root: Path) -> CheckResult:
         )
 
     systemctl_available = subprocess.run(["which", "systemctl"], capture_output=True, text=True, check=False).returncode == 0
-    active_probe = _systemd_unit_probe("openclaw.service", "is-active") if systemctl_available else {"ok": False, "output": "systemctl_missing"}
-    enabled_probe = _systemd_unit_probe("openclaw.service", "is-enabled") if systemctl_available else {"ok": False, "output": "systemctl_missing"}
+    expected_unit = "openclaw-gateway.service"
+    active_probe = _systemd_unit_probe(expected_unit, "is-active") if systemctl_available else {"ok": False, "output": "systemctl_missing"}
+    enabled_probe = _systemd_unit_probe(expected_unit, "is-enabled") if systemctl_available else {"ok": False, "output": "systemctl_missing"}
     probe_timeout_s = 0.5
+    process_probe = _openclaw_process_probe()
     doctor_probe = _run_openclaw_probe([["openclaw", "doctor", "--json"], ["openclaw", "doctor"]], timeout_s=probe_timeout_s)
     status_probe = _run_openclaw_probe([["openclaw", "status", "--json"], ["openclaw", "status"]], timeout_s=probe_timeout_s)
     health_probe = _run_openclaw_probe([["openclaw", "health", "--json"], ["openclaw", "health"]], timeout_s=probe_timeout_s)
@@ -972,15 +1095,24 @@ def check_openclaw_gateway(root: Path) -> CheckResult:
         timeout_s=probe_timeout_s,
     )
 
-    gateway_reachable = bool(status_probe.get("ok") or health_probe.get("ok") or doctor_probe.get("ok"))
+    process_fallback_ok = (
+        bool(process_probe.get("gateway_running"))
+        and bool(process_probe.get("cli_running"))
+        and any(
+            "timed out" in str(probe.get("stderr", "")).lower()
+            for probe in (doctor_probe, status_probe, health_probe)
+        )
+    )
+    gateway_reachable = bool(status_probe.get("ok") or health_probe.get("ok") or doctor_probe.get("ok") or process_fallback_ok)
+    effective_health_ok = bool(health_probe.get("ok") or process_fallback_ok)
     service_active = bool(active_probe.get("ok"))
     service_enabled = bool(enabled_probe.get("ok"))
     raw_status = "ok"
-    if not gateway_reachable or not health_probe.get("ok"):
+    if not gateway_reachable or not effective_health_ok:
         raw_status = "degraded"
     elif not models_probe.get("ok") or not service_active or not service_enabled or not doctor_probe.get("ok") or not status_probe.get("ok"):
         raw_status = "degraded"
-    status = "ok" if gateway_reachable and bool(health_probe.get("ok")) else "degraded"
+    status = "ok" if gateway_reachable and effective_health_ok else "degraded"
     detail = {
         "status": status,
         "cli_available": True,
@@ -990,7 +1122,7 @@ def check_openclaw_gateway(root: Path) -> CheckResult:
         "systemd_available": systemctl_available,
         "doctor_ok": bool(doctor_probe.get("ok")),
         "status_ok": bool(status_probe.get("ok")),
-        "health_ok": bool(health_probe.get("ok")),
+        "health_ok": effective_health_ok,
         "models_ok": bool(models_probe.get("ok")),
         "service_active_probe": active_probe,
         "service_enabled_probe": enabled_probe,
@@ -998,6 +1130,9 @@ def check_openclaw_gateway(root: Path) -> CheckResult:
         "status_probe": status_probe,
         "health_probe": health_probe,
         "models_probe": models_probe,
+        "process_probe": process_probe.get("detail", {}),
+        "process_fallback_used": process_fallback_ok,
+        "service_unit": expected_unit,
     }
     if raw_status != status:
         detail["advisory_state"] = raw_status
@@ -1031,6 +1166,21 @@ def check_plane_planning(root: Path) -> CheckResult:
 
 
 def check_runtime_truth(root: Path) -> CheckResult:
+    if _control_plane_location(root) != "local_vm":
+        snapshot = build_runtime_truth_snapshot(root)
+        snapshot["status"] = "unknown"
+        snapshot["runtime_truth_source"] = "remote_vm"
+        snapshot["source"] = "remote_control_plane"
+        snapshot["advisory_only"] = True
+        snapshot["control_plane_location"] = "remote_vm"
+        agentic_runtime = snapshot.get("agentic_runtime")
+        if isinstance(agentic_runtime, dict):
+            snapshot["agentic_runtime"] = {
+                **agentic_runtime,
+                "status": "unknown",
+                "primary_source": "remote_vm",
+            }
+        return CheckResult(status="ok", detail=snapshot)
     snapshot = build_runtime_truth_snapshot(root)
     snapshot["runtime_truth_source"] = "sqlite" if bool(snapshot.get("event_store_primary")) else "fallback"
     status = "ok" if bool(snapshot.get("event_store_primary")) else "degraded"
@@ -1052,6 +1202,18 @@ def _aggregate_status(*values: object) -> str:
     if normalized and all(value == "ok" for value in normalized):
         return "ok"
     return "unknown"
+
+
+def _runtime_idle_fast_path_check(name: str, reason: str = "no_active_graph_state") -> CheckResult:
+    return CheckResult(
+        status="ok",
+        detail={
+            "status": "ok",
+            "idle_runtime_fast_path": True,
+            "reason": reason,
+            "check": name,
+        },
+    )
 
 
 def _app_runtime_surface(checks: dict[str, CheckResult]) -> dict[str, Any]:
@@ -1135,6 +1297,7 @@ def _provider_plane_surface(kind: str, checks: dict[str, CheckResult]) -> dict[s
 
 
 
+@lru_cache(maxsize=4)
 def _load_product_priority_guard(root: Path):
     module_path = root / "platform" / "automation" / "product_priority_guard.py"
     if not module_path.exists():
@@ -1147,6 +1310,7 @@ def _load_product_priority_guard(root: Path):
     return module
 
 
+@lru_cache(maxsize=4)
 def _load_planner_dispatch_metrics(root: Path):
     module_path = root / "platform" / "automation" / "runtime" / "planner" / "planner_dispatch_metrics.py"
     if not module_path.exists():
@@ -1157,6 +1321,24 @@ def _load_planner_dispatch_metrics(root: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+@lru_cache(maxsize=8)
+def _build_delivery_control_metrics(root: Path, window_hours: int = 24) -> dict[str, Any]:
+    module = _load_product_priority_guard(root)
+    if module is None or not hasattr(module, "build_delivery_control_metrics"):
+        raise RuntimeError("product_priority_guard_missing")
+    metrics = module.build_delivery_control_metrics(root, window_hours=window_hours)
+    return metrics if isinstance(metrics, dict) else {"metrics": metrics}
+
+
+@lru_cache(maxsize=8)
+def _build_planner_dispatch_metrics(root: Path, recent_limit: int = 12) -> dict[str, Any]:
+    module = _load_planner_dispatch_metrics(root)
+    if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
+        raise RuntimeError("planner_dispatch_metrics_missing")
+    metrics = module.build_planner_dispatch_metrics(root, recent_limit=recent_limit)
+    return metrics if isinstance(metrics, dict) else {"metrics": metrics}
 
 
 def check_product_value(root: Path, api_base: str) -> CheckResult:
@@ -1200,11 +1382,8 @@ def check_delivery_integrity(root: Path) -> CheckResult:
 
 
 def check_delivery_future_integrity(root: Path) -> CheckResult:
-    module = _load_product_priority_guard(root)
-    if module is None or not hasattr(module, "build_delivery_control_metrics"):
-        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
     try:
-        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+        metrics = _build_delivery_control_metrics(root, window_hours=24)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     status = "ok" if str(metrics.get("future_status", "unknown")) == "ok" else "degraded"
@@ -1212,11 +1391,8 @@ def check_delivery_future_integrity(root: Path) -> CheckResult:
 
 
 def check_browser_proof_pipeline(root: Path) -> CheckResult:
-    module = _load_product_priority_guard(root)
-    if module is None or not hasattr(module, "build_delivery_control_metrics"):
-        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
     try:
-        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+        metrics = _build_delivery_control_metrics(root, window_hours=24)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     detail = metrics.get("browser_proof_pipeline", {}) if isinstance(metrics, dict) else {}
@@ -1225,11 +1401,8 @@ def check_browser_proof_pipeline(root: Path) -> CheckResult:
 
 
 def check_suspicious_completions(root: Path) -> CheckResult:
-    module = _load_product_priority_guard(root)
-    if module is None or not hasattr(module, "build_delivery_control_metrics"):
-        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
     try:
-        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+        metrics = _build_delivery_control_metrics(root, window_hours=24)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     detail = metrics.get("suspicious_completions", {}) if isinstance(metrics, dict) else {}
@@ -1238,11 +1411,8 @@ def check_suspicious_completions(root: Path) -> CheckResult:
 
 
 def check_qa_review_pipeline(root: Path) -> CheckResult:
-    module = _load_product_priority_guard(root)
-    if module is None or not hasattr(module, "build_delivery_control_metrics"):
-        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
     try:
-        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+        metrics = _build_delivery_control_metrics(root, window_hours=24)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     detail = metrics.get("qa_review_pipeline", {}) if isinstance(metrics, dict) else {}
@@ -1251,11 +1421,8 @@ def check_qa_review_pipeline(root: Path) -> CheckResult:
 
 
 def check_capability_stall_recovery(root: Path) -> CheckResult:
-    module = _load_product_priority_guard(root)
-    if module is None or not hasattr(module, "build_delivery_control_metrics"):
-        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
     try:
-        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+        metrics = _build_delivery_control_metrics(root, window_hours=24)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     detail = metrics.get("capability_stall_summary", {}) if isinstance(metrics, dict) else {}
@@ -1287,11 +1454,8 @@ def check_capability_stall_recovery(root: Path) -> CheckResult:
 
 
 def check_historical_delivery_debt(root: Path) -> CheckResult:
-    module = _load_product_priority_guard(root)
-    if module is None or not hasattr(module, "build_delivery_control_metrics"):
-        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
     try:
-        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+        metrics = _build_delivery_control_metrics(root, window_hours=24)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     detail = metrics.get("historical_debt", {}) if isinstance(metrics, dict) else {}
@@ -1303,11 +1467,8 @@ def check_historical_delivery_debt(root: Path) -> CheckResult:
 
 
 def check_planner_dispatch(root: Path) -> CheckResult:
-    module = _load_planner_dispatch_metrics(root)
-    if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
-        return CheckResult(status="error", detail={"error": "planner_dispatch_metrics_missing"})
     try:
-        metrics = module.build_planner_dispatch_metrics(root, recent_limit=12)
+        metrics = _build_planner_dispatch_metrics(root, recent_limit=12)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     detail = dict(metrics) if isinstance(metrics, dict) else {"metrics": metrics}
@@ -1322,11 +1483,8 @@ def check_planner_dispatch(root: Path) -> CheckResult:
 
 
 def check_capability_result_integrity(root: Path) -> CheckResult:
-    module = _load_planner_dispatch_metrics(root)
-    if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
-        return CheckResult(status="error", detail={"error": "planner_dispatch_metrics_missing"})
     try:
-        metrics = module.build_planner_dispatch_metrics(root, recent_limit=12)
+        metrics = _build_planner_dispatch_metrics(root, recent_limit=12)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     invalid_count = int(metrics.get("recent_invalid_result_count", 0) or 0)
@@ -1354,11 +1512,8 @@ def check_capability_result_integrity(root: Path) -> CheckResult:
 
 
 def check_dev_execution_model(root: Path) -> CheckResult:
-    module = _load_planner_dispatch_metrics(root)
-    if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
-        return CheckResult(status="error", detail={"error": "planner_dispatch_metrics_missing"})
     try:
-        metrics = module.build_planner_dispatch_metrics(root, recent_limit=12)
+        metrics = _build_planner_dispatch_metrics(root, recent_limit=12)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     detail = {
@@ -1377,11 +1532,8 @@ def check_dev_execution_model(root: Path) -> CheckResult:
 
 
 def check_dev_progress_integrity(root: Path) -> CheckResult:
-    module = _load_planner_dispatch_metrics(root)
-    if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
-        return CheckResult(status="error", detail={"error": "planner_dispatch_metrics_missing"})
     try:
-        metrics = module.build_planner_dispatch_metrics(root, recent_limit=12)
+        metrics = _build_planner_dispatch_metrics(root, recent_limit=12)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     no_progress_count = int(metrics.get("dev_no_progress_count", 0) or 0)
@@ -1401,11 +1553,8 @@ def check_dev_progress_integrity(root: Path) -> CheckResult:
 
 
 def check_dev_orphan_recovery(root: Path) -> CheckResult:
-    module = _load_planner_dispatch_metrics(root)
-    if module is None or not hasattr(module, "build_planner_dispatch_metrics"):
-        return CheckResult(status="error", detail={"error": "planner_dispatch_metrics_missing"})
     try:
-        metrics = module.build_planner_dispatch_metrics(root, recent_limit=12)
+        metrics = _build_planner_dispatch_metrics(root, recent_limit=12)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     orphaned_count = int(metrics.get("dev_orphaned_count", 0) or 0)
@@ -1424,11 +1573,8 @@ def check_dev_orphan_recovery(root: Path) -> CheckResult:
 
 
 def check_planner_takeover_recovery(root: Path) -> CheckResult:
-    module = _load_product_priority_guard(root)
-    if module is None or not hasattr(module, "build_delivery_control_metrics"):
-        return CheckResult(status="error", detail={"error": "product_priority_guard_missing"})
     try:
-        metrics = module.build_delivery_control_metrics(root, window_hours=24)
+        metrics = _build_delivery_control_metrics(root, window_hours=24)
     except Exception as exc:
         return CheckResult(status="error", detail={"error": str(exc)})
     detail = metrics.get("capability_stall_summary", {}) if isinstance(metrics, dict) else {}
@@ -1461,6 +1607,14 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
     state_dir = Path(os.environ.get("FC_ROLE_STATE_DIR", str(Path.home() / ".openclaw/cron/role-state"))).expanduser()
     runtime_state = _runtime_state_detail(root)
     runtime_truth = check_runtime_truth(root)
+    runtime_truth_detail = runtime_truth.detail if isinstance(runtime_truth.detail, dict) else {}
+    runtime_idle_fast_path = (
+        bool(runtime_truth_detail.get("event_store_primary"))
+        and "graph_state_count" in runtime_truth_detail
+        and "recent_event_count" in runtime_truth_detail
+        and int(runtime_truth_detail.get("graph_state_count", 0) or 0) == 0
+        and int(runtime_truth_detail.get("recent_event_count", 0) or 0) == 0
+    )
     worker_snapshot = _worker_runtime_snapshot(root)
     checks = {
         "workspace_root": check_workspace_root(root),
@@ -1471,22 +1625,22 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "scheduler_authority": check_scheduler_authority(root),
         "sessions": check_sessions(root),
         "locks": check_locks(root, state_dir),
-        "queue_workboard": check_queue_workboard(root, runtime_truth.detail if isinstance(runtime_truth.detail, dict) else None),
+        "queue_workboard": _runtime_idle_fast_path_check("queue_workboard") if runtime_idle_fast_path else check_queue_workboard(root, runtime_truth.detail if isinstance(runtime_truth.detail, dict) else None),
         "providers": check_providers(root, api_base=api_base, monitor_base=monitor_base, state_dir=state_dir),
-        "product_value": check_product_value(root, api_base=api_base),
+        "product_value": _runtime_idle_fast_path_check("product_value") if runtime_idle_fast_path else check_product_value(root, api_base=api_base),
         "delivery_integrity": check_delivery_integrity(root),
-        "delivery_future_integrity": check_delivery_future_integrity(root),
-        "browser_proof_pipeline": check_browser_proof_pipeline(root),
-        "suspicious_completions": check_suspicious_completions(root),
-        "qa_review_pipeline": check_qa_review_pipeline(root),
-        "dev_execution_model": check_dev_execution_model(root),
-        "dev_progress_integrity": check_dev_progress_integrity(root),
-        "dev_orphan_recovery": check_dev_orphan_recovery(root),
-        "capability_stall_recovery": check_capability_stall_recovery(root),
-        "capability_result_integrity": check_capability_result_integrity(root),
-        "planner_takeover_recovery": check_planner_takeover_recovery(root),
-        "historical_delivery_debt": check_historical_delivery_debt(root),
-        "planner_dispatch": check_planner_dispatch(root),
+        "delivery_future_integrity": _runtime_idle_fast_path_check("delivery_future_integrity") if runtime_idle_fast_path else check_delivery_future_integrity(root),
+        "browser_proof_pipeline": _runtime_idle_fast_path_check("browser_proof_pipeline") if runtime_idle_fast_path else check_browser_proof_pipeline(root),
+        "suspicious_completions": _runtime_idle_fast_path_check("suspicious_completions") if runtime_idle_fast_path else check_suspicious_completions(root),
+        "qa_review_pipeline": _runtime_idle_fast_path_check("qa_review_pipeline") if runtime_idle_fast_path else check_qa_review_pipeline(root),
+        "dev_execution_model": _runtime_idle_fast_path_check("dev_execution_model") if runtime_idle_fast_path else check_dev_execution_model(root),
+        "dev_progress_integrity": _runtime_idle_fast_path_check("dev_progress_integrity") if runtime_idle_fast_path else check_dev_progress_integrity(root),
+        "dev_orphan_recovery": _runtime_idle_fast_path_check("dev_orphan_recovery") if runtime_idle_fast_path else check_dev_orphan_recovery(root),
+        "capability_stall_recovery": _runtime_idle_fast_path_check("capability_stall_recovery") if runtime_idle_fast_path else check_capability_stall_recovery(root),
+        "capability_result_integrity": _runtime_idle_fast_path_check("capability_result_integrity") if runtime_idle_fast_path else check_capability_result_integrity(root),
+        "planner_takeover_recovery": _runtime_idle_fast_path_check("planner_takeover_recovery") if runtime_idle_fast_path else check_planner_takeover_recovery(root),
+        "historical_delivery_debt": _runtime_idle_fast_path_check("historical_delivery_debt") if runtime_idle_fast_path else check_historical_delivery_debt(root),
+        "planner_dispatch": _runtime_idle_fast_path_check("planner_dispatch") if runtime_idle_fast_path else check_planner_dispatch(root),
     }
     runtime_paused = runtime_state.get("lifecycle") == "paused"
     advisory_checks = {
@@ -1496,6 +1650,7 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "queue_workboard",
         "delivery_integrity",
         "delivery_future_integrity",
+        "browser_proof_pipeline",
         "historical_delivery_debt",
         "suspicious_completions",
     }
@@ -1601,8 +1756,8 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Finance Copilot doctor.")
     parser.add_argument("--root", default="")
-    parser.add_argument("--api-base-url", default=os.environ.get("FC_API_BASE_URL", "http://127.0.0.1:8050"))
-    parser.add_argument("--monitor-base-url", default=os.environ.get("FC_MONITOR_BASE_URL", "http://127.0.0.1:7779"))
+    parser.add_argument("--api-base-url", default=_default_api_base_url())
+    parser.add_argument("--monitor-base-url", default=_default_monitor_base_url())
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 

@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-94-BATCH-94-DEV-02-20260416T103108Z-139"
+stream_id: "BATCH-94"
+task_id: "BATCH-94-DEV-02"
+role: "dev"
+produced_at_utc: "2026-04-16T10:31:08Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T10:31:08Z"
+      ended_at_utc: "2026-04-16T10:31:08Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js apps/web/src/domains/forecasts/pages/personal-finance-start.test.js apps/web/src/domains/forecasts/pages/app.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit 40b3be38f2ae1df8d3ab94d419f657f53511a9d9 delivers the pending starter-open bridge across `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html`, `apps/web/src/domains/forecasts/pages/personal-finan"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-94-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-94-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The standalone personal-finance start page received open targets like `market` and `opportunities` from `/api/personal-finance/start`, but `copilot-panel` only delegated namespace/copilot targets and the page had no brid | fix_applied=Expanded `copilot-panel` open-action delegation to shared starter targets (`market`, `overview`, `calendar`, `opportunities`, `performance`, `ailab`, `brief`, `ticker:*`), added a `sessionStorage`-backed pending-open bri | verify=before=`bash scripts/runtime_host_check.sh` confirmed VM runtime and `curl -s http://3.98.20.77/api/personal-finance/start?tickers=NVDA` returned open targets `market`, `opportunities`, and `/personal-finance`, which the | architecture_check=layer=web-frontend/forecasts starter + shared widget/app shell routing; imports_ok=true; path_target=apps/web/src/domains/forecasts/pages/personal-finance-start.html -> apps/web/src/domains/forecasts/pages/app.js via exi | vision_alignment=batch=BATCH-94; target=brief+ask/open personal finance start; impact=starter open CTAs now move the user from the standalone brief into the correct dashboard/copilot destination instead of stalling on the entry page"

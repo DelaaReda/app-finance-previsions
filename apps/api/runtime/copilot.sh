@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# MODE: LOCAL_ONLY_RUNTIME
 #
 # Script optimisé pour Finance Copilot (ARM64/VM friendly)
 # - Redémarre automatiquement si déjà en cours
@@ -39,6 +40,66 @@ RUNTIME_STACK_SETTLE_SECONDS="${FC_RUNTIME_STACK_SETTLE_SECONDS:-20}"
 MONITOR_REQUIRED="${FC_MONITOR_REQUIRED:-1}"
 SYSTEMD_BACKEND_UNIT="finance-backend.service"
 PYTHON_BIN=""
+RUNTIME_LOCK_DIR="${FC_RUNTIME_LOCK_DIR:-$WORKSPACE_ROOT/logs-codex-runs}"
+RUNTIME_LOCK_FILE="${FC_RUNTIME_LOCK_FILE:-$RUNTIME_LOCK_DIR/finance-copilot-runtime.lock}"
+RUNTIME_LOCK_META="${FC_RUNTIME_LOCK_META:-$RUNTIME_LOCK_DIR/finance-copilot-runtime.lock.meta}"
+
+ensure_runtime_lock_dir() {
+    mkdir -p "$RUNTIME_LOCK_DIR"
+}
+
+write_runtime_lock_meta() {
+    local command_name="${1:-unknown}"
+    ensure_runtime_lock_dir
+    printf 'pid=%s host=%s command=%s start_epoch=%s\n' \
+        "$$" "${HOSTNAME:-unknown}" "$command_name" "$(date +%s)" > "$RUNTIME_LOCK_META"
+}
+
+clear_runtime_lock_meta() {
+    rm -f "$RUNTIME_LOCK_META"
+}
+
+runtime_lock_holder_desc() {
+    if [ -f "$RUNTIME_LOCK_META" ]; then
+        tr '\n' ' ' < "$RUNTIME_LOCK_META" | sed 's/[[:space:]]\+$//'
+        return 0
+    fi
+    printf 'unknown'
+}
+
+run_with_runtime_lock() {
+    local command_name="$1"
+    shift
+
+    ensure_runtime_lock_dir
+
+    if ! command -v flock >/dev/null 2>&1; then
+        "$@"
+        return $?
+    fi
+
+    exec 9>"$RUNTIME_LOCK_FILE"
+    if ! flock -n 9; then
+        log_warning "Un autre cycle runtime est déjà en cours ($command_name ignored: $(runtime_lock_holder_desc))"
+        return 0
+    fi
+
+    write_runtime_lock_meta "$command_name"
+    set +e
+    "$@"
+    local rc=$?
+    set -e
+    clear_runtime_lock_meta
+    flock -u 9 || true
+    return $rc
+}
+
+detach_without_runtime_lock() {
+    (
+        exec 9>&- || true
+        "$@"
+    )
+}
 
 # Résoudre l'interpréteur Python canonique pour ce runtime
 resolve_python_bin() {
@@ -269,7 +330,7 @@ generate_initial_data() {
     ensure_python_bin
     local PY="$PYTHON_BIN"
     # Lancer le job en arrière-plan
-    nohup "$PY" "$LEGACY_DIR/jobs/validate_and_generate_data.py" > /tmp/data_generation.log 2>&1 &
+    detach_without_runtime_lock nohup "$PY" "$LEGACY_DIR/jobs/validate_and_generate_data.py" > /tmp/data_generation.log 2>&1 &
     DATA_GEN_PID=$!
     log_success "Job de génération lancé (PID: $DATA_GEN_PID)"
     log "Les données seront disponibles progressivement (voir /tmp/data_generation.log)"
@@ -417,29 +478,30 @@ run_g4f_tests() {
     fi
 
     # Ne pas bloquer le démarrage : lancer en arrière-plan
-    (
+    detach_without_runtime_lock bash -lc '
         set +e
         if command -v timeout >/dev/null 2>&1; then
-            timeout 120 "$PY" "$LEGACY_DIR/scripts/test_g4f_models.py" > /tmp/g4f_test.log 2>&1
+            timeout 120 "$1" "$2" > /tmp/g4f_test.log 2>&1
         else
-            "$PY" "$LEGACY_DIR/scripts/test_g4f_models.py" > /tmp/g4f_test.log 2>&1
+            "$1" "$2" > /tmp/g4f_test.log 2>&1
         fi
         rc=$?
-        if [ $rc -ne 0 ]; then
-            log_warning "⚠️  Tests G4F échoués (rc=$rc). Voir /tmp/g4f_test.log"
+        if [ "$rc" -ne 0 ]; then
+            printf "%s\n" "⚠️  Tests G4F échoués (rc=$rc). Voir /tmp/g4f_test.log"
         else
-            log_success "✅ Tests G4F terminés. Résultats dans runtime/data/llm/models/tested_g4f_models*.json et /tmp/g4f_test.log"
+            printf "%s\n" "✅ Tests G4F terminés. Résultats dans runtime/data/llm/models/tested_g4f_models*.json et /tmp/g4f_test.log"
         fi
-    ) &
+    ' _ "$PY" "$LEGACY_DIR/scripts/test_g4f_models.py" &
     log "G4F tests lancés en arrière-plan (voir /tmp/g4f_test.log)"
 }
 
 launch_post_start_refresh() {
     log "Lancement du rafraîchissement live en arrière-plan..."
-    (
+    detach_without_runtime_lock env FC_COPILOT_SOURCE_ONLY=1 bash -lc '
         set +e
+        source "$1"
         refresh_live_data
-    ) > /tmp/finance_copilot_refresh.log 2>&1 &
+    ' _ "$SCRIPT_PATH" > /tmp/finance_copilot_refresh.log 2>&1 &
     REFRESH_PID=$!
     echo "$REFRESH_PID" > /tmp/finance_copilot_refresh.pid
     log "Refresh live en arrière-plan (PID: $REFRESH_PID, log: /tmp/finance_copilot_refresh.log)"
@@ -495,7 +557,7 @@ start_backend() {
         fi
     else
         # Démarrer en arrière-plan (logs dans runtime/)
-        nohup "$PY" run_api.py > "$SCRIPT_DIR/api.log" 2>&1 &
+        detach_without_runtime_lock nohup "$PY" run_api.py > "$SCRIPT_DIR/api.log" 2>&1 &
         BACKEND_PID=$!
         echo "$BACKEND_PID" > /tmp/finance_copilot_backend.pid
     fi
@@ -537,9 +599,9 @@ start_frontend() {
     # sessions were leaving a stale PID while the frontend listener disappeared.
     cd "$FRONTEND_DIST"
     if command -v setsid >/dev/null 2>&1; then
-        setsid python3 -m http.server 5173 </dev/null > /tmp/frontend.log 2>&1 &
+        detach_without_runtime_lock setsid python3 -m http.server 5173 </dev/null > /tmp/frontend.log 2>&1 &
     else
-        nohup python3 -m http.server 5173 </dev/null > /tmp/frontend.log 2>&1 &
+        detach_without_runtime_lock nohup python3 -m http.server 5173 </dev/null > /tmp/frontend.log 2>&1 &
     fi
     FRONTEND_PID=$!
     
@@ -607,7 +669,7 @@ start_monitor() {
             sleep 1
         fi
         mkdir -p "$WORKSPACE_ROOT/logs-codex-runs"
-        nohup env FC_MONITOR_ROOT="$WORKSPACE_ROOT" "$monitor_python" "$MONITOR_SERVER_SCRIPT" >> "$WORKSPACE_ROOT/logs-codex-runs/monitor-server.log" 2>&1 &
+        detach_without_runtime_lock nohup env FC_MONITOR_ROOT="$WORKSPACE_ROOT" "$monitor_python" "$MONITOR_SERVER_SCRIPT" >> "$WORKSPACE_ROOT/logs-codex-runs/monitor-server.log" 2>&1 &
         MONITOR_PID=$!
         echo "$MONITOR_PID" > /tmp/finance_copilot_monitor.pid
         if wait_monitor_ready "$monitor_timeout"; then
@@ -713,7 +775,7 @@ start() {
     log "Démarrage de Finance Copilot..."
     
     # Vérifier si déjà en cours
-    if is_port_in_use 8050 || is_port_in_use 5173; then
+    if [[ "${FC_COPILOT_SKIP_RUNNING_CHECK:-0}" != "1" ]] && (is_port_in_use 8050 || is_port_in_use 5173); then
         log_warning "Services déjà en cours, redémarrage..."
         stop_services
     fi
@@ -791,6 +853,12 @@ sur architecture ARM64.
 EOF
 }
 
+restart_runtime() {
+    log "🔄 Redémarrage de Finance Copilot..."
+    stop_services
+    FC_COPILOT_SKIP_RUNNING_CHECK=1 start
+}
+
 # Main
 main() {
     case "${1:-help}" in
@@ -798,15 +866,13 @@ main() {
             brief
             ;;
         start)
-            start
+            run_with_runtime_lock "start" start
             ;;
         stop)
-            stop_services
+            run_with_runtime_lock "stop" stop_services
             ;;
         restart)
-            log "🔄 Redémarrage de Finance Copilot..."
-            stop_services
-            start
+            run_with_runtime_lock "restart" restart_runtime
             ;;
         status)
             status

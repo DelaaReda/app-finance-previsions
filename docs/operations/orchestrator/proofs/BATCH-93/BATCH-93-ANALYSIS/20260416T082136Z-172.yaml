@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-93-BATCH-93-ANALYSIS-20260416T082136Z-172"
+stream_id: "BATCH-93"
+task_id: "BATCH-93-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-04-16T08:21:36Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role planner --task BATCH-93-ANALYSIS --artifact docs/ops/BATCH-93-ANALYSIS-ARCHITECTURE_AUDIT.md"
+      rc: "0"
+      started_at_utc: "2026-04-16T08:21:36Z"
+      ended_at_utc: "2026-04-16T08:21:36Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/BATCH-93-ANALYSIS-ARCHITECTURE_AUDIT.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "IK-d37ee4a8d362"
+  review_ref: "runner:BATCH-93-ANALYSIS"
+  note: "source=runner | root_cause=BATCH-93-ANALYSIS lacked committed architecture linkage to the canonical personal-finance surfaces | fix_applied=Added and committed a planner-owned analysis audit that anchors the stream to apps/api, packages/contracts, and apps/web | verify=before=BATCH-93-ANALYSIS had no committed architecture audit and guardian flagged missing architecture proof; after=docs/ops/BATCH-93-ANALYSIS-ARCHITECTURE_AUDIT.md now binds the stream to canonical reuse surfaces and the product target; test=python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=layer=apps/api+packages/contracts+apps/web; imports_ok=yes; path_target=packages/contracts/copilot_v1.py|apps/api/src/domains/copilot/api/copilot.py|apps/api/src/domains/copilot/application/copilot_service.py|apps/api/src/domains/judge/application/judge_endpoint_service.py|apps/web/src/domains/forecasts/contracts/apiConnector.js|apps/web/src/domains/forecasts/pages/personal-finance-start.html|apps/web/src/domains/forecasts/components/widgets/copilot-panel.html | vision_alignment=batch=BATCH-93; target=portfolio_first_brief_with_ranked_actions; impact=unlock_B93_ARCH_with_canonical_reuse_boundaries"

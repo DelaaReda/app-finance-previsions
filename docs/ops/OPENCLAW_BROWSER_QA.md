@@ -10,7 +10,8 @@ Ce guide couvre la vérification visuelle/DOM/réseau avec l’interface navigat
 
 ## Pré-requis
 
-- Frontend actif sur `http://127.0.0.1:5173` ou URL correspondante.
+- Pour un smoke de l’app publique d’équipe, viser `http://3.98.20.77/`.
+- `http://127.0.0.1:5173` ne s’utilise que sur l’hôte app concerné ou pour un debug local explicitement intentionnel.
 - Backend actif si la page consomme des endpoints live.
 - OpenClaw CLI installé localement.
 
@@ -25,7 +26,7 @@ openclaw browser status --json
 2. Ouvrir la page cible:
 
 ```bash
-openclaw browser open "http://127.0.0.1:5173/index.html"
+openclaw browser open "http://3.98.20.77/"
 ```
 
 3. Optionnel: redimensionner la vue:

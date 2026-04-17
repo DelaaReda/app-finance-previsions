@@ -1,0 +1,57 @@
+proof_id: "PRF-BATCH-95-BATCH-95-DEV-02-20260416T121051Z-120"
+stream_id: "BATCH-95"
+task_id: "BATCH-95-DEV-02"
+role: "dev"
+produced_at_utc: "2026-04-16T12:10:51Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "layer=platform"
+    - "imports_ok=yes"
+    - "path_target=commit=9698e900be65fc472ca1f4edd7c4a218bbac0f5b"
+    - "deployed_public=http://3.98.20.77/personal-finance-start.html?tickers=nvda"
+    - "msft&tickers=nvda"
+    - "public_page_proof=source_contains_normalizepersonalfinancescopetickers/buildp"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T12:10:51Z"
+      ended_at_utc: "2026-04-16T12:10:51Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/pages/personal-finance-start.test.js; node --test apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js; node --test apps/web/src/domains/forecasts/components/"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit=9698e900be65fc472ca1f4edd7c4a218bbac0f5b; deployed_public=http://3.98.20.77/personal-finance-start.html?tickers=nvda,msft&tickers=NVDA; public_page_proof=source contains normalizePersonalFinanceScopeTickers/buildP"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-95-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-95-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The starter flow dropped personalization in two places: personal-finance-start.html fetched /api/personal-finance/start without forwarding URL tickers, and copilot-panel.html discarded starter/prefill ticker scope when b | fix_applied=Added ticker normalization and scope propagation on the start page, persisted scope on the widget state, carried ask-action tickers into the input state, appended scoped tickers to ask request bodies, and expanded target | verify=before=starter URL tickers were not forwarded to /api/personal-finance/start and ask submissions dropped starter/prefill ticker scope; after=public EC2 serves updated start-page/widget JS and scoped /api/personal-finance | architecture_check=layer=web starter-page/widget only, reusing existing forecasts components and namespace wiring; imports_ok=yes, no new module boundaries introduced; path_target=apps/web/src/domains/forecasts/pages/personal-finance-start | vision_alignment=batch=BATCH-95; target=brief-of-day -> ask/open starter path for the personal finance copilot; impact=ticker-scoped daily brief context now survives from public starter entry to follow-up ask actions, matching the brief+"

@@ -33,8 +33,8 @@ ROOT = Path(os.environ.get('FC_WORKSPACE_ROOT', '.')).resolve()
 AUTOMATION_ROOT = ROOT / 'platform' / 'automation'
 if str(AUTOMATION_ROOT) not in sys.path:
     sys.path.insert(0, str(AUTOMATION_ROOT))
-MONITOR_BASE_URL = os.environ.get('FC_MONITOR_BASE_URL', 'http://127.0.0.1:7779').rstrip('/')
-API_BASE_URL = os.environ.get('FC_GATE_API_BASE_URL', 'http://127.0.0.1:8050').rstrip('/')
+MONITOR_BASE_URL = os.environ.get('FC_MONITOR_BASE_URL', os.environ.get('FC_PUBLIC_MONITOR_BASE_URL', 'http://3.98.20.77:8080')).rstrip('/')
+API_BASE_URL = os.environ.get('FC_GATE_API_BASE_URL', os.environ.get('FC_PUBLIC_APP_BASE_URL', 'http://3.98.20.77')).rstrip('/')
 try:
     HEALTH_HTTP_TIMEOUT = float(os.environ.get('FC_HEALTH_SNAPSHOT_HTTP_TIMEOUT_SECONDS', '15') or '15')
 except Exception:
@@ -251,6 +251,29 @@ def runtime_truth_snapshot() -> dict:
     except Exception:
         return {}
 
+def active_cycle_batch_ids(payload: dict) -> list[str]:
+    if not isinstance(payload, dict):
+        return []
+    active_cycle = payload.get('active_cycle')
+    if not isinstance(active_cycle, dict):
+        return []
+    raw_ids = active_cycle.get('active_batch_ids')
+    if not isinstance(raw_ids, list):
+        return []
+    return [str(item).strip().upper() for item in raw_ids if str(item).strip()]
+
+def canonical_runtime_idle(queue_payload: dict, workboard_payload: dict, runtime_truth: dict) -> bool:
+    queue_active = active_cycle_batch_ids(queue_payload)
+    workboard_active = active_cycle_batch_ids(workboard_payload)
+    if queue_active or workboard_active:
+        return False
+    graph_state_count = int(runtime_truth.get('graph_state_count', 0) or 0)
+    recent_event_count = int(runtime_truth.get('recent_event_count', 0) or 0)
+    sqlite_path = Path(str(runtime_truth.get('sqlite_path') or '').strip())
+    sqlite_present = bool(sqlite_path) and sqlite_path.exists()
+    event_store_primary = bool(runtime_truth.get('event_store_primary', False))
+    return (event_store_primary or sqlite_present) and graph_state_count == 0 and recent_event_count == 0
+
 def normalize_widget_state(token) -> str:
     value = str(token or '').strip().lower()
     if value in {'', 'ok', 'healthy', 'pass', 'fresh', 'running'}:
@@ -287,7 +310,9 @@ def build_critical_widget_health() -> dict:
     last_updates = api_health_data.get('last_updates', {}) if isinstance(api_health_data, dict) else {}
     last_updates = last_updates if isinstance(last_updates, dict) else {}
 
-    monitor_state = normalize_widget_state(monitor_status.get('health'))
+    # Treat a missing/timeout monitor-lite payload as neutral for product widget
+    # health so operator-plane latency does not downgrade an otherwise healthy API.
+    monitor_state = 'ok' if not monitor_status else normalize_widget_state(monitor_status.get('health'))
     recommendations_state = endpoint_state(recommendations)
     forecasts_state = combine_widget_states(
         endpoint_state(forecasts),
@@ -350,6 +375,7 @@ for t in tasks: by_state[t.get('state','?')] += 1
 done_total = by_state['DONE'] + by_state['CLOSED'] + by_state['PASS']
 ready_n    = by_state['READY'] + by_state['READY_PLANNER'] + by_state['READY_DEV']
 ip_n       = by_state['IN_PROGRESS']
+waiting_dep_n = by_state['WAITING_DEP']
 
 # Vélocité: tâches complétées dans les 24h et 7j via updated_at
 done_24h = done_7d = 0
@@ -371,6 +397,10 @@ queue_rows = top_level if top_level else items
 q_ready  = sum(1 for i in queue_rows if str(i.get('state', '')).upper() in {'READY', 'READY_PLANNER', 'READY_DEV'})
 q_closed = sum(1 for i in queue_rows if i.get('state') in ('CLOSED','DONE','PASS'))
 q_total  = len(queue_rows)
+q_waiting_dep = sum(1 for i in queue_rows if str(i.get('state', '')).upper() == 'WAITING_DEP')
+q_in_progress = sum(1 for i in queue_rows if str(i.get('state', '')).upper() == 'IN_PROGRESS')
+runtime_truth = runtime_truth_snapshot()
+canonical_idle = canonical_runtime_idle(pq, wb, runtime_truth)
 
 # ── Agents ───────────────────────────────────────────────────────────────────
 execution_mode = str(RUNTIME_STATE.get('execution_mode') or '').strip().lower()
@@ -444,18 +474,28 @@ if isinstance(planner_state, dict):
             'DELIVERY_VALUE_INSUFFICIENT',
         }:
             planner_state['delta'] = 'PLANNER_DISPATCH_ACTIVE'
-    planner_residue_only = planner_blocker in {'SQLITE_RUNTIME_RESIDUE_ACTIVE', 'RUNTIME_TRUTH_RESIDUE_ACTIVE'}
+    planner_residue_only = (
+        planner_blocker in {'SQLITE_RUNTIME_RESIDUE_ACTIVE', 'RUNTIME_TRUTH_RESIDUE_ACTIVE'}
+        or planner_delta in {
+            'REPAIR_ORCHESTRATION_BLOCKED_PAR_RESIDU_SQLITE',
+            'AUTOBATCH_BLOQUE_PAR_RESIDU_SQLITE',
+        }
+    )
     if planner_residue_only:
-        runtime_truth = runtime_truth_snapshot()
-        graph_state_count = int(runtime_truth.get('graph_state_count', 0) or 0)
-        recent_event_count = int(runtime_truth.get('recent_event_count', 0) or 0)
-        event_store_primary = bool(runtime_truth.get('event_store_primary', False))
         no_active_runtime_work = q_ready == 0 and ip_n == 0
-        if event_store_primary and no_active_runtime_work and graph_state_count == 0 and recent_event_count == 0:
-            planner_state['status'] = 'PASS'
-            planner_state['verdict'] = 'PASS'
+        if canonical_idle and no_active_runtime_work:
+            planner_state['status'] = 'IDLE'
+            planner_state['verdict'] = 'IDLE'
             planner_state['blocker'] = 'NONE'
-            planner_state['delta'] = 'NO_DELTA'
+            planner_state['delta'] = 'NO_ACTIVE_CANONICAL_WORK'
+
+    demotable_planner_statuses = {'PASS', 'WAIT', 'BLOCKED', 'IN_PROGRESS', 'READY', 'UNKNOWN', 'MUTED'}
+    if canonical_idle and str(planner_state.get('status') or '').strip().upper() in demotable_planner_statuses:
+        if planner_blocker not in {'RUN_LOCK_BUSY', 'LOCK_BUSY', 'RUN_LOCK_HELD', 'BACKEND_API_UNREACHABLE', 'MONITOR_API_UNREACHABLE', 'BACKEND_AND_MONITOR_UNREACHABLE', 'API_DOWN', 'CONTRACT_PARSE_FAILED', 'CONTRACT_GUARD_BLOCK'}:
+            planner_state['status'] = 'IDLE'
+            planner_state['verdict'] = 'IDLE'
+            planner_state['blocker'] = 'NONE'
+            planner_state['delta'] = 'NO_ACTIVE_CANONICAL_WORK'
 
 def is_rate_limit_state(state):
     blocker = (state.get('blocker') or '').upper()
@@ -510,6 +550,18 @@ for role in ['planner', 'dev', 'admin']:
     else:
         tick_age_min[role] = -1
 
+if execution_mode == 'planner_experimental' and not capability_roles and q_ready == 0 and ip_n == 0:
+    for role in ('dev', 'admin', 'scrum_master'):
+        state = agent_states.get(role)
+        if not isinstance(state, dict) or role in scheduled_roles:
+            continue
+        age_min = tick_age_min.get(role, -1)
+        if age_min in range(0, 46):
+            continue
+        if str(state.get('status') or '').strip().upper() == 'PASS' and str(state.get('delta') or '').strip().upper() == 'NO_DELTA':
+            state['status'] = 'WAIT'
+            state['delta'] = 'NO_ACTIVE_CAPABILITY'
+
 stale_agents = [r for r, age in tick_age_min.items() if r in scheduled_roles and age > 45]
 
 # ── Proofs ───────────────────────────────────────────────────────────────────
@@ -540,36 +592,65 @@ relevant_stale_context_roles = [
     if role in relevant_runtime_roles and tick_age_min.get(role, -1) not in range(0, 46)
 ]
 
+delivery_runway_present = any(
+    (
+        q_ready > 0,
+        q_waiting_dep > 0,
+        q_in_progress > 0,
+        ready_n > 0,
+        ip_n > 0,
+        waiting_dep_n > 0,
+    )
+)
+rate_limit_backoff_non_blocking = bool((rl_active or rate_limited_agents) and not blocked_agents and delivery_runway_present)
+if rate_limit_backoff_non_blocking:
+    stale_agents = [role for role in stale_agents if role not in rate_limited_agents]
+
 health = 'OK'
+health_reason = 'normal'
 if blocked_agents:
     health = 'DEGRADED'
+    health_reason = 'hard_blocker'
 elif rl_active or rate_limited_agents:
-    # Rate-limit is a temporary WAIT state, not a hard block.
-    health = 'STALE'
+    # Rate-limit is a temporary WAIT state. Keep STALE only when there is no
+    # remaining runway for delivery work.
+    if rate_limit_backoff_non_blocking:
+        health_reason = 'rate_limit_backoff_non_blocking'
+    else:
+        health = 'STALE'
+        health_reason = 'rate_limit_backoff'
 if stale_agents and health == 'OK':
     health = 'STALE'
+    health_reason = 'stale_ticks'
 if latest_summary_stale_context_open > 0 and health == 'OK' and relevant_stale_context_roles:
     # Preserve stale-context protection only for roles that are still part of the
     # current runtime perimeter and still stale now, not for legacy unscheduled roles.
     health = 'STALE'
+    health_reason = 'stale_context'
 critical_widget_health = build_critical_widget_health()
 critical_widget_state = str(critical_widget_health.get('state') or 'unknown').lower()
 if critical_widget_state == 'stale' and health == 'OK':
     health = 'STALE'
+    health_reason = 'critical_widget_stale'
 elif critical_widget_state in {'degraded', 'error', 'unknown'} and health != 'DEGRADED':
     health = 'DEGRADED'
+    health_reason = 'critical_widget_degraded'
 
 snapshot = {
     'ts_utc':          ts_str,
     'health':          health,
+    'health_reason':   health_reason,
     'execution_mode':  execution_mode or 'parallel_roles',
     'scheduled_roles': scheduled_roles,
     'capability_roles': capability_roles,
+    'delivery_runway_present': delivery_runway_present,
+    'rate_limit_backoff_non_blocking': rate_limit_backoff_non_blocking,
     'workboard': {
         'total':       len(tasks),
         'done':        done_total,
         'ready':       ready_n,
         'in_progress': ip_n,
+        'waiting_dep': waiting_dep_n,
     },
     'velocity': {
         'done_24h':    done_24h,
@@ -580,6 +661,8 @@ snapshot = {
         'total':       q_total,
         'ready':       q_ready,
         'closed':      q_closed,
+        'waiting_dep': q_waiting_dep,
+        'in_progress': q_in_progress,
     },
     'agents':          agent_states,
     'blocked_agents':  blocked_agents,

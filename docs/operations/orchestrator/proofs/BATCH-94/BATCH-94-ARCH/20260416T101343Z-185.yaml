@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-94-BATCH-94-ARCH-20260416T101343Z-185"
+stream_id: "BATCH-94"
+task_id: "BATCH-94-ARCH"
+role: "planner"
+produced_at_utc: "2026-04-16T10:13:43Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_doc_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T10:13:43Z"
+      ended_at_utc: "2026-04-16T10:13:43Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_doc_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "BATCH-94-DEV-01_READY_P1776334145_22413"
+  review_ref: "runner:BATCH-94-ARCH"
+  note: "source=runner | root_cause=BATCH-94-ARCH restait IN_PROGRESS sans preuve planner mergeable avec reference architecture canonique | fix_applied=completion planner avec preuve architecture canonique et cadrage backend first pour apps/api|apps/web | verify=before=parallel_workstream context role planner montrait in_progress_tasks=BATCH-94-ARCH; after=parallel_workstream context role planner ne montre plus de tache planner in_progress; test=python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=batch_dependency_policy=single_batch,architecture_plan_ref=docs/architecture/ARCHITECTURE_MAP.md,architecture_audit=apps/api|apps/web|platform/automation,judge_parity_ref=docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md | vision_alignment=batch=BATCH-94,target=personal_finance_copilot_brief_ask_open,impact=architecture_ready_for_dev_implementation"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -104,6 +105,16 @@ def resolve_orchestrator_write_path(root: Path, relative_path: str, *, create_pa
     return path
 
 
+def _atomic_write_text(path: Path, rendered: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+        handle.write(rendered)
+        handle.flush()
+        os.fsync(handle.fileno())
+        temp_path = Path(handle.name)
+    temp_path.replace(path)
+
+
 def write_orchestrator_json(
     root: Path,
     relative_path: str,
@@ -115,7 +126,7 @@ def write_orchestrator_json(
     rendered = json.dumps(payload, ensure_ascii=True, indent=2) + "\n"
 
     runtime_path = resolve_orchestrator_write_path(root, str(rel))
-    runtime_path.write_text(rendered, encoding="utf-8")
+    _atomic_write_text(runtime_path, rendered)
 
     should_mirror = mirror_docs if mirror_docs is not None else rel.as_posix() in DOC_MIRROR_JSON_FILES
     if should_mirror:
@@ -126,8 +137,7 @@ def write_orchestrator_json(
             if key in seen:
                 continue
             seen.add(key)
-            mirror_path.parent.mkdir(parents=True, exist_ok=True)
-            mirror_path.write_text(rendered, encoding="utf-8")
+            _atomic_write_text(mirror_path, rendered)
 
     return runtime_path
 

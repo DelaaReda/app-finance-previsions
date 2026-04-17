@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-93-BATCH-93-ARCH-20260416T083334Z-209"
+stream_id: "BATCH-93"
+task_id: "BATCH-93-ARCH"
+role: "planner"
+produced_at_utc: "2026-04-16T08:33:34Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "git commit -m \"docs: add BATCH-93 arch architecture audit\" -- docs/ops/BATCH-93-ARCH-ARCHITECTURE_AUDIT.md"
+      rc: "0"
+      started_at_utc: "2026-04-16T08:33:34Z"
+      ended_at_utc: "2026-04-16T08:33:34Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5; git diff --check -- docs/ops/BATCH-93-ARCH-ARCHITECTURE_AUDIT.md"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/BATCH-93-ARCH-ARCHITECTURE_AUDIT.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "COMPLETE_BATCH_93_ARCH_P1776328234_6297"
+  review_ref: "primary_structured:BATCH-93-ARCH"
+  note: "source=primary_structured | root_cause=missing_committed_architecture_handoff_for_B93_arch | fix_applied=committed_B93_architecture_handoff_artifact | verify=before=BATCH-93-ARCH_had_no_artifact_and_DEV-01_waited_on_it_after=ARCH_now_has_committed_planner_audit_for_contract_service_frontend_and_ec2_scope_test=parallel_workstream_context_plus_git_diff_check | architecture_check=layer=apps/api+packages/contracts+apps/web;imports_ok=yes;path_target=packages/contracts/copilot_v1.py|apps/api/src/domains/copilot/api/copilot.py|apps/api/src/domains/copilot/application/copilot_service.py|apps/api/src/domains/judge/application/judge_endpoint_service.py|apps/web/src/domains/forecasts/contracts/apiConnector.js|apps/web/src/domains/forecasts/pages/personal-finance-start.html|apps/web/src/domains/forecasts/components/widgets/copilot-panel.html | vision_alignment=batch=BATCH-93_target=portfolio_first_brief_with_ranked_actions_impact=unblock_DEV-01_with_contract_first_backend_first_handoff"

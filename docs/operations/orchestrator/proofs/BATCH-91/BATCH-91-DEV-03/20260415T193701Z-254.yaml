@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-91-BATCH-91-DEV-03-20260415T193701Z-254"
+stream_id: "BATCH-91"
+task_id: "BATCH-91-DEV-03"
+role: "dev"
+produced_at_utc: "2026-04-15T19:37:01Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-03] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-03]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T19:37:01Z"
+      ended_at_utc: "2026-04-15T19:37:01Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "FAIL"
+      evidence: "passed: `python3 -m pytest apps/api/src/domains/copilot/tests/test_copilot_domain_router.py -q`; failed-unrelated: `bash scripts/backend_regression_gate.sh` (existing failures in forecasts/judge/market_data suites outsid"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "personal-finance starter route now reuses the shared start-response contract builder from `apps/api/src/domains/copilot/application/copilot_service.py` via `apps/api/src/domains/copilot/api/copilot.py`, with regression c"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-91-DEV-03"
+  review_ref: "planner_subagent_manager:BATCH-91-DEV-03"
+  note: "source=planner_subagent_manager | root_cause=`apps/api/src/domains/copilot/api/copilot.py` duplicated start-payload contract shaping instead of delegating to `domains.copilot.application.copilot_service.build_copilot_start_response`, which risked drift on the brief | fix_applied=Updated `_copilot_start_response_from_context` to delegate to `build_copilot_start_response` when available, passing scope, note, fallback, and explainability/context fields through the shared builder; added a targeted r | verify=before=route fallback path assembled copilot start responses locally and duplicated contract/default logic; after=route fallback path delegates to shared `build_copilot_start_response` while keeping `/personal-finance/*` | architecture_check=layer=route now delegates contract shaping to application service instead of duplicating builder logic; imports_ok=yes (reused existing `copilot_service` surface, no new helper/module added); path_target=apps/api/src/dom | vision_alignment=batch=BATCH-91; target=Finance Copilot brief+ask/open starter path; impact=reduces contract drift on the day-brief starter response and keeps personal-finance alias behavior aligned with the shared memo-ready backend con"

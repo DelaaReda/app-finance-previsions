@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# MODE: LOCAL_ONLY_RUNTIME
+# Scope: VM-local monitor/LAN proxy guard only. The localhost URLs below are for the
+# orchestration/control-plane monitor, not the public AWS app-serving monitor.
 set -euo pipefail
 
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
@@ -17,10 +20,11 @@ GUARD_LOG="${LOG_DIR}/monitor-guard.log"
 LOCK_FILE="${FC_MONITOR_GUARD_LOCK_FILE:-/tmp/fc-monitor-guard.v2.lock}"
 LOCK_DIR_FALLBACK=""
 MONITOR_APP_SCRIPT="${FC_MONITOR_APP_SCRIPT:-$ROOT/apps/monitor/server.py}"
-MONITOR_PYTHON_BIN="${FC_MONITOR_PYTHON_BIN:-$ROOT/apps/monitor/.venv/bin/python}"
+MONITOR_PYTHON_BIN="${FC_MONITOR_PYTHON_BIN:-$ROOT/apps/monitor/.venv/bin/python3}"
 MONITOR_LAN_PROXY_SCRIPT="${FC_MONITOR_LAN_PROXY_SCRIPT:-$ROOT/scripts/monitor_lan_proxy.py}"
 BACKEND_HEAL_SCRIPT="${FC_BACKEND_HEAL_SCRIPT:-$ROOT/scripts/restart_api_if_stale.sh}"
 LOCAL_URL="${FC_MONITOR_LOCAL_URL:-http://127.0.0.1:7779/api/monitor/access}"
+LOCAL_STATUS_URL="${FC_MONITOR_LOCAL_STATUS_URL:-http://127.0.0.1:7779/api/status?lite=1}"
 LOCAL_DIAG_URL="${FC_MONITOR_LOCAL_DIAG_URL:-http://127.0.0.1:7779/api/runtime-diagnostics}"
 LAN_PROXY_HOST="${FC_MONITOR_LAN_HOST:-$(hostname -I 2>/dev/null | awk '{print $1}')}"
 LAN_PROXY_PORT="${FC_MONITOR_LAN_PORT:-7780}"
@@ -182,6 +186,40 @@ monitor_server_running() {
     || ss -ltn 2>/dev/null | awk '$4 ~ /:7779$/ {found=1} END{exit(found?0:1)}'
 }
 
+monitor_server_pids() {
+  pgrep -f 'apps/monitor/server.py|uvicorn.*7779' 2>/dev/null || true
+}
+
+wait_monitor_exit() {
+  local timeout="${1:-10}"
+  local waited=0
+  while [[ "$waited" -lt "$timeout" ]]; do
+    if ! monitor_server_running; then
+      return 0
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  return 1
+}
+
+kill_monitor_processes() {
+  local pids=""
+  pids="$(monitor_server_pids)"
+  [[ -n "$pids" ]] || return 0
+  log "monitor cleanup term pids=$(printf '%s' "$pids" | tr '\n' ',' | sed 's/,$//')"
+  pkill -f 'apps/monitor/server.py|uvicorn.*7779' >/dev/null 2>&1 || true
+  if wait_monitor_exit 8; then
+    return 0
+  fi
+  pids="$(monitor_server_pids)"
+  if [[ -n "$pids" ]]; then
+    log "monitor cleanup kill -9 pids=$(printf '%s' "$pids" | tr '\n' ',' | sed 's/,$//')"
+    pkill -9 -f 'apps/monitor/server.py|uvicorn.*7779' >/dev/null 2>&1 || true
+    wait_monitor_exit 5 || true
+  fi
+}
+
 stack_process_running() {
   pgrep -f 'python.*run_api.py|uvicorn.*8050|http.server 5173|vite.*5173|apps/monitor/server.py' >/dev/null 2>&1
 }
@@ -221,9 +259,14 @@ with_lock_or_exit() {
 }
 
 is_local_up() {
-  # Keep local liveness check lightweight and stable: `/api/runtime-diagnostics`
-  # can be heavier and should not trigger monitor restarts when `/api/status` is up.
+  # Lightweight process liveness check used for first-start detection.
   curl -fsS -m 5 -o /dev/null "$LOCAL_URL" >/dev/null 2>&1
+}
+
+is_local_contract_up() {
+  # Guard against false-green listeners that answer `/api/monitor/access`
+  # while hanging on the real control-plane status contract.
+  curl -fsS -m 8 -o /dev/null "$LOCAL_STATUS_URL" >/dev/null 2>&1
 }
 
 is_public_up() {
@@ -271,8 +314,7 @@ start_monitor_server() {
 }
 
 restart_monitor_server() {
-  pkill -f 'apps/monitor/server.py' >/dev/null 2>&1 || true
-  sleep 2
+  kill_monitor_processes
   start_monitor_server
 }
 
@@ -607,6 +649,16 @@ fi
 
 if ! is_local_up; then
   log "error local api unavailable after restart attempt"
+  exit 1
+fi
+
+if ! is_local_contract_up; then
+  log "local status contract down; restarting monitor server"
+  restart_monitor_server
+fi
+
+if ! is_local_contract_up; then
+  log "error local status contract unavailable after restart attempt"
   exit 1
 fi
 

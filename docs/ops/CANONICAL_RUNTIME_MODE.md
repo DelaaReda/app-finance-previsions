@@ -13,13 +13,16 @@ last_verified: 2026-03-13
 - codex exec = primary agent execution
 - qwen cli = fallback for agents only
 - g4f = app only
+- public app-serving runtime = EC2 Ubuntu (`http://3.98.20.77`, `http://ec2-3-98-20-77.ca-central-1.compute.amazonaws.com`)
 
 ## Current implementation reality
 - The durable runtime already exists around LangGraph, SQLite, event store, runtime truth reading, planner graph runtime, and model plane.
 - Active Python imports no longer depend on the removed legacy shim paths under `platform/automation/orchestration_runtime/`.
 - Active runtime scripts now read execution state from `logs-codex-runs/orchestrator-state` first.
 - Legacy registries and JSON projections still exist, but they are now compatibility or diagnostics surfaces rather than primary runtime truth.
-- `finance-copilot.sh start` remains app-first: backend, frontend, and monitor start without requiring Plane or OpenClaw health as hard prerequisites.
+- The local VM is no longer the canonical app-serving host.
+- Backend, frontend, and public endpoint validation must run against the EC2 public runtime, not local VM listeners.
+- Local VM remains the orchestration and operator workspace only.
 - Current validated behavior on 2026-03-13:
   - targeted runtime pytest suite passes
   - `./finance-copilot.sh gate` passes
@@ -46,7 +49,8 @@ last_verified: 2026-03-13
 - Agents use the official Plane MCP server for backlog read or write.
 - Active scripts and prompts must source backlog truth from Plane sync and execution truth from SQLite or planner graph, never from `docs/product/planning/tasks.md`, `stories.md`, `epics.md`, or `docs/planning/*`.
 - Active code must not read or write `docs/orchestrator-ops/*`; that tree is removed from the live runtime path.
-- `./finance-copilot.sh start` is app-first and agentic-optional: backend, frontend, and monitor must start even if Plane, OpenClaw, planner scheduling, or agent fallback are degraded.
+- On the local VM, do not start or rely on backend/frontend/monitor listeners for normal operation.
+- All manual API usage, smoke checks, and frontend validation from the repo workspace must target the public EC2 endpoints.
 - Planner runtime must import planned work from Plane into SQLite first, then derive compatibility projections from runtime state.
 - Runtime may send comments, proof links, worklogs, and useful state changes back to Plane.
 - Runtime must never create a second planning hierarchy outside Plane.

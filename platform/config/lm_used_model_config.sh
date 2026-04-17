@@ -6,13 +6,13 @@
 # Les scripts ne lisent QUE ce fichier — aucun modèle hardcodé ailleurs.
 #
 # TIERS:
-#   ORCHESTRATION  planner                 gpt-5.4 + xhigh  (fiabilite max)
-#   DEFAULT        dev, admin, analysis, qa gpt-5.4 + medium
+#   ORCHESTRATION  planner                 gpt-5.4 + high
+#   DEFAULT        dev, admin, analysis, qa gpt-5.4 + high
 #   FALLBACK_2     tous roles codex        gpt-5.3-codex-spark + high
 #   FALLBACK_3     tous roles              qwen
 #   DEEP_DEBUG     override ponctuel       gpt-5.3-codex + high
 #
-# MODÈLES valides : gpt-5.2 | gpt-5.3-codex-spark | gpt-5.3-codex | qwen
+# MODÈLES valides : gpt-5.2 | gpt-5.3-codex-spark | gpt-5.3-codex | gpt-5.4 | qwen
 # THINKING valides: minimal | low | medium | high | "" (= défaut config codex)
 # FALLBACK chain  : codex primary → codex secondary (spark) → qwen → skip
 # =============================================================================
@@ -25,11 +25,11 @@ set -euo pipefail
 
 # ORCHESTRATION — planner premium seulement
 LM_TIER_ORCHESTRATION_MODEL="${LM_TIER_ORCHESTRATION_MODEL:-gpt-5.4}"
-LM_TIER_ORCHESTRATION_THINKING="${LM_TIER_ORCHESTRATION_THINKING:-xhigh}"
+LM_TIER_ORCHESTRATION_THINKING="${LM_TIER_ORCHESTRATION_THINKING:-high}"
 
 # DEFAULT — generation code, ops, analyse, validation
 LM_TIER_BUILD_MODEL="${LM_TIER_BUILD_MODEL:-gpt-5.4}"
-LM_TIER_BUILD_THINKING="${LM_TIER_BUILD_THINKING:-medium}"
+LM_TIER_BUILD_THINKING="${LM_TIER_BUILD_THINKING:-high}"
 
 # ANALYSIS — lecture seule, metriques
 LM_TIER_ANALYSIS_MODEL="${LM_TIER_ANALYSIS_MODEL:-${LM_TIER_BUILD_MODEL}}"
@@ -83,6 +83,10 @@ LM_ROLE_CLAWSENTINEL_MODEL="${LM_ROLE_CLAWSENTINEL_MODEL:-${LM_TIER_BUILD_MODEL}
 LM_ROLE_CLAWSENTINEL_THINKING="${LM_ROLE_CLAWSENTINEL_THINKING:-${LM_TIER_BUILD_THINKING}}"
 LM_ROLE_ANALYST_MODEL="${LM_ROLE_ANALYST_MODEL:-${LM_TIER_ANALYSIS_MODEL}}"
 LM_ROLE_ANALYST_THINKING="${LM_ROLE_ANALYST_THINKING:-${LM_TIER_ANALYSIS_THINKING}}"
+LM_ROLE_SCRUM_MASTER_MODEL="${LM_ROLE_SCRUM_MASTER_MODEL:-${LM_TIER_BUILD_MODEL}}"
+LM_ROLE_SCRUM_MASTER_THINKING="${LM_ROLE_SCRUM_MASTER_THINKING:-${LM_TIER_BUILD_THINKING}}"
+LM_ROLE_PO_MODEL="${LM_ROLE_PO_MODEL:-${LM_TIER_BUILD_MODEL}}"
+LM_ROLE_PO_THINKING="${LM_ROLE_PO_THINKING:-${LM_TIER_BUILD_THINKING}}"
 
 # =============================================================================
 # SECTION 3 — FALLBACK CHAIN  (codex primary -> spark high -> qwen -> skip)

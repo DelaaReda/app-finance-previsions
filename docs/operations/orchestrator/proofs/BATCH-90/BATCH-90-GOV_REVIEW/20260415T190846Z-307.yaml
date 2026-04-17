@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-90-BATCH-90-GOV_REVIEW-20260415T190846Z-307"
+stream_id: "BATCH-90"
+task_id: "BATCH-90-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-04-15T19:08:46Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role planner --task BATCH-90-GOV_REVIEW --apply"
+      rc: "0"
+      started_at_utc: "2026-04-15T19:08:46Z"
+      ended_at_utc: "2026-04-15T19:08:46Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "bash scripts/runtime_host_check.sh && python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "root_cause=admin task merged and queue now requests planner closure; fix_applied=resume canonical planner task and close GOV_REVIEW; verify_before=lane context showed BATCH-90-GOV_REVIEW IN_PROGRESS and queue next_action requested its completion; verify_after=dry-run only; architecture_audit=planner follows canonical active task without new autobatch; vision_alignment=batch=BATCH-90,target=portfolio_first_brief_with_ranked_actions,impact=close current review gate so the shipped slice remains canonical"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "IK-2797077712fa"
+  review_ref: "planner_autonomy_tick:BATCH-90-GOV_REVIEW"
+  note: "source=planner_autonomy_tick | root_cause=Planner-owned task BATCH-90-GOV_REVIEW remained IN_PROGRESS on the canonical active cycle without a complete payload that satisfied delivery proof requirements. | fix_applied=Planner completion for BATCH-90-GOV_REVIEW backfilled the minimum delivery proof fields before attempting the canonical state transition. | verify=before=BATCH-90-GOV_REVIEW:IN_PROGRESS; after=complete_requested; test=planner_complete_autofill | architecture_check=canonical_active_task_only,sqlite_not_used_as_primary,follow_queue_next_action | vision_alignment=batch=BATCH-90; target=close_batch_90_gov_review; impact=unlock_canonical_downstream_tasks"

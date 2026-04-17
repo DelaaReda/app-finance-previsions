@@ -328,6 +328,17 @@ model_for_role() {
   printf '%s\n' "${!varname:-${ROLE_CODEX_MODEL}}"
 }
 
+thinking_for_agent() {
+  local role="$1"
+  local varname="LM_ROLE_${role^^}_THINKING"
+  varname="${varname//-/_}"
+  local level="${!varname:-}"
+  if [[ -z "$level" ]]; then
+    level="$(thinking_level_for_role "$role")"
+  fi
+  normalize_reasoning_level "$level"
+}
+
 message_for_role() {
   local role="$1"
   local allow_edits="$2"
@@ -339,7 +350,7 @@ message_for_role() {
   cat <<EOF
 Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.
 Never call send/message/delivery actions.
-Command: TMUX_ROLE_AGENT_BIN=${ROLE_AGENT_BIN} TMUX_ROLE_RETRY_ENGINE_DEFAULT=${ROLE_RETRY_ENGINE_DEFAULT} PROMPT_TIMEOUT_SECONDS=${ROLE_PROMPT_TIMEOUT_SECONDS} RETRY_PROMPT_TIMEOUT_SECONDS=${ROLE_RETRY_PROMPT_TIMEOUT_SECONDS} TMUX_ROLE_RECOVERY_THRESHOLD=${ROLE_RECOVERY_THRESHOLD} TMUX_ROLE_NO_DELTA_THRESHOLD=${ROLE_NO_DELTA_THRESHOLD} TMUX_ROLE_STALL_ABORT_SECONDS=${ROLE_STALL_ABORT_SECONDS} SKIP_RETRY_ON_TIMEOUT=${ROLE_SKIP_RETRY_ON_TIMEOUT} TMUX_ROLE_CODEX_EXEC_FALLBACK=${ROLE_CODEX_EXEC_FALLBACK} TMUX_ROLE_CODEX_MODEL=${role_model} TMUX_ROLE_CODEX_EXEC_RESUME=${ROLE_CODEX_EXEC_RESUME} TMUX_ROLE_MIN_REFLECTION_PASSES=${ROLE_MIN_REFLECTION_PASSES} TMUX_ROLE_ALLOW_FILE_EDITS=${allow_edits} bash scripts/cron_tmux_role_runner.sh ${role_runner_arg}
+Command: cd ${ROOT} && TMUX_ROLE_AGENT_BIN=${ROLE_AGENT_BIN} TMUX_ROLE_RETRY_ENGINE_DEFAULT=${ROLE_RETRY_ENGINE_DEFAULT} PROMPT_TIMEOUT_SECONDS=${ROLE_PROMPT_TIMEOUT_SECONDS} RETRY_PROMPT_TIMEOUT_SECONDS=${ROLE_RETRY_PROMPT_TIMEOUT_SECONDS} TMUX_ROLE_RECOVERY_THRESHOLD=${ROLE_RECOVERY_THRESHOLD} TMUX_ROLE_NO_DELTA_THRESHOLD=${ROLE_NO_DELTA_THRESHOLD} TMUX_ROLE_STALL_ABORT_SECONDS=${ROLE_STALL_ABORT_SECONDS} SKIP_RETRY_ON_TIMEOUT=${ROLE_SKIP_RETRY_ON_TIMEOUT} TMUX_ROLE_CODEX_EXEC_FALLBACK=${ROLE_CODEX_EXEC_FALLBACK} TMUX_ROLE_CODEX_MODEL=${role_model} TMUX_ROLE_CODEX_EXEC_RESUME=${ROLE_CODEX_EXEC_RESUME} TMUX_ROLE_MIN_REFLECTION_PASSES=${ROLE_MIN_REFLECTION_PASSES} TMUX_ROLE_ALLOW_FILE_EDITS=${allow_edits} bash scripts/cron_tmux_role_runner.sh ${role_runner_arg}
 EOF
 }
 
@@ -347,7 +358,7 @@ message_for_stale_sweep() {
   cat <<EOF
 Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.
 Never call send/message/delivery actions.
-Command: STALE_SWEEP_THRESHOLD_SECONDS=${STALE_SWEEP_THRESHOLD_SECONDS} bash scripts/stale_cron_tick.sh
+Command: cd ${ROOT} && STALE_SWEEP_THRESHOLD_SECONDS=${STALE_SWEEP_THRESHOLD_SECONDS} bash scripts/stale_cron_tick.sh
 EOF
 }
 
@@ -355,7 +366,7 @@ message_for_dg_alert() {
   cat <<EOF
 Execute exactly this shell command and return ONLY its stdout, verbatim, no explanation.
 Never call send/message/delivery actions.
-Command: bash scripts/dg_alert_15m.sh
+Command: cd ${ROOT} && bash scripts/dg_alert_15m.sh
 EOF
 }
 
@@ -450,8 +461,10 @@ upsert_stale_sweep_job() {
   local id=""
   local msg=""
   local desc="Automatic stale-running cron auto-heal sweep"
+  local utility_model=""
   id="$(find_job_id_by_name "$STALE_SWEEP_JOB_NAME" || true)"
   msg="$(message_for_stale_sweep)"
+  utility_model="$(model_for_role "$STALE_SWEEP_AGENT")"
 
   if [[ "$ENABLE_STALE_SWEEP" -eq 0 ]]; then
     if [[ "$APPLY" -eq 0 ]]; then
@@ -479,7 +492,7 @@ upsert_stale_sweep_job() {
       --agent "$STALE_SWEEP_AGENT" \
       --every "$STALE_SWEEP_EVERY" \
       --thinking "$STALE_SWEEP_THINKING" \
-      --model "$ROLE_CODEX_MODEL" \
+      --model "$utility_model" \
       --session isolated \
       --no-deliver \
       --wake now \
@@ -492,7 +505,7 @@ upsert_stale_sweep_job() {
       --agent "$STALE_SWEEP_AGENT" \
       --every "$STALE_SWEEP_EVERY" \
       --thinking "$STALE_SWEEP_THINKING" \
-      --model "$ROLE_CODEX_MODEL" \
+      --model "$utility_model" \
       --session isolated \
       --no-deliver \
       --wake now \
@@ -511,8 +524,10 @@ upsert_dg_alert_job() {
   local id=""
   local msg=""
   local desc="Continuous delivery-health digest and auto-escalation hints"
+  local utility_model=""
   id="$(find_job_id_by_name "$DG_ALERT_JOB_NAME" || true)"
   msg="$(message_for_dg_alert)"
+  utility_model="$(model_for_role "$DG_ALERT_AGENT")"
 
   if [[ "$ENABLE_DG_ALERT" -eq 0 ]]; then
     if [[ "$APPLY" -eq 0 ]]; then
@@ -540,7 +555,7 @@ upsert_dg_alert_job() {
       --agent "$DG_ALERT_AGENT" \
       --every "$DG_ALERT_EVERY" \
       --thinking "$DG_ALERT_THINKING" \
-      --model "$ROLE_CODEX_MODEL" \
+      --model "$utility_model" \
       --session isolated \
       --no-deliver \
       --wake now \
@@ -553,7 +568,7 @@ upsert_dg_alert_job() {
       --agent "$DG_ALERT_AGENT" \
       --every "$DG_ALERT_EVERY" \
       --thinking "$DG_ALERT_THINKING" \
-      --model "$ROLE_CODEX_MODEL" \
+      --model "$utility_model" \
       --session isolated \
       --no-deliver \
       --wake now \
@@ -622,11 +637,8 @@ map_tmp="$(mktemp)"
     session_name="$(session_for_role "$role" || true)"
     trace_file="$(trace_for_role "$role" || true)"
     role_timeout="$(timeout_seconds_for_role "$role")"
-    role_thinking="$(thinking_level_for_role "$role")"
+    role_thinking="$(thinking_for_agent "$role")"
     role_model="$(model_for_role "$role")"
-    if [[ -z "$role_thinking" ]]; then
-      role_thinking="$THINKING_LEVEL"
-    fi
     if [[ ! "$role_timeout" =~ ^[0-9]+$ ]] || [[ "$role_timeout" -lt 60 ]]; then
       role_timeout="$TIMEOUT_SECONDS"
     fi

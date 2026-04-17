@@ -114,6 +114,8 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
         self.assertIsInstance(payload["delivery_control"], dict)
         for field in ("status", "integrity_status", "future_status", "needs_proof_backfill", "suspicious_completions", "pipeline_counts"):
             self.assertIn(field, payload["delivery_control"])
+        for field in ("product_delivery_state", "phase", "product_done", "ops_clean", "next_batch_eligible", "ec2_reachable", "freeze_reason"):
+            self.assertIn(field, payload["delivery_control"])
         self.assertIn("alerts_overview", payload)
         self.assertIsInstance(payload["alerts_overview"], dict)
         for field in ("status", "snapshot_path", "active_count", "suppressed_count", "top_alert", "priority_bands", "suppression_reasons", "pipeline"):

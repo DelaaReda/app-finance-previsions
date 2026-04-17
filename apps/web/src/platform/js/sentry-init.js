@@ -1,7 +1,10 @@
 /* Frontend Sentry bootstrap for static UI runtime */
 (function () {
   var SENTRY_CDN = "https://browser.sentry-cdn.com/8.43.0/bundle.tracing.replay.min.js";
-  var DEFAULT_API_BASE = "http://127.0.0.1:8050";
+  var DEFAULT_API_BASE =
+    typeof window !== "undefined" && window.location && window.location.origin
+      ? window.location.origin.replace(/\/$/, "")
+      : "http://3.98.20.77";
   var sdkLoadPromise = null;
   var initialized = false;
 

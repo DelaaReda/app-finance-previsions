@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +16,12 @@ ROOT = Path(__file__).resolve().parents[3]
 AUTOMATION_DIR = ROOT / "platform" / "automation"
 if str(AUTOMATION_DIR) not in sys.path:
     sys.path.insert(0, str(AUTOMATION_DIR))
+
+if "yaml" not in sys.modules:
+    fake_yaml = types.ModuleType("yaml")
+    fake_yaml.safe_load = lambda *args, **kwargs: {}
+    fake_yaml.safe_dump = lambda *args, **kwargs: ""
+    sys.modules["yaml"] = fake_yaml
 
 from runtime.truth.event_store import EventStore
 
@@ -52,10 +59,10 @@ class PlannerSubagentManagerTests(unittest.TestCase):
                     "version": "v1",
                     "defaults": {"prompt_timeout_seconds": 210, "retry_prompt_timeout_seconds": 90, "tick_timeout_seconds": 540},
                     "roles": {
-                        "planner": {"model": "gpt-5.4", "thinking": "xhigh"},
+                        "planner": {"model": "gpt-5.4", "thinking": "high"},
                         "dev": {"model": "gpt-5.4", "thinking": "high"},
-                        "admin": {"model": "gpt-5.4", "thinking": "medium"},
-                        "scrum_master": {"model": "gpt-5.3-codex-spark", "thinking": "low"},
+                        "admin": {"model": "gpt-5.4", "thinking": "high"},
+                        "scrum_master": {"model": "gpt-5.4", "thinking": "high"},
                     },
                     "features": {
                         "planner_orchestrator": {
@@ -91,13 +98,25 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         self.assertFalse(result["allowed"])
         self.assertIn("parent_role_forbidden", result["reason"])
 
-    def test_prompt_mentions_native_codex_multi_agent_helpers(self) -> None:
+    def test_plan_rejects_owner_task_target_role_mismatch(self) -> None:
+        result = plan_subagent(self.config, "planner", "admin", "BATCH-61-DEV-02", "runtime")
+        self.assertFalse(result["allowed"])
+        self.assertEqual(result["reason"], "owner_task_target_role_mismatch:dev!=admin")
+
+    def test_prompt_enforces_json_only_contract_and_narrow_scope_rule(self) -> None:
         prompt = _build_prompt("admin", "BATCH-61-ADMIN-01", "runtime", "Validate runtime truth.")
-        self.assertIn("CODEX_NATIVE_ORCHESTRATION", prompt)
-        self.assertIn("Use native Codex multi-agent helpers when delegation is warranted", prompt)
-        self.assertIn("`explorer` is exception-only", prompt)
-        self.assertIn("monitor agent", prompt)
-        self.assertNotIn("planner-owned capability dispatch only", prompt)
+        self.assertIn("Hard output contract:", prompt)
+        self.assertIn("Return exactly one JSON object only:", prompt)
+        self.assertIn("No markdown, no code fence, no prose before or after", prompt)
+        self.assertIn("status must be completed, blocked, or failed.", prompt)
+        self.assertIn("Work on the narrowest file/test set that can unblock OWNER_TASK_ID", prompt)
+        self.assertIn("for large memory/log files use rg/sed/tail instead of cat.", prompt)
+        self.assertIn("Prefer a bounded fix or artifact now; do not stop at analysis-only", prompt)
+        self.assertIn("no kickoff/progress chatter or shell/banner echo", prompt)
+        self.assertIn("Finance Copilot brief+ask with explainable memo output", prompt)
+        self.assertIn("queue/workboard/monitor are projections", prompt)
+        self.assertIn("planner_runtime_actions.py, runtime truth helpers, VM-safe wrappers", prompt)
+        self.assertIn("recommended_next=planner_route_to_dev_or_scrum", prompt)
 
     def test_config_defaults_to_native_codex_runtime_policy(self) -> None:
         self.assertFalse(self.config.allow_runtime_explorer)
@@ -190,6 +209,52 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         snapshot = status_snapshot(self.config, "planner")
         self.assertEqual(snapshot["active_count"], 0)
         self.assertTrue(any(item["subagent_id"] == subagent_id for item in snapshot["recent"]))
+        graph_state = EventStore(self.root).load_graph_state("BATCH-61-ADMIN-01") or {}
+        self.assertEqual(graph_state.get("status"), "merged")
+        self.assertEqual(graph_state.get("current_node"), "close_or_requeue")
+
+    def test_run_subagent_preserves_last_structured_json_when_startup_noise_is_present(self) -> None:
+        self.config.backend = "codex_exec"
+        self.config.enabled = True
+        stdout = "\n".join(
+            [
+                "OpenAI Codex v0.114.0 (research preview)",
+                '{"status":"in_progress","summary":"Taking ownership.","root_cause":"","fix_applied":"","artifact":"","verify":"","files_touched":"","tests_run":"","commit_sha":"","architecture_check":"","vision_alignment":"","recommended_next":"","blocking_issue":""}',
+                '{"status":"in_progress","summary":"Patch failed due context drift; I will re-read the exact script block and apply a narrower update so only the personal-finance page override logic changes.","root_cause":"","fix_applied":"","artifact":"","verify":"","files_touched":"","tests_run":"","commit_sha":"","architecture_check":"","vision_alignment":"","recommended_next":"Re-run targeted tests after patch.","blocking_issue":"Patch context mismatch from prior file version."}',
+            ]
+        )
+        stderr = "invalid_subagent_result:start_banner_only"
+
+        with patch.object(MODULE, "shutil_which", return_value="/usr/bin/codex"), patch.object(
+            MODULE,
+            "_run_codex_exec_subagent",
+            return_value=(0, stdout, stderr, "codex_exec:planner_dev_live"),
+        ):
+            rc, payload = run_subagent(
+                self.config,
+                role="planner",
+                target_role="dev",
+                owner_task_id="BATCH-61-DEV-90",
+                task_kind="delivery",
+                message="Implement the next slice and return proof.",
+                ttl_min=15,
+                backend="codex_exec",
+                timeout_seconds=120,
+                subagent_id_override="planner_dev_live",
+            )
+
+        self.assertEqual(rc, 6)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["status"], "failed")
+        self.assertIn("Patch failed due context drift", payload["summary"])
+        self.assertEqual(payload["blocking_issue"], "Patch context mismatch from prior file version.")
+        self.assertEqual(payload["recommended_next"], "Re-run targeted tests after patch.")
+
+    def test_value_present_rejects_placeholder_only_segments(self) -> None:
+        self.assertFalse(MODULE._value_present("..."))
+        self.assertFalse(MODULE._value_present("before=...; after=...; test=..."))
+        self.assertFalse(MODULE._value_present("layer=...; imports_ok=...; path_target=..."))
+        self.assertTrue(MODULE._value_present("before=500; after=200; test=pytest"))
 
     def test_run_subagent_records_running_graph_state_before_backend_returns(self) -> None:
         self.config.backend = "codex_exec"
@@ -282,6 +347,170 @@ class PlannerSubagentManagerTests(unittest.TestCase):
         snapshot = status_snapshot(self.config, "planner")
         recent = next(item for item in snapshot["recent"] if item["subagent_id"] == "planner_dev_recovered")
         self.assertEqual(recent["status"], "merged")
+
+    def test_collect_prefers_explicit_subagent_id_over_stale_owner_task_match(self) -> None:
+        stale_record = PlannerSubagentRecord(
+            subagent_id="planner_dev_stale",
+            target_role="dev",
+            owner_task_id="BATCH-61-DEV-77",
+            parent_role="planner",
+            task_kind="delivery",
+            status="failed",
+            created_at="2099-03-06T11:00:00Z",
+            expires_at="2099-03-06T11:30:00Z",
+            ttl_min=30,
+            backend="codex_exec",
+            last_update_at="2099-03-06T11:05:00Z",
+            summary="stale owner-task match",
+            blocking_issue="invalid_subagent_result:missing_result_payload",
+        )
+        _save_registry(self.config.registry_path, [stale_record])
+        self.config.results_dir.mkdir(parents=True, exist_ok=True)
+        (self.config.results_dir / "planner_dev_latest.result.json").write_text(
+            json.dumps(
+                {
+                    "subagent_id": "planner_dev_latest",
+                    "target_role": "dev",
+                    "owner_task_id": "BATCH-61-DEV-77",
+                    "parent_role": "planner",
+                    "task_kind": "delivery",
+                    "status": "failed",
+                    "summary": "Latest explicit subagent result",
+                    "root_cause": "codex_exec_rate_limit",
+                    "fix_applied": "none",
+                    "artifact": "logs/latest.json",
+                    "verify": "rate_limit_window=active",
+                    "files_touched": "none",
+                    "tests_run": "SKIP(no_tests)",
+                    "commit_sha": "none",
+                    "architecture_check": "none",
+                    "vision_alignment": "none",
+                    "recommended_next": "wait_for_quota",
+                    "blocking_issue": "codex_exec_rate_limit",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        rc_collect, collected = collect_subagent(
+            self.config,
+            "planner",
+            "planner_dev_latest",
+            "BATCH-61-DEV-77",
+            mark_merged=True,
+        )
+
+        self.assertEqual(rc_collect, 6)
+        self.assertFalse(collected["ok"])
+        self.assertEqual(collected["subagent_id"], "planner_dev_latest")
+        self.assertEqual(collected["blocking_issue"], "codex_exec_rate_limit")
+
+    def test_collect_accepts_complete_status_payload_as_success(self) -> None:
+        record = PlannerSubagentRecord(
+            subagent_id="planner_dev_complete",
+            target_role="dev",
+            owner_task_id="BATCH-61-DEV-88",
+            parent_role="planner",
+            task_kind="delivery",
+            status="running",
+            created_at="2099-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="qwen",
+            last_update_at="2099-03-06T12:00:00Z",
+        )
+        _save_registry(self.config.registry_path, [record])
+        self.config.results_dir.mkdir(parents=True, exist_ok=True)
+        (self.config.results_dir / "planner_dev_complete.result.json").write_text(
+            json.dumps(
+                {
+                    "subagent_id": "planner_dev_complete",
+                    "target_role": "dev",
+                    "owner_task_id": "BATCH-61-DEV-88",
+                    "parent_role": "planner",
+                    "task_kind": "delivery",
+                    "status": "complete",
+                    "summary": "Delivered with proof via fallback backend",
+                    "root_cause": "none",
+                    "fix_applied": "normalized success token",
+                    "artifact": "docs/proof.md",
+                    "verify": "before=x; after=y; test=z",
+                    "files_touched": "apps/api/src/example.py",
+                    "tests_run": "pytest -q test_example.py",
+                    "commit_sha": "abc123",
+                    "architecture_check": "pass",
+                    "vision_alignment": "pass",
+                    "recommended_next": "none",
+                    "blocking_issue": "none",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        rc_collect, collected = collect_subagent(self.config, "planner", "planner_dev_complete", "", mark_merged=True)
+
+        self.assertEqual(rc_collect, 0)
+        self.assertTrue(collected["ok"])
+        self.assertEqual(collected["status"], "complete")
+        snapshot = status_snapshot(self.config, "planner")
+        merged = next(item for item in snapshot["recent"] if item["subagent_id"] == "planner_dev_complete")
+        self.assertEqual(merged["status"], "merged")
+
+    def test_collect_accepts_failed_status_when_delivery_proof_is_complete(self) -> None:
+        record = PlannerSubagentRecord(
+            subagent_id="planner_dev_failed_with_proof",
+            target_role="dev",
+            owner_task_id="BATCH-61-DEV-89",
+            parent_role="planner",
+            task_kind="delivery",
+            status="running",
+            created_at="2099-03-06T12:00:00Z",
+            expires_at="2099-03-06T12:30:00Z",
+            ttl_min=30,
+            backend="qwen",
+            last_update_at="2099-03-06T12:00:00Z",
+        )
+        _save_registry(self.config.registry_path, [record])
+        self.config.results_dir.mkdir(parents=True, exist_ok=True)
+        (self.config.results_dir / "planner_dev_failed_with_proof.result.json").write_text(
+            json.dumps(
+                {
+                    "subagent_id": "planner_dev_failed_with_proof",
+                    "target_role": "dev",
+                    "owner_task_id": "BATCH-61-DEV-89",
+                    "parent_role": "planner",
+                    "task_kind": "delivery",
+                    "status": "failed",
+                    "summary": "Delivery completed via fallback backend",
+                    "root_cause": "backend fallback mislabeled the terminal status",
+                    "fix_applied": "proof payload preserved",
+                    "artifact": "docs/proof.md",
+                    "verify": "before=x; after=y; test=z",
+                    "files_touched": "apps/api/src/example.py",
+                    "tests_run": "pytest -q test_example.py",
+                    "commit_sha": "abc123",
+                    "architecture_check": "pass",
+                    "vision_alignment": "pass",
+                    "recommended_next": "none",
+                    "blocking_issue": "none",
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        rc_collect, collected = collect_subagent(
+            self.config,
+            "planner",
+            "planner_dev_failed_with_proof",
+            "",
+            mark_merged=True,
+        )
+
+        self.assertEqual(rc_collect, 0)
+        self.assertTrue(collected["ok"])
+        snapshot = status_snapshot(self.config, "planner")
+        merged = next(item for item in snapshot["recent"] if item["subagent_id"] == "planner_dev_failed_with_proof")
+        self.assertEqual(merged["status"], "merged")
 
     def test_collect_keeps_active_subagent_running_when_result_payload_missing(self) -> None:
         record = PlannerSubagentRecord(

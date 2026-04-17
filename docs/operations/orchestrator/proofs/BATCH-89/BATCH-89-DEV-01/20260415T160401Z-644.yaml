@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-89-BATCH-89-DEV-01-20260415T160401Z-644"
+stream_id: "BATCH-89"
+task_id: "BATCH-89-DEV-01"
+role: "dev"
+produced_at_utc: "2026-04-15T16:04:01Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T16:04:01Z"
+      ended_at_utc: "2026-04-15T16:04:01Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS `python3 -m pytest apps/api/src/domains/copilot/tests/test_copilot_domain_router.py -k 'ranked_action or matches_shared_contract'`; PASS `python3 -m pytest apps/api/src/domains/copilot/tests/test_personal_finance_co"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "`/api/copilot/start` now returns a contract-safe `ranked_action` when ask/open items exist, and `/api/personal-finance/start` rewrites that action target to `/personal-finance/ask`. Commit: `443953ce50a94c82728242d3e7166"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-89-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-89-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=`packages/contracts/copilot_v1.py` already exposed `ranked_action`, but the copilot route/service path only propagated `ask/open`; `ranked_action` was dropped or left on `/copilot/ask` when namespace rewriting happened. | fix_applied=Added ranked-action selection/preservation in `apps/api/src/domains/copilot/application/copilot_service.py`, added ranked-action namespace rewriting plus fallback derivation from ask/open in `apps/api/src/domains/copilot | verify=before=targeted router test failed with `ranked_action.target == /copilot/ask` on `/api/personal-finance/start`, and the start response path could omit `ranked_action`; after=ranked action is derived/preserved on copilot | architecture_check=layer=kept to copilot route/service contract wiring only; imports_ok=yes reused existing shared contract and existing copilot modules without widening into new endpoint stacks; path_target=`apps/api/src/domains/copilot/* | vision_alignment=batch=BATCH-89; target=personal finance copilot brief+ask/open starter; impact=adds a concrete top action in the starter payload and keeps alias navigation consistent, improving the first-step brief-to-ask flow without w"

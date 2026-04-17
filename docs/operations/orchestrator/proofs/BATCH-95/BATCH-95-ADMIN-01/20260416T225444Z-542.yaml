@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-95-BATCH-95-ADMIN-01-20260416T225444Z-542"
+stream_id: "BATCH-95"
+task_id: "BATCH-95-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-04-16T22:54:44Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+preconditions:
+  change_plan:
+    - "scope fermer batch-95-admin-01 comme revue admin du flux copilot"
+    - "dependency impact confirmer que dev-03 est complete avant le handoff planner"
+    - "risk eviter un faux blocage admin alors que la sante publique est verte"
+    - "verification reutiliser healthcheck ec2 et parent dev du tick comme preuves"
+    - "rollback garder l etape admin ouverte si complete refuse la dependance ou la preuve"
+  architecture_checks:
+    - "ec2-public-only_runtime_proof"
+    - "active-docs-index_and_anti-regression_guards_respected"
+    - "no_localhost_or_legacy_backlog_truth_used"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(runtime_review_no_code_change)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T22:54:44Z"
+      ended_at_utc: "2026-04-16T22:54:44Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "fc_health_check:PASS,dev_parent_monitor:PASS"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+  artifacts:
+    - "logs-codex-runs/dev-parent/latest.json"
+handoff:
+  to_role: "planner"
+  handoff_id: "HO-20260416225444-699"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "admin"
+  qa_verdict: "GO_WITH_CAUTION"
+meta:
+  idempotency_key: "IK-92786fb8159e"
+  review_ref: "http://3.98.20.77:8080/api/status?lite=1"
+  note: "root_cause=pas_de_blocker_runtime_public_sur_EC2_et_etape_admin_restante_sans_handoff; fix_applied=revue_admin_realisee_puis_handoff_planner_apres_validation_healthcheck_et_parent_dev; verify=before=admin_task_in_progress_after_claim; after=ec2_api_frontend_monitor_ok_and_dev_parent_pass; test=fc_health_check_PASS+dev_parent_monitor_PASS"

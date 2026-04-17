@@ -85,12 +85,35 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 
 ### VM-Only Runtime Rule (Critical)
 
-- This project runtime is **VM-only**.
-- Never run backend/frontend/monitor servers, cron installers, or role runner ticks on macOS host.
-- All execution must happen inside VM workspace: `/home/venom/analyse-financiere`.
+- This project runtime is split:
+  - orchestration runtime is **VM-only**
+  - app-serving runtime is **EC2 public-endpoint only**
+- Never run backend/frontend/monitor servers on macOS host or on the local VM for normal usage.
+- Keep local VM execution limited to orchestration, planner, admin, OpenClaw, and repo maintenance inside `/home/venom/analyse-financiere`.
 - Before running runtime commands, verify host with:
   - `bash scripts/runtime_host_check.sh`
 - If `runtime_is_vm=0`, stop and do not execute runtime commands.
+- Canonical public app endpoints:
+  - frontend: `http://3.98.20.77/`
+  - api: `http://3.98.20.77/api/...`
+  - public DNS equivalent: `http://ec2-3-98-20-77.ca-central-1.compute.amazonaws.com/`
+- From this VM, all manual API calls, smokes, frontend validation, and endpoint tests must target the public EC2 URLs, not `127.0.0.1:8050`, `127.0.0.1:7779`, `127.0.0.1:5173`, or other local listeners.
+- Local loopback API URLs are allowed only when logged directly into the EC2 app host for deployment or host-local debugging.
+- Canonical EC2 app runtime reference:
+  - `docs/ops/EC2_APP_RUNTIME_QUICK_REFERENCE.md`
+- From the UTM VM, app control must use:
+  - `scripts/aws_remote_app_control.sh`
+- The EC2 app host may auto-stop after HTTP inactivity; the wrapper is responsible for waking it before app control.
+- During a real EC2 publication/restart window, public probes can briefly return `502`, `MAINTENANCE`, or `DEFER reason=runtime_restart_in_progress`.
+- Treat that as transient publication state, not a durable outage, unless the maintenance signal has cleared and the public probes still fail.
+- Mac <-> UTM VM = shared workspace view of the same repo. This is one sync layer: local workspace sharing only.
+- AWS app publication is a second, separate layer: shared workspace -> AWS EC2.
+- Canonical operator path is Mac-side publication. If the operator intentionally launches the same publication wrapper from the UTM VM, it still publishes the same shared workspace snapshot, not VM-local orchestration state.
+- VM agents may edit the shared workspace, but they must not assume those edits are live on AWS until a real publication to EC2 has completed.
+- Sync scope is app-serving code/support only, not orchestration state/history. In practice the sync pushes `apps/api`, `apps/web`, `apps/monitor`, `packages`, `platform`, `finance-copilot.sh`, and the small support scripts used by the app host. It excludes `logs-codex-runs/`, `memory/`, `docs/operations/orchestrator/`, local DB/runtime artifacts, cache/data dirs, local virtualenvs, and `node_modules`.
+- Therefore: missing planner/orchestrator artifacts on EC2 do not mean the sync failed. EC2 is app-serving only.
+- After app sync or restart, agents must allow brief EC2 propagation/stabilization time before declaring a public endpoint broken; see `docs/ops/EC2_APP_RUNTIME_QUICK_REFERENCE.md`.
+- If another doc, proof, report, or old batch file still shows `localhost:*` for app checks, treat it as historical evidence only. Current operator guidance is `AGENTS.md` + `docs/ops/EC2_APP_RUNTIME_QUICK_REFERENCE.md` + `docs/ops/ACTIVE_DOCS_INDEX.md`.
 
 Engineering reference (API endpoints):
 - `docs/ops/API_ENDPOINT_BEST_PRACTICES.md`

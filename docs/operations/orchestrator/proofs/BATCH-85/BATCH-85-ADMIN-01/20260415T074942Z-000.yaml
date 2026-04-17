@@ -1,0 +1,82 @@
+proof_id: PRF-BATCH-85-BATCH-85-ADMIN-01-20260415T074942Z-000
+stream_id: BATCH-85
+task_id: BATCH-85-ADMIN-01
+role: admin
+produced_at_utc: 2026-04-15T07:49:42Z
+inputs:
+  queue_snapshot_ref: logs-codex-runs/orchestrator-state/priority-queue.json
+  workboard_snapshot_ref: logs-codex-runs/orchestrator-state/parallel-workstreams.json
+  runtime_snapshot_ref: logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite
+  state: planner_graph_state
+preconditions:
+  dependency_gate: BATCH-85-DEV-03 complete
+  task_notes:
+    - INTEGRATION-APP-EENGINEER-RECOMMENDATIONS: validate monitor/cron/runtime health after dev chain and capture explicit unblock or blocker evidence.
+execution:
+  api_health:
+    cmd: python3 - <<'PY'
+      import urllib.request
+      urllib.request.urlopen('http://127.0.0.1:8050/api/health', timeout=5)
+    PY
+    rc: PASS
+    details:
+      status_code: 200
+      body_snapshot: {
+        "ok": true,
+        "status": "ok",
+        "backend_up": true
+      }
+  monitor_status:
+    cmd: curl -fsS "http://127.0.0.1:7779/api/status?lite=1"
+    rc: PASS
+    details:
+      execution_mode: planner_experimental
+      active_batch: BATCH-85
+      doctor_overall_status: degraded
+  personal_finance_start:
+    cmd: curl -fsS http://127.0.0.1:8050/api/personal-finance/start
+    rc: PASS
+    details:
+      brief_of_day: present
+      ask_count: 4
+      open_count: 3
+      generated_at: 2026-04-15T07:49:39.363280Z
+      source: [market_brief_job, copilot_start_route]
+  frontend_root:
+    cmd: curl -fsS http://127.0.0.1:5173/
+    rc: PASS
+    details:
+      status_code: 200
+      body_prefix: "<!DOCTYPE html>"
+  monitor_health_script:
+    cmd: bash scripts/fc_health_check.sh
+    rc: PASS
+    details:
+      issues:
+        - signal_unparseable_window: 0
+        - contract_guard_blocks_window: 0
+        - session_not_ready_window: 0
+verifications:
+  runtime_truth_snapshot:
+    queue_status:
+      - BATCH-85-ADMIN-01 state IN_PROGRESS
+      - BATCH-85-DEV-01 state DONE
+      - BATCH-85-DEV-02 state DONE
+      - BATCH-85-DEV-03 state DONE
+      - BATCH-85-GOV_REVIEW WAITING_DEP
+    result:
+      blocker: none
+  raw_output_summary:
+    previous_planner_result_status: failed
+    reason_summary: planner_subagent_summary_no_delivery_fields
+    parsed_blocker_issue: command_output_wrapper_artifacts
+outputs:
+  artifacts:
+    - docs/ops/BATCH-85-ADMIN-01-RUNTIME-VALIDATION.md
+    - docs/operations/orchestrator/proofs/BATCH-85/BATCH-85-ADMIN-01/20260415T074942Z-000.yaml
+  proof_count_estimate: 1
+  idempotency_key: PLANNER_MERGE_BATCH-85-ADMIN-01
+signoff:
+  producer_agent: adminapp-codex
+  qa_verdict: PASS
+  next_handoff: planner

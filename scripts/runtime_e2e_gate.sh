@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
+# MODE: PUBLIC_VALIDATION_BY_DEFAULT
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 cd "$ROOT"
 
-MONITOR_BASE_URL="${FC_MONITOR_BASE_URL:-http://127.0.0.1:7779}"
-API_BASE_URL="${FC_GATE_API_BASE_URL:-http://127.0.0.1:8050}"
-FRONTEND_BASE_URL="${FC_GATE_FRONTEND_BASE_URL:-http://127.0.0.1:5173}"
+PUBLIC_ONLY="${FC_GATE_PUBLIC_ONLY:-1}"
+MONITOR_BASE_URL="${FC_MONITOR_BASE_URL:-${FC_PUBLIC_MONITOR_BASE_URL:-http://3.98.20.77:8080}}"
+API_BASE_URL="${FC_GATE_API_BASE_URL:-${FC_PUBLIC_APP_BASE_URL:-http://3.98.20.77}}"
+FRONTEND_BASE_URL="${FC_GATE_FRONTEND_BASE_URL:-${FC_PUBLIC_APP_BASE_URL:-http://3.98.20.77}}"
 BACKEND_HEALTH_URL="${FC_GATE_BACKEND_HEALTH_URL:-$API_BASE_URL/api/health}"
 QUIET_PERIOD_SECONDS="${FC_GATE_QUIET_PERIOD_SECONDS:-30}"
 STACK_READY_TIMEOUT_SECONDS="${FC_GATE_STACK_READY_TIMEOUT_SECONDS:-45}"
@@ -19,6 +21,21 @@ SUMMARY_JSON="$PROOF_ROOT/runtime-e2e-$TS_UTC.json"
 
 if ! [[ "$QUIET_PERIOD_SECONDS" =~ ^[0-9]+$ ]]; then
   QUIET_PERIOD_SECONDS=30
+fi
+
+guard_public_url() {
+  local url="$1"
+  if [[ "${FC_ALLOW_LOCAL_URLS:-0}" != "1" && "$url" =~ ^https?://(127\.0\.0\.1|localhost)(:|/|$) ]]; then
+    echo "Refusing local validation URL: $url (set FC_ALLOW_LOCAL_URLS=1 to override)" >&2
+    exit 2
+  fi
+}
+
+if [[ "$PUBLIC_ONLY" == "1" ]]; then
+  guard_public_url "$API_BASE_URL"
+  guard_public_url "$FRONTEND_BASE_URL"
+  guard_public_url "$MONITOR_BASE_URL"
+  guard_public_url "$BACKEND_HEALTH_URL"
 fi
 
 mkdir -p "$PROOF_ROOT"
@@ -81,9 +98,15 @@ runtime_stack_probe() {
   backend_code="$(probe_http_code "$BACKEND_HEALTH_URL")"
   monitor_code="$(probe_http_code "$MONITOR_BASE_URL/api/status?lite=1")"
 
-  listener_up 5173 && listener_frontend="up"
-  listener_up 8050 && listener_backend="up"
-  listener_up 7779 && listener_monitor="up"
+  if [[ "$PUBLIC_ONLY" == "1" ]]; then
+    listener_frontend="external"
+    listener_backend="external"
+    listener_monitor="external"
+  else
+    listener_up 5173 && listener_frontend="up"
+    listener_up 8050 && listener_backend="up"
+    listener_up 7779 && listener_monitor="up"
+  fi
 
   printf '%s|%s|%s|%s|%s|%s\n' \
     "$frontend_code" \
@@ -103,7 +126,12 @@ wait_runtime_stack_ready() {
   while [ "$waited" -lt "$timeout" ]; do
     probe="$(runtime_stack_probe)"
     IFS='|' read -r frontend_code backend_code monitor_code listener_frontend listener_backend listener_monitor <<< "$probe"
-    if [[ "$frontend_code" == "200" && "$backend_code" == "200" && "$monitor_code" == "200" && "$listener_frontend" == "up" && "$listener_backend" == "up" && "$listener_monitor" == "up" ]]; then
+    if [[ "$PUBLIC_ONLY" == "1" ]]; then
+      if [[ "$frontend_code" == "200" && "$backend_code" == "200" ]]; then
+        printf '%s\n' "$probe"
+        return 0
+      fi
+    elif [[ "$frontend_code" == "200" && "$backend_code" == "200" && "$monitor_code" == "200" && "$listener_frontend" == "up" && "$listener_backend" == "up" && "$listener_monitor" == "up" ]]; then
       printf '%s\n' "$probe"
       return 0
     fi
@@ -189,30 +217,36 @@ PY
 }
 
 log "runtime_e2e_gate started ts_utc=$TS_UTC"
-launcher_action="started"
+launcher_action="public_only"
 preflight_probe="$(runtime_stack_probe)"
 IFS='|' read -r preflight_frontend_code preflight_backend_code preflight_monitor_code preflight_listener_5173 preflight_listener_8050 preflight_listener_7779 <<< "$preflight_probe"
 log "preflight_stack frontend=${preflight_frontend_code} backend=${preflight_backend_code} monitor=${preflight_monitor_code} listeners=5173:${preflight_listener_5173},8050:${preflight_listener_8050},7779:${preflight_listener_7779}"
-if [[ "$preflight_frontend_code" == "200" && "$preflight_backend_code" == "200" && "$preflight_monitor_code" == "200" && "$preflight_listener_5173" == "up" && "$preflight_listener_8050" == "up" && "$preflight_listener_7779" == "up" ]]; then
-  launcher_action="refresh_existing_stack"
-  log "launcher_refresh reason=stack_healthy_but_runtime_gate_requires_owned_stack"
+if [[ "$PUBLIC_ONLY" != "1" ]]; then
+  launcher_action="started"
+  if [[ "$preflight_frontend_code" == "200" && "$preflight_backend_code" == "200" && "$preflight_monitor_code" == "200" && "$preflight_listener_5173" == "up" && "$preflight_listener_8050" == "up" && "$preflight_listener_7779" == "up" ]]; then
+    launcher_action="refresh_existing_stack"
+    log "launcher_refresh reason=stack_healthy_but_runtime_gate_requires_owned_stack"
+  fi
+  record_cmd "launcher_start ./finance-copilot.sh start" ./finance-copilot.sh start
+  record_cmd "launcher_status ./finance-copilot.sh status" ./finance-copilot.sh status
+else
+  log "launcher_skip reason=public_only"
 fi
-record_cmd "launcher_start ./finance-copilot.sh start" ./finance-copilot.sh start
-record_cmd "launcher_status ./finance-copilot.sh status" ./finance-copilot.sh status
 post_start_probe="$(wait_runtime_stack_ready "$STACK_READY_TIMEOUT_SECONDS" || true)"
 IFS='|' read -r post_start_frontend_code post_start_backend_code post_start_monitor_code post_start_listener_5173 post_start_listener_8050 post_start_listener_7779 <<< "$post_start_probe"
 log "post_start_stack frontend=${post_start_frontend_code} backend=${post_start_backend_code} monitor=${post_start_monitor_code} listeners=5173:${post_start_listener_5173},8050:${post_start_listener_8050},7779:${post_start_listener_7779}"
-record_cmd "monitor_smoke scripts/monitor_contract_smoke.sh" bash scripts/monitor_contract_smoke.sh --base-url "$MONITOR_BASE_URL"
 doctor_json_file="$tmp_dir/doctor.json"
 doctor_eval_file="$tmp_dir/doctor_eval.json"
-log "doctor scripts/fc_doctor.sh --json"
-if ! bash scripts/fc_doctor.sh --json >"$doctor_json_file" 2>>"$PROOF_FILE"; then
-  log "doctor_command_exit_nonzero tolerated_for_gate"
-fi
-if [[ -s "$doctor_json_file" ]]; then
-  cat "$doctor_json_file" | tee -a "$PROOF_FILE" >/dev/null
-fi
-python3 - "$doctor_json_file" <<'PY' > "$doctor_eval_file"
+if [[ "$PUBLIC_ONLY" != "1" ]]; then
+  record_cmd "monitor_smoke scripts/monitor_contract_smoke.sh" bash scripts/monitor_contract_smoke.sh --base-url "$MONITOR_BASE_URL"
+  log "doctor scripts/fc_doctor.sh --json"
+  if ! bash scripts/fc_doctor.sh --json >"$doctor_json_file" 2>>"$PROOF_FILE"; then
+    log "doctor_command_exit_nonzero tolerated_for_gate"
+  fi
+  if [[ -s "$doctor_json_file" ]]; then
+    cat "$doctor_json_file" | tee -a "$PROOF_FILE" >/dev/null
+  fi
+  python3 - "$doctor_json_file" <<'PY' > "$doctor_eval_file"
 import json
 import sys
 from pathlib import Path
@@ -292,6 +326,9 @@ print(
     )
 )
 PY
+else
+  printf '%s\n' '{"doctor_status":"public_only","doctor_runtime_status":"unknown","doctor_non_runtime_degraded_checks":[]}' >"$doctor_eval_file"
+fi
 
 failures=0
 quiet_period_result="SKIP"
@@ -321,27 +358,33 @@ if [[ "$QUIET_PERIOD_SECONDS" =~ ^[0-9]+$ ]] && [[ "$QUIET_PERIOD_SECONDS" -gt 0
   quiet_monitor_code="$(probe_http_code "$MONITOR_BASE_URL/api/status?lite=1")"
   quiet_backend_code="$(probe_http_code "$BACKEND_HEALTH_URL")"
 
-  listener_5173="down"
-  listener_7779="down"
-  listener_8050="down"
-  listener_up 5173 && listener_5173="up"
-  listener_up 7779 && listener_7779="up"
-  listener_up 8050 && listener_8050="up"
+  if [[ "$PUBLIC_ONLY" == "1" ]]; then
+    listener_5173="external"
+    listener_7779="external"
+    listener_8050="external"
+  else
+    listener_5173="down"
+    listener_7779="down"
+    listener_8050="down"
+    listener_up 5173 && listener_5173="up"
+    listener_up 7779 && listener_7779="up"
+    listener_up 8050 && listener_8050="up"
+  fi
 
-  if [[ "$quiet_monitor_code" != "200" && "$listener_7779" == "up" ]]; then
+  if [[ "$PUBLIC_ONLY" != "1" && "$quiet_monitor_code" != "200" && "$listener_7779" == "up" ]]; then
     quiet_monitor_code="$(probe_http_code_retry "$MONITOR_BASE_URL/api/status?lite=1")"
   fi
 
   if [[ "$quiet_frontend_code" != "200" ]]; then
     quiet_period_result="DEGRADED"
     quiet_period_reason="frontend_http_${quiet_frontend_code}"
-  elif [[ "$quiet_monitor_code" != "200" ]]; then
+  elif [[ "$PUBLIC_ONLY" != "1" && "$quiet_monitor_code" != "200" ]]; then
     quiet_period_result="DEGRADED"
     quiet_period_reason="monitor_http_${quiet_monitor_code}"
   elif [[ "$quiet_backend_code" != "200" ]]; then
     quiet_period_result="DEGRADED"
     quiet_period_reason="backend_http_${quiet_backend_code}"
-  elif [[ "$listener_5173" != "up" || "$listener_7779" != "up" || "$listener_8050" != "up" ]]; then
+  elif [[ "$PUBLIC_ONLY" != "1" && ( "$listener_5173" != "up" || "$listener_7779" != "up" || "$listener_8050" != "up" ) ]]; then
     quiet_period_result="DEGRADED"
     quiet_period_reason="listener_missing"
   fi

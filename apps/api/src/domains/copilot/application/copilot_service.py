@@ -1271,7 +1271,7 @@ def _fetch_live_market_indicators() -> Dict[str, Any]:
     }
 
     live_market_enabled = str(
-        __import__("os").getenv("FC_COPILOT_LIVE_MARKET_DATA", "1")
+        __import__("os").getenv("FC_COPILOT_LIVE_MARKET_DATA", "0")
     ).strip().lower() in {"1", "true", "yes", "on"}
     if not live_market_enabled:
         fallback["degraded_reason"] = "Live data disabled - using snapshot brief only"
@@ -1709,6 +1709,23 @@ def build_copilot_start_response(
         if isinstance(resolved_start.get("brief_of_day"), dict)
         else {}
     )
+    if not _safe_text(brief_of_day.get("summary")):
+        fallback_brief = _load_daily_brief_payload()
+        if isinstance(fallback_brief, dict) and fallback_brief:
+            merged_brief = dict(fallback_brief)
+            for key, value in brief_of_day.items():
+                if key == "summary":
+                    continue
+                if value in (None, "", [], {}):
+                    continue
+                merged_brief[key] = value
+            brief_of_day = merged_brief
+        else:
+            brief_of_day = {
+                **brief_of_day,
+                "summary": "No daily brief available yet.",
+                "source": ["brief_daily_fallback"],
+            }
     resolved_scope_tickers: List[str] = []
     for item in (scope.get("tickers") if isinstance(scope, dict) else []) or []:
         token = _safe_text(item).upper()

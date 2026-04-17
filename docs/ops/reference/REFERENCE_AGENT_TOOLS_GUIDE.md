@@ -27,13 +27,13 @@ Cron (système)
 
 ## 🌐 OpenClaw Browser — Tester l'interface
 
-L'agent peut utiliser le navigateur OpenClaw pour valider que l'UI fonctionne.
+L'agent peut utiliser le navigateur OpenClaw pour valider l'UI publique. Depuis 2026-04-16, viser EC2 public et non les listeners VM.
 
 ### Commandes essentielles
 
 ```bash
 # Naviguer vers l'app
-openclaw browser navigate "http://localhost:5173/"
+openclaw browser navigate "http://3.98.20.77/"
 
 # Prendre un screenshot
 openclaw browser screenshot
@@ -56,7 +56,7 @@ openclaw browser snapshot
 
 ```bash
 # 1. Naviguer
-openclaw browser navigate "http://localhost:5173/"
+openclaw browser navigate "http://3.98.20.77/"
 sleep 3
 
 # 2. Vérifier données live chargées
@@ -83,32 +83,32 @@ openclaw browser status
 
 ## 🔧 API Backend — Endpoints disponibles
 
-Base URL: `http://localhost:8050/api`
+Base URL: `http://3.98.20.77/api`
 
 ```bash
 # Santé
-curl http://localhost:8050/api/health | jq .
+curl http://3.98.20.77/api/health | jq .
 
 # News (460+ articles réels)
-curl "http://localhost:8050/api/news/feed?limit=5" | jq '.data.items[0].title'
+curl "http://3.98.20.77/api/news/feed?limit=5" | jq '.data.items[0].title'
 
 # Forecasts (20 tickers)
-curl "http://localhost:8050/api/forecasts?limit=5" | jq '.data.rows[] | {ticker, direction, confidence}'
+curl "http://3.98.20.77/api/forecasts?limit=5" | jq '.data.rows[] | {ticker, direction, confidence}'
 
 # Stocks avec historique prix
-curl http://localhost:8050/api/stocks/prices | jq '.data.tickers | keys'
+curl http://3.98.20.77/api/stocks/prices | jq '.data.tickers | keys'
 
 # Top stocks
-curl http://localhost:8050/api/stocks/top | jq '.data.stocks[0]'
+curl http://3.98.20.77/api/stocks/top | jq '.data.stocks[0]'
 
 # Backtests
-curl http://localhost:8050/api/backtests | jq '.data.overall_metrics'
+curl http://3.98.20.77/api/backtests | jq '.data.overall_metrics'
 
 # Brief hebdo
-curl http://localhost:8050/api/brief/weekly | jq '.data | {title, sentiment}'
+curl http://3.98.20.77/api/brief/weekly | jq '.data | {title, sentiment}'
 
 # Copilot Q&A
-curl -X POST http://localhost:8050/api/copilot/ask \
+curl -X POST http://3.98.20.77/api/copilot/ask \
   -H "Content-Type: application/json" \
   -d '{"question":"Should I buy gold today?","tickers":["GLD"]}' | jq '.data.answer'
 ```
@@ -210,7 +210,7 @@ bash scripts/fc_vm_resume.sh
 ### Backend arrêté
 ```bash
 # Vérifier:
-curl http://localhost:8050/api/health
+curl http://3.98.20.77/api/health
 
 # Redémarrer (chercher le process):
 ps aux | grep "run_api\|uvicorn\|gunicorn" | grep -v grep
@@ -238,11 +238,11 @@ Voir `docs/product/planning/PRODUCT_VISION.md` pour la vision complète.
 openclaw browser evaluate "window.newsItems && window.newsItems[0].headline" 
 
 # 2. Forecasts avec confiance > 0
-curl http://localhost:8050/api/forecasts?limit=1 | jq '.data.rows[0].confidence'
+curl http://3.98.20.77/api/forecasts?limit=1 | jq '.data.rows[0].confidence'
 # → doit être > 0.55 pour être utile
 
 # 3. Stocks avec vrais % de changement
-curl http://localhost:8050/api/stocks/top | jq '.data.stocks[0].change_percent'
+curl http://3.98.20.77/api/stocks/top | jq '.data.stocks[0].change_percent'
 # → doit être != 0.0
 
 # 4. Backend fix: change_percent dans /api/stocks/top

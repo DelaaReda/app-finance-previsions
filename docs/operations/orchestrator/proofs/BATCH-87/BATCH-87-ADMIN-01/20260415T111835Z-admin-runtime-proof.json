@@ -1,0 +1,34 @@
+{
+  "task_id": "BATCH-87-ADMIN-01",
+  "stream": "BATCH-87",
+  "role": "admin",
+  "generated_at_utc": "2026-04-15T11:18:35Z",
+  "status": "blocked",
+  "summary": "Runtime truth/observability for BATCH-87 ADMIN-01 is healthy on monitor/cron/locks and dependency graph, but close-path is still blocked by repeated unrelated admin runtime blockers and an active /api/personal-finance/ask LLM timeout.",
+  "root_cause": "planner_runtime_actions --collect-only still receives admin blocker payloads (legacy payload drift + backend_regression_gate failures on unrelated modules) while runtime stack endpoints and locks are green; ask endpoint returns model quality error due copilot provider timeout.",
+  "fix_applied": "No control-plane/app code/config changes were required for this pass; captured direct runtime, orchestration, and endpoint evidence for unblock decision.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-87/BATCH-87-ADMIN-01/20260415T111835Z-admin-runtime-proof.json",
+  "verify": [
+    "PASS runtime_host_check.sh => runtime_is_vm=1",
+    "PASS scripts/fc_status_brief.sh => in_progress=0 waiting_dep=1 ready=0 closed=86, mismatch=0, planner quality=0",
+    "PASS scripts/fc_health_check.sh => monitor/backend/frontend contract OK, no stale locks, cron sessions healthy",
+    "PASS scripts/fc_reactivate_guard.sh --audit-only => stale locks shared=0 role_state=0 fc=0",
+    "PASS scripts/dependency_recompute.sh => queue sync + dependency_recompute_ok (queue_waiting_dep=0, workboard_waiting_dep=1)",
+    "PASS planner_runtime_actions collect-only for BATCH-87-ADMIN-01 returned owner_task_id with admin_block action",
+    "PASS /api/personal-finance/start?tickers=MSFT&tickers=AAPL returns 200 with brief_of_day + ask/open payload",
+    "FAIL /api/personal-finance/ask with valid question returns model:error quality_status:error (\"copilot ask llm timed out after 8.00s\")"
+  ],
+  "verify_blocker": [
+    "planner_runtime_actions collect-only action log includes admin_block:BATCH-87-ADMIN-01: scripts/backend_regression_gate.sh fails on unrelated modules and secondary_compat noise",
+    "orchestrator-runtime.sqlite planner_graph_state contains BATCH-87-ADMIN-01 status=running @node=wait_or_collect_result, while BATCH-87-DEV-01/02/03 remain retryable residue"
+  ],
+  "files_touched": [
+    "docs/operations/orchestrator/proofs/BATCH-87/BATCH-87-ADMIN-01/20260415T111835Z-admin-runtime-proof.json"
+  ],
+  "tests_run": "runtime smoke + control-plane checks only: runtime_host_check, fc_status_brief, fc_health_check, fc_reactivate_guard --audit-only, dependency_recompute, planner_runtime_actions --collect-only, /api/personal-finance/start, /api/personal-finance/ask",
+  "commit_sha": "SKIP(no code/config change)",
+  "architecture_check": "PASS(admin scope): runtime/matched monitor/cron locks and control-plane snapshots are coherent; this is not a core orchestration infra outage.",
+  "vision_alignment": "BLOCKED on ask-path reliability: brief/open flows are shippable and aligned with user-visible objective; ask contract is not yet production-ready.",
+  "recommended_next": "planner_route_to_dev_or_scrum",
+  "blocking_issue": "/api/personal-finance/ask returns provider timeout -> model:error quality_status:error (requires backend ask/LLM path stabilization); ADMIN-01 still collecting blocker noise from legacy/redundant runtime payloads and regression-gate wording."
+}

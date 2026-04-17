@@ -1,5 +1,9 @@
 # ENGINEERING PLAYBOOK v1 (analyse-financiere)
 
+Historical/runtime note:
+- Current public app runtime lives on AWS EC2 (`http://3.98.20.77`, `/api/...`, `:8080`).
+- Any `localhost:*` app example below is host-local debug only or legacy context, not the normal team validation path.
+
 ## Objective
 Ship fast **without** shipping garbage.
 

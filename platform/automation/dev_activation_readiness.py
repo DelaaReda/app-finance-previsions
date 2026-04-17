@@ -21,8 +21,8 @@ if str(THIS_DIR) not in sys.path:
 from orchestrator_paths import resolve_orchestrator_write_path
 
 
-DEFAULT_MONITOR_BASE = "http://127.0.0.1:7779"
-PLANNER_DISPATCH_SUCCESS_STATUSES = {"completed", "merged", "done", "pass", "ok", "success"}
+DEFAULT_MONITOR_BASE = "http://3.98.20.77:8080"
+PLANNER_DISPATCH_SUCCESS_STATUSES = {"complete", "completed", "merged", "done", "pass", "ok", "success"}
 
 
 def _iso_now() -> str:

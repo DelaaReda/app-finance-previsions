@@ -15,6 +15,8 @@ from typing import Any
 CANONICAL_ORCHESTRATOR_DIR = Path("logs-codex-runs/orchestrator-state")
 STATE_DIR_DEFAULT = Path.home() / ".openclaw/cron/role-state"
 BATCH_ID_RE = re.compile(r"\b(BATCH-\d+)\b", re.IGNORECASE)
+STREAM_ID_INLINE_RE = re.compile(r"\bstream_id\s*=\s*([A-Za-z0-9._:-]+)", re.IGNORECASE)
+TASK_ID_INLINE_RE = re.compile(r"\btask_id\s*=\s*([A-Za-z0-9._:-]+)", re.IGNORECASE)
 ACTIONABLE_TASK_STATES = {
     "READY",
     "READY_DEV",
@@ -213,6 +215,23 @@ def _contract_fields(path: Path) -> dict[str, str]:
         token = key.strip().upper()
         if token and token not in fields:
             fields[token] = value.strip()
+    inline_sources = [str(fields.get(key, "")).strip() for key in ("EVIDENCE", "NEXT", "RISKS")]
+    if "STREAM_ID" not in fields:
+        for value in inline_sources:
+            match = STREAM_ID_INLINE_RE.search(value)
+            if match:
+                fields["STREAM_ID"] = match.group(1).strip()
+                break
+    if "TASK_ID" not in fields:
+        for value in inline_sources:
+            match = TASK_ID_INLINE_RE.search(value)
+            if match:
+                fields["TASK_ID"] = match.group(1).strip()
+                break
+    if "BATCH_ID" not in fields:
+        batch_id = _batch_id_from_values(fields.get("STREAM_ID"), fields.get("TASK_ID"), *inline_sources)
+        if batch_id:
+            fields["BATCH_ID"] = batch_id
     return fields
 
 

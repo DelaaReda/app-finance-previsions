@@ -38,1429 +38,766 @@
   - mission_compliance: partial
   - orchestration_improvement: partial
   - independent_delivery_effectiveness: not_ok
-  - confirmed: `BATCH-84` still carries canonical `novelty_target` + visible delta, hard guard is cleared, tmux panes are no longer on `(deleted)` cwd
-  - still wrong: runtime is still effectively planner-only (`roles=["planner"]`, `core_roles=["planner"]`), admin remains planner-owned (`admin_autonomy_active=false`), dev remains planner-owned and idle, canonical flow is paused (`BATCH-84=WAITING_DEP`, `READY_PLANNER=1`, `in_progress=0`), product runtime remains degraded (`backend_api.status=degraded`), doctor refresh may defer to `unknown`, and workboard projection remains non-decision-capable (`projection_missing_operational_fields`)
-  - priority_corrections:
-    - restore/admin-enable a truly autonomous admin execution path, or make planner-to-admin dispatch self-advancing without manual babysitting
-    - keep `product_runtime` as a hard independent-delivery gate; degraded backend means delivery is not independently effective
-    - stop treating planner-only quarantine as acceptable steady state when the goal is independent delivery
-    - restore reliable doctor refresh so orchestration does not depend on deferred health
-    - keep novelty policy, but prioritize actual task progression and delivery health over policy-only correctness
-- ownership_now_2026_03_27_evening: admin/infra owns the next orchestration slice around autonomous admin execution, doctor freshness, and app-runtime gating; novelty policy is now secondary maintenance, not the main blocker.
-- current_safe_step_2026_03_27_evening: treat planner-only runtime as temporary degraded mode, not target steady state; next systemic fix must either re-enable a real admin autonomy path or make planner->admin dispatch self-advancing from canonical truth, while preserving product-runtime gating and fresh doctor semantics.
-- 2026-04-07 orchestration fix:
-  - ownership_now: planner->admin handoff self-advancing semantics
-  - implemented: `admin_dispatcher_tick.sh` now claims canonical admin work from `READY`, `READY_PLANNER`, and `READY_ADMIN`
-  - reason: planner-owned admin handoffs were allowed to stall if the task never renormalized from `READY_PLANNER` to plain `READY`
-  - expected_effect: repeated planner dispatch intent should materialize into admin execution more reliably, without manual normalization of task state
-  - next_architecture_fix: keep product runtime as a separate hard delivery gate and continue demoting non-decision-capable projection fields
-- 2026-04-07 backend auto-heal fix:
-  - ownership_now: product runtime recovery path used by `monitor_stack_guard.sh`
-  - implemented: `scripts/restart_api_if_stale.sh` now restarts when `/api/health` is non-responsive even without socket-pressure markers
-  - reason: the old heal path falsely logged success on a live-but-hung backend process, so monitor/admin kept observing `backend_api.status=degraded` without effective recovery
-  - expected_effect: periodic guard should now convert timed-out backend health into a real restart attempt, instead of a no-op `[OK]`
-  - current_safe_step: let periodic monitor/admin guards consume this corrected heal path before adding more backend-specific orchestration
-- 2026-04-07 dispatcher role-field fix:
-  - ownership_now: canonical downstream claim visibility in `admin_dispatcher_tick.sh`
-  - implemented: dispatcher helper functions now resolve target role from `role`, `assigned_to`, or `assignee`
-  - reason: projection key drift could hide claimable/in-progress admin work even when the canonical handoff existed
-  - expected_effect: planner-owned admin/dev handoffs remain visible to runtime dispatch despite minor workboard field-shape differences
-  - next_architecture_fix: keep shrinking dependence on non-decision-capable projection fields while preserving runtime-truth-first decisions
-- 2026-04-08 operational-state fix:
-  - ownership_now: eliminate false `IN_PROGRESS` on planner-owned downstream tasks
-  - implemented: `state_reconciler.py` now normalizes stale `state=IN_PROGRESS` rows to operational `status` when status still says `READY_*`, `BLOCKED`, or `WAITING_DEP`
-  - implemented: `apps/monitor/server.py` now derives capability activity/readiness from operational status, not raw `state`, for admin/dev planner-owned surfaces
-  - reason: `BATCH-84-ADMIN-01` was still counted as active execution while canonical status remained `READY_PLANNER`, which overstated delivery progress
-  - expected_effect: planner dispatch is no longer misread as real downstream execution when the task still needs claim/retry
-  - current_safe_step: let reconcile/monitor consume this logic and then recheck whether the remaining blocker is purely backend runtime health
-- implemented_2026_03_27_monitor_semantics:
-  - monitor now separates `scheduler_roles` from `capability_roles`
-  - planner-only mode keeps `scheduler_roles=["planner"]` but exposes planner-owned capability domains in top-level `roles`
-  - `admin_autonomy_active` can hydrate directly from canonical active-cycle workboard truth when an admin handoff is ready/running on the active batch
-  - lite status prefers the latest cached doctor snapshot over `doctor_status=unknown` when refresh is merely deferred
-- ownership_now: architecture/admin infra owns runtime reliability only: preserve bootstrap/session hygiene, keep `BATCH-84` canonical, let planner own planner-task orchestration, keep dev strictly downstream, and let admin help only on the explicit canonical handoff
-- lane_repaired: partial (dev/admin shells are live again, but productivity must still be measured from fresh canonical work, not pane presence)
-- canonical_source_checked: yes
-- current_safe_step: take canonical `BATCH-84 IN_PROGRESS` and its explicit `next_action` as source of truth, let planner/admin work the live batch-level handoff, keep dev in standby until a real dev-ready task appears, and ignore stale March 20 board/history
-- current_coordination_blocker: old board state and old role memory are stale; current orchestration risk is not bootstrap drift but agents acting from historical `BATCH-71` assumptions instead of the live `BATCH-84` handoff
-- proof_fraiche_utile_observee: yes (fresh canonical state on 2026-03-24 shows `active_cycle.active_batch_ids=["BATCH-84"]`, batch `BATCH-84` is `IN_PROGRESS`, owned by `planner`, with explicit next action toward `BATCH-84-ADMIN-01`)
-- proof_fraiche_utile_observee: yes (2026-03-24T23:19Z: `agent-iteration-issues-latest.json` et `planner-guardian-latest.json` sont enfin rafraîchis depuis le cycle canonique; `planner` pointe `PLANNER_DISPATCH_ACTIVE_BATCH-84-ADMIN-01`, `admin` publie `BATCH-84-ADMIN-01/BLOCKED`, `dev` publie `wait_for_dev_task_on_active_cycle`, et le guardian interdit explicitement `ANALYSIS/autobatch` tant que `BATCH-84-ADMIN-01` n’a pas transitionné)
-- proof_fraiche_utile_observee: yes (2026-03-25 recheck: guardian publie désormais `novelty_target_workflow` avec champs requis; `status_lite` et `doctor` s’alignent tous deux sur `product_runtime=degraded`; `BATCH-84` reste `READY_PLANNER` avec hard guard `stagnation_requires_novelty_target`)
-- live_recheck_2026-03-24: queue/workboard are aligned on `BATCH-84`; tmux remains secondary and partly incomplete, but canonical planning truth is clear enough to drive autonomous missions without waiting for tmux perfection
-- required_adjustment_now: stop reasoning from stale March 20 state, follow only canonical `BATCH-84`, and let missions be driven by explicit canonical handoffs rather than by session presence or old role memory
-- value_delivery_assessment_since_2026-03-20: yes, substantive user-facing value was delivered. Strongest evidence is `BATCH-80` and `BATCH-82`, which ship and validate the personal finance copilot vertical slice: start/ask/context endpoints, conversation history, decision journal, frontend copilot widget/page, and runtime validation. `BATCH-81` and `BATCH-83` look mostly like reuse/revalidation/proof closure rather than net-new product surface.
-- anti_self_deception_rule: do not confuse high batch throughput with high incremental user value. Count `BATCH-80` and `BATCH-82` as major value delivery; treat `BATCH-81` / `BATCH-83` primarily as hardening/reuse/validation unless a clearly new user-visible capability is proven.
-- root_causes_low_incremental_value: (1) batch churn on a duplicated objective: `BATCH-68` through `BATCH-84` keep the same title/scope instead of moving to a new capability frontier; (2) reuse/verification is being counted as fresh delivery (`already implemented`, `reuse existing`, `no code changes required` appear repeatedly in proofs); (3) planner lacks a novelty gate to stop reopening the same slice once the vertical slice is already live; (4) orchestration optimizes for closing batches/proofs, not for maximizing new user-visible delta; (5) admin/gov/proof closure overhead is large relative to net-new product work.
-- anti_stagnation_plan_now:
-  - `1_novelty_gate`: planner must classify every batch as `net_new`, `hardening`, `validation`, or `reuse_only` before opening downstream work
-  - `2_no_duplicate_scope_loop`: if the last delivered batch on the same title/scope was `net_new`, the next same-scope batch must justify a new user-visible delta or be demoted to hardening/validation instead of counting as fresh delivery
-  - `3_stagnation_escalation`: two consecutive `reuse_only`/`validation` batches on the same scope trigger a stagnation alert and force planner to write the next novelty target before continuing
-  - `4_mission_discipline`: planner pursues novelty or explicit hardening; admin only validates canonical handoffs; dev never invents work outside canonical `READY_DEV`
-  - `5_scoreboard`: team reports both `throughput` and `net_new_user_value`; only the latter counts as real delivery progress
-- automation_guard_status_2026-03-24: canonical `planner-autobatch` now evaluates a novelty/stagnation gate before minting a fresh batch. If the two most recent same-scope batches classify as low-novelty (`validation` / `reuse_only`), autobatch exits with `reason=stagnation_requires_novelty_target` and planner autonomy reports an explicit stagnation issue instead of churning another duplicate delivery loop.
-- blocked_handoff_guard_2026-03-24: planner autonomy now escalates `canonical_handoff_stale` when the active cycle is pinned on an `admin` or `dev` task that stays `IN_PROGRESS` without meaningful proof fields past the freshness threshold. This turns handoff stagnation into an explicit runtime blocker instead of leaving the system in a vague `active_cycle_pinned` wait state.
-- hard_stagnation_guard_2026-03-24: planner autonomy now evaluates the novelty gate before claiming more planner work, not only before autobatch. If recent same-scope batches are low-novelty, the tick exits with `planner_stagnation_requires_novelty_target` and stops same-scope churn on the canonical flow until planner defines a novelty target.
-- proof_transition_ttl_2026-03-24: `state_reconciler.py` now treats structured proof (`artifact`, `runtime_artifact`, `verify`, `summary`, `artifacts`, `proof_manifests`, `last_meaningful_progress_at`) as consumable evidence. If such proof exists but the task stays non-terminal past TTL, it is auto-reclassified to `BLOCKED` with `proof_transition_stalled` so autonomy cannot keep overstating motion.
-- delivery_value_gate_2026-03-24: `product_priority_guard.py` now degrades `delivery_control` when app runtime is not actually healthy (`copilot_status != ok`, invalid forecasts, or priority guard P0 breakage). Independent delivery is no longer considered effective just because proof coverage exists.
-- proof_churn_suppression_2026-03-24: `build_delivery_integrity_metrics()` now dedupes repeated `complete` events by `task_id` within the active window and exposes duplicate proof churn explicitly instead of counting every repeated proof emission as fresh delivery throughput.
-- completion_idempotency_fix_2026-03-24: `parallel_workstream.complete_task()` now uses a deterministic idempotency key (`role + task_id + handoff_to`) and returns a no-op when the same completion is replayed on an already terminal task. This suppresses proof/event churn at the source instead of only hiding it in reporting.
-- orchestration_mission_publication:
-  - mission: improve automated delivery orchestration so value ships without manual intervention on specific batches
-  - non_goal: manually close `BATCH-84-ADMIN-01` or any other individual batch as the primary strategy
-  - success_criteria:
-    - planner stops reopening the same scope without novelty
-    - stagnation is detected automatically
-    - lanes count as productive only with fresh useful proof
-    - canonical handoffs advance without human babysitting
-    - throughput and net-new value are tracked separately
 
-## Shared Anti-Stagnation Plan
-- `A. novelty_gate`: before downstream work, planner must stamp each batch `net_new|hardening|validation|reuse_only`
-- `B. duplicate_scope_guard`: repeated same-title batches must justify a new user-visible delta or get downgraded from fresh delivery
-- `C. stagnation_alert`: two same-scope `reuse_only|validation` batches in a row force planner to define a novelty target before continuing
-- `D. lane_validity_gate`: a lane counts as productive only if bootstrap is correct, non-interactive, and it emits fresh useful proof on the canonical stream
-- `E. handoff_escalation`: if a canonical batch-level handoff does not advance, planner must raise a blocker on the active cycle instead of letting humans silently compensate
-- `F. value_scoreboard`: track `batch_throughput` separately from `net_new_user_value`; use the second metric to judge whether orchestration is actually working
 
-## Usage Rules
-- update this top board, not the historical log below, when coordinating cross-agent work
-- do not use this file as a chat transcript
-- do not override queue/workboard, runtime truth, or planner dispatch snapshots with notes from this file
-- record architecture decisions in `memory/YYYY-MM-DD.md`; keep this file focused on current ownership/blockers/next action
+Top priorities
+1. Réconcilier la vérité planner/runtime pour `BATCH-95-DEV-02`: si le batch n’existe plus en SQLite/graph/public-status, le retirer des projections locales au lieu de continuer à le présenter runnable
+2. Restaurer un `ranked_action` public non nul sur `/api/copilot/start` et `/api/personal-finance/start`, aligné avec le ticker scope (`NVDA`) et la chaîne `judge -> copilot -> personal-finance`
+3. Corriger la sélection des prompts/actions dérivés côté judge start pour éliminer la fuite `AAPL` dans le scope `NVDA`
 
-- Role focus: eliminate stale-active/false-active runtime blockers without taking feature work away from planner/dev; current ownership=`active_cycle_dispatch_gate` in `platform/automation/runtime/planner/planner_runtime_actions.py` + `platform/automation/state_reconciler.py`
-- Stable decisions:
-- queue/workboard `active_cycle` wins over stale planner/subagent residue; out-of-cycle capability rows are orchestration drift and must be ignored/quarantined, not merged as delivery truth
-- Useful commands:
-- Recurring blockers: stale planner subagents, dispatch-cycle drift, session freshness, run-lock backpressure misread as canonical state, out_of_cycle_dispatch_drift
-- Handoff expectations:
-- lane repaired: yes
-- canonical source checked: yes
-- current ownership: admin/infra bootstrap + session hygiene + samefile-aware lane validity + active-cycle dispatch gate
-- next safe step: add or read a fresh lane execution proof (tick artifact or equivalent) before treating any tmux session as productive; continue ignoring tmux-only evidence when queue/workboard/runtime truth disagree
-- ownership_now: lane bootstrap hard-fail + stale retryable residue quarantine
-- current_coordination_blocker: tmux sessions can still regress into deleted/foreign workdirs and runtime truth can still expose `start_banner_only` retryables after queue/workboard already returned a task to `READY_PLANNER`; both are transport debt and must not be read as active delivery truth
-- ownership_now: process-cwd lane validity + auxiliary tmux quarantine + shared runtime-truth residue quarantine
-- current_coordination_blocker: transport hygiene remains the live blocker class; deleted-workdir shells and stale `start_banner_only` retryables must be demoted everywhere before orchestration progress can be trusted as autonomous
-- current_safe_step: preserve novelty-target as the only same-scope exit path, and rely on the new process-cwd / shared-runtime quarantine rules to stop stale transport artifacts from masquerading as active work
-- current_safe_step: let auto-recovery recycle any lane whose pane cwd is deleted/foreign, and let reconciler quarantine `retryable/start_banner_only` once the canonical task is back in `READY_*` so planner dispatch stops chasing stale transport residue
-- [2026-02-26 18:38:50 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260226T233841Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_errors_present next_action=force_run_failed_roles_then_recheck exec_report=role_ok_13_on_14_sessions_12_on_12_ready_1_errors_1_stale_0 issues=role_errors_present suggestions=force_run_failed_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260226T233841Z.json
-- [2026-02-26 18:43:23 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260226T234314Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260226T234314Z.json
-- [2026-02-26 18:55:37 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260226T235528Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260226T235528Z.json
-- [2026-02-26 19:01:32 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T000123Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T000123Z.json
-- [2026-02-26 19:18:57 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T001848Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T001848Z.json
-- [2026-02-26 19:36:28 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T003619Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T003619Z.json
-- [2026-02-26 19:56:02 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T005553Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T005553Z.json
-- [2026-02-26 20:33:12 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T013302Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T013302Z.json
-- [2026-02-26 21:09:41 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T020932Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T020932Z.json
-- [2026-02-26 21:29:25 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T022916Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T022916Z.json
-- [2026-02-26 21:49:44 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T024935Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T024935Z.json
-- [2026-02-26 22:10:13 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T031003Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T031003Z.json
-- [2026-02-26 22:25:07 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T032457Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T032457Z.json
-- [2026-02-26 22:42:43 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T034234Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T034234Z.json
-- [2026-02-26 22:59:23 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T035914Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T035914Z.json
-- [2026-02-26 23:15:50 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T041540Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T041540Z.json
-- [2026-02-26 23:33:51 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T043341Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T043341Z.json
-- [2026-02-26 23:54:25 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T045416Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T045416Z.json
-- [2026-02-27 00:13:33 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T051324Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T051324Z.json
-- [2026-02-27 00:29:35 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T052926Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T052926Z.json
-- [2026-02-27 00:48:47 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T054837Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T054837Z.json
-- [2026-02-27 01:08:14 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T060805Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T060805Z.json
-- [2026-02-27 01:23:26 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T062317Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T062317Z.json
-- [2026-02-27 01:38:33 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T063824Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T063824Z.json
-- [2026-02-27 01:56:27 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T065618Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T065618Z.json
-- [2026-02-27 02:14:18 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T071409Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T071409Z.json
-- [2026-02-27 02:29:24 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T072915Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T072915Z.json
-- [2026-02-27 02:46:15 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T074605Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T074605Z.json
-- [2026-02-27 03:02:39 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T080229Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T080229Z.json
-- [2026-02-27 03:20:41 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T082031Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T082031Z.json
-- [2026-02-27 03:44:52 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T084443Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=stale_running_jobs next_action=reset_stale_running_role_jobs_then_force_run_planner_backend_frontend exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_1 issues=stale_running_jobs suggestions=reset_stale_running_role_jobs_then_force_run_planner_backend_frontend artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T084443Z.json
-- [2026-02-27 04:06:03 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T090553Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T090553Z.json
-- [2026-02-27 04:28:19 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T092810Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T092810Z.json
-- [2026-02-27 04:46:52 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T094643Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T094643Z.json
-- [2026-02-27 05:04:59 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T100450Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T100450Z.json
-- [2026-02-27 05:08:13 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T100803Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T100803Z.json
-- [2026-02-27 05:11:03 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T101053Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0_exec_blockers_1_exec_process_3 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T101053Z.json
-- [2026-02-27 05:14:24 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T101414Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0_exec_blockers_1_exec_process_3 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T101414Z.json
-- [2026-02-27 05:16:17 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T101608Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0_exec_blockers_1_exec_process_3 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T101608Z.json
-- [2026-02-27 05:25:27 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T102518Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0_exec_blockers_1_exec_process_3 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T102518Z.json
-- [2026-02-27 05:37:13 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T103703Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0_exec_blockers_3_exec_process_1 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T103703Z.json
-- [2026-02-27 05:48:28 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T104818Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_14_on_14_sessions_12_on_12_ready_1_errors_0_stale_0_exec_blockers_2_exec_process_2 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T104818Z.json
-- [2026-02-27 06:18:29 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T111820Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring_no_ready_items exec_report=role_ok_0_on_0_sessions_11_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=none suggestions=none artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T111820Z.json
-- [2026-02-27 08:16:54 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T131645Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_2_on_12_sessions_0_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T131645Z.json
-- [2026-02-27 08:17:34 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T131725Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_2_on_12_sessions_0_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T131725Z.json
-- [2026-02-27 08:18:33 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T131824Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_2_on_12_sessions_0_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T131824Z.json
-- [2026-02-27 08:32:00 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T133150Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_10_on_12_sessions_0_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T133150Z.json
-- [2026-02-27 08:47:21 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T134711Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_0_on_12_ready_0_errors_0_stale_0_exec_blockers_2_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T134711Z.json
-- [2026-02-27 09:02:42 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T140233Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_1_on_12_ready_0_errors_0_stale_0_exec_blockers_1_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T140233Z.json
-- [2026-02-27 09:17:36 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T141727Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_2_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T141727Z.json
-- [2026-02-27 09:32:36 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T143226Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T143226Z.json
-- [2026-02-27 09:47:37 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T144728Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T144728Z.json
-- [2026-02-27 10:02:43 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T150234Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T150234Z.json
-- [2026-02-27 10:18:39 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T151828Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T151828Z.json
-- [2026-02-27 10:33:52 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T153340Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T153340Z.json
-- [2026-02-27 10:48:53 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T154844Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T154844Z.json
-- [2026-02-27 11:04:00 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T160351Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T160351Z.json
-- [2026-02-27 11:19:19 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T161909Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T161909Z.json
-- [2026-02-27 11:34:22 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T163413Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T163413Z.json
-- [2026-02-27 11:49:38 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T164929Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T164929Z.json
-- [2026-02-27 12:04:46 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T170436Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T170436Z.json
-- [2026-02-27 12:19:40 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T171930Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_3_on_12_ready_0_errors_0_stale_0_exec_blockers_1_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T171930Z.json
-- [2026-02-27 12:34:54 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T173445Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_4_on_12_ready_0_errors_0_stale_0_exec_blockers_1_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T173445Z.json
-- [2026-02-27 12:49:57 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T174947Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_4_on_12_ready_0_errors_0_stale_0_exec_blockers_1_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T174947Z.json
-- [2026-02-27 13:05:25 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T180516Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_4_on_12_ready_0_errors_0_stale_0_exec_blockers_1_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T180516Z.json
-- [2026-02-27 13:20:47 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T182037Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_4_on_12_ready_0_errors_0_stale_0_exec_blockers_1_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T182037Z.json
-- [2026-02-27 13:35:43 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T183534Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_4_on_12_ready_0_errors_0_stale_0_exec_blockers_1_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T183534Z.json
-- [2026-02-27 13:51:08 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T185059Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_4_on_12_ready_0_errors_0_stale_0_exec_blockers_1_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T185059Z.json
-- [2026-02-27 14:06:45 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T190636Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_4_on_12_ready_0_errors_0_stale_0_exec_blockers_1_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T190636Z.json
-- [2026-02-27 14:21:48 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T192139Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_4_on_12_ready_0_errors_0_stale_0_exec_blockers_3_exec_process_1 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T192139Z.json
-- [2026-02-27 14:37:30 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T193720Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_1_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T193720Z.json
-- [2026-02-27 14:52:31 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T195222Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T195222Z.json
-- [2026-02-27 15:07:30 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T200720Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T200720Z.json
-- [2026-02-27 15:22:30 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T202221Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T202221Z.json
+Main blocker
+- faux actif control-plane sur `BATCH-95-DEV-02`: le snapshot planner local garde `runtime_actionable=true` et `task_id=BATCH-95-DEV-02`, tandis que la vérité publique/EC2 publiée par `aws_remote_app_control.sh public-status` expose `active_batch=null` et aucun travail ouvert
 
-## 2026-04-15T03:05:57Z admin-unblock
+False progress detected
+- `planner_board_runtime.py snapshot` continue d’annoncer `next_action=advance batch-95-dev-02` alors que le monitor public EC2 et `fc_doctor` n’exposent plus aucun batch actif
+- stabilité du produit public = vraie disponibilité applicative, mais pas nouvelle livraison; la simple réponse 200 des endpoints ne constitue pas un nouveau delta utilisateur
+- présence du champ `ranked_action` dans le contrat partagé `packages/contracts/copilot_v1.py` sans valeur effective sur les endpoints publics crée une illusion de complétude
 
-Continuity
-- previous_verdict: false progress was dominating around BATCH-84-ADMIN-01 while the app slice itself was already considered ready
-- previous_main_blocker: BATCH-84-ADMIN-01 looping on start_banner_only/admin_invalid_result_streak with planner_takeover_required churn
-- previous_top_priority: stop blind admin retry churn and let the personal-finance copilot slice ship
-- changed_since_last_run: synced canonical state now shows BATCH-84=CLOSED, BATCH-84-ADMIN-01=DONE, open_batches=0, open_tasks=0; this run could not reach the VM for live proof
+Next useful delivery
+- le plus petit lot utile est une correction backend publique qui remet `ranked_action` non nul et scope-first (`ticker:NVDA` ou action ask/open cohérente) sur `/api/copilot/start` et `/api/personal-finance/start`, avec parité judge et preuve EC2
+
+Architecture note
+- ce qui rapproche de judge -> copilot -> portfolio: les endpoints publics restent branchés sur `judge_personal_finance_start_service` et le contrat partagé `copilot_v1` existe déjà
+- ce qui doit être réduit: les projections locales/planner qui continuent de publier un batch actif sans corroboration runtime publique ou graph SQLite
+- ce qui doit être supprimé: toute lecture du “progrès” fondée sur batch runnable/proof/monitor local quand `active_batch_ids=[]` ou `active_batch=null` côté vérité publique
+- [2026-04-16 08:14:18 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260416T121404Z_role_contract_blockers next_action_unique=admin-agents-tick-20260416T121404Z directive=none/none message=none/none exec_report=tick=20260416T121404Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck
+## 2026-04-16T22:26:20Z orchestration-architect
 
 Verdict
-- blocker: no active delivery blocker remains in the synced canonical queue/workboard; the only blocker in this run is host_context_blocked because VM runtime validation is unreachable from the sandbox
-- blocker_class: runtime/config/bootstrap
-- fix_needed: no runtime/code fix is justified from the synced state; publish the resolved-state diagnosis and require the next VM-capable run to confirm live health if needed
+- app_progress: no
+- orchestration_efficiency: poor
+- delivered_value_now: none
+
+What changed since previous run
+- Worse: la vérité produit publique a régressé brutalement; `curl -i http://3.98.20.77/` et `curl -i http://3.98.20.77/api/health` renvoient maintenant `502 Bad Gateway`.
+- Changed: le planner guardian continue pourtant d’annoncer `BATCH-95` actif sur `BATCH-95-DEV-03` (`READY_DEV`) avec recommandation de suivre la lane dev.
+- Changed: le runtime truth local montre surtout `BATCH-95-DEV-01` et `BATCH-95-DEV-02` déjà `merged/validated` avec preuves EC2 antérieures, pas une nouvelle preuve actuelle sur `DEV-03`.
+- Unchanged: le contrat partagé `packages/contracts/copilot_v1.py` et les services `copilot`/`judge` existent toujours côté code; la livraison publique reste donc bloquée par le runtime EC2, pas par l’absence de code.
+- Worse: `executors-monitoring-latest.json` garde `health=OK`, `done_24h=617`, `proofs=118` et des widgets `ok` malgré la panne publique actuelle, donc le monitor app-first continue de sur-vendre l’état réel.
+
+Top priorities
+1. Restaurer immédiatement la disponibilité publique EC2 (`frontend` + `api`) avant toute nouvelle lecture de progrès batch.
+2. Réconcilier `BATCH-95-DEV-03` avec la vérité runtime: si aucune preuve publique actuelle n’existe, sortir cette tâche du statut “active delivery” au lieu de la laisser gonfler les projections planner.
+3. Faire tomber le faux vert monitor/doctor: `apps/monitor/services/status_service.py` et les snapshots dérivés doivent refléter la panne publique 502 au lieu de préserver un `health=OK` hérité.
+
+Main blocker
+- `BATCH-95-DEV-03` dans `logs-codex-runs/orchestrator-state/planner-guardian-latest.json` / `priority-queue.json` / `parallel-workstreams.json` est traité comme travail actif alors que le vrai goulot actuel est la panne publique EC2 (`502` sur `/` et `/api/health`); tant que cette panne n’est pas réparée, le task_id actif est un résidu control-plane, pas un delta livrable.
+
+False progress detected
+- `planner-guardian-latest.json` recommande encore de “faire avancer la tâche canonique active BATCH-95-DEV-03” alors que le produit public est indisponible.
+- `executors-monitoring-latest.json` affiche `health=OK`, `done_24h=617` et `proofs=118` malgré la régression publique en cours.
+- Les preuves `merged/validated` de `BATCH-95-DEV-01` et `BATCH-95-DEV-02` dans `planner-graph-state.json` restent historiquement vraies, mais elles ne valent pas livraison actuelle tant que l’EC2 public est à `502`.
+- `packages/contracts/copilot_v1.py` et les services endpoint donnent une impression de parité produit au niveau code, alors que l’endpoint public n’est pas utilisable maintenant.
+
+Next useful delivery
+- Le plus petit lot utile est un rétablissement runtime EC2 vérifié publiquement, puis un smoke simple de la chaîne `judge -> copilot -> personal-finance` (`/api/judge/personal-finance/start`, `/api/copilot/start`, `/api/personal-finance/start`) montrant à nouveau un brief + `ask/open` utilisables sur l’host public.
+
+Architecture note
+- ce qui rapproche de judge -> copilot -> portfolio: les contrats partagés existent (`packages/contracts/copilot_v1.py`) et `apps/api/src/domains/judge/application/judge_endpoint_service.py` reste la bonne référence de façade métier.
+- ce qui doit être réduit: la dépendance des décisions planner/monitor à des projections vertes (`priority-queue.json`, `parallel-workstreams.json`, `executors-monitoring-latest.json`) quand la surface publique est rouge.
+- ce qui doit être supprimé: toute lecture de “delivery avance” basée sur `proofs`, `done_24h`, retries ou tâches `READY_DEV` sans smoke public EC2 actuel.
+
+## 2026-04-16T22:27:24Z role-prompt-engineer
+
+Continuity
+- previous_target_role: planner
+- previous_prompt_issue: `planner_guardian` confondait `READY_*` downstream avec une lane déjà active
+- changed_since_last_run: VM `planner-guardian-latest.json` = `ready_but_none_task_update` sur `BATCH-95-DEV-03` (`READY_DEV`) pendant que le patch actif demandait encore `collect`/`handoff-ack`
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- why_this_prompt_now: le problème n’était plus la doctrine admin ni la couche commune, mais une mauvaise consigne planner face à une lane dev prête
+
+Prompt audit
+- useful_rules: `follow_canonical_active_task` reste utile pour une lane downstream réellement active
+- redundant_rules: guidance `collect` répétée sur `READY_DEV`, alors qu’aucun subagent n’est encore à collecter
+- contradictory_rules: patch guardian vs état réel `READY_DEV`
+- too_long_or_noisy_sections: défaut de branchement, pas de longueur
+- missing_tool_guidance: manque d’un `planner_subagent_manager.py run` explicite pour `READY_*`
+- likely_output_failures_caused_by_prompt: attente passive planner et churn `ready_but_none_task_update`
+- architecture_doctrine_overcopy: no
+
+Optimization
+- keep: collect/ack pour `IN_PROGRESS|BLOCKED`
+- simplify: branche READY séparée et courte
+- remove: collect/ack sur lane prête
+- move_out_of_prompt: none
+- tool_usage_improvements: READY downstream -> run ciblé
+- expected_runtime_impact: meilleur dispatch dev à partir du planner sans fausse attente
+
+Patch proposal
+- patch_type: tool-guidance / anti-churn
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- exact_goal: faire publier un patch guardian cohérent avec `READY_DEV`
+- expected_gain: moins de churn planner vers la lane dev
+- risk: low
+
+Measurement
+- signals_to_watch: `ready_but_none_task_update`, contenu de `planner-prompt-patches.json`, disparition des consignes `collect` sur `READY_*`
+- success_criteria: patch guardian READY -> `run`, pas `collect`
+- rollback_condition: perte de guidance pour les vraies lanes actives
+
+Decision
+- next_owner: prompt-expert
+- next_action: surveiller la prochaine publication guardian et confirmer que la lane prête reçoit bien un dispatch clair
+## 2026-04-16T22:29:24Z admin-unblock
+
+Continuity
+- previous_verdict: le control-plane sur-vendait `BATCH-95` alors que les surfaces publiques/monitor pouvaient afficher `active_batch=null`
+- previous_main_blocker: divergence forte entre batch actif runtime local et surfaces compatibles/public-status lisant un board vide
+- previous_top_priority: réconcilier la vérité planner/runtime sur `BATCH-95` avant de conclure à un faux batch actif
+- changed_since_last_run: la VM confirme toujours `BATCH-95-DEV-03` en `READY_DEV`, mais `parallel-workstreams.json` publiait les streams uniquement sous `streams`, pas sous l’alias `workstreams` consommé par certaines surfaces de compatibilité
+
+Verdict
+- blocker: faux `active_batch=null` causé par une projection de workboard incomplète: les streams actifs existaient dans `streams`, mais pas dans `workstreams`
+- blocker_class: false progress / misleading metrics
+- fix_needed: republier systématiquement l’alias `workstreams` depuis la projection canonique `streams`
 - runtime_can_resume: yes
 
 Actions taken
-- read continuity files (SOUL.md, USER.md, MEMORY.md, admin-agents memory, today/yesterday daily memory)
-- inspected synced canonical queue/workboard and reconcile state under logs-codex-runs/orchestrator-state
-- reviewed dispatcher/takeover/reconcile code paths tied to the prior admin churn to check for an obvious relapse before deciding against a code patch
-## 2026-04-15T04:04:12Z vision-batch-architect signal
-- verdict: keep BATCH-85 as the sole priority; no new batch is justified before VM proof and Plane/runtime realignment.
-- top_priority: finish BATCH-85 backend/monitor hardening and validate the brief/action/memo slice on the VM.
-- selected_batch: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
-- create_now: no
-- next_action: finish the existing hardening in `apps/api` and `apps/monitor`, VM-validate `/api/copilot/context` and `/api/personal-finance/start`, then revisit Plane metadata only if needed.
-
-## 2026-04-15T04:32:17Z vision-batch-architect signal
-- verdict: no new batch; BATCH-85 remains the only useful product slice.
-- top_priority: finish and VM-prove the existing brief/action/memo hardening.
-- selected_batch: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
-- create_now: no
-- next_action: complete `apps/api` + `apps/monitor` hardening, prove `/api/copilot/context` and `/api/personal-finance/ask` on VM, then fix Plane metadata only if closure is blocked.
-
-## 2026-04-15T04:38:31Z admin-unblock
-
-Continuity
-- previous_verdict: prior runs treated the local synced state as mostly clear and were blocked mainly on missing VM proof.
-- previous_main_blocker: inability to validate and repair the live VM runtime from this sandboxed environment.
-- previous_top_priority: finish and prove the BATCH-85 brief/action/memo slice on the VM.
-- changed_since_last_run: synced state now clearly shows an active BATCH-85 chain; planner guardian points to `BATCH-85-DEV-01`, while executors monitoring still reports planner-only scheduling, stale dev/admin ticks, and unreachable backend/frontend/monitor surfaces.
-
-Verdict
-- blocker: runtime is effectively planner-only and degraded in the synced canonical health snapshots; dev/admin execution is stale and app services are reported unreachable, but live VM recovery cannot be executed from this sandbox.
-- blocker_class: runtime/config/bootstrap
-- fix_needed: no safe code patch from mac-side static state; the next useful action is VM-side runtime recovery and revalidation of planner/dev/admin scheduling plus app health.
-- runtime_can_resume: no
-
-Actions taken
-- read continuity files (`SOUL.md`, `USER.md`, `MEMORY.md`, `memory/agents/admin-agents.md`, daily memories).
-- attempted VM host/runtime access through the mandatory safety gate and SSH runtime host check; sandbox denied SSH to `dev-vm-utm`.
-- inspected synced canonical state (`priority-queue.json`, `parallel-workstreams.json`, `planner-guardian-latest.json`, `executors-monitoring-latest.json`, `state-reconcile-report.json`) to separate a real runtime blocker from stale retry churn.
+- patché `platform/automation/compat/projections/parallel_workstream.py` pour hydrater `streams` depuis `workstreams` si nécessaire et republier toujours `workstreams` à la sauvegarde
+- ajouté une régression ciblée dans `platform/automation/tests/test_parallel_workstream_queue_sync.py`
+- exécuté `bash scripts/vm_safe_exec.sh -- "python3 platform/automation/compat/projections/parallel_workstream.py sync-priority --queue logs-codex-runs/orchestrator-state/priority-queue.json"` pour republier la projection vivante côté VM
 
 Validation
-- command_or_check: safety-gated SSH runtime host check plus static inspection of synced orchestrator-state snapshots.
-- observed_result: SSH failed with `Operation not permitted`; synced state shows `BATCH-85` open with `BATCH-85-DEV-01` as active task, planner blocked on `PLANNER_RUNTIME_ACTIONS_FAILED`, admin reporting `backend_api_unreachable/frontend_unreachable/monitor_contract_down`, `scheduled_roles=["planner"]`, and dev/admin tick ages around 56k minutes.
-- canonical_signal_after_fix: no runtime fix applied; blocker remains unresolved until a VM-capable run restores or revalidates runtime services and non-planner role scheduling.
+- command_or_check: `PYTHONPATH=/Users/venom/Documents/analyse-financiere/platform/automation python3 platform/automation/tests/test_parallel_workstream_queue_sync.py`; `PYTHONPATH=/Users/venom/Documents/analyse-financiere/platform/automation python3 platform/automation/tests/test_planner_guardian.py`; `bash scripts/vm_ssh_exec.sh -- "python3 - <<'PY' ... parallel-workstreams.json ... PY"`
+- observed_result: suites ciblées OK (`22 tests`, `21 tests`); côté VM `workstreams_len=97` et `BATCH-95` est désormais publié avec `state=READY_DEV` et `next_action=claim BATCH-95-DEV-03 (READY_DEV pour dev)`
+- canonical_signal_after_fix: la projection compatible reflète à nouveau le batch canonique actif au lieu d’un faux board vide; le flux `planner -> dev` redevient lisible pour les lecteurs `workstreams`
 
 Decision
 - next_owner: admin
-- next_action: run VM-side doctor/status/recovery on `dev-vm-utm`, restore non-planner runtime scheduling and app reachability, then recheck BATCH-85 handoff state.
+- next_action: traiter séparément la panne publique EC2 (`502 Bad Gateway`) avant toute nouvelle lecture de livraison produit
 - escalation_needed: yes
 
 Notes
-- false_progress_detected: yes — queue/workboard show BATCH-85 moving, but monitor still reports a planner-only degraded runtime with stale downstream roles.
-- legacy_influence: low — this run did not find a dominant legacy retry loop; the blocker is runtime reachability and bootstrap health.
-- value_impact: high — the brief/ask/memo slice cannot be treated as resumable while the canonical runtime remains degraded and unreachable.
-
-## 2026-04-15T04:38:31Z endpoint-architecture-steward signal
-- endpoint: /api/copilot/context
-- main_gap: missing Judge-style shared typed contract and endpoint-service layer; runtime proof is blocked upstream by degraded VM execution.
-- target: keep the brief/context starter path stable and Judge-parity-ready without adding new plumbing before VM recovery.
-- patch_now: no
-- next_action: recover VM runtime first, then finish BATCH-85 proof on `/api/copilot/context` and related personal-finance aliases.
-
-Validation
-- command_or_check: attempted VM host/runtime access via ssh runtime_host_check, then statically inspected logs-codex-runs/orchestrator-state/{priority-queue.json,parallel-workstreams.json,state-reconcile-report.json}
-- observed_result: ssh to dev-vm-utm is blocked by the sandbox; synced canonical state shows BATCH-84 closed, BATCH-84-ADMIN-01 done, and no open or flagged tasks
-- canonical_signal_after_fix: no code fix applied; canonical synced state is already clear of takeover/retry blockers for the previously stuck batch
-
-Decision
-- next_owner: planner
-- next_action: resume normal canonical planning on the next batch; only re-open admin intervention if a VM-side doctor/status check diverges from the synced queue/workboard
-- escalation_needed: no
-
-Notes
-- false_progress_detected: previous false progress class (takeover proofs without task completion) is no longer present in the synced state for BATCH-84
-- legacy_influence: READY_ADMIN remains a legacy compatibility token consumed by the admin dispatcher, but no live synced row currently uses it
-- value_impact: this run delivered no new product code; the useful outcome is confirming the earlier blocker is already absorbed in canonical synced state and avoiding unnecessary churn
-
-## 2026-04-15T02:03:46Z Orchestration Priority Report
-
-1. Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-
-## 2026-04-15T03:52:37Z admin-unblock
-
-Continuity
-- previous_verdict: no active delivery blocker remained in synced canonical state; the only blocker last run was VM live validation being unreachable from the sandbox
-- previous_main_blocker: none confirmed in canonical synced truth after BATCH-84 closure; only host_context_blocked prevented live proof
-- previous_top_priority: let planner resume canonical flow unless new retry/takeover churn reappears
-- changed_since_last_run: active cycle advanced to BATCH-85 via planner autobatch; BATCH-84 stays closed, BATCH-85 is now active, and synced open tasks still show zero takeover/retry/starvation signals
+- false_progress_detected: yes; l’absence de `workstreams` faisait croire à `active_batch=null` alors que `BATCH-95-DEV-03` était bien `READY_DEV` dans la vérité runtime compatible
+- legacy_influence: medium; c’est un défaut d’alias de projection/compatibilité, pas de backlog ni de logique métier produit
+- value_impact: unblock de lisibilité/control-plane seulement; public_delivery_after_fix=no car l’EC2 public reste en `502`
+## 2026-04-16T22:33:32Z orchestration-architect
 
 Verdict
-- blocker: no confirmed delivery blocker exists in synced canonical queue/workboard; this run is blocked only by host_context_blocked because SSH to the VM is sandbox-denied
+- app_progress: no
+- orchestration_efficiency: poor
+- delivered_value_now: none
+
+What changed since previous run
+- Changed: `BATCH-95-DEV-03` n’est plus seulement une projection implicite; le workboard le décrit maintenant comme un lot de restauration des `502` publics EC2, avec plan pré-changement explicite.
+- Changed: la projection compat a été resynchronisée et republie `workstreams`, donc le faux `active_batch=null` a disparu côté control-plane.
+- Unchanged: `planner-guardian-latest.json`, `planner-prompt-patches.json`, `priority-queue.json` et `planner_board_runtime.py snapshot` restent convergents seulement entre eux sur `BATCH-95-DEV-03`, pas avec la vérité publique.
+- Unchanged: la vérité primaire SQLite ne contient toujours que `BATCH-95-DEV-01` et `BATCH-95-DEV-02` en `merged`; aucune ligne ni événement `BATCH-95-DEV-03`.
+- Worse: `executors-monitoring-latest.json` continue d’annoncer `health=OK`, `done_24h=617`, widgets `ok` et `task_id=none` partout pendant que tous les endpoints publics critiques répondent `502`.
+
+Top priorities
+1. Restaurer l’API et le monitor publics EC2 (`/api/health`, `/api/copilot/start`, `/api/personal-finance/start`, `/api/judge/personal-finance/start`, `/api/status?lite=1`) avant tout nouveau claim de delivery.
+2. Faire converger `BATCH-95-DEV-03` vers une vraie vérité runtime: soit une ligne/event SQLite + preuve publique EC2, soit le reclasser explicitement comme résidu/projection si aucun dispatch réel n’existe.
+3. Corriger `apps/monitor/services/status_service.py` et la chaîne `executors-monitoring-latest.json` pour qu’un `502` public rende impossible un `health=OK` ou des widgets “ok” sans smoke public courant.
+
+Main blocker
+- `BATCH-95-DEV-03` est le vrai goulot: visible comme `IN_PROGRESS` dans `logs-codex-runs/orchestrator-state/parallel-workstreams.json`, mais absent de `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` (`planner_graph_state` et `orchestration_events`), alors que la cible explicite du lot est de réparer les `502` publics qui bloquent `judge -> copilot -> personal-finance`.
+
+False progress detected
+- `planner-guardian-latest.json`, `planner-prompt-patches.json`, `priority-queue.json` et le snapshot `planner_board_runtime.py` convergent sur `BATCH-95-DEV-03`, mais ce consensus reste projection-only tant que SQLite n’a ni état ni événement pour cette tâche.
+- `executors-monitoring-latest.json` compte `done_24h=617`, `proofs=118`, `health=OK` et des widgets `ok` avec `task_id=none`; ce sont des métriques de plomberie, pas une preuve de valeur produit.
+- `BATCH-95` garde `user_value_delta_visible=1` dans la queue/workboard alors que le seul lot ouvert sert à restaurer une panne publique et ne livre aucun nouveau delta visible tant que l’EC2 reste en `502`.
+- La planner team n’a pas créé de nouveau delta utilisateur visible depuis le run précédent; elle a seulement mieux nommé le lot de restauration.
+
+Next useful delivery
+- Le plus petit lot utile est de remettre en service publiquement le chemin `judge -> copilot -> personal-finance` déjà prouvé plus tôt aujourd’hui, puis de re-smoker `ranked_action=open_<ticker>` sur EC2 public pour décider si `BATCH-95-DEV-03` ajoute vraiment quelque chose ou se clôt comme lot de restauration sans nouveau scope produit.
+
+Architecture note
+- Ce qui rapproche de `judge -> copilot -> portfolio`: les commits déjà présents dans `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `packages/contracts/copilot_v1.py` et les tests associés restent la bonne colonne vertébrale produit.
+- Ce qui doit être réduit: la dépendance à des projections `READY_DEV`/`user_value_delta_visible=1` et à un monitor app-first qui peut dire `OK` quand le produit public est indisponible.
+- Ce qui doit être supprimé: toute lecture de progrès basée sur `done_24h`, `proofs`, takeovers, retries ou widgets `ok` sans smoke public EC2 réussi au moment du verdict.
+- [2026-04-16 18:43:08 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260416T224257Z_role_contract_blockers next_action_unique=admin-agents-tick-20260416T224257Z directive=none/none message=none/none exec_report=tick=20260416T224257Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck
+
+## 2026-04-16T22:41:24Z orchestration-architect
+
+Verdict
+- app_progress: no
+- orchestration_efficiency: poor
+- delivered_value_now: none
+
+What changed since previous run
+- Changed: le smoke public EC2 régresse de nouveau en `502 Bad Gateway` sur `GET /api/health`, `GET /api/copilot/start?tickers=NVDA` et `GET /api/personal-finance/start?tickers=NVDA`, alors que le run précédent s’appuyait encore sur des preuves publiques utilisables.
+- Changed: `bash scripts/vm_ssh_exec.sh -- "bash scripts/runtime_host_check.sh"` confirme cette fois un vrai contexte VM (`runtime_is_vm=1`), donc le diagnostic n’est plus limité au host local.
+- Unchanged: `planner-guardian-latest.json`, `planner-prompt-patches.json`, `priority-queue.json` et `parallel-workstreams.json` continuent tous à porter `BATCH-95-DEV-03` comme tâche canonique active/`READY_DEV`.
+- Worse: `fc_doctor --json` et `planner_board_runtime.py snapshot` ne matérialisent toujours pas `BATCH-95-DEV-03` dans la vérité SQLite; seuls `BATCH-95-DEV-01` et `BATCH-95-DEV-02` existent comme `merged`.
+- Real progress absent: aucune nouvelle API publique ou nouvelle capacité visible n’est utilisable maintenant sur EC2, malgré les contrats et services déjà présents dans `packages/contracts/copilot_v1.py`, `apps/api/src/domains/copilot/application/copilot_service.py` et `apps/api/src/domains/judge/application/judge_endpoint_service.py`.
+
+Top priorities
+1. Restaurer immédiatement le backend public EC2 et repasser un smoke simple sur `/api/health`, `/api/copilot/start?tickers=NVDA` et `/api/personal-finance/start?tickers=NVDA`; sans ça, aucune delivery actuelle n’est réellement livrée.
+2. Réconcilier `BATCH-95-DEV-03` entre projections et vérité runtime: soit écrire une vraie ligne SQLite/proof publique pour cette tâche, soit la retirer du batch actif comme résidu control-plane.
+3. Empêcher planner/guardian/queue/workboard de traiter un `READY_DEV` sans runtime row publique comme convergence; tant que SQLite ne voit pas la tâche, le control-plane doit annoncer “no public proof”, pas “active delivery”.
+
+Main blocker
+- Le vrai goulot est double: régression produit EC2 (`502 Bad Gateway` sur toutes les routes publiques vérifiées) et faux actif control-plane sur `BATCH-95-DEV-03` projeté par `logs-codex-runs/orchestrator-state/planner-guardian-latest.json`, `planner-prompt-patches.json`, `priority-queue.json` et `parallel-workstreams.json`, alors que `fc_doctor --json` / SQLite n’exposent aucune row correspondante pour `BATCH-95-DEV-03`.
+
+False progress detected
+- `planner_board_runtime.py snapshot` dit `runtime_actionable=true` et `next_action=advance batch-95-dev-03`, mais `fc_doctor` ne prouve que `BATCH-95-DEV-01` et `BATCH-95-DEV-02` comme `merged`; `DEV-03` n’a pas de vérité runtime.
+- Le guardian reste rouge sur `ready_but_none_task_update`: c’est exactement un signal de recyclage de handoff/attente, pas de convergence.
+- Les batches antérieurs visibles en `quarantined_retryable_residue` montrent encore une forte traîne control-plane; tant qu’elle n’influence pas la décision active elle reste résidu, mais `BATCH-95-DEV-03` influence encore la décision active et devient donc un faux progrès critique.
+- Le monitor et les endpoints publics ne valident aucun nouveau delta visible maintenant; parler de contrats publics “livrés” sans smoke EC2 vert est trompeur.
+
+Next useful delivery
+- Le plus petit lot utile est de remettre publiquement en ligne le spine `judge -> copilot -> personal-finance` déjà censé être livré, puis de démontrer par un smoke EC2 qu’un scope ticker (`NVDA`) redevient ouvrable avec `ranked_action` non nul avant toute nouvelle itération planner.
+
+Architecture note
+- Ce qui rapproche de `judge -> copilot -> portfolio`: garder la logique métier et les contrats dans `packages/contracts/copilot_v1.py`, `apps/api/src/domains/copilot/application/copilot_service.py` et `apps/api/src/domains/judge/application/judge_endpoint_service.py`, avec validation publique EC2 comme preuve finale.
+- Ce qui doit être réduit: le poids décisionnel de `planner-guardian-latest.json`, `planner-prompt-patches.json`, `priority-queue.json` et `parallel-workstreams.json` quand ils n’ont pas de correspondance SQLite/public proof.
+- Ce qui doit être supprimé: la possibilité qu’une tâche `READY_DEV` sans runtime row publique continue d’être traitée comme batch actif convergent.
+- [2026-04-16 18:58:08 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260416T225758Z_role_contract_blockers next_action_unique=admin-agents-tick-20260416T225758Z directive=none/none message=none/none exec_report=tick=20260416T225758Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck
+
+## 2026-04-16T23:01:54Z orchestration-architect
+
+Verdict
+- app_progress: yes
+- orchestration_efficiency: mixed
+- delivered_value_now: moderate
+
+What changed since previous run
+- Changed: la vérité canonique VM est confirmée sur ce run avec `runtime_is_vm=1`, `fc_doctor overall_status=ok`, `event_store_primary=true`, `graph_state_count=0`, `recent_event_count=0`, et `active_batch_ids=[]`.
+- Changed: `priority-queue.json` et `parallel-workstreams.json` classent `BATCH-95` en `recent_completed_batch_ids`; aucun batch réellement actif n’apparaît dans SQLite.
+- Changed: les endpoints publics EC2 `GET /api/copilot/start?tickers=NVDA`, `GET /api/personal-finance/start?tickers=NVDA&debug=true`, et `GET /api/judge/personal-finance/start?tickers=NVDA&debug=true` répondent tous avec un payload utilisable et `ranked_action=open_nvda`.
+- Unchanged: `planner-guardian-latest.json` reste rouge (`ready_but_no_delta`, `ready_but_none_task_update`) alors que le snapshot VM dit `runtime_actionable=false` et `NO_ACTIVE_CANONICAL_WORK`.
+- Worse: `platform/automation/planner_guardian.py` continue de déduire un claim READY depuis les compteurs dérivés queue/workboard même quand `projection_decision_reason=runtime_idle_no_active_cycle`.
+
+Top priorities
+1. Corriger `platform/automation/planner_guardian.py` pour neutraliser `ready_but_no_delta` / `ready_but_none_task_update` quand `active_batch_ids=[]`, `runtime_actionable=false`, et `projection_decision_reason=runtime_idle_no_active_cycle`.
+2. Réconcilier les artefacts locaux `planner-guardian-latest.json` / queue / workboard avec la vérité VM SQLite pour qu’un planner idle ne soit plus présenté comme un READY caché.
+3. Matérialiser la valeur déjà livrée par un smoke public EC2 simple qui démontre `judge -> copilot -> personal-finance` avec `scope_tickers=["NVDA"]` et `ranked_action=open_nvda`.
+
+Main blocker
+- task_id=NONE: le goulot réel n’est plus un batch ouvert mais un résidu control-plane dans `platform/automation/planner_guardian.py` et `logs-codex-runs/orchestrator-state/planner-guardian-latest.json`, qui réclame un claim READY malgré une vérité canonique idle (`planner_board_runtime.py snapshot` => `runtime_actionable=false`).
+
+False progress detected
+- Le rouge `planner-guardian-latest.json` ne correspond pas à la vérité runtime: il demande encore de "Claim une tache READY" alors que le snapshot VM n’expose aucun batch ni tâche active.
+- `queue_has_ready=1` / `workboard_role_has_ready=1` dans le fallback guardian local ne prouvent pas une delivery en cours; ce sont des signaux dérivés qui contredisent SQLite.
+- Les résidus quarantined (`BATCH-84` à `BATCH-88`) visibles via `runtime_truth_reader.py` restent de la compat secondaire; ils ne doivent plus piloter la décision active.
+
+Next useful delivery
+- Ajouter un smoke public EC2 ciblé et canonique pour le starter scope-first (`/api/judge/personal-finance/start` -> `/api/copilot/start` -> `/api/personal-finance/start`) puis fermer explicitement la dette guardian si ce smoke reste vert.
+
+Architecture note
+- Ce qui rapproche de `judge -> copilot -> portfolio`: `packages/contracts/copilot_v1.py` + `apps/api/src/domains/judge/application/judge_endpoint_service.py` + `apps/api/src/domains/copilot/application/copilot_service.py` livrent déjà un contrat public stable avec `brief_of_day`, `ranked_action`, `ask/open`, et scope ticker.
+- Ce qui doit être réduit: la dépendance du guardian aux compteurs queue/workboard dérivés quand la vérité canonique SQLite est idle.
+- Ce qui doit être supprimé: toute lecture décisionnelle des résidus compat/legacy et toute interprétation d’un faux READY local comme blocage produit.
+
+## 2026-04-16T23:08:00Z po-vision-batch-architect
+
+- Recheck produit/runtime: la valeur publique prioritaire est de nouveau bien visible sur EC2; le control-plane reste dégradé mais advisory.
+- Signaux confirmés:
+  - monitor public `active_batch=null`
+  - queue locale `active_batch_ids=[]`
+  - `executors-monitoring-latest.json` = `STALE` avec `planner delta=NO_DELTA`
+  - `planner-graph-state.json` ne montre que des résultats `merged` de `BATCH-95`
+- Interprétation admin: ne pas traiter ce résiduel comme raison pour bloquer un prochain batch vision, mais ne pas ouvrir non plus un nouveau batch tant que planner/runtime ne démontrent pas une convergence propre vers une nouvelle livraison visible.
+- Plus petit blocage concret restant: le control-plane mélange encore vérité canonique vide et bruit de projection/guardian, ce qui donne une impression de batch actif alors que le produit public est déjà livré.
+- Orientation admin utile si reprise: réduire le bruit `projection_decision_capable` / stale monitoring autour d'un runtime sans batch actif, sans rouvrir de lot produit déjà livré.
+
+## 2026-04-16T23:03:29Z admin-unblock
+
+Continuity
+- previous_verdict: le control-plane sur-vendait `BATCH-95` alors que les surfaces publiques/monitor pouvaient afficher `active_batch=null`
+- previous_main_blocker: divergence forte entre batch actif runtime local et surfaces compatibles/public-status lisant un board vide
+- previous_top_priority: réconcilier la vérité planner/runtime sur `BATCH-95` avant de conclure à un faux batch actif
+- changed_since_last_run: le public EC2 reste ok, mais le tick planner de 2026-04-16T22:55:41Z tombait en `checkpoint_fallback` à cause d’un parseur `config.toml` cassé au root repo VM
+
+Verdict
+- blocker: le planner ne pouvait pas reprendre proprement parce que le repo `.codex/config.toml` exposait un bloc `[agents]` incompatible avec le parseur Codex/OpenClaw, ce qui cassait le tick et forcait un fallback checkpoint
 - blocker_class: runtime/config/bootstrap
-- fix_needed: no runtime/code fix is justified from the available canonical state; keep the runtime untouched and require a VM-capable run for live validation if needed
+- fix_needed: retirer le bloc scalaire `[agents]` invalide du repo config pour laisser uniquement les roles structures `agents.*`
 - runtime_can_resume: yes
 
 Actions taken
-- read continuity files (SOUL.md, USER.md, MEMORY.md, admin-agents memory, today/yesterday daily memory)
-- attempted the required VM safety-gated host check path and confirmed outbound SSH is blocked by the sandbox before any live runtime command could run
-- inspected synced canonical queue/workboard/reconcile state and verified the active batch has no open planner/admin recovery signals
+- confirme sur VM que le host runtime etait correct via `bash scripts/vm_ssh_exec.sh -- "bash scripts/runtime_host_check.sh"`
+- identifie la cause racine dans `logs-codex-runs/role-runner/planner.events.log`: `Error loading config.toml: invalid type: integer \`1\`, expected struct AgentRoleToml in \`agents\``
+- supprime localement le bloc invalide `[agents]` de `/Users/venom/Documents/analyse-financiere/.codex/config.toml` puis revalide depuis la VM
 
 Validation
-- command_or_check: ssh -i /Users/venom/.ssh/id_utm_linux venom@dev-vm-utm 'cd /home/venom/analyse-financiere && python3 platform/policies/command_safety_gate.py --cmd '"'"'bash scripts/runtime_host_check.sh'"'"' --workdir /home/venom/analyse-financiere'; jq summaries of logs-codex-runs/orchestrator-state/{priority-queue.json,parallel-workstreams.json,state-reconcile-report.json}
-- observed_result: SSH failed with `Operation not permitted`; synced canonical state shows BATCH-85 active, BATCH-85-ANALYSIS in progress, BATCH-85-PLAN ready for planner, flagged_open_tasks=0, dependency_starvation_detected=0, and stagnation_hard_guarded=0
-- canonical_signal_after_fix: no fix applied; synced canonical truth contains no planner_takeover_required, admin_recovery_required, invalid_result_streak, or dependency_starvation signal on open tasks
+- command_or_check: `bash scripts/vm_safe_exec.sh -- "cd /home/venom/analyse-financiere && codex exec --skip-git-repo-check --json 'Return exactly the JSON object {\\\"status\\\":\\\"ok\\\"}.'"` 
+- observed_result: le repo root VM execute desormais `codex exec` sans erreur de parseur et renvoie `{"status":"ok"}`
+- canonical_signal_after_fix: la config VM vue par `sed -n '1,120p' .codex/config.toml` ne contient plus `[agents]`; la panne structurelle du tick planner est levee, meme si `active_batch_ids=[]` reste l'etat canonique courant
 
 Decision
 - next_owner: planner
-- next_action: continue the canonical BATCH-85 planning flow; only reopen admin unblock when a VM-capable run can verify live doctor/status or synced state starts emitting retry/takeover signals again
+- next_action: laisser le prochain tick planner repartir sans fallback config et n’avancer que s’il existe encore un READY canonique réel
 - escalation_needed: no
 
 Notes
-- false_progress_detected: no active false-progress blocker is visible in the current synced state; the current batch is new and not yet emitting stale retry/proof churn
-- legacy_influence: none on the active blocker path; admin remains downstream WAITING_DEP rather than blocking the critical path
-- value_impact: avoided an unnecessary orchestration patch and confirmed the active work still targets the personal-first finance copilot flow (brief du jour, ask/open rapide, top action, memo)
-- delivered_value_now: weak
-- `apps/api` has real user-facing progress already in place: personal-finance start/open flow fixes, `allocation_drift_alerts` always present, decision-journal portfolio filtering, and a staged switch to local snapshot-backed live market context.
-- `apps/monitor` recent work is mostly operator-facing: status caching, product-vs-doctor status semantics, OpenClaw systemd probe correction, and runtime visibility hardening. It is not a new end-user feature.
+- false_progress_detected: oui; guardian voyait `queue_has_ready=1` alors que le cycle canonique restait vide et que le vrai bug etait un parseur de config, pas un manque de produit livre
+- legacy_influence: faible; le blocage venait du repo config partagé avec OpenClaw/Codex, pas d’une registry legacy décisionnelle
+- value_impact: public_delivery_after_fix=no; le fix débloque le control-plane planner, pas la valeur utilisateur publique qui était déjà restaurée sur EC2
 
-2. Top 3 priorités
-- Stop `BATCH-84-ADMIN-01` from looping on `retry_capability`: in [`/Users/venom/Documents/analyse-financiere/platform/automation/runtime/planner/planner_runtime_actions.py`](/Users/venom/Documents/analyse-financiere/platform/automation/runtime/planner/planner_runtime_actions.py) and [`/Users/venom/Documents/analyse-financiere/platform/automation/planner_subagent_manager.py`](/Users/venom/Documents/analyse-financiere/platform/automation/planner_subagent_manager.py), hard-fail `invalid_subagent_result:start_banner_only` instead of feeding takeover/retry churn.
-- Ship the already-complete personal-finance slice instead of waiting on admin proof spam: promote `BATCH-84-DEV-01/02/03` plus recent `apps/api` copilot changes through a narrow app-runtime validation pass and treat admin validation as a release gate, not as a new delivery lane.
-- Demote legacy compat plumbing from live decisions: keep [`/Users/venom/Documents/analyse-financiere/platform/automation/runtime/truth/runtime_truth_reader.py`](/Users/venom/Documents/analyse-financiere/platform/automation/runtime/truth/runtime_truth_reader.py) and [`/Users/venom/Documents/analyse-financiere/platform/automation/runtime/truth/dispatch_snapshot.py`](/Users/venom/Documents/analyse-financiere/platform/automation/runtime/truth/dispatch_snapshot.py); reduce [`/Users/venom/Documents/analyse-financiere/platform/automation/runtime/planner/planner_board_runtime.py`](/Users/venom/Documents/analyse-financiere/platform/automation/runtime/planner/planner_board_runtime.py), [`/Users/venom/Documents/analyse-financiere/platform/automation/runtime/planner/planner_dispatch_metrics.py`](/Users/venom/Documents/analyse-financiere/platform/automation/runtime/planner/planner_dispatch_metrics.py), and [`/Users/venom/Documents/analyse-financiere/platform/automation/role_runtime_context.py`](/Users/venom/Documents/analyse-financiere/platform/automation/role_runtime_context.py) to read/projection only; quarantine or remove [`/Users/venom/Documents/analyse-financiere/platform/automation/compat/legacy_workers/worker_manager.py`](/Users/venom/Documents/analyse-financiere/platform/automation/compat/legacy_workers/worker_manager.py) from planner health because it is already marked compat-only and still carries stale failure residue.
-
-3. Blocage principal
-- Real bottleneck: `BATCH-84-ADMIN-01`. The live workboard row shows `planner_takeover_required=true`, `admin_invalid_result_streak=2700`, `proof_count=0`, `next_action=retry_capability`; `BATCH-84-GOV_REVIEW` is starved behind it. SQLite still records the same bridge failure pattern as retryable/quarantined `invalid_subagent_result:start_banner_only`. Main files: [`/Users/venom/Documents/analyse-financiere/platform/automation/runtime/planner/planner_runtime_actions.py`](/Users/venom/Documents/analyse-financiere/platform/automation/runtime/planner/planner_runtime_actions.py), [`/Users/venom/Documents/analyse-financiere/platform/automation/planner_subagent_manager.py`](/Users/venom/Documents/analyse-financiere/platform/automation/planner_subagent_manager.py), and the lingering legacy residue in [`/Users/venom/Documents/analyse-financiere/docs/operations/orchestrator/legacy/planner-subagents-registry.json`](/Users/venom/Documents/analyse-financiere/docs/operations/orchestrator/legacy/planner-subagents-registry.json).
-
-4. Faux progrès détecté
-- `docs/operations/orchestrator/proofs/BATCH-84-ADMIN-01` contains 1265 takeover proof files, including 607 on `2026-04-14`, while the blocked task itself still has `proof_count=0`.
-- `executors-monitoring-latest.json` reports `done_7d=539` and `proofs=105`, but the live queue/workboard has only one active batch and two non-terminal tasks, with the blocker producing no user-visible delta.
-- SQLite runtime truth is primary and explicitly quarantines retryable residue, but the system still keeps 38 historical `ready_to_merge` rows and 7 quarantined residues around. If you read raw counts instead of the quarantines, it looks busier than it is.
-- `planner-guardian-latest.json` is stale (`2026-03-13T18:02:17Z`). It is not current runtime truth.
-- Local Plane sync evidence is absent: no `plane-sync-snapshot.json` exists under runtime state or docs, while the active queue still carries `active_cycle.doc_ref=docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md`. Plane is the target truth, but this workspace snapshot does not show Plane as the effective front-door.
-
-5. Prochaine livraison utile
-- Smallest useful shipment: release the personal-finance copilot slice that is already done in `BATCH-84-DEV-01/02/03` and recent `apps/api` commits. Concretely: stable personal-finance start/open routing, persistent `allocation_drift_alerts`, and decision-journal filtering by portfolio. Validate against app runtime only (`apps/api` + frontend), then either close `BATCH-84-ADMIN-01` as a narrow runtime check or fail it explicitly. Do not keep the slice hostage to planner takeover proofs.
-- [2026-02-27 15:37:36 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T203726Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T203726Z.json
-- [2026-02-27 15:52:27 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T205217Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T205217Z.json
-- [2026-02-27 16:07:33 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T210723Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T210723Z.json
-- [2026-02-27 16:23:02 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T212253Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T212253Z.json
-- [2026-02-27 16:38:02 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T213752Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T213752Z.json
-- [2026-02-27 16:53:07 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T215258Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T215258Z.json
-- [2026-02-27 17:08:13 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T220803Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T220803Z.json
-- [2026-02-27 17:23:44 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T222332Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T222332Z.json
-- [2026-02-27 17:38:58 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T223846Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T223846Z.json
-- [2026-02-27 17:53:50 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T225340Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_5_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T225340Z.json
-- [2026-02-27 18:37:52 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T233743Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_8_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T233743Z.json
-- [2026-02-27 18:52:55 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260227T235246Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_8_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260227T235246Z.json
-- [2026-02-27 19:07:55 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260228T000745Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_8_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260228T000745Z.json
-- [2026-02-27 19:22:56 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260228T002247Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_8_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260228T002247Z.json
-- [2026-02-27 19:38:07 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260228T003758Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_8_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260228T003758Z.json
-- [2026-02-27 19:53:12 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260228T005303Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_8_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260228T005303Z.json
-- [2026-02-27 20:08:09 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260228T010759Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_8_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260228T010759Z.json
-- [2026-02-27 20:23:09 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260228T012300Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_8_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260228T012300Z.json
-- [2026-02-27 20:38:16 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260228T013806Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_12_on_12_sessions_8_on_12_ready_0_errors_0_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260228T013806Z.json
-- [2026-02-27 23:43:27 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260228T044317Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_engineer) exec_report=role_ok_0_on_12_sessions_8_on_12_ready_0_errors_12_stale_0_exec_blockers_0_exec_process_0 issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer) artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260228T044317Z.json
-- [2026-02-28 00:14:01 EST] status=WARN reason=tick_not_observed_but_proof_changed tick=20260228T051351Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ok_2_on_14_sessions_12_on_12_ready_0_errors_12_stale_0_exec_blockers_1_exec_process_0 issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck artifact=logs-codex-runs/admin-agents/ticks/admin-agents-20260228T051351Z.json
-- [2026-03-03 22:33:06 EST] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=admin-agents task_id=AA_20260304T033256Z_roles_disabled_admins_only_mode next_action_unique=admin-agents-tick-20260304T033256Z directive=none/none exec_report=tick=20260304T033256Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=roles_disabled_admins_only_mode next_action=if_delivery_needed_enable_sequential_mode_sta issues=roles_disabled_admins_only_mode suggestions=if_delivery_needed_enable_sequential_mode_starting_planner
-- [2026-03-04 15:23:20 EST] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=none task_id=AA_20260304T202310Z_none next_action_unique=admin-agents-tick-20260304T202310Z directive=none/none message=none/none exec_report=tick=20260304T202310Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring_no_ready_items exec_report=role_ok_0_on_0_sessions_3_on_ issues=none suggestions=none
-- [2026-03-06 16:47:10 EST] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=none task_id=AA_20260306T214701Z_none next_action_unique=admin-agents-tick-20260306T214701Z directive=none/none message=none/none exec_report=tick=20260306T214701Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring_no_ready_items exec_report=role_ok_0_on_0_sessions_1_on_ issues=none suggestions=none
-- [2026-03-06 16:47:42 EST] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=none task_id=AA_20260306T214731Z_none next_action_unique=admin-agents-tick-20260306T214731Z directive=none/none message=none/none exec_report=tick=20260306T214731Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=none next_action=keep_monitoring_no_ready_items exec_report=role_ok_0_on_0_sessions_1_on_ issues=none suggestions=none
-
-## 2026-03-20 live admin/infra recheck
-- ownership_now: admin/infra owns lane bootstrap, startup/session hygiene, workdir correctness, anti-interactive safeguards, stale-active quarantine, and active-cycle dispatch guardrails.
-- proof_fraiche_utile_observee: yes (`active_cycle.active_batch_ids=["BATCH-71"]`; `BATCH-71-PLAN` is `DONE`; `BATCH-71-ANALYSIS` is `IN_PROGRESS` for planner on the live workboard).
-- current_coordination_blocker: planner proof transport is fixed, but downstream proof freshness is still missing; `dev/admin` have no fresh useful-work proof on `BATCH-71`, and auxiliary sessions `admin-agents-sync-cron`, `adminapp_codex_sync`, and `clawsentinel` are confirmed absent on the live VM.
-- current_safe_step: keep the repaired non-interactive bootstrap unchanged, let planner complete `BATCH-71-ANALYSIS` under the tightened proof contract, recreate the three auxiliary sessions only if they are still needed, and do not count `dev/admin` as productive until `BATCH-71` emits fresh downstream work.
-
-shared_mission_reference: see `docs/ops/AGENTS_READY.md` section `Shared Mission: Automated Delivery Orchestration`
-admin_autonomy_plan_reference: see `docs/ops/AGENTS_READY.md` section `Admin Autonomy Plan`
-lane_validity_rule_2026_03_24: core lane validity now requires fresh cycle-aligned proof when actionable canonical work exists; tmux presence and stale off-cycle contracts are advisory only.
-verification_governance_2026-03-24:
-  - oversight_owner: main architect/admin verifier
-  - oversight_mission: verify that admin agents follow the shared mission, improve automated delivery orchestration itself, and increase independent delivery effectiveness rather than manually rescuing batches
-  - oversight_checklist:
-    - mission_compliance: are admins removing blocker classes instead of closing individual batch tasks manually
-    - orchestration_effect: did their work improve autonomous delivery flow, lane validity, stagnation handling, or canonical handoff progression
-    - independent_delivery_effectiveness: is canonical delivery advancing with less human intervention and with fresh useful proof
-    - drift_detection: are admins slipping into tmux-based, legacy-based, or batch-specific manual behavior
-  - publication_rule: after each verification, publish verdict, problems, corrections, and required adjustments for admin agents in this board; if architecture behavior changes, also publish in `memory/YYYY-MM-DD.md`
-
-## 2026-03-24 deep verification (architecture/admin oversight)
-- verdict:
-  - mission_compliance: partial
-  - orchestration_improvement: partial
-  - independent_delivery_effectiveness: not_ok
-- what_is_working:
-  - canonical runtime remains SQLite/runtime-truth first (`event_store_primary=true`, legacy bridges secondary only)
-  - novelty/stagnation signaling is now live in canonical truth: queue meta reports `stagnation_alert` for `BATCH-84` with `recent_classes=["reuse_only","reuse_only","reuse_only"]`
-  - planner-only runtime remains active and non-interactive; control plane itself is alive
-- major_problems:
-  - `stagnation_alert` is visible but not strong enough to stop same-scope churn; canonical flow is still on `BATCH-84` despite explicit `novelty_target_required=true`
-  - proof churn is excessive: `BATCH-84-ANALYSIS` produced dozens of proof manifests in one day, which indicates repeated closure/proof attempts instead of clean state transition
-  - proof consumption is failing: `BATCH-84-ADMIN-01` has an admin runtime proof from `2026-03-24T09:42:00Z`, but at `2026-03-24T22:48Z` the canonical queue still shows the batch `IN_PROGRESS`
-  - workboard projection fidelity is poor: `parallel-workstreams.json` exposes `BATCH-84` tasks but `status`, `owner`, `next_action`, and `proof_count` are effectively empty, so agents cannot rely on the projection to drive autonomous transitions
-  - independent user-facing delivery is still weak because monitor/doctor report `product_runtime.status=degraded` (backend API degraded) even while control-plane status is mostly healthy
-- required_corrections:
-  - promote `stagnation_alert` from advisory signal to a hard planner guard: same-scope continuation must stop until a novelty target is written
-  - add proof-consumption / transition TTL: if a canonical proof exists and no blocker is present, queue/workboard must transition or raise an explicit blocker automatically
-  - fix projection fidelity for `parallel-workstreams.json` task rows, or mark it explicitly non-decision-capable and stop using it for autonomous reasoning
-  - add a delivery-value gate: degraded app runtime must prevent the system from counting control-plane progress as delivered user value
-  - suppress repeated proof emission for the same task without state change; repeated `analysis_only` proof churn is orchestration debt, not progress
-- next_safe_step:
-  - admins should work on proof-consumption automation, projection fidelity, and stagnation-to-hard-block escalation rather than touching `BATCH-84` manually
-- rule_update_2026_03_24:
-  - active-cycle stagnation is now a hard planner guard
-  - proof already present without transition becomes a counted canonical blocker (`proof_transition_stalled`)
-  - workboard rows missing operational fields are explicitly non-decision-capable
-  - degraded product runtime blocks strict delivery completion credit
-- live_result_2026_03_24T2257Z:
-  - canonical queue now exposes `planner_hard_guard=stagnation_requires_novelty_target` on `BATCH-84`
-  - workboard projection is explicitly degraded/non-decision-capable (`projection_missing_operational_fields`, 16 missing fields)
-  - next_safe_step: propagate runtime proof into canonical task rows so `proof_transition_stalled` can fire on real admin/dev proof debt instead of leaving stale `IN_PROGRESS`
-- supervision_rule_2026_03_24:
-  - doctor/guardian/issue-latest must follow active-cycle truth, not stale planner heuristics
-  - if downstream canonical task is active, supervision must point to that task rather than recommend planner analysis/new batch behavior
-  - `agent-iteration-issues-latest.json` now exposes active-cycle stale roles explicitly so stale admin/dev supervision becomes visible even before those lanes rerun
-- live_supervision_result_2026_03_24T2319Z:
-  - guardian now points to `BATCH-84-ADMIN-01` and `stagnation_requires_novelty_target` instead of autobatch/ANALYSIS
-  - issue latest now reflects active-cycle `planner/admin/dev` entries on `BATCH-84`
-  - next_safe_step: make `planner_companion_tick` consume guardian hard-guard state directly so relaunch decisions cannot regress even if a stale guardian artifact reappears
-
-## 2026-03-24 deep verification refresh (late check)
-- verdict:
-  - mission_compliance: partial
-  - orchestration_improvement: partial
-  - independent_delivery_effectiveness: partial
-- what_is_working_now:
-  - product runtime recovered to `ok` in live status; backend/frontend/monitor are all `ok`
-  - canonical flow is coherent at high level: `BATCH-84` has `tasks_total=8`, `closed=6`, `in_progress=1`, `waiting_dep=1`
-  - admin is now the canonical in-progress lane for the active batch; dev remains correctly idle downstream
-  - anti-stagnation scoreboard remains live in queue meta
-- deep_problems_now:
-  - stagnation is still real: queue meta reports `recent_classes=["reuse_only","reuse_only","reuse_only"]` and `novelty_target_required=true`, but canonical flow still continues on the same scope
-  - planner proof churn remains pathological: `BATCH-84-ANALYSIS` now has `count=88` proof artifacts, which means repeated completion/proof attempts rather than a clean transition model
-  - admin observability is stale: `agent-iteration-issues-latest.json` still reports admin/dev from `2026-03-20`, while planner is fresh on `2026-03-24`; cross-role supervision is therefore unreliable
-  - guardian alignment is poor: `planner-guardian-latest.json` is red and recommends creating a new batch / claiming ANALYSIS even while canonical truth already shows `BATCH-84-ADMIN-01` as the single in-progress task; this is a canonical-vs-guardian drift
-  - projection fidelity is only partial: workboard task rows expose correct `state`, but key coordination fields (`owner`, `next_action`, proof counts) are empty or low-fidelity even though `proof_manifests` and batch-level progress exist
-- architecture_reading:
-  - admins did improve core orchestration surfaces (runtime truth first, product runtime healthy again, canonical admin handoff visible)
-  - however, they have not yet made the supervision layer trustworthy enough for autonomous governance because guardian/iteration-issue views lag or contradict canonical truth
-  - the remaining bottleneck is now orchestration observability and transition quality, not raw runtime uptime
-- required_corrections:
-  - make `stagnation_alert` block same-scope continuation until a novelty target is written
-  - stop repeated planner proof emission without state change; one task should not generate dozens of near-duplicate proof manifests
-  - refresh admin/dev structured issue publication on every active-cycle check so oversight can judge current behavior, not March 20 leftovers
-  - align planner guardian logic with canonical active task state so guardian recommendations stop contradicting the real flow
-  - enrich or explicitly downgrade workboard fields used by autonomous agents (`owner`, `next_action`, proof counters) to avoid false reasoning from half-populated projections
-- next_safe_step:
-  - admins should prioritize supervision quality and transition fidelity: guardian alignment, fresh admin/dev issue publication, and proof-to-transition automation
-
-## 2026-03-25 verification update
-- verdict:
-  - mission_compliance: ok
-  - orchestration_improvement: ok
-  - independent_delivery_effectiveness: partial
-- verified_improvements:
-  - canonical supervision is now fresh for all roles: `agent-iteration-issues-latest.json` updated at `2026-03-25T02:04:02Z` for planner/admin/dev
-  - guardian is now aligned with canonical truth: it anchors on `BATCH-84-ADMIN-01`, recognizes `projection_secondary_only=true`, and keeps the hard guard `stagnation_requires_novelty_target`
-  - canonical flow advanced from admin in-progress to planner-ready: monitor now reports `BATCH-84` as `READY_PLANNER` with `ready_planner_count=1` and `in_progress=0`
-  - workboard task states are now consistent and current (`BATCH-84-ADMIN-01=READY_PLANNER`, `BATCH-84-GOV_REVIEW=WAITING_DEP`)
-- remaining_problems:
-  - independent delivery is still only partial because the same-scope stagnation is unresolved: hard guard is active, but no novelty target has been written yet
-  - proof churn debt remains very high (`BATCH-84-ANALYSIS` still has 88 proof artifacts), so orchestration history is noisy even though the current state is healthier
-  - health semantics are inconsistent between surfaces: live status reports `product_runtime=ok`, while doctor snapshot still reports degraded backend/product runtime; supervision should not force humans to reconcile contradictory health views
-- interpretation:
-  - admins are now following the mission better: they improved supervision, alignment, and transition quality instead of manually rescuing a batch
-  - the next gap is no longer stale supervision; it is novelty selection and health-signal consistency
-- required_adjustments:
-  - keep the hard stagnation guard, but add the missing novelty-target workflow so planner can exit the same-scope loop intentionally
-  - normalize `status_service` vs `doctor` semantics for backend/product health so autonomous decisions do not depend on contradictory surfaces
-  - reduce proof churn by suppressing duplicate proof emission once a task is already canonically closed or returned to planner
-- ownership_now_2026_03_24_late: reliability slice = explicit novelty-target workflow + doctor/monitor health semantics normalization + duplicate-proof suppression after closure/return planner.
-- current_safe_step_2026_03_24_late: let planner consume `novelty_target_workflow` from canonical truth; treat `doctor.status` as control-plane and `product_runtime.status` as user-facing runtime; reject replayed completion proofs on tasks already `DONE`, `READY`, or `READY_PLANNER`.
-- verification_followup_2026_03_25: `novelty_target_workflow` is now visible in canonical queue/guardian for `BATCH-84`; remaining systemic gap was doctor semantics.
-- current_safe_step_2026_03_25: publish the doctor semantic fix by treating monitor reachability as advisory-only for product runtime, then refresh live status/doctor surfaces before touching any other autonomy rule.
-- current_safe_step_2026_03_25: deleted tmux cwd now fails lane validity at pane + `/proc` level and role lanes are re-created through canonical recovery; next safe step is a live recheck to confirm deleted-root sessions disappear and stale `start_banner_only` rows are quarantined once owner tasks return to `READY_PLANNER`.
-
-## 2026-03-25 deep verification live
-- verdict:
-  - mission_compliance: ok
-  - orchestration_improvement: ok
-  - independent_delivery_effectiveness: partial
-- what_is_confirmed:
-  - hard stagnation enforcement is real in canonical truth: queue meta carries `planner_hard_guard.active=true`, `reason=stagnation_requires_novelty_target`, and a concrete `novelty_target_workflow`
-  - supervision is fresh and aligned: `agent-iteration-issues-latest.json` is current for planner/admin/dev, and guardian tracks the canonical active task `BATCH-84-ADMIN-01`
-  - workboard task states are coherent enough to show the active flow: `BATCH-84-ADMIN-01=IN_PROGRESS`, `BATCH-84-GOV_REVIEW=WAITING_DEP`, downstream dev tasks remain `DONE`
-- deep_problem_now:
-  - the remaining blocker is no longer stale supervision; it is capability execution quality on the active admin task
-  - doctor/runtime truth shows `BATCH-84-ADMIN-01` in `retryable` with `next_action=retry_capability` and `blocking_issue=invalid_subagent_result:start_banner_only`
-  - this means the admin capability path is still producing unusable banner-only output instead of a valid structured result, so autonomy is guarded correctly but not advancing effectively
-  - queue/workboard still expose the active task as `IN_PROGRESS`, while runtime truth already knows the current failure mode; this is a translation lag the admins should reduce
-  - product runtime remains degraded in live status/doctor, so delivered value is not yet independently healthy even though the orchestration guards are stronger
-- required_corrections:
-  - treat `invalid_subagent_result:start_banner_only` as a first-class orchestration defect and either auto-recover or auto-quarantine the failing capability run
-  - propagate retryable capability failure details from runtime truth into the higher-level queue/workboard status so oversight is not forced to inspect doctor internals
-  - keep the novelty hard guard active, but do not confuse the guard itself with progress; the real next gain is valid admin capability execution plus explicit novelty target selection
-  - continue suppressing proof churn and do not reopen downstream work while admin capability remains invalid
-- next_safe_step:
-  - admins should focus on turning banner-only admin capability executions into valid structured outputs or immediate explicit blockers, then leave planner to fill the required novelty target
-
-## 2026-03-27 verification
-- verdict:
-  - mission_compliance: ok
-  - orchestration_improvement: ok
-  - independent_delivery_effectiveness: partial
-- what_is_confirmed:
-  - canonical novelty workflow is now genuinely exercised, not only documented: `active_cycle.novelty_target=portfolio_first_brief_with_ranked_actions`, `user_visible_delta` is present, and `novelty_target_required=false`
-  - queue meta cleared the hard stop: `planner_hard_guard.active=false`, `novelty_target_workflow.status=clear`, `novelty_target_audit.status=clear`
-  - active flow advanced beyond the prior admin retry loop: `BATCH-84-ADMIN-01` is back in `READY_PLANNER` / ready state, and the batch no longer shows active same-scope churn
-  - supervision remains fresh enough to follow the canonical flow instead of stale heuristics
-- deep_problems_now:
-  - lane bootstrap has regressed again: all visible tmux sessions are rooted in `/home/venom/shared/analyse-financiere (deleted)`, so lane validity is still not trustworthy even when queue/workboard progress is good
-  - doctor/runtime truth still carries stale `retryable` admin residues with `blocking_issue=invalid_subagent_result:start_banner_only`, even after queue/workboard returned the active task to `READY_PLANNER`
-  - user-facing delivery is still not fully effective because doctor continues to mark `product_runtime.status=degraded` / `backend_api.status=degraded`
-  - proof churn debt remains visible (`BATCH-84-ANALYSIS` count=88), even if the current active loop is healthier
-- architecture_reading:
-  - admins have now proven they can improve orchestration policy itself: the novelty-target workflow was published, consumed, and cleared through canonical truth
-  - the main remaining admin debt is transport/runtime hygiene, not planner policy design
-  - specifically: tmux lane bootstrap and stale retryable runtime-truth cleanup are still weak enough to reintroduce false-positive health
-- required_corrections:
-  - make lane-validity fail hard on deleted/foreign tmux workdirs and auto-recreate those sessions before they are considered healthy
-  - quarantine or reconcile stale `retryable/start_banner_only` runtime-truth rows once canonical task state has moved back to `READY_*`
-  - keep product runtime as a separate success gate and do not count orchestration progress as independent delivery while backend runtime stays degraded
-  - preserve the cleared novelty-target workflow in canonical truth so future same-scope loops must pass through the same explicit user-value delta path
-- ownership_now_2026_03_25_late: reliability slice = two-field strict stagnation exit (`novelty_target` + `user_visible_delta`) plus canonical audit when planner still does not write them.
-- current_safe_step_2026_03_25_late: keep `stagnation_requires_novelty_target` active until both fields are present; use `novelty_target_audit` as the canonical escalation signal before any same-scope reopen/autobatch.
-
-## 2026-03-25 verification refresh (novelty target set)
-- verdict:
-  - mission_compliance: ok
-  - orchestration_improvement: partial
-  - independent_delivery_effectiveness: partial
-- confirmed_progress:
-  - planner did write the canonical novelty target on `BATCH-84` (`portfolio_first_brief_with_ranked_actions`) with visible user delta; `novelty_target_required=false`
-  - canonical hard guard is now clear (`planner_hard_guard.active=false`, `novelty_target_workflow.status=clear`)
-  - active admin task advanced from `IN_PROGRESS` to `READY_PLANNER`; queue/workboard now expose `BATCH-84` as `READY_PLANNER` / `WAITING_DEP` instead of active churn
-  - supervision remains fresh and aligned on the active cycle
-- new_or_remaining_problems:
-  - all visible tmux sessions are again rooted in `/home/venom/shared/analyse-financiere (deleted)`; lane bootstrap hygiene regressed even though canonical truth kept moving
-  - product runtime remains degraded (`backend_api.status=degraded`), so independent delivery is still not fully effective for the user-facing surface
-  - runtime truth still retains recent `retryable` admin states with `blocking_issue=invalid_subagent_result:start_banner_only` even though higher-level queue/workboard moved back to `READY_PLANNER`; this residue can confuse later automation unless reconciled/cleared explicitly
-  - proof churn debt remains (`BATCH-84-ANALYSIS` count=88)
-- architecture_reading:
-  - admins did the right architectural thing by enforcing and then clearing the novelty-target workflow through canonical truth
-  - but autonomous lanes are still not robust enough because session/workdir hygiene can regress independently of queue/workboard progress
-  - remaining admin mission is now split: (1) keep novelty workflow canonical; (2) harden lane bootstrap + cleanup stale retryable runtime-truth residue
-- required_corrections:
-- make lane-validity checks fail hard on tmux sessions rooted in deleted workdirs and auto-recreate them before they are counted as healthy
-- reconcile or quarantine stale `retryable/start_banner_only` runtime-truth rows once the canonical task returns to `READY_PLANNER`
-- implemented_2026_03_25: lane validity now rejects deleted cwd at both tmux metadata and actual process cwd levels; `vm_resume_guard.sh` escalates invalid codex/qwen role sessions into `auto_recover_tmux_roles.sh`; `dispatch_snapshot.py` quarantines retryable invalid-result residues after owner tasks return to `READY_*`
-  - keep product/app runtime as a separate success gate; do not overstate orchestration progress as delivered value while backend remains degraded
-
-## 2026-03-27 verification refresh
-- verdict:
-  - mission_compliance: ok
-  - orchestration_improvement: ok
-  - independent_delivery_effectiveness: partial
-- confirmed_progress:
-  - canonical novelty workflow is fully operational on `BATCH-84`
-  - `planner_hard_guard.active=false` and `novelty_target_workflow.status=clear`
-  - `BATCH-84-ADMIN-01` returned to `READY_PLANNER` / ready in canonical queue-workboard flow
-  - cross-role supervision is fresh for planner/admin/dev
-  - visible tmux panes are no longer rooted in a `(deleted)` workdir
-- remaining_problems:
-  - `product_runtime.status=degraded` and `backend_api.status=degraded`
-  - runtime truth still carries stale `retryable/start_banner_only` rows after canonical task recovery to `READY_*`
-  - workboard remains explicitly non-decision-capable: `projection_missing_operational_fields`
-  - proof churn debt remains high on `BATCH-84-ANALYSIS` (`proof_manifests_count=88`)
-- required_corrections:
-  - reconcile or quarantine stale `retryable/start_banner_only` runtime-truth rows once canonical task returns to `READY_*`
-  - keep product runtime as a hard success gate and do not overstate orchestration progress as independent delivery while backend stays degraded
-  - preserve novelty-target workflow as the only valid exit for future same-scope loops
-  - keep lane bootstrap hygiene stable and prevent regression back to deleted workdirs
-  - reduce duplicate proof emission after canonical state closure
-
-## 2026-03-27 delivery-independence recheck
-- verdict:
-  - mission_compliance: partial
-  - orchestration_improvement: partial
-  - independent_delivery_effectiveness: not_ok
-- confirmed:
-  - `BATCH-84` still carries a canonical novelty target and visible user delta
-  - `planner_hard_guard.active=false`
-  - visible tmux panes are no longer rooted in a `(deleted)` workdir
-- deep_problems:
-  - runtime is still `planner-only`; `roles=["planner"]` and `core_roles=["planner"]`
-  - `admin` is not autonomous: `schedule=planner-owned`, `admin_autonomy_active=false`, `next=claim BATCH-84-ADMIN-01`
-  - `dev` is also planner-owned and idle; independent downstream autonomy is not active
-  - active queue batch `BATCH-84` is `WAITING_DEP` with `READY_PLANNER=1` and no in-progress work, so canonical flow is not advancing by itself at this instant
-  - `product_runtime.status=degraded` with `backend_api.status=degraded`, so user-facing delivery is still unhealthy
-  - `doctor_status=unknown` / `doctor_refresh_deferred`, so high-level health gating is weakened
-  - workboard remains explicitly non-decision-capable: `projection_missing_operational_fields`
-- required_corrections:
-  - restore/admin-enable autonomous admin execution path or make planner dispatch-to-admin fully self-advancing without manual intervention
-  - treat `product_runtime` health as a hard delivery gate; degraded backend means delivery is not independently effective
-  - remove planner-only quarantine as the steady-state operating model for delivery if independent admin improvement is expected
-  - restore reliable doctor refresh so orchestration decisions do not run on deferred health
-  - keep novelty workflow, but prioritize actual task progression over policy-only correctness
-
-## 2026-03-27 planner progress check
-- verdict:
-  - planner_advancing: partial
-  - autonomous_delivery_progress: not_ok
-- confirmed:
-  - active batch remains `BATCH-84`
-  - queue state counts are only `CLOSED=83` and `READY_PLANNER=1`
-  - `queue_in_progress=0`
-  - planner still emits `PLANNER_DISPATCH_ACTIVE`
-  - planner next action remains `continue BATCH-84-ADMIN-01 via capability dispatch`
-  - admin remains `READY` with `claim BATCH-84-ADMIN-01`
-- interpretation:
-  - planner is alive and dispatching
-  - but canonical flow is not advancing autonomously at this instant because no task is actually `IN_PROGRESS`
-  - admin capability is still the bottleneck between planner intent and real delivery progress
-  - degraded backend keeps delivered value below acceptable autonomous-delivery level
-- required_corrections:
-  - convert planner->admin handoff from repeated dispatch intent into self-advancing claim/execution behavior
-  - treat `queue_ready_planner_count=1` plus `queue_in_progress=0` as a stalled-flow condition, not acceptable steady state
-  - prioritize backend health recovery because degraded product runtime means delivery is not effectively progressing
-
-## Admin ownership update — 2026-03-27
-- ownership_now: monitor/runtime supervision semantics for stalled-flow and independent-delivery gating
-- current_coordination_blocker: planner intent is visible, but planner-only runtime with `READY_PLANNER>0` and `IN_PROGRESS=0` still hides the absence of real downstream execution
-- current_safe_step: rely on the new runtime-diagnostics findings (`INDEPENDENT_DELIVERY_PAUSED_PLANNER_ONLY`, `ADMIN_AUTONOMY_NOT_ACTIVE`, `PRODUCT_RUNTIME_DELIVERY_GATE`, `DOCTOR_REFRESH_DEFERRED`) instead of treating planner dispatch as proof of progress
-- next_architecture_fix: make planner->admin handoff self-advancing at the runtime layer instead of repeatedly planner-owned/ready-only
-2026-03-27T05:05Z admin/infra
-- ownership_now: planner->admin self-advance gap in `platform/automation/admin_dispatcher_tick.sh`
-- architecture_fix_applied: added canonical `admin_claim_ready` path when admin lane is empty; admin is no longer excluded from blocked-role autonomy filtering/takeover eligibility
-- live_recheck: dry-run after patch saw `ready_queue=0`, `board_waiting_dep=1`, `planner_in_progress=0`, `admin_in_progress=0`; branch compiled but was not exercised by a live `admin READY` candidate at that instant
-- current_coordination_blocker: autonomous delivery still depends on the next live `admin READY` handoff actually appearing and being consumed; product runtime remains a separate degraded gate
-- current_safe_step: observe the next `BATCH-84-ADMIN-01` or equivalent `admin READY` transition and confirm it becomes `IN_PROGRESS` without manual intervention
-2026-04-07T08:33Z admin/infra
-- ownership_now: operational-state dispatch correctness for planner-owned downstream handoffs
-- architecture_fix_applied: planner dispatch selectors and planner autonomy now use canonical operational state (`status` over stale raw `state`) so `READY_PLANNER` / `READY_DEV` retries do not get hidden by old `state=IN_PROGRESS`
-- current_coordination_blocker: live confirmation still depends on the next planner tick materializing `BATCH-84-ADMIN-01` into real admin execution or surfacing a fresh explicit blocker
-- current_safe_step: recheck the next canonical planner tick and verify `BATCH-84-ADMIN-01` no longer stays invisible to dispatch because of `state/status` mismatch
-2026-04-07T09:08Z admin/infra
-- ownership_now: post-claim orchestration truth after operational-state dispatch fix
-- architecture_fix_verified: canonical `dispatch-capability --target-role admin` now succeeds on `BATCH-84-ADMIN-01`; the old `CLAIM_ERROR: task ... not READY` is gone, and queue batch-level `next_action` now correctly says `claim BATCH-84-ADMIN-01 (READY_PLANNER pour admin)`
-- current_coordination_blocker: the next blocker is no longer stale claim semantics; dispatch now lands in `reason=planner_takeover_runtime_not_healthy` / `backend=planner_takeover`, so runtime-health under takeover is the remaining autonomy bottleneck
-- current_safe_step: treat planner->admin handoff semantics as repaired; next infra slice should target planner-takeover runtime health instead of more queue/workboard claim logic
-2026-04-08T08:23Z admin/infra
-- ownership_now: planner takeover runtime-health gate during backend auto-heal
-- architecture_fix_applied: planner takeover now reads `/api/status?lite=1` and treats status fetch timeouts as advisory while continuing to rely on `doctor + backend_api` as the critical readiness gate
-- current_coordination_blocker: live confirmation still depends on the next planner takeover attempt after backend heal; the remaining failure class should now be true backend degradation, not full-status timeout noise
-- current_safe_step: re-run one canonical planner/admin dispatch path and confirm any remaining blocker is `backend_not_healthy:*` or a real runtime issue, not `status_unavailable`
-2026-03-27T05:31Z admin/infra
-- ownership_now: canonical planner->admin materialization guard in `platform/automation/planner_autonomy_tick.sh` and `platform/automation/runtime/planner/planner_runtime_actions.py`
-- architecture_fix_applied: added a planner-owned `dispatch-capability` CLI and taught planner autonomy to use targeted `admin`/`dev` dispatch before accepting an active cycle as merely pinned; failures now surface as `planner_admin_dispatch_not_materialized` / `planner_dev_dispatch_not_materialized`
-- current_coordination_blocker: live confirmation still depends on the next canonical `READY_PLANNER` downstream task actually materializing into `IN_PROGRESS`; backend/product degradation remains a separate delivery gate
-- current_safe_step: let the next canonical planner tick consume a live `admin READY_PLANNER` handoff and verify it yields either a real dispatch or an explicit `planner_admin_dispatch_not_materialized` blocker instead of silent churn
-- 2026-04-07 admin/infra ownership: backend degradation slice. Removed backend self-HTTP from copilot live-context path; local snapshots now used for forecasts/news so 3-worker API is less likely to self-saturate.
-- 2026-04-07 admin/infra update: backend self-saturation reduced; finance-backend restarted cleanly (ExecMainPID 535183) and /api/health recovered. Remaining check is monitor/product-runtime status convergence.
-
-## 2026-04-08 planner progress check
-- verdict:
-  - planner_advancing: partial
-  - autonomous_delivery_progress: not_ok
-- confirmed:
-  - active batch remains `BATCH-84`
-  - queue state counts remain `CLOSED=83`, `READY_PLANNER=1`
-  - `queue_in_progress=0`, `queue_waiting_dep=0`
-  - planner still reports `PLANNER_DISPATCH_ACTIVE`
-  - planner next action remains `continue BATCH-84-ADMIN-01 via capability dispatch`
-  - admin remains `READY` with `claim BATCH-84-ADMIN-01`
-- interpretation:
-  - planner is alive and still dispatching intent
-  - but canonical flow is not advancing autonomously because no task is actually in progress
-  - the planner->admin handoff is still not self-advancing
-  - degraded backend keeps delivered value below acceptable autonomous-delivery level
-- required_corrections:
-  - convert planner->admin handoff from repeated dispatch intent into self-advancing claim/execution behavior
-  - treat `READY_PLANNER=1` with `in_progress=0` as a stalled-flow condition, not a normal steady state
-  - recover backend health because degraded product runtime means delivery is not effectively progressing
-- 2026-04-08 admin/infra: planner->admin stalled-flow root cause fixed in parallel_workstream claim/recompute path. Canonical BATCH-84 now shows admin task IN_PROGRESS with queue in_progress=1; remaining blocker is degraded backend product runtime, not planner dispatch.
-- 2026-04-08: Added canonical `backend_runtime_required_before_takeover` gating in `state_reconciler.py`. Active-cycle capability-ready rows are now blocked in queue/workboard when `backend_api` is degraded, instead of looking like acceptable `READY_PLANNER` steady state. The gate auto-clears when backend health returns.
-
-## 2026-04-15T02:09:07Z orchestration-architect
-
-Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-- delivered_value_now: weak
-
-What changed since previous run
-- File-only run: `bash scripts/runtime_host_check.sh` returned `runtime_is_vm=0` on mac host, so this verdict is static from canonical files only.
-- `apps/api` made a real reliability step: `copilot_service.py` now reads local snapshots for forecasts/news instead of self-calling `localhost:8050`, and `run_api.py` now caps API workers at `1..3`.
-- `apps/monitor` improved operational truth reporting: status now separates `scheduler_roles` vs `capability_roles`, merges doctor/live app semantics, and flags independent-delivery pauses explicitly.
-- `BATCH-84` regressed from the 2026-04-08 `IN_PROGRESS` recovery to `status=BLOCKED` / `state=READY_PLANNER`; `BATCH-84-ADMIN-01` is back in `READY_PLANNER` with `planner_takeover_required=true`.
-- SQLite runtime truth now shows `BATCH-84-ADMIN-01` `retryable` at `2026-04-15T01:33:57Z` with `blocking_issue=invalid_subagent_result:start_banner_only`; the blocker is no longer backend-health uncertainty but invalid admin takeover output.
-- Proof churn is much worse: `docs/operations/orchestrator/proofs/BATCH-84-ADMIN-01/` contains 1265 files total, including 761 on 2026-04-10..15 and 607 on 2026-04-14 alone.
-
-Top priorities
-1. Stop automatic retry/proof emission on `BATCH-84-ADMIN-01` after `invalid_subagent_result:start_banner_only`; hold one explicit blocker until an admin run returns a structured result or real file/test delta.
-2. Ship the small app reliability lot independently of orchestration: `apps/api/src/domains/copilot/application/copilot_service.py` + `apps/api/src/platform/run_api.py`; do not keep that behind planner takeover cleanup.
-3. Strip decision power away from projection/legacy side channels in `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/role_runtime_context.py`, and `platform/automation/runtime/planner/planner_dispatch_metrics.py`; SQLite/planner graph must drive the decision, not proof spam or bus residue.
-
-Main blocker
-- `BATCH-84-ADMIN-01` is still stuck between `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` (`retryable`, `invalid_subagent_result:start_banner_only`, updated `2026-04-15T01:33:57Z`) and `logs-codex-runs/orchestrator-state/priority-queue.json` / `parallel-workstreams.json` (`BATCH-84` `BLOCKED`, task `READY_PLANNER`, `planner_takeover_required=true`); no structured admin result, no user-visible delta.
-
-False progress detected
-- A takeover proof at `2026-04-15T02:01:18Z` embeds `BATCH-84` as `IN_PROGRESS` with `health=OK`, but the canonical queue/workboard had already fallen back by `2026-04-15T02:03:34Z` to `BLOCKED` / `READY_PLANNER`; the proofs are reporting motion that does not persist.
-- `docs/operations/orchestrator/proofs/BATCH-84-ADMIN-01/` is now pure churn surface: 1265 files total, 607 on 2026-04-14, while SQLite still records the same `start_banner_only` blocker.
-- The queue still carries contradictory novelty fields on `BATCH-84`: `novelty_target_required=false` and meta audit `clear`, but item-level `novelty_target_workflow.status=required` with `missing_fields=['novelty_target','user_visible_delta']`.
-- `runtime-state.json` is still `planner-only` from `2026-03-14T02:27:38Z`; better monitor semantics do not equal restored autonomy.
-
-Next useful delivery
-- Deliver the independent app reliability slice now: ship local-snapshot market context plus bounded API workers, then freeze `BATCH-84-ADMIN-01` retries until one admin execution yields a structured result or a single explicit blocker.
-
-Architecture note
-- Keep `platform/automation/runtime/truth/runtime_truth_reader.py` as the primary read surface; SQLite/planner graph is still the right truth source.
-- Reduce `platform/automation/runtime/truth/dispatch_snapshot.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/role_runtime_context.py`, and especially `platform/automation/runtime/planner/planner_runtime_actions.py`; they still mix primary truth with projection mutation, fallback metrics, or compat side channels.
-- Remove `platform/automation/compat/legacy_workers/worker_manager.py` as soon as planner/admin no longer need dynamic-worker compat storage; it is explicitly `legacy_compat_only` and should not remain on any critical path.
-
-## 2026-04-15T03:06:01Z orchestration-architect
-
-Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-- delivered_value_now: moderate
-
-What changed since previous run
-- Changed: `BATCH-84`, `BATCH-84-ADMIN-01`, and `BATCH-84-GOV_REVIEW` were marked `DONE/CLOSED` in queue/workboard between `2026-04-15T02:33:06Z` and `2026-04-15T02:36:45Z`; `active_cycle.active_batch_ids` is now empty.
-- Changed: five more takeover proof files were emitted after the previous run, then planner closed admin/gov with `SKIP(...)` proof artifacts instead of another admin retry.
-- Unchanged: SQLite remains the primary runtime truth and still carries `BATCH-84-ADMIN-01` as `retryable` on `invalid_subagent_result:start_banner_only`; `runtime_truth_reader.py` now quarantines 12 retryable residues, but the failure class still exists.
-- Worse: projection/runtime drift is now larger; queue/workboard report zero open items, zero open streams, and zero non-done tasks while SQLite still holds `BATCH-84` retryable graph state and dispatch metrics flatten to `planner_state=idle`.
-- Real progress: `apps/api` has a real shippable reliability lot (`apps/api/src/domains/copilot/application/copilot_service.py` now uses local snapshots for forecasts/news; `apps/api/src/platform/run_api.py` now bounds worker fan-out), while `apps/monitor` improved operator semantics only.
-
-Top priorities
-1. Reconcile `BATCH-84` closure with SQLite truth: do not treat the batch as delivered while `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` still records `BATCH-84-ADMIN-01` as `retryable`; either close/quarantine the primary row explicitly or reopen one blocker row with zero further proof spam.
-2. Ship the app lot independently now: promote the already-complete personal-finance slice (`BATCH-84-DEV-01/02/03`) plus the current `apps/api` reliability changes without waiting for more admin takeover proofs.
-3. Remove legacy/compat influence from runtime decisions: keep `platform/automation/runtime/truth/runtime_truth_reader.py` and `platform/automation/runtime/truth/dispatch_snapshot.py`, but strongly reduce `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py` so `secondary_compat_only` data cannot still shape outcomes.
-
-Main blocker
-- `BATCH-84-ADMIN-01` in `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite`: queue/workboard closed it at `2026-04-15T02:33:59Z`, but SQLite `planner_graph_state` still says `status=retryable`, `current_node=close_or_requeue`, `blocking_issue=invalid_subagent_result:start_banner_only` (`updated_at=2026-04-15T01:33:57.681571Z`).
-
-False progress detected
-- New takeover proofs continued after the last run until `2026-04-15T02:33:59Z`, then `BATCH-84-ADMIN-01` was completed by planner takeover with `SKIP(planner_takeover_runtime_verification)` rather than by a repaired admin capability.
-- `BATCH-84-GOV_REVIEW` was closed by `SKIP(planner_gov_review_blocker_only)` and a runtime projection artifact, not by a new user-visible validation step.
-- `planner_dispatch_metrics` now reports `status=ok` and `planner_state=idle` because projections are closed and retryables are quarantined; that is a cleaner dashboard, not proof that the runtime failure was removed.
-- `priority-queue.json` still says `delivery_kind=reuse_only` and `user_value_delta_visible=0` while carrying a concrete `user_visible_delta`, so batch-closure semantics remain inconsistent.
-
-Next useful delivery
-- Release the personal-finance start/open slice plus the current `apps/api` reliability patch as a narrow app shipment, then freeze any new `BATCH-84-ADMIN-01` proof generation until one targeted fix removes the SQLite retryable row or turns it into a single explicit blocked incident.
-
-Architecture note
-- Keep `platform/automation/runtime/truth/runtime_truth_reader.py`; it is the only surface here that consistently enforces SQLite-first truth and quarantines compat residue.
-- Keep `platform/automation/runtime/truth/dispatch_snapshot.py`, but reduce any status flattening that hides quarantined failures without surfacing them as drift.
-- Reduce strongly `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still manufacture optimistic projection state or read legacy side channels.
-- Remove `platform/automation/compat/legacy_workers/worker_manager.py` as soon as planner no longer imports it on the critical path; it is now explicitly compat-only and already rejects `openclaw` as a provider.
-
-## 2026-04-15T03:33:12Z admin-unblock
+## 2026-04-16T23:04:37Z role-prompt-engineer
 
 Continuity
-- previous_verdict: static-only deblock run; synced canonical state already looked closed but VM proof was missing.
-- previous_main_blocker: live runtime unknown; suspected no active queue/workboard blocker but no VM validation.
-- previous_top_priority: verify real VM runtime before touching queue/workboard state.
-- changed_since_last_run: VM access worked; live checks exposed `restart_api_if_stale.sh` fallback spawning an orphan backend under cron-like env, leaking the restart lock FD, and leaving `/api/health` intermittently degraded while queue/workboard stayed closed. After patching the heal path and lightening/caching default copilot context, fresh `fc_doctor` returned `status=ok`, `product_runtime=ok`, `backend_runtime=ok`, `agentic_runtime=ok`.
-
-Verdict
-- blocker: backend heal/validation guard was creating or preserving a bad runtime path: `systemctl --user` degraded in non-interactive env, fallback `nohup` inherited the flock FD and held `/tmp/fc-api-restart.lock`, and default `/api/copilot/context` did unnecessary live portfolio-risk work on the starter path.
-- blocker_class: guard
-- fix_needed: keep backend restarts on the user systemd path in cron-like sessions, close inherited lock FDs on manual fallback, skip live saved-portfolio risk computation for default copilot context, and cache `/api/copilot/context` so repeated probes do not starve health/status.
-- runtime_can_resume: yes
-
-Actions taken
-- validated VM host context and inspected live runtime instead of trusting queue/workboard closure.
-- patched [`/Users/venom/Documents/analyse-financiere/scripts/restart_api_if_stale.sh`](/Users/venom/Documents/analyse-financiere/scripts/restart_api_if_stale.sh), [`/Users/venom/Documents/analyse-financiere/scripts/critical_endpoints_smoke.sh`](/Users/venom/Documents/analyse-financiere/scripts/critical_endpoints_smoke.sh), [`/Users/venom/Documents/analyse-financiere/apps/api/src/domains/copilot/application/copilot_service.py`](/Users/venom/Documents/analyse-financiere/apps/api/src/domains/copilot/application/copilot_service.py), and [`/Users/venom/Documents/analyse-financiere/apps/api/src/domains/copilot/api/copilot.py`](/Users/venom/Documents/analyse-financiere/apps/api/src/domains/copilot/api/copilot.py); added targeted cache/risk-skip tests in [`/Users/venom/Documents/analyse-financiere/apps/api/src/domains/copilot/tests/test_copilot_service.py`](/Users/venom/Documents/analyse-financiere/apps/api/src/domains/copilot/tests/test_copilot_service.py) and [`/Users/venom/Documents/analyse-financiere/apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`](/Users/venom/Documents/analyse-financiere/apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py).
-- killed the orphan backend holding the lock, restarted `finance-backend.service` with explicit `XDG_RUNTIME_DIR`/`DBUS_SESSION_BUS_ADDRESS`, then re-warmed `/api/copilot/context` and re-ran `fc_doctor`.
-
-Validation
-- command_or_check: `env -i ... bash scripts/restart_api_if_stale.sh`; `apps/api/src/.venv/bin/pytest -q ...saved_portfolio_context_skips_live_risk_for_default_scope`; `apps/api/src/.venv/bin/pytest -q ...copilot_context_repeated_calls_return_cache_hit`; sequential `curl` on `/api/status`, `/api/health`, `/api/copilot/context`; fresh `bash scripts/fc_doctor.sh --json`.
-- observed_result: targeted VM tests passed; orphan `run_api.py` disappeared; sequential `/api/status` and `/api/health` returned `{"status":"ok","backend_up":true}`; warmed `/api/copilot/context` completed in `0.029111s`; fresh `/tmp/fc_doctor.latest.json` reported `{"status":"ok","product_runtime":"ok","backend_runtime":"ok","agentic_runtime":"ok"}`.
-- canonical_signal_after_fix: runtime truth stayed SQLite-primary with no worker orphans, queue/workboard remained closed, and the canonical doctor app-first signal is now green again.
-
-Decision
-- next_owner: planner
-- next_action: resume normal planner-owned flow; treat any future slow first-hit `/api/copilot/context` after cold restart as a perf follow-up, not as a reason to reopen backlog or create a new batch.
-- escalation_needed: no
-
-Notes
-- false_progress_detected: before the fix, `critical_endpoints_smoke.sh` could still pass while `/api/health` timed out, and `restart_api_if_stale.sh` kept logging `restart check already running` because the child backend inherited FD 9 for the flock lock.
-- legacy_influence: the user systemd unit still points at the shared alias path, but restart ownership is now stable and no longer creates duplicate/manual fallback listeners on the critical path.
-- value_impact: real user-facing runtime is back: health/status recover reliably, the brief/open starter no longer forces live portfolio-risk work by default, and repeated copilot context fetches are now low-cost.
-## 2026-04-15T03:38:06Z vision-batch-architect signal
-- verdict: no new batch; the core copilot slice already exists, and the only useful work now is to finish the in-flight low-cost hardening and stop backlog inflation.
-- top_priority: finish existing copilot low-cost reliability hardening, then reconcile closed BATCH-84 projections with SQLite retryable residue.
-- selected_batch: Finish in-flight copilot runtime-cost hardening
-- create_now: no
-- next_action: validate the current backend hardening on VM, then reconcile retryable planner residues before proposing any new module.
-
-## 2026-04-15T03:50:40Z orchestration-architect
-
-Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-- delivered_value_now: moderate
-
-What changed since previous run
-- Changed: planning truth reopened on `BATCH-85`; queue/workboard now show `BATCH-85-ANALYSIS` `IN_PROGRESS`, `BATCH-85-PLAN` `READY_PLANNER`, and 6 downstream tasks `WAITING_DEP`.
-- Changed: planner freshness surfaces moved with it; `logs-codex-runs/orchestrator-state/agent-iteration-issues-latest.json` and `planner-guardian-latest.json` both point to `BATCH-85`.
-- Unchanged: raw SQLite still carries the old failure class; `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` still holds `BATCH-84-ADMIN-01` as `retryable` on `invalid_subagent_result:start_banner_only`.
-- Worse: visible telemetry drift widened; `docs/operations/orchestrator/executors-monitoring-latest.json` still reports `queue.closed=82`, `workboard.done=547`, `ready=0`, `in_progress=0`, while canonical queue/workboard already reopened `BATCH-85`.
-- Real progress: there is now a narrow app hardening lot in `apps/api` + `apps/monitor` worth shipping independently of planner/admin churn.
-
-Top priorities
-1. Ship the current app hardening lot in `apps/api` + `apps/monitor` independently of `BATCH-85` orchestration; it already improves latency, fallback resilience, and backend stability.
-2. Stop completed-task replay at the source: `platform/automation/runtime/planner/planner_runtime_actions.py` must refuse new dispatch/validate/proof emission once the owner task is `DONE`, specifically for `BATCH-84-ADMIN-01`.
-3. Make runtime truth and monitor output active-cycle aware: `platform/automation/runtime/truth/runtime_truth_reader.py`, `platform/automation/runtime/truth/dispatch_snapshot.py`, and the monitor feed must stop surfacing BATCH-83/84 residue as current progress when `BATCH-85` is active.
-
-Main blocker
-- `BATCH-85-ANALYSIS` is the only canonical active task, but its flow is masked by stale telemetry: `docs/operations/orchestrator/parallel-workstreams.json` opens 8 `BATCH-85` tasks while `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` still centers `BATCH-84-ADMIN-01` and `docs/operations/orchestrator/executors-monitoring-latest.json` still reports zero open work.
-
-False progress detected
-- `docs/operations/orchestrator/executors-monitoring-latest.json` is stale enough to show `queue.closed=82`, `workboard.done=547`, `ready=0`, `in_progress=0`, and `done_24h=544` after `BATCH-85` was opened.
-- Raw SQLite still emits/retains `BATCH-84-ADMIN-01` `retryable` `start_banner_only`; only quarantine in `platform/automation/runtime/truth/runtime_truth_reader.py` hides it from decision surfaces.
-- `platform/automation/runtime/truth/dispatch_snapshot.py` still reports `latest_owner_task_id=BATCH-83-ANALYSIS` and fills `recent` with old batches, so the “recent planner motion” surface is largely historical residue, not current delivery.
-- The takeover proof surface remains a churn sink: `docs/operations/orchestrator/proofs/BATCH-84-ADMIN-01/` contains 607 files on `2026-04-14` and 22 more on `2026-04-15`, even though queue/workboard already closed the task.
-
-Next useful delivery
-- Release the current app hardening patch as a narrow reliability shipment: copilot context cache + composition-only/price-cache portfolio fallback + single-worker API startup + monitor/status probe fixes, then let `BATCH-85` continue without reopening admin takeover cleanup.
-
-Architecture note
-- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py` and `platform/automation/runtime/truth/dispatch_snapshot.py`; they are the only places already enforcing SQLite-first truth and residue quarantine.
-- Reduce strongly: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still mix canonical truth with historical graph noise, compat fallbacks, or operator-side messaging.
-- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py`; it is explicitly `legacy_compat_only` and should not remain on a critical delivery path.
-## 2026-04-15T03:49:48Z vision-batch-architect signal
-- verdict: keep BATCH-85 as the sole priority; do not create a second batch for the same brief/action/memo scope.
-- top_priority: finish the in-flight low-cost copilot hardening and validate it on the VM runtime.
-- selected_batch: BATCH-85 - Fiabiliser le slice app brief/action/memo independamment du churn admin
-- create_now: no
-- next_action: finish current backend/monitor hardening, publish VM proof, then reassess backlog only in Plane if a real net-new gap remains.
-
-## 2026-04-15T03:53:00Z vision-batch-architect signal
-- verdict: no new batch; `BATCH-85` already covers the only useful gap and must stay the sole priority.
-- top_priority: finish `BATCH-85` backend/monitor hardening and validate the starter path on the VM.
-- selected_batch: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
-- create_now: no
-- next_action: ship the current hardening, get VM proof, then clean planning metadata in Plane only if still necessary.
-
-## 2026-04-15T03:53:52Z admin-unblock
-
-Continuity
-- previous_verdict: no active delivery blocker remained in synced canonical state; the only blocker last run was VM live validation being unreachable from the sandbox
-- previous_main_blocker: none confirmed in canonical synced truth after BATCH-84 closure; only host_context_blocked prevented live proof
-- previous_top_priority: let planner resume canonical flow unless new retry/takeover churn reappears
-- changed_since_last_run: active cycle advanced to BATCH-85 via planner autobatch; BATCH-84 stays closed, BATCH-85 is now active, and synced open tasks still show zero takeover/retry/starvation signals
-
-Verdict
-- blocker: no confirmed delivery blocker exists in synced canonical queue/workboard; this run is blocked only by host_context_blocked because SSH to the VM is sandbox-denied
-- blocker_class: runtime/config/bootstrap
-- fix_needed: no runtime/code fix is justified from the available canonical state; keep the runtime untouched and require a VM-capable run for live validation if needed
-- runtime_can_resume: yes
-
-Actions taken
-- read continuity files (SOUL.md, USER.md, MEMORY.md, admin-agents memory, today/yesterday daily memory)
-- attempted the required VM safety-gated host check path and confirmed outbound SSH is blocked by the sandbox before any live runtime command could run
-- inspected synced canonical queue/workboard/reconcile state and verified the active batch has no open planner/admin recovery signals
-
-Validation
-- command_or_check: ssh -i /Users/venom/.ssh/id_utm_linux venom@dev-vm-utm 'cd /home/venom/analyse-financiere && python3 platform/policies/command_safety_gate.py --cmd '"'"'bash scripts/runtime_host_check.sh'"'"' --workdir /home/venom/analyse-financiere'; jq summaries of logs-codex-runs/orchestrator-state/{priority-queue.json,parallel-workstreams.json,state-reconcile-report.json}
-- observed_result: SSH failed with `Operation not permitted`; synced canonical state shows BATCH-85 active, BATCH-85-ANALYSIS in progress, BATCH-85-PLAN ready for planner, flagged_open_tasks=0, dependency_starvation_detected=0, and stagnation_hard_guarded=0
-- canonical_signal_after_fix: no fix applied; synced canonical truth contains no planner_takeover_required, admin_recovery_required, invalid_result_streak, or dependency_starvation signal on open tasks
-
-Decision
-- next_owner: planner
-- next_action: continue the canonical BATCH-85 planning flow; only reopen admin unblock when a VM-capable run can verify live doctor/status or synced state starts emitting retry/takeover signals again
-- escalation_needed: no
-
-Notes
-- false_progress_detected: no active false-progress blocker is visible in the current synced state; the current batch is new and not yet emitting stale retry/proof churn
-- legacy_influence: none on the active blocker path; admin remains downstream WAITING_DEP rather than blocking the critical path
-- value_impact: avoided an unnecessary orchestration patch and confirmed the active work still targets the personal-first finance copilot flow (brief du jour, ask/open rapide, top action, memo)
-
-## 2026-04-15T03:54:50Z orchestration-architect
-
-Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-- delivered_value_now: weak
-
-What changed since previous run
-- Unchanged: no material progress since the previous orchestration report; `BATCH-85` is still only `1 IN_PROGRESS / 1 READY_PLANNER / 6 WAITING_DEP` in `logs-codex-runs/orchestrator-state/parallel-workstreams.json`.
-- Unchanged: SQLite runtime truth still has zero `BATCH-85` rows; `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` remains centered on historical `BATCH-83/84` graph state and keeps `BATCH-84-ADMIN-01` as `retryable`.
-- Worse: the synced admin-unblock view is still too optimistic; `docs/operations/orchestrator/executors-monitoring-latest.json` is stale at `2026-04-15T03:38:02Z`, while queue/workboard moved again at `2026-04-15T03:49:05Z`.
-- Real progress: the app hardening lot in `apps/api` + `apps/monitor` is still real and independently shippable; no new retry loop has started on `BATCH-85` itself.
-
-Top priorities
-1. Ship the current `apps/api` + `apps/monitor` hardening lot independently of orchestration cleanup.
-2. Stop counting `BATCH-85` as advancing until `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py` materialize it into SQLite/runtime truth instead of projections only.
-3. Make `platform/automation/runtime/truth/dispatch_snapshot.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, and `platform/automation/role_runtime_context.py` active-cycle aware so old `BATCH-83/84` residue cannot masquerade as current motion.
-
-Main blocker
-- `BATCH-85-PLAN` / `BATCH-85-ANALYSIS` are open only in `logs-codex-runs/orchestrator-state/priority-queue.json` and `logs-codex-runs/orchestrator-state/parallel-workstreams.json`, while `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` has no `BATCH-85` graph/event rows and still holds `BATCH-84-ADMIN-01` `retryable` residue.
-
-False progress detected
-- `platform/automation/runtime/planner/planner_board_runtime.py` reports `planning_alignment_status=aligned` and `next_action=advance batch-85-analysis`, but `platform/automation/runtime/truth/dispatch_snapshot.py` still reports `latest_owner_task_id=BATCH-83-ANALYSIS` with `active_count=0`.
-- `platform/automation/runtime/truth/runtime_truth_reader.py` still returns only historical `BATCH-83/84` latest states and `quarantined_retryable_residue_count=8`, including `BATCH-84-ADMIN-01` updated at `2026-04-15T01:33:57.681571Z`.
-- `docs/operations/orchestrator/executors-monitoring-latest.json` is stale enough to remain `health=DEGRADED` from `2026-04-15T03:38:02Z`, so operator telemetry still lags the canonical queue/workboard reopen on `BATCH-85`.
-- `platform/automation/compat/legacy_workers/worker_manager.py` remains present as explicit `legacy_compat_only` plumbing; it is not the primary truth, but its existence still expands the false-motion surface.
-
-Next useful delivery
-- Release the current narrow reliability lot now: `/api/copilot/context` cache, composition-only saved-portfolio fallback, portfolio price cache, single-worker backend startup, and monitor/status OpenClaw probe fixes.
-
-Architecture note
-- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py`; it is the only read surface that is clearly SQLite-first and that quarantines retryable residue instead of promoting it.
-- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/truth/dispatch_snapshot.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still allow projection-only progress or historical residue to look current.
-- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py`; it is explicitly `legacy_compat_only` / `compat_only` and should not remain anywhere near the critical delivery path.
-
-## 2026-04-15T04:04:26Z orchestration-architect
-
-Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-- delivered_value_now: moderate
-
-What changed since previous run
-- Changed: `docs/operations/orchestrator/parallel-workstreams.json` kept moving until `2026-04-15T04:02:18Z`; `BATCH-85-ANALYSIS` is still `IN_PROGRESS` while `BATCH-85-PLAN` is still `READY_PLANNER`, so planner is now burning a WIP slot without closing the prerequisite plan.
-- Changed: `logs-codex-runs/orchestrator-state/planner-guardian-events.jsonl` worsened from yellow to red and now reports `planner_wip_limit_reached_on_ready_plan` at `2026-04-15T04:00:25Z`.
-- Unchanged: `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` still has `0` `BATCH-85` graph rows and `0` `BATCH-85` events; runtime truth remains anchored on historical `BATCH-83/84`.
-- Unchanged: `docs/operations/orchestrator/executors-monitoring-latest.json` is still stale at `2026-04-15T03:38:02Z` while queue/workboard kept moving after that point.
-- Unchanged: no new `BATCH-84-ADMIN-01` takeover proof files appeared after the previous report, but the historical spam still stands at `1270` files and continues to pollute perception of progress.
-- Real progress: the app hardening lot is still concrete and independently shippable; `apps/api` now caches `/api/copilot/context`, falls back to composition-only portfolio context and cached prices, and `apps/monitor` now prefers SQLite/runtime truth over stale latest-snapshot data while clarifying app-vs-control-plane health.
-
-Top priorities
-1. Ship the current `apps/api` + `apps/monitor` reliability lot independently of `BATCH-85` orchestration state.
-2. Fix `platform/automation/runtime/planner/planner_runtime_actions.py` so `BATCH-85-PLAN` is claimed/completed before `BATCH-85-ANALYSIS` is counted as active, and stop treating projection-only WIP as progress.
-3. Keep SQLite/runtime truth authoritative in `platform/automation/runtime/truth/dispatch_snapshot.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and monitor/status surfaces; stale monitor snapshots and projection-only summaries must stay secondary.
-
-Main blocker
-- `BATCH-85-PLAN` is still `READY_PLANNER` in `docs/operations/orchestrator/parallel-workstreams.json` while `BATCH-85-ANALYSIS` stays `IN_PROGRESS` there, but `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` has `0` `BATCH-85` rows/events, so the planner WIP slot is blocked by non-materialized projection state.
-
-False progress detected
-- `platform/automation/runtime/planner/planner_board_runtime.py` still returns `planning_alignment_status=aligned` and `next_action=advance batch-85-analysis` even though `workboard_decision_capable=false` with `projection_missing_operational_fields`.
-- `platform/automation/runtime/truth/dispatch_snapshot.py` now reports `ready_total=1` and `waiting_dep_count=6` for the active cycle, but `active_count=0`, `latest_owner_task_id=""`, and all runtime graph rows are historical; this is movement in the projection plane, not runtime execution.
-- `docs/operations/orchestrator/executors-monitoring-latest.json` remains frozen at `2026-04-15T03:38:02Z`, so operator telemetry still lags the current queue/workboard by more than 20 minutes.
-- `platform/automation/planner_subagent_manager.py` and `platform/automation/compat/legacy_workers/worker_manager.py` still write `legacy_compat_only` / `operator_plane` metadata and keep secondary registries on disk, which expands the false-signal surface even when dispatch is supposed to be SQLite-first.
-
-Next useful delivery
-- Release the already-built brief/action/memo hardening slice: cached `/api/copilot/context`, composition-only saved-portfolio fallback, local portfolio price cache, single-worker backend boot, and the monitor/status doctor-consensus fixes.
-
-Architecture note
-- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py`; it remains the cleanest SQLite-first anti-noise surface because it quarantines retryable residue instead of promoting it.
-- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/truth/dispatch_snapshot.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py` until they stop manufacturing "current progress" from projection-only state.
-- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py`; it is explicit compat-only plumbing, already rejects `openclaw` as a provider, and should not stay on the critical delivery path.
-
-## 2026-04-15T04:08:50Z admin-unblock
-
-Continuity
-- previous_verdict: no confirmed delivery blocker was visible in synced canonical truth; only VM live validation was blocked by sandboxed SSH
-- previous_main_blocker: none confirmed on BATCH-85 from admin/retry signals; planner was expected to continue canonical flow
-- previous_top_priority: let planner continue BATCH-85 unless retry/takeover churn reappeared
-- changed_since_last_run: synced state still had no admin retry churn, but static queue/workboard inspection exposed a new projection drift: `BATCH-85-ANALYSIS` was autobatch-claimed at `2026-04-15T03:46:45Z`, then `BATCH-85-PLAN` was backfilled at `2026-04-15T03:49:05Z`, which flipped `next_action` to PLAN and tripped planner WIP logic
-
-Verdict
-- blocker: autobatch analysis-only streams were being retrofitted with an upstream `PLAN` step during queue/workboard sync, creating a false planner blocker (`READY_PLANNER` PLAN in front of an already `IN_PROGRESS` ANALYSIS)
-- blocker_class: false_progress
-- fix_needed: preserve autobatch analysis seeds during sync by refusing upstream PLAN backfill, pruning stray upstream tasks, and keeping autobatch queue next_action aligned to ANALYSIS
-- runtime_can_resume: yes
-
-Actions taken
-- confirmed VM live validation was still unavailable because SSH to `dev-vm-utm` is sandbox-denied in this run
-- traced the inconsistency to `platform/automation/compat/projections/parallel_workstream.py`: autobatch creates `ANALYSIS` only, but later `ensure_stream()` backfilled `PLAN` and rewired `ANALYSIS.depends_on`
-- patched the projection sync to preserve autobatch analysis-only streams and added a regression test that reproduces the `BATCH-85` drift
-
-Validation
-- command_or_check: `python3 platform/automation/tests/test_parallel_workstream_queue_sync.py`; targeted local temp-board reproduction of `sync-priority` on an active autobatch analysis stream
-- observed_result: local unittest suite passed (`Ran 15 tests in 2.332s`); targeted repro now keeps task ids at `ANALYSIS/ARCH/DEV-01/DEV-02/DEV-03/ADMIN-01/GOV_REVIEW`, leaves `BATCH-85-ANALYSIS.depends_on=[]`, and updates queue next_action back to `BATCH-85-ANALYSIS`
-- canonical_signal_after_fix: projection sync no longer recreates `BATCH-85-PLAN` ahead of an active autobatch analysis, so the planner path is no longer structurally blocked by a synthetic upstream task
-
-Decision
-- next_owner: planner
-- next_action: rerun the canonical planner/admin flow on the VM and confirm doctor/status now advance `BATCH-85` without reintroducing `PLAN` ahead of active autobatch analysis
-- escalation_needed: no
-
-Notes
-- false_progress_detected: yes - queue/workboard showed a `READY_PLANNER` PLAN as the next step even though the real active work was an autobatch `ANALYSIS` already in progress
-- legacy_influence: low - the fault lived in the compat projection sync, not in legacy worker execution
-- value_impact: removes a projection-only deadlock on the active personal-finance copilot hardening batch, so planner can continue brief/action/memo reliability work instead of looping on fake WIP
-
-## 2026-04-15T04:14:39Z vision-batch-architect signal
-- verdict: no new batch; keep the existing brief/action/memo hardening as the sole useful priority
-- top_priority: finish the current `apps/api` + `apps/monitor` low-cost reliability slice and prove it on the VM
-- selected_batch: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
-- create_now: no
-- next_action: validate the active slice on the canonical VM runtime, then reconcile Plane metadata only if a real product gap remains
-
-## 2026-04-15T04:13:44Z orchestration-architect
-
-Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-- delivered_value_now: moderate
-
-What changed since previous run
-- Changed: the synthetic `BATCH-85-PLAN` disappeared from queue/workboard; the active stream is now only `BATCH-85-ANALYSIS` `IN_PROGRESS` plus 6 downstream `WAITING_DEP`.
-- Changed: the runtime monitor advanced to `2026-04-15T04:08:01Z` and `logs-codex-runs/orchestrator-state/state-reconcile-report.json` now acknowledges `projection_decision_disabled=1`.
-- Unchanged: `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` still has `0` `BATCH-85` rows and `0` `BATCH-85` events; runtime truth stays anchored on historical `BATCH-84` residue.
-- Worse: `logs-codex-runs/orchestrator-state/planner-guardian-latest.json` and `agent-iteration-issues-latest.json` still block on removed `BATCH-85-PLAN` / stale `BATCH-85-ADMIN-01`, so the guard surfaces are now staler than the workboard they supervise.
-- Unchanged: the `apps/api` + `apps/monitor` reliability lot is still independently shippable.
-
-Top priorities
-1. Ship the current `apps/api` + `apps/monitor` reliability lot independently of orchestration cleanup.
-2. Make `BATCH-85` real in SQLite before counting it as progress: `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py` must materialize the active batch into runtime truth instead of leaving it projection-only.
-3. Stop stale guard surfaces from steering planner work: regenerate planner guardian / iteration issue state from active-cycle runtime truth only, and keep legacy registries / message bus / intent registry strictly secondary.
-
-Main blocker
-- `BATCH-85` is still projection-only: `logs-codex-runs/orchestrator-state/priority-queue.json` and `logs-codex-runs/orchestrator-state/parallel-workstreams.json` show it active, but `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` has no `BATCH-85` rows or events, so planner guard surfaces keep blocking on stale data instead of the real active task.
-
-False progress detected
-- `logs-codex-runs/orchestrator-state/planner-guardian-latest.json` still reports `blocker_id=batch_85_plan_not_done` and `next_action_unique=repair_dependency_order_then_claim_BATCH-85-PLAN...` even though `BATCH-85-PLAN` is gone from the current workboard.
-- `logs-codex-runs/orchestrator-state/agent-iteration-issues-latest.json` still tells planner to repair `BATCH-85-PLAN` and marks admin as the canonical active task while the live workboard has only `BATCH-85-ANALYSIS` in progress.
-- SQLite/event store still centers `BATCH-84-ADMIN-01` `retryable` on `invalid_subagent_result:start_banner_only`; `recent_b85_events` is empty.
-- `docs/operations/orchestrator/proofs/BATCH-84-ADMIN-01/` still contains `1270` takeover proof files, including `22` on `2026-04-15`; this is churn residue, not fresh delivery.
-- Legacy secondary surfaces still exist and are still written/read on the side: `planner-subagents-registry.json`, `dynamic-workers-registry.json`, `agent-message-bus.jsonl`, `intent-registry.json`.
-
-Next useful delivery
-- Release the existing reliability slice: `/api/copilot/context` cache, default saved-portfolio context without live risk fetch, composition-only/cached portfolio fallback, single-worker backend startup, and monitor app-first/runtime-truth health fixes.
-
-Architecture note
-- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py` and `platform/automation/runtime/truth/dispatch_snapshot.py` as the SQLite-first anti-noise boundary.
-- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still let projection/compat residue shape current decisions.
-- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py` from the active planner path; keep legacy registries/message bus/intent registry as passive mirrors only.
-
-## 2026-04-15T04:25:53Z admin-unblock
-
-Continuity
-- previous_verdict: synced state looked clear enough to avoid a fix, but live VM proof was unavailable because sandboxed SSH could not reach `dev-vm-utm`
-- previous_main_blocker: no confirmed active blocker in queue/workboard; only `host_context_blocked` for VM validation
-- previous_top_priority: keep `BATCH-85` as the sole priority and finish the brief/action/memo hardening with VM proof
-- changed_since_last_run: synced canonical monitor now shows `planner_subagent_not_found` on `BATCH-85`, traced locally to historical out-of-cycle SQLite rows being surfaced as live active subagents in `planner_board_runtime.py`
-
-Verdict
-- blocker: planner companion was being told that active planner-owned subagents still existed, even though those rows were historical (`BATCH-83/81/80/...`) and not collectable for the active cycle `BATCH-85`
-- blocker_class: stale_state
-- fix_needed: derive planner active-subagent and collect-pending signals from active-cycle-filtered `dispatch_snapshot`, not from unfiltered `runtime_truth.latest_states`
-- runtime_can_resume: yes
-
-Actions taken
-- inspected synced canonical state (`priority-queue.json`, `parallel-workstreams.json`, `executors-monitoring-latest.json`, `planner-guardian-latest.json`, SQLite `planner_graph_state`) and isolated the new blocker to a false active-subagent signal
-- patched `platform/automation/runtime/planner/planner_board_runtime.py` so `active_subagent_ids`, `subagent_progress_age_s`, and `subagent_collect_pending_runtime` ignore historical out-of-cycle runtime rows already filtered out by `dispatch_snapshot`
-- added `platform/automation/tests/test_planner_board_runtime.py` to lock the regression: historical `running` / `ready_to_merge` rows outside the active cycle must not trigger `COLLECT_ACTIVE_CAPABILITY`
-
-Validation
-- command_or_check: `PYTHONPATH=platform/automation python3 platform/automation/runtime/planner/planner_board_runtime.py --root /Users/venom/Documents/analyse-financiere snapshot` ; `PYTHONPATH=platform/automation python3 platform/automation/tests/test_planner_board_runtime.py`
-- observed_result: local synced snapshot now reports `active_subagent_ids=[]`, `active_subagents_count=0`, `subagent_collect_pending_runtime=false`, `subagent_collect_pending=false`, `next_action=advance batch-85-arch`; targeted test passes (`Ran 1 test ... OK`). Live VM validation is still blocked here because sandboxed SSH cannot reach `dev-vm-utm`
-- canonical_signal_after_fix: the false `COLLECT_ACTIVE_CAPABILITY` path is removed from the synced planner snapshot; the active planner task remains `BATCH-85-ARCH` with `suggested_next=run`
-
-Decision
-- next_owner: planner
-- next_action: let the next VM planner tick advance/dispatch `BATCH-85-ARCH` instead of collecting a ghost subagent, then recheck live status/doctor on the VM
-- escalation_needed: no
-
-Notes
-- false_progress_detected: yes; 9 historical SQLite rows still marked `running` and 38 historical `ready_to_merge` rows were leaking into planner supervision even though the active cycle is `BATCH-85`
-- legacy_influence: `planner_board_runtime.py` was trusting unfiltered runtime-truth history for supervision signals instead of the already cycle-filtered `dispatch_snapshot`
-- value_impact: stops zero-value planner collect churn and restores the path toward the brief/action/memo reliability slice; this is a runtime unblock, not a new product delivery
-
-## 2026-04-15T04:24:01Z vision-batch-architect signal
-- verdict: no new batch; `BATCH-85` stays the only useful priority, but it still looks projection-only
-- top_priority: finish `BATCH-85` hardening and produce VM proof before any new batch
-- selected_batch: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
-- create_now: no
-- next_action: finish the active slice, then repair canonical Plane/SQLite truth only if it still blocks closure
-
-## 2026-04-15T04:23:37Z orchestration-architect
-
-Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-- delivered_value_now: moderate
-
-What changed since previous run
-- Changed: `BATCH-85-ANALYSIS` is now `DONE` in `logs-codex-runs/orchestrator-state/parallel-workstreams.json`, and `BATCH-85-ARCH` moved to `IN_PROGRESS`; the dev/admin chain remains `WAITING_DEP`.
-- Changed: stale guard wording improved slightly; `planner-guardian-latest.json` no longer points to removed `BATCH-85-PLAN`, but it now blocks on `planner_subagent_not_found` while still calling `BATCH-85-ADMIN-01` the canonical active task.
-- Unchanged: this run stayed file-only because `bash scripts/runtime_host_check.sh` still reports `runtime_is_vm=0`; there is still no live VM proof.
-- Unchanged: `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` still has `0` `BATCH-85` graph rows and `0` `BATCH-85` events; runtime truth remains anchored on `BATCH-84`, with `3` retryable rows still present there.
-- Worse: `BATCH-85-ANALYSIS` was closed with `completion_mode=runtime_no_code`, `files_touched=...parallel-workstreams.json,...priority-queue.json`, and no SQLite materialization, while `executors-monitoring-latest.json` still claims `done_24h=544` and `proofs=105`.
-- Real progress: the same `apps/api` + `apps/monitor` reliability lot remains independently shippable; no new product-side blocker appeared in the app slice.
-
-Top priorities
-1. Ship the current `apps/api` + `apps/monitor` reliability lot independently of orchestration cleanup.
-2. Fix the stale planner collect/materialization path on `BATCH-85-ARCH`: `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py` must stop chasing a missing subagent and must emit real `BATCH-85` SQLite state/events before any further handoff counts as progress.
-3. Stop guard/monitor surfaces from scoring projection motion as delivery: `planner-guardian-latest.json`, `agent-iteration-issues-latest.json`, and `executors-monitoring-latest.json` must derive active-task/progress truth from SQLite/runtime-truth snapshots only.
-
-Main blocker
-- `BATCH-85-ARCH` is blocked in `platform/automation/runtime/planner/planner_runtime_actions.py` / `platform/automation/planner_subagent_manager.py`: planner collect is trying to resume a missing subagent (`planner_subagent_not_found`), while SQLite still has no `BATCH-85` rows or events to make the batch real in runtime truth.
-
-False progress detected
-- `BATCH-85-ANALYSIS` is marked `DONE`, but the recorded completion is `runtime_no_code` and touches only queue/workboard projections; it created no visible product delta and no SQLite runtime state.
-- `planner-guardian-latest.json` says the canonical active task is `BATCH-85-ADMIN-01` `WAITING_DEP`, while the current workboard shows `BATCH-85-ARCH` `IN_PROGRESS`; supervision is still reading a stale active-task story.
-- `executors-monitoring-latest.json` reports `done_24h=544` and `proofs=105` even though `health=DEGRADED`, planner is `BLOCKED`, and the active batch has zero runtime-truth rows.
-- SQLite still records only `BATCH-84` dispatch/validate churn and `3` retryable residue rows; any claimed `BATCH-85` orchestration progress is still projection-only.
-
-Next useful delivery
-- Release the existing brief/action/memo reliability slice: cached `/api/copilot/context`, lighter saved-portfolio context defaults, composition-only/cached portfolio fallback, judge rationale normalization with rebalancing fallback, single-worker API startup, and runtime-truth-first monitor health fixes.
-
-Architecture note
-- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py` and `platform/automation/runtime/truth/dispatch_snapshot.py` as the SQLite-first/quarantine boundary.
-- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, `platform/automation/role_runtime_context.py`, and the planner-subagent snapshot path in `apps/monitor/server.py`; they still let projection or compat artifacts frame current activity.
-- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py` from the active planner path; legacy registries, message bus, and intent registry must remain passive mirrors only.
-
-## 2026-04-15T04:13:35Z admin-unblock
-
-Continuity
-- previous_verdict: autobatch projection drift on `BATCH-85` was fixed locally; VM proof remained unavailable because SSH to the VM was sandbox-denied
-- previous_main_blocker: synthetic upstream `BATCH-85-PLAN` was masking the already-active autobatch `BATCH-85-ANALYSIS`
-- previous_top_priority: confirm that planner can now stay on `BATCH-85-ANALYSIS` without new retry/takeover churn
-- changed_since_last_run: synced queue/workboard now show `BATCH-85` in `IN_PROGRESS` with `BATCH-85-ANALYSIS` active and no `planner_takeover_required`, `admin_recovery_required`, `invalid_result_streak`, or `retry_capability` on open tasks; VM SSH is still blocked by sandbox policy
-
-Verdict
-- blocker: no active delivery blocker is visible in the current canonical queue/workboard for `BATCH-85`; the only blocker in this run is `host_context_blocked` because live VM validation cannot be executed
-- blocker_class: runtime/config/bootstrap
-- fix_needed: no additional runtime/code patch is justified in this run; keep the prior `BATCH-85` projection fix and require the next VM-capable admin pass for live proof if needed
-- runtime_can_resume: yes
-
-Actions taken
-- attempted the required VM runtime entrypoint via SSH safety-gate path and confirmed the sandbox still rejects access to `dev-vm-utm` (`Operation not permitted`)
-- inspected canonical synced state in `logs-codex-runs/orchestrator-state/{priority-queue.json,parallel-workstreams.json}` and verified `BATCH-85-ANALYSIS` remains the active planner step with downstream tasks waiting on dependencies
-- compared workboard vs SQLite/planner graph and confirmed the remaining `BATCH-84-*` `retryable` rows are historical residue already quarantined by `runtime_truth_reader`, not live blockers on the active batch
-
-Validation
-- command_or_check: SSH gate attempt for `bash scripts/runtime_host_check.sh`; local canonical probes via `build_runtime_truth_snapshot()` and `build_stable_planner_dispatch_snapshot()`
-- observed_result: SSH to the VM is still sandbox-denied; local synced truth shows `BATCH-85-ANALYSIS=IN_PROGRESS`, `BATCH-84-ADMIN-01=DONE`, `BATCH-84-GOV_REVIEW=DONE`, and no active retry/takeover flags on the current batch, while historical `BATCH-84` SQLite residues are marked `quarantined_retryable_residue:done`
-- canonical_signal_after_fix: no new fix applied in this run; current canonical signals already indicate planner can continue `BATCH-85` without admin recovery churn
-
-Decision
-- next_owner: planner
-- next_action: continue `BATCH-85-ANALYSIS` on the canonical flow and only request a VM-capable admin check if live runtime proof is required again
-- escalation_needed: yes
-
-Notes
-- false_progress_detected: historical only - stale `BATCH-84` retryable rows remain in SQLite, but they are quarantined and do not map to the active batch anymore
-- legacy_influence: medium - old planner-subagent residues still exist in secondary/runtime history, but they are no longer on the critical path for `BATCH-85`
-- value_impact: no new user-visible change shipped in this run; confirmed the active work still serves the personal-first brief/action/memo path and that no fresh orchestration blocker needs intervention
-
-## 2026-04-15T04:20:18Z role-prompt-engineer signal
+- previous_target_role: planner
+- previous_prompt_issue: le guardian savait déjà distinguer `READY_*` downstream vs `IN_PROGRESS`, mais pas encore `projection READY` vs runtime canonique idle
+- changed_since_last_run: `planner-guardian-latest.json` restait rouge sur `fallback_checkpoint` avec `active_batch_ids=[]`, `projection_decision_reason=runtime_idle_no_active_cycle`, mais encore `ready_but_no_delta` + `ready_but_none_task_update`
+
+Target
 - role: planner
-- prompt_issue: shared prompt duplicated planner autonomy rules and could bias batch creation over collect/repair/ack on canonical downstream active work
-- patch_type: anti-churn
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- why_this_prompt_now: ce bruit guardian contaminait aussi la lecture admin du control-plane en faisant passer un résidu projeté pour une action planner réelle
+
+Prompt audit
+- useful_rules: le guardian reste la bonne couche pour publier un feedback court au planner
+- redundant_rules: les pénalités READY projetées répétaient un faux signal déjà contredit par la vérité canonique idle
+- contradictory_rules: `NO_ACTIVE_CANONICAL_WORK` + recommandation `Claim une tache READY`
+- too_long_or_noisy_sections: bruit sémantique, pas bruit volumique
+- missing_tool_guidance: manque d’un état neutre explicite quand la vérité SQLite/canonique est idle
+- likely_output_failures_caused_by_prompt: faux rouges admin/planner, faux streaks, reprise d’autobatch/claim inutile
+- architecture_doctrine_overcopy: no
+
+Optimization
+- keep: lecture canonique idle via `runtime_idle_no_active_cycle`
+- simplify: runtime idle canonique => pas de pénalité READY, pas de streak, pas de reco claim
+- remove: guidance issue/projection-only qui pousse le planner à traiter un READY fantôme
+- move_out_of_prompt: none
+- tool_usage_improvements: l’admin peut désormais lire `planner-guardian-latest.json` sans confondre projection READY et vérité canonique idle
+- expected_runtime_impact: structurel immédiat sur la qualité du signal control-plane
+
+Patch proposal
+- patch_type: anti-churn / cleanup
 - create_now: yes
-- expected_gain: fewer planner redispatch loops and clearer canonical-active-task follow-up
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- exact_goal: faire converger score/issues/recommendations du guardian avec `summary.delta=NO_ACTIVE_CANONICAL_WORK`
+- expected_gain: moins de faux incidents admin et moins de relances planner basées sur un READY fantôme
+- risk: low
 
-## 2026-04-15T04:13:44Z orchestration-architect
-
-Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-- delivered_value_now: moderate
-
-What changed since previous run
-- Changed: the synthetic `BATCH-85-PLAN` disappeared from queue/workboard; the active stream is now only `BATCH-85-ANALYSIS` `IN_PROGRESS` plus 6 downstream `WAITING_DEP`.
-- Changed: the runtime monitor advanced to `2026-04-15T04:08:01Z` and `logs-codex-runs/orchestrator-state/state-reconcile-report.json` now acknowledges `projection_decision_disabled=1`.
-- Unchanged: `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` still has `0` `BATCH-85` rows and `0` `BATCH-85` events; runtime truth stays anchored on historical `BATCH-84` residue.
-- Worse: `logs-codex-runs/orchestrator-state/planner-guardian-latest.json` and `agent-iteration-issues-latest.json` still block on removed `BATCH-85-PLAN` / stale `BATCH-85-ADMIN-01`, so the guard surfaces are now staler than the workboard they supervise.
-- Unchanged: the `apps/api` + `apps/monitor` reliability lot is still independently shippable.
-
-Top priorities
-1. Ship the current `apps/api` + `apps/monitor` reliability lot independently of orchestration cleanup.
-2. Make `BATCH-85` real in SQLite before counting it as progress: `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py` must materialize the active batch into runtime truth instead of leaving it projection-only.
-3. Stop stale guard surfaces from steering planner work: regenerate planner guardian / iteration issue state from active-cycle runtime truth only, and keep legacy registries / message bus / intent registry strictly secondary.
-
-Main blocker
-- `BATCH-85` is still projection-only: `logs-codex-runs/orchestrator-state/priority-queue.json` and `logs-codex-runs/orchestrator-state/parallel-workstreams.json` show it active, but `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` has no `BATCH-85` rows or events, so planner guard surfaces keep blocking on stale data instead of the real active task.
-
-False progress detected
-- `logs-codex-runs/orchestrator-state/planner-guardian-latest.json` still reports `blocker_id=batch_85_plan_not_done` and `next_action_unique=repair_dependency_order_then_claim_BATCH-85-PLAN...` even though `BATCH-85-PLAN` is gone from the current workboard.
-- `logs-codex-runs/orchestrator-state/agent-iteration-issues-latest.json` still tells planner to repair `BATCH-85-PLAN` and marks admin as the canonical active task while the live workboard has only `BATCH-85-ANALYSIS` in progress.
-- SQLite/event store still centers `BATCH-84-ADMIN-01` `retryable` on `invalid_subagent_result:start_banner_only`; `recent_b85_events` is empty.
-- `docs/operations/orchestrator/proofs/BATCH-84-ADMIN-01/` still contains `1270` takeover proof files, including `22` on `2026-04-15`; this is churn residue, not fresh delivery.
-- Legacy secondary surfaces still exist and are still written/read on the side: `planner-subagents-registry.json`, `dynamic-workers-registry.json`, `agent-message-bus.jsonl`, `intent-registry.json`.
-
-Next useful delivery
-- Release the existing reliability slice: `/api/copilot/context` cache, default saved-portfolio context without live risk fetch, composition-only/cached portfolio fallback, single-worker backend startup, and monitor app-first/runtime-truth health fixes.
-
-Architecture note
-- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py` and `platform/automation/runtime/truth/dispatch_snapshot.py` as the SQLite-first anti-noise boundary.
-- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still let projection/compat residue shape current decisions.
-- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py` from the active planner path; keep legacy registries/message bus/intent registry as passive mirrors only.
-
-## 2026-04-15T04:32:52Z orchestration-architect
-
-Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-- delivered_value_now: moderate
-
-What changed since previous run
-- `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` and `logs-codex-runs/orchestrator-state/planner-graph-state.json` now contain a real `BATCH-85-DEV-01` planner dispatch at `2026-04-15T04:30:29Z`; the previous run still had zero `BATCH-85` runtime truth rows/events.
-- `logs-codex-runs/orchestrator-state/parallel-workstreams.json` now shows `BATCH-85-DEV-01` as `IN_PROGRESS`, with downstream `DEV-02/DEV-03/ADMIN-01/GOV_REVIEW` starved behind that chain instead of a phantom `BATCH-85-PLAN`.
-- `logs-codex-runs/orchestrator-state/priority-queue.json` did not converge: `BATCH-85` still says `state=READY`, `next_action=ouvrir BATCH-85-ANALYSIS`, and `user_value_delta_visible=0` even after the real dev dispatch.
-- `logs-codex-runs/orchestrator-state/executors-monitoring-latest.json` is now the stalest control-plane surface: it still blocks on `BATCH-85-ARCH` / `planner_subagent_not_found`, not on the live `BATCH-85-DEV-01` runtime.
-- `BATCH-84` retryable admin residue is still present in SQLite/planner graph and can still contaminate blocker and health metrics even though the active cycle is `BATCH-85`.
-- This run stayed file-only because `bash scripts/runtime_host_check.sh` still returns `runtime_is_vm=0` on mac host; no live runtime command was executed.
-
-Top priorities
-1. Ship the current `apps/api` + `apps/monitor` reliability lot independently, then validate it on the VM through `/api/copilot/context`, `/api/status`, and the portfolio/judge flows.
-2. Make `BATCH-85` converge across canonical surfaces: when runtime truth dispatches `BATCH-85-DEV-01`, queue/workboard/monitor must stop advertising `ouvrir BATCH-85-ANALYSIS` or stale `BATCH-85-ARCH` blockers.
-3. Quarantine or purge remaining `BATCH-84` retryable admin residue and remove the remaining OpenClaw/operator-plane leftovers from planner graph / compat surfaces that still shape alerts.
-
-Main blocker
-- Host live validation is blocked by mac context (`runtime_is_vm=0`), and the structural bottleneck is `BATCH-85` drift across `logs-codex-runs/orchestrator-state/priority-queue.json`, `logs-codex-runs/orchestrator-state/parallel-workstreams.json`, `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite`, and `logs-codex-runs/orchestrator-state/executors-monitoring-latest.json`.
-
-False progress detected
-- `logs-codex-runs/orchestrator-state/executors-monitoring-latest.json` advertises `done_24h=544` and `proofs=105`, but its planner blocker is stale and points to `BATCH-85-ARCH`, not the live runtime task.
-- `logs-codex-runs/orchestrator-state/legacy/planner-subagents-registry.json` updates in lockstep with the new dispatch, but it is explicitly `legacy_compat_only` / `registry_secondary_only`; treating it as progress would be a category error.
-- `logs-codex-runs/orchestrator-state/planner-graph-state.json` still carries `BATCH-84-ADMIN-01` and `BATCH-84-GOV_REVIEW` `retryable` residues on `invalid_subagent_result:start_banner_only`; that is old churn, not current user value.
-- `logs-codex-runs/orchestrator-state/priority-queue.json` still says `user_value_delta_visible=0` and wants to reopen analysis while runtime is already waiting on `BATCH-85-DEV-01`; that mismatch is operational noise, not delivery.
-
-Next useful delivery
-- Release the current copilot/portfolio/monitor reliability slice: cached `/api/copilot/context`, lightweight saved-portfolio defaults without forced live risk fetch, composition-only/cached portfolio metrics fallback, single-worker backend startup, and event-store-first monitor health/status fixes.
-
-Architecture note
-- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py`, `platform/automation/runtime/truth/dispatch_snapshot.py`, and `platform/automation/runtime/planner/planner_board_runtime.py` as the SQLite-first, active-cycle filter boundary.
-- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still mix compat collection, stale mirrors, and fallback control into live orchestration.
-- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py` from any active planner decision path, plus the remaining OpenClaw/operator-plane metadata and message-bus-style legacy cues once monitor/status no longer need them.
-
-## 2026-04-15T04:40:36Z orchestration-architect
-
-Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-- delivered_value_now: moderate
-
-What changed since previous run
-- Changed: `logs-codex-runs/orchestrator-state/priority-queue.json` now marks `BATCH-85` `IN_PROGRESS` instead of `READY`, but still keeps `next_action="compléter BATCH-85-ANALYSIS (READY_PLANNER pour planner)"`.
-- Changed: `logs-codex-runs/orchestrator-state/parallel-workstreams.json` advanced to `2026-04-15T04:39:03Z`, but the `BATCH-85` stream still carries no task list, so the newer workboard snapshot still does not expose a real executable chain.
-- Unchanged: `logs-codex-runs/orchestrator-state/orchestration-runtime.sqlite` still materializes only `1` `BATCH-85` graph row and `1` `BATCH-85` event, both on `BATCH-85-DEV-01`; there is still no broader `BATCH-85` runtime truth.
-- Unchanged: `logs-codex-runs/orchestrator-state/executors-monitoring-latest.json` still reports planner `BLOCKED`, `done_24h=544`, and `proofs=105`, while its admin/dev snapshots are stale relative to the live runtime task.
-- Worse: queue/workboard drift is now larger, because both projection surfaces still tell planner to finish `ANALYSIS` while the canonical active runtime task is already `BATCH-85-DEV-01`.
-- Real progress: the current `apps/api` + `apps/monitor` lot still carries a real user-facing slice worth shipping independently: copilot context/start caching, lower-cost saved-portfolio behavior, judge/portfolio fallback hardening, and runtime-truth-first monitor fixes.
-
-Top priorities
-1. Ship the current `apps/api` + `apps/monitor` reliability lot independently of orchestration cleanup.
-2. Make queue/workboard/monitor converge on runtime truth for `BATCH-85-DEV-01`: stop advertising `compléter BATCH-85-ANALYSIS` once SQLite has the live dispatch.
-3. Quarantine or purge `BATCH-84` retryable residue and remove compat/OpenClaw leftovers from active planner control paths in `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py`.
-
-Main blocker
-- `BATCH-85` still fails convergence: `priority-queue.json` and `parallel-workstreams.json` frame the batch as unfinished `ANALYSIS`, while SQLite/runtime truth only knows `BATCH-85-DEV-01`; `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py` still let compat collection and stale planner-subagent state shape control flow.
-
-False progress detected
-- `priority-queue.json` and `parallel-workstreams.json` both moved timestamps/state on `BATCH-85`, but `user_value_delta_visible` is still `0` and the workboard stream exposes no task list.
-- `docs/operations/orchestrator/proofs/BATCH-84-ADMIN-01/` still contains `1270` takeover proof files, including `22` dated `2026-04-15`; this is churn residue, not new delivery.
-- `executors-monitoring-latest.json` still claims `done_24h=544` and `proofs=105` while planner remains blocked and the active batch is not fully materialized in SQLite.
-- Legacy secondary surfaces still exist and can still look alive: `planner-subagents-registry.json`, `dynamic-workers-registry.json`, `agent-message-bus.jsonl`, and `intent-registry.json`.
-
-Next useful delivery
-- Release the current brief/action/memo reliability slice: cached `/api/copilot/context`, stable `/api/copilot/start`, lower-cost saved-portfolio fallback, composition-only/cached portfolio performance fallback, and monitor health/status that prefer runtime truth over stale compat projections.
-
-Architecture note
-- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py` and `platform/automation/runtime/truth/dispatch_snapshot.py` as the SQLite-first primary read boundary.
-- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still carry active compat/projection/OpenClaw logic.
-- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py` from any active planner decision path; legacy registries, message bus, and intent registry must stay passive mirrors only.
-
-## 2026-04-15T04:40:36Z endpoint-architecture-steward signal
-- endpoint: /api/copilot/context
-- main_gap: shared contract is still missing and the route still owns cache/fallback response normalization
-- target: typed copilot contract + endpoint facade, with route limited to parsing/cache/namespace rewrite
-- patch_now: no
-- next_action: implement `packages/contracts/copilot_v1.py` plus a copilot endpoint service after the current reliability lot ships
-
-## 2026-04-15T04:38:43Z vision-batch-architect signal
-- verdict: no new batch; BATCH-85 still has to finish and get VM proof
-- top_priority: complete the active brief/action/memo hardening and then converge runtime metadata
-- selected_batch: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
-- create_now: no
-- next_action: finish BATCH-85 on current code surfaces and validate on the VM
-
-## 2026-04-15T04:45:46Z admin-unblock
-
-Continuity
-- previous_verdict: `BATCH-85` had started to materialize in runtime truth, but queue/workboard/monitor still drifted and kept stale planner-facing next actions
-- previous_main_blocker: false active-cycle progress where planner surfaces still pointed to `BATCH-85-ANALYSIS` or stale planner blockers instead of the live downstream task
-- previous_top_priority: converge canonical surfaces on the real active task and stop counting projection drift as progress
-- changed_since_last_run: local projection logic now collapses impossible upstream states once a downstream step is already active, so `BATCH-85-ANALYSIS` no longer masks the downstream blocker
-
-Verdict
-- blocker: false progress in the workboard projection kept `BATCH-85-ANALYSIS` open after downstream progress, which hid the real blocker on `BATCH-85-DEV-01`
-- blocker_class: false_progress
-- fix_needed: self-heal upstream projection state when a later template step is already started or completed, then let queue/workboard expose the downstream blocker instead of a stale planner action
-- runtime_can_resume: no
-
-Actions taken
-- patched `platform/automation/compat/projections/parallel_workstream.py` so recompute-state marks impossible upstream tasks `DONE` when downstream progress already exists in the same stream
-- added a regression case in `platform/automation/tests/test_parallel_workstream_queue_sync.py` covering the exact `BATCH-85` stale-analysis drift
-- verified locally that the projection now stops pointing to `BATCH-85-ANALYSIS` and instead exposes the downstream `DEV-01` blocker path
-
-Validation
-- command_or_check: `PYTHONPATH=/Users/venom/Documents/analyse-financiere/platform/automation python3 platform/automation/tests/test_parallel_workstream_queue_sync.py`
-- observed_result: `Ran 16 tests in 6.331s` and `OK`; local projection probe now yields `analysis_state=DONE`, `dev01_state=BLOCKED`, and queue/stream next action shifted off the stale planner analysis step
-- canonical_signal_after_fix: the local canonical projection no longer reports `compléter BATCH-85-ANALYSIS`; it now reflects the downstream path, which reveals `BATCH-85-DEV-01` as the actual blocker
+Measurement
+- signals_to_watch: disparition de `ready_but_*` sur `fallback_checkpoint` idle, `recommendations=[]`, `ready_idle_streak=0`
+- success_criteria: le guardian ne republie plus un claim READY quand `active_batch_ids=[]` et `projection_decision_reason=runtime_idle_no_active_cycle`
+- rollback_condition: une vraie lane READY canonique n’est plus signalée
 
 Decision
-- next_owner: admin
-- next_action: on the VM, inspect and recover the real `BATCH-85-DEV-01` `no_progress` capability path instead of retrying planner analysis
-- escalation_needed: yes
+- next_owner: prompt-expert
+- next_action: relire le prochain idle guardian et confirmer que le faux rouge admin/planner a disparu
+## 2026-04-16T23:12:17Z orchestration-architect
+
+Verdict
+- app_progress: no
+- orchestration_efficiency: poor
+- delivered_value_now: moderate
+
+What changed since previous run
+- Le produit public EC2 reste utilisable: `/api/copilot/start`, `/api/personal-finance/start` et `/api/judge/personal-finance/start?tickers=NVDA` exposent toujours un brief exploitable avec `ranked_action=open_nvda` et `target=ticker:NVDA`.
+- Le monitor public EC2 reste cohérent avec un état produit idle: `active_batch=null`, queue/workboard vides, aucun batch actif visible côté app host.
+- La VM planner ne converge pas vers cette idleness: `planner_board_runtime.py snapshot` annonce `active_batch_ids=["BATCH-96"]`, `runtime_actionable=true`, `next_action="advance batch-96-analysis"`.
+- `BATCH-96` n’est pas une livraison visible mais un autobatch planner-only: seule la tâche `BATCH-96-ANALYSIS` existe, créée avec la note `generated by planner-autobatch to keep planner lane non-passive`.
+- Le guardian/patch layer a cessé de montrer un vieux blocage historique, mais il valide maintenant un faux progrès neuf: `planner-guardian-latest.json` est vert/in-progress sur `BATCH-96-ANALYSIS` alors que le monitor public ne voit aucun travail produit actif.
+
+Top priorities
+1. Supprimer la création d’autobatch planner-only quand la vérité publique/runtime indique qu’aucun batch produit n’est nécessaire, au lieu de transformer l’idleness saine en `BATCH-96-ANALYSIS`.
+2. Aligner la publication monitor/public sur la vérité planner canonique, ou inversement, pour qu’un `active_batch` planner-only non livré ne soit plus présenté comme travail réel.
+3. Exiger qu’un batch actif ouvert depuis planner possède au moins un dispatch capability concret (`dev`/`admin`) ou une preuve publique EC2 nouvelle, sinon le reclasser en résidu control-plane.
+
+Main blocker
+- Faux batch actif `task_id=BATCH-96-ANALYSIS` dans `logs-codex-runs/orchestrator-state/priority-queue.json`, `parallel-workstreams.json` et `planner-guardian-latest.json`; il recycle une obligation de non-passivité planner au lieu de porter un delta utilisateur nouveau sur EC2.
+
+False progress detected
+- `BATCH-96` est marqué `user_value_delta_visible=1` mais ne contient aucune tâche delivery/admin/QA ni preuve publique nouvelle; c’est un claim de valeur sans livraison.
+- `runtime_actionable=true` côté VM est trompeur ici: il signifie seulement que le planner peut avancer un autobatch d’analyse, pas qu’un endpoint public ou contrat nouveau doit être shipé.
+- `planner-guardian-latest.json` vert + `planner-prompt-patches.json.active=[]` peuvent donner une impression de convergence alors que la chaîne `judge -> copilot -> portfolio/personal-finance` n’a pas changé depuis le run précédent.
+
+Next useful delivery
+- Fermer explicitement `BATCH-96` comme résidu control-plane et ne rouvrir un batch que pour un plus petit delta prouvable sur EC2: un smoke public lisible montrant un brief plus portfolio/watchlist-first que l’état actuel, ou aucune ouverture de batch si aucun delta neuf n’existe.
+
+Architecture note
+- Ce qui rapproche de `judge -> copilot -> portfolio`: les endpoints publics EC2 restent vivants, contractés via `packages/contracts/copilot_v1.py`, et `judge` alimente bien `copilot`/`personal-finance` avec un `ranked_action` ouvrable.
+- Ce qui doit être réduit: les autobatches planner sans dispatch capability ni preuve publique, surtout quand ils servent seulement à éviter l’état idle.
+- Ce qui doit être supprimé: la règle de non-passivité qui convertit l’absence saine de travail produit en batch `ANALYSIS` auto-généré et fausse les signaux de delivery.
+- [2026-04-16 19:14:20 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260416T231409Z_sessions_missing next_action_unique=admin-agents-tick-20260416T231409Z directive=none/none message=none/none exec_report=tick=20260416T231409Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
+
+## 2026-04-16T23:27:48Z admin-unblock
+
+Continuity
+- previous_verdict: runtime_can_resume=yes
+- previous_main_blocker: planner/control-plane pouvait encore recycler un faux batch planner-only sans nouveau delta public
+- previous_top_priority: planner
+- changed_since_last_run: le vrai gap restait structurel, pas produit; EC2 public etait joignable, mais `product_done` n'etait pas monotone pendant `product_done_ops_dirty`, le guardian ne marquait pas explicitement le bruit de projection comme residu advisory, et le watchdog EC2 gardait encore un mode d'auto-stop HTTP dans le chemin normal
+
+Verdict
+- blocker: absence d'autorite canonique monotone entre preuve publique EC2, idleness runtime, et gouvernance planner; cela permettait a la fois le faux progres planner-only et le risque d'arret EC2 a vide
+- blocker_class: false progress / misleading metrics
+- fix_needed: rendre `product_done` monotone des qu'une preuve publique batch-scopee est validee, demoter le bruit de projection en `residue_detected` cote guardian, et passer le watchdog EC2 en mode reachability-only par defaut
+- runtime_can_resume: yes
+
+Actions taken
+- patched `platform/automation/runtime/truth/runtime_truth_reader.py` pour que `product_done` reste vrai des la preuve publique validee, meme si `ops_clean=false` et qu'un batch reste encore actif
+- patched `platform/automation/planner_guardian.py` pour marquer le bruit de projection idle en `residue_detected` advisory et pour pousser l'ouverture du prochain batch seulement depuis `product_delivery_state.phase=idle_ready_for_next_batch`
+- patched `scripts/aws_ec2_idle_stop.sh` et `scripts/install_aws_idle_stop.sh` pour sortir l'auto-stop HTTP du chemin normal et installer un watchdog de joignabilite EC2 par defaut
+- added targeted regressions in `platform/automation/tests/test_runtime_truth_reader.py` and `platform/automation/tests/test_planner_guardian.py`
+
+Validation
+- command_or_check: `python3 -m py_compile platform/automation/runtime/truth/runtime_truth_reader.py platform/automation/planner_guardian.py apps/monitor/services/status_service.py` + `PYTHONPATH=platform/automation python3 platform/automation/tests/test_runtime_truth_reader.py` + `PYTHONPATH=platform/automation python3 platform/automation/tests/test_planner_guardian.py` + `python3 apps/monitor/tests/test_status_never_null.py` + `bash -n scripts/aws_ec2_idle_stop.sh scripts/install_aws_idle_stop.sh`
+- observed_result: py_compile pass; runtime truth tests pass (5); planner guardian tests pass (26); monitor status test suite stays green with 4 skips in this environment; shell syntax pass
+- canonical_signal_after_fix: `product_delivery_state` peut maintenant rester `product_done_ops_dirty` avec `product_done=true`; guardian traite l'idle bruité comme residu advisory et ouvre le batch suivant seulement depuis l'etat canonique; le watchdog EC2 ne stoppe plus l'instance sur simple inactivite HTTP en mode normal
+
+Decision
+- next_owner: planner
+- next_action: laisser le planner consommer `product_delivery_state` comme autorite de reprise; deployer le watchdog EC2 mis a jour sur l'app host avant de re-evaluer toute politique d'arret
+- escalation_needed: no
 
 Notes
-- false_progress_detected: yes; this fix removes a misleading planner-facing next action, but it does not complete delivery by itself
-- legacy_influence: medium; queue/workboard remain derived surfaces and still need VM/runtime truth confirmation for the downstream blocker
-- value_impact: observability-plus-unblock accuracy only; the real delivery blocker is now clearer, but live runtime recovery still requires VM access
+- false_progress_detected: yes; le faux progres venait du batch planner-only/du bruit de projection, pas d'un manque de preuve publique EC2
+- legacy_influence: low; le fix retire une logique legacy du chemin critique sans toucher aux endpoints produit
+- value_impact: la livraison publique existante n'est pas etendue ici, mais la boucle canonique ne devrait plus se figer ni bruler des tokens a vide sur un produit deja joignable; public_delivery_after_fix=no
+- [2026-04-16T23:28:06Z] delivery-first-ec2-policy
+  - `scripts/aws_ec2_idle_stop.sh` no longer stops EC2 on blind HTTP inactivity by default.
+  - New default is `AWS_EC2_IDLE_STOP_MODE=disabled`; only explicit opt-in mode `http_idle_opt_in` can trigger shutdown.
+  - Rationale: delivery continuity now outranks cheap idle-stop in the normal path; public EC2 reachability is treated as product authority, not as a stop signal.
+- [2026-04-16 19:29:23 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260416T232912Z_sessions_missing next_action_unique=admin-agents-tick-20260416T232912Z directive=none/none message=none/none exec_report=tick=20260416T232912Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
 
-## 2026-04-15T04:38:43Z endpoint-architecture-steward signal
-- endpoint: GET `/api/copilot/start`
-- main_gap: route still owns cache/fallback/response shaping and no shared typed contract exists
-- target: move starter shaping to a reusable application service with a canonical contract
-- patch_now: no
-- next_action: fold the endpoint convergence into BATCH-85 after current hardening lands
+## 2026-04-16T23:32:13Z orchestration-architect
 
-## 2026-04-15T04:37:41Z role-prompt-engineer signal
+Verdict
+- ec2_reachable: yes
+- app_progress: no
+- product_done: no
+- ops_clean: no
+- next_batch_eligible: no
+- continuity_gap: no
+- token_burn: yes
+- orchestration_efficiency: poor
+- delivered_value_now: moderate
+
+Authority state
+- public_proof_status: EC2 public proof is healthy and usable. `GET /api/health` is ok; `GET /api/copilot/start` and `GET /api/personal-finance/start` now prove the default starter is portfolio-aware (`effective_tickers=["AAPL"]`, `ranked_action=open_aapl`, saved portfolio context present), and explicit ticker probes still return scope-respecting `open_nvda`. This is real user value, but it is not a new `BATCH-96` delta.
+- runtime_truth_status: VM runtime truth is canonical and non-idle. `fc_doctor --json` says `runtime_truth_source=sqlite`, `event_store_primary=true`, sessions/scheduler are ok, and `planner_board_runtime.py snapshot` exposes `active_batch_ids=["BATCH-96"]`, `runnable_task_ids=["BATCH-96-ARCH"]`, `runtime_actionable=true`. But the same doctor snapshot also claims `product_delivery_state.active_batch_id=BATCH-96`, `product_done=true`, `next_batch_eligible=true`, which overstates closure relative to the active task graph.
+- active_batch_source: runtime_truth
+- advisory_mismatch: yes
+
+What changed since previous run
+- The public default starter was rechecked without explicit tickers and is materially usable: it now resolves to the saved portfolio (`AAPL`) with `ranked_action=open_aapl` and portfolio context on both `copilot/start` and `personal-finance/start`.
+- `BATCH-96` advanced only inside planner control-plane: `BATCH-96-ANALYSIS` is now `DONE` with a doc-only proof, and the active canonical task moved to `BATCH-96-ARCH`.
+- No downstream capability opened: `BATCH-96-DEV-01/02/03` and `BATCH-96-ADMIN-01` remain `WAITING_DEP`, so no new EC2-visible slice shipped after the previous run.
+- The public monitor still reports `active_batch=null` on the EC2 app host while VM runtime truth keeps `BATCH-96` active; this is an advisory mismatch, not proof of product regression.
+
+Top priorities
+1. Either dispatch `BATCH-96-DEV-01` immediately with a concrete EC2-visible portfolio-first starter delta, or back off/close `BATCH-96`; do not let `ARCH` spin without a real downstream slice.
+2. Silence or back off `dev`, `admin`, and stale executor-monitor wait lanes until a real `READY_DEV` or active capability exists; `none_no_ready` and `none_no_signal` are burning tokens.
+3. Fix the runtime/planner closure rule so planner autonomy cannot reopen an already-shipped starter scope as `net_new` and simultaneously mark the active batch `product_done=true`.
+
+Main blocker
+- Planner autonomy can reopen already-public starter behavior as a fresh active batch (`BATCH-96`) and progress it through `ANALYSIS/ARCH` without producing a new EC2-visible user delta, while runtime summary fields overstate that same batch as already `product_done`.
+
+False progress detected
+- `BATCH-96` was created by `planner_autonomy` with `novelty_class=net_new` and `user_value_delta_visible=1` even though the public EC2 starter behavior it points to was already shipped before this batch existed.
+- `BATCH-96-ANALYSIS` closed on a migration/proof memo only; `BATCH-96-ARCH` is now active with no artifact and no downstream capability dispatch, so the batch is moving only inside planner paperwork.
+- `executors-monitoring-latest.json` is stale but still advertises `done_24h=596` and `proofs=118` while the current live lanes are effectively waiting; this is observational churn, not shipping.
+- `planner-guardian-latest.json` pushes `PLANNER_QUALITY_BACKFILL_*` on missing architecture fields; that is advisory cleanup, not a reason to treat `BATCH-96` as valuable active product work.
+
+Next useful delivery
+- Smallest real slice: make the default public starter fully portfolio-first, not just portfolio-aware. `GET /api/copilot/start` and `GET /api/personal-finance/start` already choose `AAPL`, but the brief body/top risks still stay market-wide (`MSFT`/`NVDA` dominate). Dispatch `BATCH-96-DEV-01` only if it tightens that default EC2-visible ranking and memo entry path.
+
+## 2026-04-16T23:43:50Z orchestration-architect
+
+Verdict
+- ec2_reachable: yes
+- app_progress: yes
+- product_done: no
+- ops_clean: no
+- next_batch_eligible: no
+- continuity_gap: no
+- token_burn: yes
+- orchestration_efficiency: mixed
+- delivered_value_now: weak
+
+Authority state
+- public_proof_status: EC2 public is healthy and user-usable now; `/api/health`, `/api/copilot/start?tickers=NVDA`, `/api/personal-finance/start?tickers=NVDA`, and `/api/judge/personal-finance/start?tickers=NVDA` all return a real brief with `ranked_action=open_nvda`
+- runtime_truth_status: runtime snapshot still shows `active_batch_ids=["BATCH-96"]`, `runtime_actionable=true`, `runnable_task_ids=["BATCH-96-DEV-01"]`, and `active_canonical_task.task_id=BATCH-96-DEV-01`
+- active_batch_source: runtime_truth
+- advisory_mismatch: yes
+
+What changed since previous run
+- Public EC2 proof stayed good; no new public outage or regression was observed on the starter endpoints.
+- The canonical runtime batch is still `BATCH-96`, but it advanced materially from planner-only closure work to `BATCH-96-DEV-01` runnable/in progress.
+- `BATCH-96-ANALYSIS` and `BATCH-96-ARCH` are now closed, but both closures are proof/documentation steps only; no DEV artifact or fresh EC2-visible delta exists yet.
+- Guardian/projections now align on `BATCH-96-DEV-01` as the active canonical task, while the public monitor still exposes `active_batch=null`.
+- Admin capability traffic remains mostly `WAITING_DEP` / `none_no_signal`, so some lanes are still burning tokens without changing canonical product state.
+
+Top priorities
+1. Finish `BATCH-96-DEV-01` as the smallest backend-first slice that changes public EC2 behavior now: make the starter truly scope-first/portfolio-first on `copilot` / `personal-finance` / `judge`, then prove it on public EC2.
+2. Put admin and other wait-only capability lanes into backoff until `BATCH-96-DEV-01` produces either a code delta, a runtime truth transition, or a new public EC2 proof.
+3. Reconcile advisory surfaces so `monitor` / executor summaries cannot keep advertising `active_batch=null` or stale delivery-gap summaries while runtime truth already has an active canonical batch.
+
+Main blocker
+- `BATCH-96` is real and active, but the only completed steps so far are planner proof closures (`ANALYSIS`, `ARCH`); `BATCH-96-DEV-01` has started without any artifact or new EC2-visible user delta yet.
+
+False progress detected
+- `BATCH-96-ANALYSIS` and `BATCH-96-ARCH` count as delivery evidence in the control-plane, but they only closed planner proof debt and did not change public product behavior.
+- The public monitor still reports `active_batch=null` although runtime truth and guardian both confirm `BATCH-96-DEV-01`; this is an advisory mismatch, not a signal that delivery is idle.
+- Admin ticks are still emitting `none_no_signal` / `WAITING_DEP_BATCH-96-ADMIN-01`, and recent dev ticks were waiting on readiness; that consumption does not change `runtime truth`, `product_done`, or public proof.
+- `executors-monitoring-latest.json` is stale and still summarizes an old idle/no-active-capability posture after `BATCH-96` activation; treating it as active truth would be false progress.
+
+Next useful delivery
+- Ship `BATCH-96-DEV-01` independently as a backend starter-ranking slice: the requested ticker/watchlist context must drive the top risk and `ranked_action` on public EC2 for `copilot`, `personal-finance`, and `judge`, with one public smoke proving the change.
+- [2026-04-16 19:47:09 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260416T234658Z_sessions_missing next_action_unique=admin-agents-tick-20260416T234658Z directive=none/none message=none/none exec_report=tick=20260416T234658Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
+
+## 2026-04-16T23:53:08Z orchestration-architect
+
+Verdict
+- ec2_reachable: yes
+- app_progress: yes
+- product_done: yes
+- ops_clean: no
+- next_batch_eligible: no
+- continuity_gap: no
+- token_burn: yes
+- orchestration_efficiency: mixed
+- delivered_value_now: moderate
+
+Authority state
+- public_proof_status: Public EC2 is user-usable now. `GET /api/health`, `GET /api/copilot/start?tickers=NVDA`, `GET /api/personal-finance/start?tickers=NVDA`, and `GET /api/judge/personal-finance/start?tickers=NVDA` all return a real brief with `ranked_action=open_nvda`; `personal-finance/start` now exposes non-empty `brief_of_day.what_changed_today` and `brief_of_day.what_matters_now`. Public monitor `/api/status` is currently `500` and is advisory only.
+- runtime_truth_status: VM runtime truth is canonical and non-idle. `fc_doctor --json` reports `runtime_truth_source=sqlite`, `event_store_primary=true`, latest merged state `BATCH-96-DEV-01` at `2026-04-16T23:50:23Z`, and `product_delivery_state.product_done=true`; the planner snapshot still has `active_batch_ids=["BATCH-96"]`, `runtime_actionable=true`, and `runnable_task_ids=["BATCH-96-DEV-02"]`.
+- active_batch_source: runtime_truth
+- advisory_mismatch: yes
+
+What changed since previous run
+- `BATCH-96-DEV-01` merged for real in runtime truth with commit `42ef80fc59d50822f7463df14783ea8ceec98abe`; this is no longer planner-only structural motion.
+- Public EC2 proof now shows the delivered delta: `GET /api/personal-finance/start?tickers=NVDA` returns non-empty `what_changed_today` and `what_matters_now`, while `copilot` and `judge` remain usable.
+- The canonical next action moved forward: queue/workboard now point to `claim BATCH-96-DEV-02 (READY_DEV pour dev)`.
+- Guardian and executors-monitoring lag behind reality: guardian still reports `BATCH-96-DEV-01` active/in progress, and `executors-monitoring-latest.json` remains `STALE` with old wait/no-ready guidance.
+- Public advisory surfaces regressed operationally: `GET http://3.98.20.77:8080/api/status?lite=1` and `.../api/status` return `500`, and `scripts/aws_remote_app_control.sh public-status` returns `Internal Server Error`, without invalidating the product endpoints.
+
+Top priorities
+1. Claim and ship `BATCH-96-DEV-02` as the next smallest public EC2-visible slice, or explicitly back it off if no new user delta is intended; do not open a new batch while `BATCH-96` is still actionable.
+2. Put stale wait-only lanes on backoff now: admin `none_no_signal` / backend-health advisory churn and old dev waiting guidance are burning tokens without changing runtime truth or public proof.
+3. Reconcile or quarantine advisory surfaces (`planner-guardian-latest.json`, `executors-monitoring-latest.json`, public monitor `/api/status`) so they cannot masquerade as active truth once runtime truth has already advanced.
+
+Main blocker
+- The real bottleneck is no longer product reachability or planner convergence: it is the stale control-plane around `BATCH-96` that still points humans and agents at `DEV-01`/wait states while runtime truth has already moved to `BATCH-96-DEV-02`.
+
+False progress detected
+- `planner-guardian-latest.json` still says `BATCH-96-DEV-01 (dev/IN_PROGRESS)` at `2026-04-16T23:46:33Z`, but runtime truth has already merged that task at `2026-04-16T23:50:23Z` and queue/workboard now expose `DEV-02` as the next claim.
+- `executors-monitoring-latest.json` is `STALE`, still carries high throughput/proof counters (`done_24h=596`, `proofs=118`), and keeps dev/admin in wait-mode guidance that no longer matches the canonical next action.
+- Public monitor `/api/status` and `/api/status?lite=1` returning `500` would falsely suggest runtime trouble if treated as authority; product truth remains the public app endpoints and VM sqlite runtime truth.
+- `aws_remote_app_control.sh public-status` failing with `Internal Server Error` is also advisory residue here, not a reason to reopen or freeze the batch.
+
+Next useful delivery
+- The next useful delivery is `BATCH-96-DEV-02`: expose the newly shipped story-line fields on the public product surface with existing UI wiring, then prove that `copilot` / `personal-finance` show the change on EC2 without relying on monitor projections.
+- [2026-04-16 20:03:13 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T000302Z_sessions_missing next_action_unique=admin-agents-tick-20260417T000302Z directive=none/none message=none/none exec_report=tick=20260417T000302Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
+
+## 2026-04-17T00:03:52Z orchestration-architect
+
+Verdict
+- ec2_reachable: yes
+- app_progress: yes
+- product_done: yes
+- ops_clean: no
+- next_batch_eligible: yes
+- continuity_gap: no
+- token_burn: yes
+- orchestration_efficiency: mixed
+- delivered_value_now: moderate
+
+Authority state
+- public_proof_status: Public EC2 product proof is live and usable on 2026-04-17T00:02Z. `GET /api/copilot/start?tickers=NVDA&tickers=MSFT` and `GET /api/personal-finance/start?tickers=NVDA&tickers=MSFT` now return `ranked_action.id=open_msft`, sorted open targets for both tickers, and the single-ticker start payloads expose non-empty `brief_of_day.what_changed_today` / `what_matters_now`. `GET http://3.98.20.77:8080/api/status?lite=1` is still `500`, so monitor remains advisory only.
+- runtime_truth_status: VM runtime truth is canonical and non-idle. `bash scripts/runtime_host_check.sh` on the VM confirms `runtime_is_vm=1`; `fc_doctor --json` reports `runtime_truth_source=sqlite`, `event_store_primary=true`, `product_delivery_state.product_done=true`, and latest merged task `BATCH-96-DEV-01` at `2026-04-16T23:50:23Z`. The planner snapshot still keeps `active_batch_ids=["BATCH-96"]` with runnable `BATCH-96-DEV-02`, but `dev.last_contract` shows only `DELTA: CONTRACT_SCOPE_AUTOFILL` and no proof.
+- active_batch_source: runtime_truth
+- advisory_mismatch: yes
+
+What changed since previous run
+- `BATCH-96-DEV-01` landed for real just after the prior run: runtime truth now shows it merged at `2026-04-16T23:50:23Z` with public EC2 proof attached.
+- Public EC2 starter behavior materially improved: multi-ticker requests now prioritize `MSFT` (`open_msft`) and preserve sorted open targets; single-ticker requests expose non-empty `what_changed_today` and `what_matters_now`.
+- Canonical runtime advanced to `BATCH-96-DEV-02`; planner guardian now points to a dev-owned active task instead of planner-only analysis.
+- `BATCH-96-DEV-02` still has no proof artifact; the live dev contract is only `claim` + `contract_incomplete_autofill`, so no second public delta is visible yet.
+- Public monitor/status regressed operationally: `/api/status?lite=1` and `scripts/aws_remote_app_control.sh public-status` both fail with `500`/`Internal Server Error` while product APIs stay healthy.
+
+Top priorities
+1. Either ship `BATCH-96-DEV-02` to a new public EC2-visible delta in one tick, or back it off and close `BATCH-96`; do not let a product-done batch linger open on an unproven dev claim.
+2. Quarantine or fix the public monitor path (`/api/status?lite=1`) and stale `executors-monitoring-latest.json` so advisory surfaces cannot contradict EC2 proof or runtime truth.
+3. Put dev/admin lanes into backoff when they repeat `CONTRACT_SCOPE_AUTOFILL`, `WAITING_DEP_BATCH-96-ADMIN-01_*`, or similar no-proof states without changing runtime truth or public proof.
+
+Main blocker
+- `BATCH-96` is already `product_done=yes` on public EC2, but runtime closure is not monotonic: the automaton keeps the batch active on unproven `DEV-02` while stale advisory surfaces continue to generate follow-up work.
+
+False progress detected
+- `dev.last_contract` reports `BATCH-96-DEV-02` only as `claim` with `CONTRACT_SCOPE_AUTOFILL`; there is no `DEV-02` proof file and no new public EC2 delta beyond `DEV-01`.
+- `planner.last_contract` and guardian still push `continue BATCH-96-DEV-02`, even though the queue/workboard labels still describe `READY_PLANNER` / `WAITING_DEP`; that is projection lag, not fresh delivery.
+- `executors-monitoring-latest.json` is `STALE`, still advertises widget health and large proof counters (`done_24h=596`, `proofs=118`), while the public monitor endpoint itself returns `500`.
+- Admin ticks keep emitting `WAITING_DEP_BATCH-96-ADMIN-01_MONITOR_PUBLIC_FAILED` and “continue to DEV-03” guidance even though no admin task is canonically actionable now.
+
+Next useful delivery
+- The smallest useful delivery is binary: either make `BATCH-96-DEV-02` produce one more public EC2-visible change now, or explicitly stop/backoff `DEV-02` so `BATCH-96` can close and the next truly new batch can open cleanly.
+
+## 2026-04-17T00:03:08Z role-prompt-engineer
+
+Target
 - role: planner
-- prompt_issue: planner base prompt was duplicating system/shared/guardian rules and diluting collect-before-redispatch behavior
-- patch_type: shorten
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- why_this_prompt_now: le bloc `ROLE=planner` restait la couche parent la plus rentable à corriger; il ne verrouillait pas encore explicitement l’autorité produit, la continuité EC2, ni le backoff des lanes stériles
+
+Prompt audit
+- useful_rules: collect-first sur subagent/downstream actif, reprise d’une tâche `IN_PROGRESS`, claim exact d’une tâche `READY`, subagent unique et ciblé, `none_no_signal` réservé à une indisponibilité runtime prouvée, preuve planner déjà compacte
+- redundant_rules: la non-passivité était déjà exprimée deux fois (`jamais passif...` puis la règle `claim/collect/autobatch échoue`); le vrai manque était la hiérarchie d’autorité, pas davantage de verbes
+- contradictory_rules: pas de contradiction dure interne, mais une omission contradictoire avec l’architecture cible: le prompt laissait encore l’état produit ambigu entre EC2 public, runtime truth et projections
+- authority_confusion_found: oui; `dashboard/monitor/docs = derives` ne suffisait pas à verrouiller `EC2 public > runtime truth > projections`, ni à interdire à `guardian/monitor/queue` de réouvrir un batch `product_done`
+- continuity_gap_tolerated: yes
+- token_burn_backoff_missing: yes
+- likely_output_failures_caused_by_prompt: passivité planner alors que l’EC2 est joignable, réouvertures pilotées par projections, churn `none_no_signal/retry/takeover`, redispatch décoratif au lieu de collect/backoff/claim utile
+
+Optimization
+- keep: la décision tick collect-first, la distinction `IN_PROGRESS` vs `READY`, le subagent ciblé, la règle résidu historique -> cleanup admin + retry, et la preuve planner existante
+- simplify: une ligne d’autorité compacte au lieu de recopier la doctrine Judge-parity
+- remove: l’ambiguïté implicite qui laissait `monitor/guardian/queue` influencer l’état actif ou la clôture produit
+- authority_fix: ajout explicite `EC2 public = vérité produit; VM runtime truth = vérité exécution; projections = advisory` + verrou `product_done`
+- continuity_fix: ajout explicite `EC2 joignable + aucun batch actif runtime => create_or_claim_now ou repair immédiat`
+- backoff_fix: ajout explicite `none_no_signal|retry|takeover` stériles => backoff + action d’unblock/fix
+- expected_runtime_impact: direct sur le prochain tick planner, avec meilleure priorisation claim/collect/backoff et moins de faux blockers advisory
+
+Patch proposal
+- patch_type: cleanup / authority-fix / anti-churn
 - create_now: yes
-- expected_gain: less redispatch churn and clearer planner next action on canonical active work
-## ${TS} endpoint-architecture-steward signal
-- endpoint: GET /api/copilot/start
-- main_gap: route trop chargée et absence de contrat partagé canonique pour une surface produit critique.
-- target: contrat `copilot_start_v1` + façade `copilot_endpoint_service` + route mince avec fallback/métadonnées standardisés.
-- patch_now: no
-- next_action: préparer la refactorisation structurée de `copilot/start` vers Judge-parity sans casser l\'alias personal-finance.
-## 2026-04-15T04:42:36Z vision-batch-architect signal
-- verdict: no new batch; BATCH-85 remains the only valid priority
-- top_priority: finish the active brief/action/memo hardening and prove it on the VM
-- selected_batch: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
-- create_now: no
-- next_action: complete BATCH-85 and postpone any new batch until canonical VM proof exists
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- exact_goal: injecter la hiérarchie d’autorité, la continuité EC2 et le backoff stérile dans `ROLE=planner` sans regonfler le prompt
+- expected_gain: moins de `none_no_signal`, moins de réouvertures projection-only, moins de lanes wait-only, plus de `create_or_claim_now` ou `product_done` corrects
+- risk: low-to-medium; le bloc planner est central, donc une sur-agressivité serait visible vite
 
-## 2026-04-15T04:42:36Z endpoint-architecture-steward signal
-- endpoint: GET /api/copilot/start
-- main_gap: route still owns cache, fallback, namespace rewriting, and final payload shaping without a shared starter contract
-- target: shared `copilot_start_v1` contract plus a reusable endpoint facade so the route becomes thin
-- patch_now: no
-- next_action: fold Judge-parity cleanup into BATCH-85 after active hardening and VM proof
-## 2026-04-15T04:49:00Z endpoint-architecture-steward signal
-- endpoint: GET /api/copilot/start
-- main_gap: route trop chargée et absence de contrat partagé canonique pour une surface produit critique.
-- target: contrat `copilot_start_v1` + façade `copilot_endpoint_service` + route mince avec fallback/métadonnées standardisés.
-- patch_now: no
-- next_action: préparer la refactorisation structurée de `copilot/start` vers Judge-parity sans casser l'alias personal-finance.
-## 2026-04-15T05:05:00Z endpoint-architecture-steward signal
-- endpoint: GET /api/portfolios/{portfolio_id}/risk-profile
-- main_gap: la dégradation `composition_only` ou `metrics_unavailable` n'était pas explicitement matérialisée en metadata canonique.
-- target: garder la façade existante et y normaliser `fallback_used` + `status=degraded`.
-- patch_now: yes
-- next_action: vérifier ensuite les surfaces frontend/monitor qui lisent ce payload pour consommer la dégradation explicite.
-## 2026-04-15T05:14:00Z endpoint-architecture-steward signal
-- endpoint: GET /api/portfolios/{portfolio_id}/performance
-- main_gap: le payload répondait mais sans metadata business suffisante ni fallback explicite.
-- target: enrichir `PortfolioPerformance` in-place avec provenance, filtres, warnings, stats et `fallback_used`.
-- patch_now: yes
-- next_action: vérifier si les surfaces produit consomment ces nouveaux signaux au lieu de traiter les `null` comme silence.
-## 2026-04-15T04:44:30Z orchestration-architect
+Measurement
+- signals_to_watch: `none_no_signal`, `retry/takeover` récurrents, batch re-open après preuve EC2, outputs planner qui classent `ops_clean=no` comme blocage produit, présence d’un backoff quand des lanes stériles persistent
+- success_criteria: baisse des sorties passives quand EC2 est joignable; un batch prouvé sur EC2 n’est plus rouvert par `guardian/monitor/queue`; les lanes stériles passent en backoff au lieu de reconsommer
+- rollback_condition: hausse des claims/autobatches agressifs alors qu’une lane active canonique existe, ou perte du collect-first sur une vraie tâche downstream active
+
+## 2026-04-17T00:08:27Z admin-unblock
+
+Continuity
+- previous_verdict: public EC2 app usable, but public monitor lite still returned `500` and could act as false authority against already-shipped product proof.
+- changed_since_last_run: EC2 app host was running stale monitor code (`apps/monitor/src/aggregators/health.py` without `has_stale_context` / `rate_limits_advisory`) while local workspace already had the fix; a restart attempt also exposed runtime lock inheritance from `apps/api/runtime/copilot.sh`.
 
 Verdict
+- blocker: public monitor `GET /api/status?lite=1` crashed on EC2 due stale deployed monitor code, then restart control was vulnerable to a detached child inheriting the runtime lock FD.
+- blocker_class: false authority / bad guard
+- ec2_reachable: yes
+- product_delivery_blocked: no
+- delivery_continuity_restored: yes
+- public_delivery_after_fix: yes
+- runtime_can_resume: yes
+
+Authority check
+- public_proof_status: `http://3.98.20.77/api/health`, `/api/copilot/start?tickers=NVDA`, and `http://3.98.20.77:8080/api/status?lite=1` all return `200` after fix; starter payload still exposes a real NVDA brief and action set.
+- runtime_truth_status: app-only EC2 monitor now reports `primary_status=ok`, `product_runtime.status=ok`, `delivery_control.phase=idle_ready_for_next_batch`, `next_batch_eligible=true`.
+- next_batch_eligible: yes
+- projections_status: monitor lite responds again and is now advisory-clean for the public app host; no `500` remains on the product-facing projection.
+- guardian_status: unchanged in this run; no guardian rewrite performed.
+- false_authority_detected: yes
+- token_burn_detected: yes
+
+Actions taken
+- confirmed public authority first (`api/health`, `copilot/start`) and captured EC2 traceback from `logs-codex-runs/monitor-server.log`
+- verified remote drift: EC2 `apps/monitor/src/aggregators/health.py` lacked the newer `compute_health(...)` signature already present locally
+- hardened `apps/api/runtime/copilot.sh` so detached children close FD `9` and no longer inherit the runtime lock during background backend/frontend/monitor jobs
+- published current workspace to EC2 with `bash scripts/aws_app_sync_and_restart.sh`
+
+Validation
+- command_or_check: `curl -s http://3.98.20.77/api/health`
+- observed_result: `200` with `status=ok`
+- canonical_signal_after_fix: public product runtime restored
+- command_or_check: `curl -s 'http://3.98.20.77:8080/api/status?lite=1'`
+- observed_result: `200` with `health=OK`, `primary_status=ok`, `delivery_control.phase=idle_ready_for_next_batch`
+- canonical_signal_after_fix: false monitor blocker removed
+- command_or_check: `ssh ubuntu@3.98.20.77 'cd /home/ubuntu/analyse-financiere && bash ./finance-copilot.sh status'`
+- observed_result: backend/frontend/monitor all `EN COURS`
+- canonical_signal_after_fix: EC2 app control can run again without deadlocking on the inherited runtime lock
+
+Decision
+- next_owner: VM planner/admin runtime
+- next_action: resume canonical delivery from VM truth only; treat EC2 app host monitor as restored advisory surface, and do not reopen any batch from public monitor residue alone.
+- [2026-04-16 20:18:34 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T001823Z_sessions_missing next_action_unique=admin-agents-tick-20260417T001823Z directive=none/none message=none/none exec_report=tick=20260417T001823Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
+
+## 2026-04-17T00:31:50Z orchestration-architect
+
+Verdict
+- ec2_reachable: yes
 - app_progress: yes
+- product_done: yes
+- ops_clean: no
+- next_batch_eligible: yes
+- continuity_gap: no
+- token_burn: yes
+- orchestration_efficiency: mixed
+- delivered_value_now: moderate
+
+Authority state
+- public_proof_status: `http://3.98.20.77/api/health`, `/api/copilot/start?tickers=NVDA`, `/api/personal-finance/start?tickers=NVDA`, and `/api/judge/personal-finance/start?tickers=NVDA` all return `200`; `ranked_action=open_nvda` is public; `what_changed_today` and `what_matters_now` are now non-empty on the starter flow. Public monitor lite still reports `active_batch=null` and `idle_ready_for_next_batch`.
+- runtime_truth_status: VM `runtime_host_check` confirms `runtime_is_vm=1`. VM `fc_doctor --json` is `event_store_primary=true`, `runtime_truth_source=sqlite`, `product_done=true`, `ops_clean=false`, `next_batch_eligible=true`, `active_batch_id=BATCH-96`. Latest sqlite states are `BATCH-96-DEV-01`, `BATCH-96-DEV-02`, and `BATCH-96-DEV-03`, all `merged`.
+- active_batch_source: runtime_truth
+- advisory_mismatch: yes
+
+What changed since previous run
+- `BATCH-96-DEV-03` now has fresh canonical runtime proof: sqlite latest states include it as `merged` with `updated_at=2026-04-17T00:29:06Z`.
+- Public EC2 proof progressed materially: judge starter now keeps the scope on `NVDA` and exposes non-empty `brief_of_day.what_changed_today` and `brief_of_day.what_matters_now`.
+- `planner_board_runtime.py snapshot` still carries `active_batch_ids=["BATCH-96"]`, but `runtime_actionable=false` and `next_action=none`, so the batch is no longer an actionable delivery lane.
+- `planner_guardian`, `planner.last_contract`, `dev.last_contract`, and `admin.last_contract` still talk as if `BATCH-96-DEV-03` must continue or complete, despite the canonical merge.
+- Public monitor lite remains in `idle_ready_for_next_batch`, so the product surface already behaves like a done batch while the VM control-plane keeps the residue open.
+
+Top priorities
+1. Close or back off the `BATCH-96` residue from runtime truth outward: stop treating `BATCH-96-DEV-03` as active once `merged` + public EC2 proof are already present.
+2. Open the next eligible batch immediately from runtime truth, not from guardian/workboard consensus; target a portfolio/watchlist-first user delta because the public starter still reports `context_influence.mode=market_wide`.
+3. Silence token-burn surfaces (`planner_guardian`, `executors-monitoring-latest.json`, stale role contracts) until they republish from sqlite truth instead of replaying `DEV-03` follow-up advice.
+
+Main blocker
+- The real blocker is not product runtime. The blocker is monotonic closure failure: `BATCH-96` is product-done in public proof and sqlite, but stale contracts/projections still keep it notionally active, which delays the next useful batch opening.
+
+False progress detected
+- `planner-guardian-latest.json` still recommends following `BATCH-96-DEV-03` as canonical active work after the batch already reached `product_done=true`.
+- `dev.last_contract` blocks on `delivery evidence incomplete: commit_sha,files_touched` even though sqlite marks `BATCH-96-DEV-03` as `merged` and EC2 public proof is already visible.
+- `admin.last_contract` waits on `BATCH-96-ADMIN-01` behind `DEV-03`, creating hold-state churn instead of helping the runtime opener move to the next batch.
+- `executors-monitoring-latest.json` is `STALE` and still publishes stale velocity/health advice that does not change canonical state.
+
+Next useful delivery
+- The smallest high-value next slice is a true portfolio/watchlist-first starter on public EC2 across `judge -> copilot -> personal-finance`: preserve `ranked_action`, but replace `context_influence.mode=market_wide` with actual personal prioritization and a visible next action that reflects saved portfolio/watchlist context when available.
+- [2026-04-16 20:41:49 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=deterministic_issue_detected blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T004012Z_role_contract_blockers next_action_unique=admin-agents-tick-20260417T004012Z directive=none/none message=none/none exec_report=tick=20260417T004012Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck
+
+## 2026-04-17T00:46:14Z orchestration-architect
+
+Verdict
+- ec2_reachable: yes
+- app_progress: no
+- product_done: yes
+- ops_clean: no
+- next_batch_eligible: yes
+- continuity_gap: yes
+- token_burn: yes
 - orchestration_efficiency: poor
 - delivered_value_now: moderate
 
-What changed since previous run
-- Changed: `logs-codex-runs/orchestrator-state/planner-graph-state.json` and `orchestration-runtime.sqlite` now carry a real `BATCH-85-DEV-01` runtime record with code/test evidence tied to commit `aaeb75dc`.
-- Changed: `logs-codex-runs/orchestrator-state/parallel-workstreams.json` now marks `BATCH-85-DEV-01` `BLOCKED` with `dev_execution_state=no_progress` instead of leaving the batch only on planner-owned `ANALYSIS/ARCH`.
-- Unchanged: `bash scripts/runtime_host_check.sh` still returns `runtime_is_vm=0`, so this run stayed file-only and produced no live VM proof.
-- Unchanged: `logs-codex-runs/orchestrator-state/priority-queue.json` still tells planner to `compléter BATCH-85-ANALYSIS`, and `executors-monitoring-latest.json` is still stale relative to the live `BATCH-85-DEV-01` runtime row.
-- Worse: the only active `BATCH-85` runtime task is already `retryable` in SQLite with `backend_requested=codex_exec`, `backend_used=qwen`, and `status=failed`, so orchestration turned a real code delta into another retry loop instead of converging it.
-- Real progress: the `apps/api` + `apps/monitor` reliability lot is still a real independent shipment candidate with visible product/runtime gains.
-
-Top priorities
-1. Ship the current `apps/api` + `apps/monitor` reliability lot independently of orchestration cleanup.
-2. Stop `BATCH-85-DEV-01` from re-entering retry churn: fix `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py` so a proof-backed code delta is merged or explicitly blocked once, not converted into `retryable`.
-3. Make queue/workboard/monitor read runtime truth first: `priority-queue.json`, `parallel-workstreams.json`, and `executors-monitoring-latest.json` must stop advertising `ANALYSIS` once SQLite says `BATCH-85-DEV-01`.
-
-Main blocker
-- `BATCH-85-DEV-01` is the real bottleneck: `logs-codex-runs/orchestrator-state/planner-graph-state.json` records it as `retryable` after a failed shadow fallback, while `logs-codex-runs/orchestrator-state/parallel-workstreams.json` reports `planner_dev_capability_failed:subagent_status_failed`; live validation remains blocked by host context (`runtime_is_vm=0`).
-
-False progress detected
-- `BATCH-85-ANALYSIS` and `BATCH-85-ARCH` were both closed as `runtime_no_code`, touching queue/workboard artifacts rather than shipping user-visible delta.
-- `BATCH-85-DEV-01` has a real commit and tests, but the runtime result is still `status=failed` / `guard_status=retryable`; counting that as delivered would be false.
-- `executors-monitoring-latest.json` still reports `done_24h=545` and `proofs=106` while planner is blocked and the active batch is not converged.
-- Legacy secondary surfaces still update (`legacy/planner-subagents-registry.json`) even though they are explicitly `decision_capable=false`.
-
-Next useful delivery
-- Release the existing brief/action/memo reliability slice now: cached `/api/copilot/context`, stable `/api/copilot/start`, composition-only portfolio fallback, cached portfolio price reads, single-worker backend startup, and monitor status semantics that separate product runtime from control-plane degradation.
-
-Architecture note
-- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py` and `platform/automation/runtime/truth/dispatch_snapshot.py` as SQLite-first read boundaries.
-- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still let projection/compat state steer active decisions.
-- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py` from active planner flow; `planner-subagents-registry.json`, `dynamic-workers-registry.json`, `agent-message-bus.jsonl`, and `intent-registry.json` must remain passive mirrors only.
-
-## 2026-04-15T04:44:30Z endpoint-architecture-steward signal
-- endpoint: GET /api/copilot/start
-- main_gap: route encore trop chargée malgré le hardening BATCH-85; cache, namespace rewrite et fallback restent dans l’API au lieu d’une façade service typée.
-- target: contrat partagé `copilot_start_v1` + `copilot_endpoint_service` pour centraliser metadata/fallback et rendre la route mince.
-- patch_now: no
-- next_action: converger `/api/copilot/start` après le ship du lot fiabilité, sans ouvrir de refactor plus large tant que `BATCH-85-DEV-01` n’est pas stabilisé.
-
-## 2026-04-15T04:52:24Z orchestration-architect
-
-Verdict
-- app_progress: yes
-- orchestration_efficiency: poor
-- delivered_value_now: moderate
+Authority state
+- public_proof_status: EC2 public proof is still green. `GET /api/health`, `GET /api/copilot/start?tickers=NVDA`, `GET /api/personal-finance/start?tickers=NVDA`, and `GET /api/judge/personal-finance/start?tickers=NVDA` all return `200`; starter payloads still expose `ranked_action=open_nvda` plus non-empty `what_changed_today` and `what_matters_now`. Public monitor lite reports `active_batch=null` and `phase=idle_ready_for_next_batch`.
+- runtime_truth_status: canonical runtime truth is effectively idle. `planner_board_runtime.py snapshot` still carries `active_cycle.active_batch_ids=["BATCH-96"]`, but `runtime_actionable=false`, `active_subagents_count=0`, `runnable_task_count=0`, and `next_action=none`. Latest sqlite rows for `BATCH-96` are only `BATCH-96-DEV-01/02/03`, all `merged`, with `BATCH-96-DEV-03` closed at `2026-04-17T00:29:06Z`.
+- active_batch_source: projection_only
+- advisory_mismatch: yes
 
 What changed since previous run
-- Changed: `priority-queue.json` and `parallel-workstreams.json` now both point to `compléter BATCH-85-DEV-01`, so the stale `ANALYSIS` wording is gone.
-- Changed: the canonical static runtime still shows one real `BATCH-85` row in SQLite/planner graph, while `BATCH-84` still leaves six old rows behind as residue.
-- Changed: the active app lot is still concrete and recent; commit `aaeb75dc` plus touched files in `apps/api` and `apps/monitor` confirm a real brief/action/memo reliability slice exists.
-- Unchanged: `runtime_is_vm=0`, so there is still no live VM proof and no active runtime recovery from this context.
-- Unchanged: queue/workboard still expose `BATCH-85` without any materialized task list and keep `user_value_delta_visible=0`, so delivery surfaces still under-report the actual delta.
-- Worse: `BATCH-85-DEV-01` remains `retryable` after a proof-backed code/test result, which means orchestration still converts a real delivery delta into control-plane churn.
+- No fresh public user delta appeared after the previous run; EC2 still shows the same shipped starter improvement, not a new slice.
+- Runtime truth now confirms the full `BATCH-96` dev chain is merged in sqlite, including `BATCH-96-DEV-03` at `00:29:06Z`.
+- Public monitor lite still says `active_batch=null` and `idle_ready_for_next_batch`, which matches effective idleness rather than an active delivery lane.
+- `planner_board_runtime.py snapshot` still keeps `active_cycle.active_batch_ids=["BATCH-96"]` even though it simultaneously says `runtime_actionable=false` and `next_action=none`.
+- `planner-guardian-latest.json` and `executors-monitoring-latest.json` still tell lanes to continue `BATCH-96-DEV-03` and wait on `BATCH-96-ADMIN-01`; this is residue, not canonical active work.
 
 Top priorities
-1. Ship the current `apps/api` + `apps/monitor` reliability lot independently of orchestration cleanup.
-2. Stop re-queueing proof-backed `BATCH-85-DEV-01` results as retryable in `platform/automation/runtime/planner/planner_runtime_actions.py` and `platform/automation/planner_subagent_manager.py`.
-3. Make projections carry real runtime meaning: `priority-queue.json`, `parallel-workstreams.json`, and monitor status should materialize the active task and value delta from SQLite/event-store truth instead of empty stream shells.
+1. Make runtime closure monotonic: once sqlite says `merged` and EC2 public proof is already visible, clear `BATCH-96` from the active cycle and let the single runtime opener move to the next eligible batch.
+2. Put guardian/executor/admin residue lanes into backoff when the latest canonical task state is already `merged`; stop `PLANNER_DISPATCH_ACTIVE_BATCH-96-DEV-03`, `WAITING_DEP_BATCH-96-ADMIN-01`, and any stray `none_no_signal` churn.
+3. Open one small EC2-visible slice immediately after closure from runtime truth only: the next useful lot is a genuinely portfolio/watchlist-first starter delta, not another proof/control-plane follow-up on `BATCH-96`.
 
 Main blocker
-- `BATCH-85-DEV-01` is still the bottleneck: one real SQLite/planner-graph row exists for it, but it remains `retryable` after a failed fallback path while queue/workboard keep an empty `BATCH-85` shell (`tasks_count=0`, `user_value_delta_visible=0`).
+- The blocker is monotonic closure failure, not product runtime. `BATCH-96` is already product-done on public EC2 and merged in sqlite, but stale contracts/projections still keep it notionally active, so the next batch never opens even though EC2 is reachable.
 
 False progress detected
-- `priority-queue.json` and `parallel-workstreams.json` moved forward to `DEV-01`, but they still expose no task list and still claim `user_value_delta_visible=0`.
-- `planner-graph-state.json` contains the proof-backed `BATCH-85-DEV-01` result and also a large volume of unrelated `retryable` residue, so more runtime rows do not mean more user value.
-- `parallel-workstreams.json` repeats `dev_invalid_result_streak=0` and `planner_takeover_required=false` across many blocks while the real active task is still unresolved; those counters currently hide churn more than they explain it.
-- `worker_manager.py` and the legacy registries remain explicitly `legacy_compat_only` / `decision_capable=false`, yet planner-side code still reads around them and OpenClaw compatibility hooks remain loaded in active paths.
+- `planner-guardian-latest.json` still claims `BATCH-96-DEV-03` is the canonical active `IN_PROGRESS` task after sqlite already merged it.
+- `executors-monitoring-latest.json` still asks dev to continue `BATCH-96-DEV-03` and keeps admin behind `WAITING_DEP_BATCH-96-ADMIN-01`, producing wait-state activity without changing public proof or runtime truth.
+- The snapshot-level `active_cycle.active_batch_ids=["BATCH-96"]` survives after `runtime_actionable=false` and `next_action=none`; this is closure residue masquerading as continuity.
+- Any follow-up lane spending tokens on `DEV-03`/`ADMIN-01` now is token burn because it no longer changes `runtime truth`, `product_done`, `next_batch_eligible`, or EC2 proof.
 
 Next useful delivery
-- Release the existing brief/action/memo reliability slice now: hardened `/api/copilot/start`, cached/copilot context improvements, explicit degraded portfolio risk metadata, and monitor status that prefers event-store/runtime truth.
+- The smallest next lot that can create a visible delta quickly is a backend-first starter improvement that makes the public EC2 entry flow truly portfolio/watchlist-first by default, rather than staying mostly `market_wide` with only explicit `NVDA` scoping.
 
-Architecture note
-- Keep: `platform/automation/runtime/truth/runtime_truth_reader.py` and `platform/automation/runtime/truth/dispatch_snapshot.py` as the primary truth boundary; they already quarantine retryable residue and mark compat surfaces non-decision-capable.
-- Reduce: `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_dispatch_metrics.py`, and `platform/automation/role_runtime_context.py`; they still mix runtime truth with projection/compat/OpenClaw logic.
-- Remove ASAP: `platform/automation/compat/legacy_workers/worker_manager.py` from any active planner decision path; `planner-subagents-registry.json`, `dynamic-workers-registry.json`, `agent-message-bus.jsonl`, and `intent-registry.json` must stay passive mirrors only.
+VM instruction
+- Treat `BATCH-96` as done from runtime truth outward: back off stale follow-up lanes, clear the active-cycle residue, and open the next EC2-visible batch immediately from the runtime opener once `active_batch_ids=[]` is true canonically.
+- [2026-04-16 20:41:49 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=deterministic_issue_detected blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T004012Z_role_contract_blockers next_action_unique=admin-agents-tick-20260417T004012Z directive=none/none message=none/none exec_report=tick=20260417T004012Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck
+- [2026-04-16 20:57:05 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T005654Z_sessions_missing next_action_unique=admin-agents-tick-20260417T005654Z directive=none/none message=none/none exec_report=tick=20260417T005654Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
+- [2026-04-16 21:43:59 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T014349Z_sessions_missing next_action_unique=admin-agents-tick-20260417T014349Z directive=none/none message=none/none exec_report=tick=20260417T014349Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
+- [2026-04-16 22:01:29 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T020118Z_sessions_missing next_action_unique=admin-agents-tick-20260417T020118Z directive=none/none message=none/none exec_report=tick=20260417T020118Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)

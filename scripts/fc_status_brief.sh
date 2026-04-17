@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
+# MODE: PUBLIC_VALIDATION_BY_DEFAULT
 # fc_status_brief.sh — compact operator brief (read-only)
 set -euo pipefail
 
-BASE_URL="${FC_MONITOR_BASE_URL:-http://127.0.0.1:7779}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+BASE_URL="${FC_MONITOR_BASE_URL:-${FC_PUBLIC_MONITOR_BASE_URL:-http://3.98.20.77:8080}}"
 TIMEOUT_S="${FC_STATUS_BRIEF_TIMEOUT_S:-15}"
 STATUS_FILE="$(mktemp)"
 STATUS_ENDPOINT="${FC_STATUS_BRIEF_ENDPOINT:-/api/status?lite=1}"
+PROBE_SCRIPT="${FC_PUBLIC_RUNTIME_PROBE_SCRIPT:-${SCRIPT_DIR}/aws_public_runtime_probe.py}"
+
+if [[ "${FC_ALLOW_LOCAL_URLS:-0}" != "1" && "$BASE_URL" =~ ^https?://(127\.0\.0\.1|localhost)(:|/|$) ]]; then
+  echo "Refusing local validation URL: $BASE_URL (set FC_ALLOW_LOCAL_URLS=1 to override)" >&2
+  exit 2
+fi
 
 cleanup() {
   rm -f "$STATUS_FILE"
@@ -13,6 +21,37 @@ cleanup() {
 trap cleanup EXIT
 
 curl -fsS --max-time "$TIMEOUT_S" "${BASE_URL%/}${STATUS_ENDPOINT}" -o "$STATUS_FILE" || {
+  PROBE_JSON="$(python3 "$PROBE_SCRIPT" --url "${BASE_URL%/}${STATUS_ENDPOINT}" --timeout "$TIMEOUT_S" 2>/dev/null || true)"
+  if [[ -n "${PROBE_JSON}" ]]; then
+    MAINTENANCE_ACTIVE="$(python3 - "$PROBE_JSON" <<'PY'
+import json,sys
+try:
+    payload = json.loads(sys.argv[1])
+except Exception:
+    print("0")
+    raise SystemExit(0)
+print("1" if payload.get("maintenance_active") else "0")
+PY
+)"
+    if [[ "$MAINTENANCE_ACTIVE" == "1" ]]; then
+      python3 - "$PROBE_JSON" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+command = str(payload.get("maintenance_command") or "restart").strip() or "restart"
+age = payload.get("maintenance_age_s")
+age_suffix = f"/{age}s" if isinstance(age, int) else ""
+print(f"Santé: MAINTENANCE · command={command}{age_suffix}")
+print("Batches: deferred")
+print("Agents: deferred")
+print("Blocages: public_restart_in_progress")
+print("Lecture réelle: publication/restart EC2 en cours; ne pas conclure à une panne durable.")
+print("Action recommandée: attendre 20 à 30 secondes puis relancer scripts/fc_status_brief.sh.")
+PY
+      exit 0
+    fi
+  fi
   echo "Santé: monitor_unreachable (${BASE_URL%/}${STATUS_ENDPOINT})"
   echo "Batches: unknown"
   echo "Agents: unknown"

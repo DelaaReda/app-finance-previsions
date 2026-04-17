@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-85-BATCH-85-DEV-02-20260415T063406Z-227"
+stream_id: "BATCH-85"
+task_id: "BATCH-85-DEV-02"
+role: "dev"
+produced_at_utc: "2026-04-15T06:34:06Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T06:34:06Z"
+      ended_at_utc: "2026-04-15T06:34:06Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit 62d91297"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-85-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-85-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The widget renderer only passed `action.prefill.question` into ask button handlers, but the judge/copilot start payload commonly provides `prompt` (and sometimes `question`) instead, leaving prefilled asks empty and maki | fix_applied=Updated `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html` in `renderCopilotActions()` to resolve ask prefill via `action.prefill.question || action.prompt || action.question`, preserving existing beh | verify=before=ask buttons only forwarded `prefill.question`; backend `prompt`-based actions rendered inert quick-ask buttons. after=ask buttons forward a resolved prefill from `prefill.question|prompt|question`, enabling handle | architecture_check=layer=web/widgets; imports_ok=true; path_target=apps/web/src/domains/forecasts/components/widgets/copilot-panel.html | vision_alignment=batch=BATCH-85-DEV-02; target=personal finance copilot starts with brief of day and supports ask/open interactions; impact=restores quick ask usability without changing routes by enabling backend prompt-based ask actions"

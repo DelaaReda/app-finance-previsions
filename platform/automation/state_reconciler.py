@@ -66,6 +66,8 @@ CODEX_STARTUP_NOISE_MARKERS = (
     "worker quit with fatal",
     "reconnecting...",
 )
+DEFAULT_PUBLIC_APP_BASE_URL = "http://3.98.20.77"
+DEFAULT_PUBLIC_MONITOR_BASE_URL = "http://3.98.20.77:8080"
 
 
 @dataclass
@@ -298,11 +300,42 @@ def _fetch_local_json(url: str, timeout: float = 1.5) -> dict | None:
         return None
 
 
+def _http_status_ok(url: str, timeout: float = 1.5) -> bool:
+    try:
+        import urllib.request
+
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            status = int(getattr(resp, "status", 0) or 0)
+            return 200 <= status < 300
+    except Exception:
+        return False
+
+
+def _public_api_base_url() -> str:
+    return str(
+        os.environ.get("FC_API_BASE_URL")
+        or os.environ.get("FC_PUBLIC_APP_BASE_URL")
+        or DEFAULT_PUBLIC_APP_BASE_URL
+    ).strip() or DEFAULT_PUBLIC_APP_BASE_URL
+
+
+def _public_monitor_base_url() -> str:
+    return str(
+        os.environ.get("FC_MONITOR_BASE_URL")
+        or os.environ.get("FC_PUBLIC_MONITOR_BASE_URL")
+        or DEFAULT_PUBLIC_MONITOR_BASE_URL
+    ).strip() or DEFAULT_PUBLIC_MONITOR_BASE_URL
+
+
 def _runtime_probes_ok() -> bool:
     try:
         import urllib.request
 
-        for url in ("http://127.0.0.1:8050/api/health", "http://127.0.0.1:7779/api/status"):
+        for url in (
+            f"{_public_api_base_url().rstrip('/')}/api/health",
+            f"{_public_monitor_base_url().rstrip('/')}/api/status",
+        ):
             req = urllib.request.Request(url, headers={"Accept": "application/json"})
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 status = int(getattr(resp, "status", 0) or 0)
@@ -314,25 +347,31 @@ def _runtime_probes_ok() -> bool:
 
 
 def _delivery_backend_ready() -> tuple[bool, str]:
-    payload = _fetch_local_json("http://127.0.0.1:7779/api/status?lite=1", timeout=1.5)
-    if not isinstance(payload, dict):
-        return False, "status_lite_unavailable"
-    primary_status = str(payload.get("primary_status", "") or payload.get("status", "")).strip().lower()
-    if primary_status not in {"ok", "paused"}:
+    monitor_base = _public_monitor_base_url().rstrip("/")
+    api_base = _public_api_base_url().rstrip("/")
+    payload = _fetch_local_json(f"{monitor_base}/api/status?lite=1", timeout=1.5)
+    if isinstance(payload, dict):
+        primary_status = str(payload.get("primary_status", "") or payload.get("status", "")).strip().lower()
+        if primary_status in {"ok", "paused"}:
+            doctor_payload = payload.get("doctor", {})
+            if not isinstance(doctor_payload, dict):
+                doctor_payload = {}
+            app_runtime = doctor_payload.get("app_runtime", payload.get("app_runtime", {}))
+            if not isinstance(app_runtime, dict):
+                app_runtime = {}
+            backend_api = app_runtime.get("backend_api", {})
+            if not isinstance(backend_api, dict):
+                backend_api = {}
+            backend_status = str(backend_api.get("status", "")).strip().lower()
+            if backend_status == "ok":
+                return True, "ok"
+            if _http_status_ok(f"{api_base}/api/health", timeout=1.5):
+                return True, "backend_health_fallback"
+            return False, f"backend_api:{backend_status or 'unknown'}"
         return False, f"primary_status:{primary_status or 'unknown'}"
-    doctor_payload = payload.get("doctor", {})
-    if not isinstance(doctor_payload, dict):
-        doctor_payload = {}
-    app_runtime = doctor_payload.get("app_runtime", {})
-    if not isinstance(app_runtime, dict):
-        app_runtime = {}
-    backend_api = app_runtime.get("backend_api", {})
-    if not isinstance(backend_api, dict):
-        backend_api = {}
-    backend_status = str(backend_api.get("status", "")).strip().lower()
-    if backend_status != "ok":
-        return False, f"backend_api:{backend_status or 'unknown'}"
-    return True, "ok"
+    if _http_status_ok(f"{api_base}/api/health", timeout=1.5):
+        return True, "backend_health_fallback"
+    return False, "status_lite_unavailable"
 
 
 def _active_planner_subagent_owner_tasks(root: Path, board: dict | None = None) -> set[str]:
@@ -755,11 +794,24 @@ def _runtime_item_is_success(item: dict) -> bool:
 def _sync_runtime_truth_projection(root: Path, board: dict, active_cycle_ids: set[str], now: str) -> dict[str, int]:
     runtime_truth = build_runtime_truth_snapshot(root, state_limit=256, event_limit=128)
     latest_states = runtime_truth.get("latest_states")
+    quarantined_retryable_residue = runtime_truth.get("quarantined_retryable_residue")
     if not isinstance(latest_states, list):
         return {"runtime_projection_synced": 0, "runtime_completion_consumed": 0}
+    if not isinstance(quarantined_retryable_residue, list):
+        quarantined_retryable_residue = []
 
     by_task_id: dict[str, dict] = {}
     for item in latest_states:
+        if not isinstance(item, dict):
+            continue
+        task_id = str(item.get("task_id", "") or "").strip()
+        if not task_id:
+            continue
+        stream_id = str(item.get("stream_id", "") or item.get("batch_id", "") or "").strip().upper()
+        if active_cycle_ids and stream_id and stream_id not in active_cycle_ids:
+            continue
+        by_task_id[task_id] = item
+    for item in quarantined_retryable_residue:
         if not isinstance(item, dict):
             continue
         task_id = str(item.get("task_id", "") or "").strip()
@@ -788,12 +840,20 @@ def _sync_runtime_truth_projection(root: Path, board: dict, active_cycle_ids: se
         runtime_status = str(item.get("status", "") or "").strip().lower()
         blocking_issue = str(item.get("blocking_issue", "") or "").strip().lower()
         task_state = _task_operational_state(task)
+        quarantined_ready_residue = (
+            runtime_status == "quarantined"
+            and blocking_issue.startswith("quarantined_retryable_residue:")
+        )
         retryable_banner_residue = (
             runtime_status == "retryable"
             and blocking_issue == "invalid_subagent_result:start_banner_only"
-            and task_state in READY_STATES
+            and task_state in (READY_STATES | ACTIVE_IN_PROGRESS_STATES)
             and proof_count == 0
         )
+        if quarantined_ready_residue:
+            if _quarantine_retryable_runtime_residue(task, item, now):
+                quarantined += 1
+            continue
         if retryable_banner_residue:
             if _quarantine_retryable_runtime_residue(task, item, now):
                 quarantined += 1
@@ -890,6 +950,16 @@ def _clear_runtime_truth_quarantine(task: dict, now: str) -> bool:
 def _quarantine_retryable_runtime_residue(task: dict, item: dict, now: str) -> bool:
     changed = False
     issue = str(item.get("blocking_issue", "") or "").strip() or "invalid_subagent_result:start_banner_only"
+    desired_state = ""
+    issue_token = issue.lower()
+    if issue_token.startswith("quarantined_retryable_residue:"):
+        desired_state = issue.split(":", 1)[1].strip().upper()
+    if desired_state not in READY_STATES | DONE_STATES | {"BLOCKED", "WAITING_DEP"}:
+        current_state = _task_operational_state(task)
+        if current_state in READY_STATES | DONE_STATES | {"BLOCKED", "WAITING_DEP"}:
+            desired_state = current_state
+        else:
+            desired_state = _preferred_ready_state_for_role(_task_role(task))
     updates = {
         "runtime_truth_quarantined": True,
         "runtime_truth_quarantine_reason": "stale_retryable_after_ready",
@@ -900,14 +970,13 @@ def _quarantine_retryable_runtime_residue(task: dict, item: dict, now: str) -> b
         if task.get(key) != value:
             task[key] = value
             changed = True
-    ready_state = _task_operational_state(task)
-    if ready_state and str(task.get("status", "") or "").strip().upper() != ready_state:
-        task["status"] = ready_state
+    if desired_state and str(task.get("status", "") or "").strip().upper() != desired_state:
+        task["status"] = desired_state
         changed = True
-    if ready_state and str(task.get("state", "") or "").strip().upper() != ready_state:
-        task["state"] = ready_state
+    if desired_state and str(task.get("state", "") or "").strip().upper() != desired_state:
+        task["state"] = desired_state
         changed = True
-    desired_next_action = _default_next_action_for_state(ready_state)
+    desired_next_action = _default_next_action_for_state(desired_state)
     if desired_next_action and str(task.get("next_action", "") or "").strip() != desired_next_action:
         task["next_action"] = desired_next_action
         changed = True
@@ -918,6 +987,7 @@ def _quarantine_retryable_runtime_residue(task: dict, item: dict, now: str) -> b
         "admin_recovery_reason",
         "dev_recovery_reason",
         "last_capability_failure_mode",
+        "dev_execution_state",
     ):
         if str(task.get(key, "") or "").strip():
             task[key] = ""
@@ -925,6 +995,10 @@ def _quarantine_retryable_runtime_residue(task: dict, item: dict, now: str) -> b
     for key in ("planner_takeover_required", "admin_recovery_required", "dev_recovery_required"):
         if bool(task.get(key)):
             task[key] = False
+            changed = True
+    for key in ("dev_no_progress_streak", "dev_orphaned_streak", "dev_invalid_result_streak"):
+        if int(task.get(key) or 0) != 0:
+            task[key] = 0
             changed = True
     if changed:
         task["reconciled_at"] = now

@@ -135,6 +135,15 @@ PY
 }
 
 with_lock() {
+  if ! command -v flock >/dev/null 2>&1; then
+    local lock_dir="${LOCK_FILE}.d"
+    if ! mkdir "$lock_dir" 2>/dev/null; then
+      echo "PLANNER_AUTONOMY status=skip reason=busy_lock"
+      exit 0
+    fi
+    trap 'rmdir "'"$lock_dir"'" 2>/dev/null || true' EXIT
+    return 0
+  fi
   local fd=73
   eval "exec ${fd}>\"$LOCK_FILE\""
   if ! flock -n "$fd"; then
@@ -150,8 +159,13 @@ run_safe_cmd() {
   out_file="$(mktemp)"
   err_file="$(mktemp)"
   set +e
-  timeout "$SAFE_TIMEOUT_SECONDS" "$EXEC_SAFE" --workdir "$ROOT" -- "$cmd" >"$out_file" 2>"$err_file"
-  rc=$?
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$SAFE_TIMEOUT_SECONDS" "$EXEC_SAFE" --workdir "$ROOT" -- "$cmd" >"$out_file" 2>"$err_file"
+    rc=$?
+  else
+    "$EXEC_SAFE" --workdir "$ROOT" -- "$cmd" >"$out_file" 2>"$err_file"
+    rc=$?
+  fi
   set -e
   local out_text err_text
   out_text="$(cat "$out_file" 2>/dev/null || true)"
@@ -363,13 +377,17 @@ PY
 }
 
 novelty_guard_snapshot() {
-  python3 - "$ROOT" <<'PY'
+  ROOT_PATH="$ROOT" AUTOMATION_DIR="$SCRIPT_DIR" python3 - <<'PY'
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
-root = Path(sys.argv[1])
+root = Path(os.environ["ROOT_PATH"])
+automation_dir = Path(os.environ["AUTOMATION_DIR"]).resolve()
 guard_path = root / "platform" / "automation" / "product_priority_guard.py"
+if not guard_path.exists():
+    guard_path = automation_dir / "product_priority_guard.py"
 spec = importlib.util.spec_from_file_location("fc_product_priority_guard", guard_path)
 if spec is None or spec.loader is None:
     print("1|guard_missing|none|none")
@@ -507,6 +525,67 @@ print(f"{role}|{task_id}|{state}|{planner_takeover}|{next_action}|{blocked_reaso
 PY
 }
 
+delivery_state_snapshot() {
+  ROOT_PATH="$ROOT" AUTOMATION_DIR="$SCRIPT_DIR" DELIVERY_EC2_REACHABLE="${FC_PLANNER_AUTONOMY_EC2_REACHABLE:-}" python3 - <<'PY'
+import os
+from pathlib import Path
+import sys
+
+root = Path(os.environ["ROOT_PATH"])
+automation_dir = Path(os.environ["AUTOMATION_DIR"]).resolve()
+if str(automation_dir) not in sys.path:
+    sys.path.insert(0, str(automation_dir))
+
+from runtime.truth.public_runtime_probe import probe_public_surface
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+
+raw_reachable = str(os.environ.get("DELIVERY_EC2_REACHABLE", "") or "").strip().lower()
+maintenance_active = False
+maintenance_details = {}
+public_probe_status = "unknown"
+if raw_reachable in {"1", "true", "yes", "ok"}:
+    ec2_reachable = True
+    public_probe_status = "ok"
+elif raw_reachable in {"0", "false", "no", "error"}:
+    ec2_reachable = False
+    public_probe_status = "error"
+else:
+    base_url = str(os.environ.get("FC_PUBLIC_APP_BASE_URL") or os.environ.get("FC_API_BASE_URL") or "http://3.98.20.77").strip() or "http://3.98.20.77"
+    url = f"{base_url.rstrip('/')}/api/health"
+    probe = probe_public_surface(url, timeout_s=1.5)
+    maintenance_active = bool(probe.get("maintenance_active"))
+    maintenance_details = probe
+    if probe.get("http_ok"):
+        ec2_reachable = True
+        public_probe_status = "ok"
+    elif maintenance_active:
+        ec2_reachable = True
+        public_probe_status = "degraded"
+    else:
+        ec2_reachable = False
+        public_probe_status = "error"
+
+snapshot = build_runtime_truth_snapshot(
+    root,
+    state_limit=24,
+    event_limit=24,
+    ec2_reachable=ec2_reachable,
+    public_probe_status=public_probe_status,
+    maintenance_active=maintenance_active,
+    maintenance_details=maintenance_details,
+)
+state = snapshot.get("product_delivery_state", {}) if isinstance(snapshot, dict) else {}
+phase = str(state.get("phase") or "idle_ready_for_next_batch").strip() or "idle_ready_for_next_batch"
+active_batch = str(state.get("active_batch_id") or "none").strip() or "none"
+next_batch_eligible = "1" if bool(state.get("next_batch_eligible")) else "0"
+freeze_reason = str(state.get("freeze_reason") or "none").strip() or "none"
+product_done = "1" if bool(state.get("product_done")) else "0"
+ops_clean = "1" if bool(state.get("ops_clean")) else "0"
+ec2_reachable = "1" if bool(state.get("ec2_reachable")) else "0"
+print(f"{phase}|{active_batch}|{next_batch_eligible}|{freeze_reason}|{product_done}|{ops_clean}|{ec2_reachable}")
+PY
+}
+
 parse_kv_field() {
   local payload="$1"
   local field="$2"
@@ -537,6 +616,26 @@ dispatch_capability_capture() {
 }
 
 with_lock
+
+delivery_snapshot="$(delivery_state_snapshot)"
+delivery_phase="${delivery_snapshot%%|*}"
+delivery_rest="${delivery_snapshot#*|}"
+delivery_active_batch="${delivery_rest%%|*}"
+delivery_rest="${delivery_rest#*|}"
+delivery_next_batch_eligible="${delivery_rest%%|*}"
+delivery_rest="${delivery_rest#*|}"
+delivery_freeze_reason="${delivery_rest%%|*}"
+delivery_rest="${delivery_rest#*|}"
+delivery_product_done="${delivery_rest%%|*}"
+delivery_rest="${delivery_rest#*|}"
+delivery_ops_clean="${delivery_rest%%|*}"
+delivery_ec2_reachable="${delivery_rest##*|}"
+
+if [[ "$delivery_phase" == "external_outage" ]]; then
+  write_state 0 "delivery_governor" "deferred" "external_outage" "${delivery_active_batch:-none}" "external_outage" "phase=${delivery_phase};freeze_reason=${delivery_freeze_reason};ec2_reachable=${delivery_ec2_reachable}"
+  echo "PLANNER_AUTONOMY status=warn action=delivery_governor outcome=deferred issue=external_outage phase=${delivery_phase} freeze_reason=${delivery_freeze_reason} ec2_reachable=${delivery_ec2_reachable}"
+  exit 0
+fi
 
 snapshot="$(planner_runway_snapshot)"
 planner_in_progress="${snapshot%%|*}"
@@ -626,6 +725,20 @@ novelty_rest="${novelty_rest#*|}"
 novelty_scope="${novelty_rest%%|*}"
 novelty_recent_classes="${novelty_rest#*|}"
 
+delivery_snapshot="$(delivery_state_snapshot)"
+delivery_phase="${delivery_snapshot%%|*}"
+delivery_rest="${delivery_snapshot#*|}"
+delivery_active_batch="${delivery_rest%%|*}"
+delivery_rest="${delivery_rest#*|}"
+delivery_next_batch_eligible="${delivery_rest%%|*}"
+delivery_rest="${delivery_rest#*|}"
+delivery_freeze_reason="${delivery_rest%%|*}"
+delivery_rest="${delivery_rest#*|}"
+delivery_product_done="${delivery_rest%%|*}"
+delivery_rest="${delivery_rest#*|}"
+delivery_ops_clean="${delivery_rest%%|*}"
+delivery_ec2_reachable="${delivery_rest##*|}"
+
 if [[ "$novelty_allow" != "1" ]]; then
   write_state 1 "novelty_guard" "deferred" "planner_stagnation_requires_novelty_target" "none" "planner_stagnation_requires_novelty_target" "reason=${novelty_reason};scope=${novelty_scope};recent_classes=${novelty_recent_classes};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc}"
   echo "PLANNER_AUTONOMY status=warn action=novelty_guard outcome=deferred issue=planner_stagnation_requires_novelty_target reason=${novelty_reason} scope=${novelty_scope} recent_classes=${novelty_recent_classes} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
@@ -699,7 +812,7 @@ if [[ "$AUTO_CREATE_ON_EMPTY" != "1" ]]; then
   exit 0
 fi
 
-if [[ "$runway_task_count" =~ ^[0-9]+$ ]] && (( runway_task_count > 0 )) || [[ "$runway_stream_count" =~ ^[0-9]+$ ]] && (( runway_stream_count > 0 )); then
+if [[ "$delivery_phase" != "product_done_ops_dirty" && "$delivery_phase" != "idle_ready_for_next_batch" ]] && { [[ "$runway_task_count" =~ ^[0-9]+$ ]] && (( runway_task_count > 0 )) || [[ "$runway_stream_count" =~ ^[0-9]+$ ]] && (( runway_stream_count > 0 )); }; then
   bridge_payload="$(runtime_dispatch_capture)"
   bridge_rc="$(capture_rc "$bridge_payload")"
   bridge_out="$(capture_body "$bridge_payload")"
@@ -716,45 +829,8 @@ if [[ "$runway_task_count" =~ ^[0-9]+$ ]] && (( runway_task_count > 0 )) || [[ "
   exit 0
 fi
 
-active_cycle_snapshot="$(
-  QUEUE_PATH="$QUEUE_FILE" BOARD_PATH="$BOARD_FILE" python3 - <<'PY'
-import json
-import os
-from pathlib import Path
-
-
-def load_json(path_str: str) -> dict:
-    path = Path(path_str)
-    if not path.exists():
-        return {}
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
-    except Exception:
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def normalize_ids(values) -> list[str]:
-    if not isinstance(values, list):
-        return []
-    return [str(value).strip().upper() for value in values if str(value).strip()]
-
-
-queue_payload = load_json(os.environ["QUEUE_PATH"])
-board_payload = load_json(os.environ["BOARD_PATH"])
-active_cycle = {}
-if isinstance(queue_payload.get("active_cycle"), dict):
-    active_cycle = queue_payload.get("active_cycle") or {}
-elif isinstance(board_payload.get("active_cycle"), dict):
-    active_cycle = board_payload.get("active_cycle") or {}
-
-active_ids = normalize_ids(active_cycle.get("active_batch_ids"))
-cycle_id = str(active_cycle.get("cycle_id") or "none").strip() or "none"
-print(f"{','.join(active_ids) or 'none'}|{cycle_id}")
-PY
-)"
-active_batch_ids="${active_cycle_snapshot%%|*}"
-active_cycle_id="${active_cycle_snapshot#*|}"
+active_batch_ids="$delivery_active_batch"
+active_cycle_id="canonical_delivery_state"
 
 if [[ -n "$active_batch_ids" && "$active_batch_ids" != "none" ]]; then
   handoff_stale_seconds="${FC_CANONICAL_HANDOFF_STALE_SECONDS:-1800}"
@@ -845,8 +921,20 @@ PY
     echo "PLANNER_AUTONOMY status=warn action=active_cycle_guard outcome=deferred issue=canonical_handoff_stale active_cycle=${active_batch_ids} cycle_id=${active_cycle_id} task_id=${stale_handoff_task} role=${stale_handoff_role} age_s=${stale_handoff_age_s} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
     exit 0
   fi
-  write_state 1 "autobatch_guard" "deferred" "planner_active_cycle_pinned" "${active_batch_ids}" "planner_active_cycle_pinned" "active_cycle=${active_batch_ids};cycle_id=${active_cycle_id};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN}"
-  echo "PLANNER_AUTONOMY status=warn action=autobatch_guard outcome=deferred issue=planner_active_cycle_pinned active_cycle=${active_batch_ids} cycle_id=${active_cycle_id} planner_ready=0 sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+  create_payload="$(run_safe_capture "create_top_level_queued" "python3 platform/automation/runtime/planner/planner_runtime_actions.py planner-autobatch --board \"$BOARD_FILE\" --queue \"$QUEUE_FILE\" --reason planner_active_cycle_queue_next --cooldown-s 0 --allow-active-queued")"
+  create_rc="$(capture_rc "$create_payload")"
+  create_out="$(capture_body "$create_payload")"
+  created_batch_id="$(parse_autobatch_id "$create_out")"
+  create_reason="$(parse_autobatch_reason "$create_out")"
+  if [[ "$create_rc" == "0" && "$create_out" == AUTOBATCH_OK* ]]; then
+    sync_after_create_payload="$(run_safe_capture "sync_priority_after_queued_create" "python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --board \"$BOARD_FILE\" --queue \"$QUEUE_FILE\"")"
+    sync_after_create_rc="$(capture_rc "$sync_after_create_payload")"
+    write_state 0 "autobatch_queue_next" "resolved" "planner_active_cycle_queue_next" "${created_batch_id}" "none" "active_cycle=${active_batch_ids};cycle_id=${active_cycle_id};created_batch=${created_batch_id};create_reason=${create_reason:-created};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};post_sync_rc=${sync_after_create_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN}"
+    echo "PLANNER_AUTONOMY status=ok action=autobatch_queue_next outcome=resolved active_cycle=${active_batch_ids} cycle_id=${active_cycle_id} batch_id=${created_batch_id} create_reason=${create_reason:-created} post_sync_rc=${sync_after_create_rc} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
+    exit 0
+  fi
+  write_state 1 "autobatch_guard" "deferred" "planner_active_cycle_pinned" "${active_batch_ids}" "planner_active_cycle_pinned" "active_cycle=${active_batch_ids};cycle_id=${active_cycle_id};create_rc=${create_rc};create_reason=${create_reason:-none};sanitize_rc=${sanitize_rc};sync_rc=${sync_rc};collect_rc=${collect_rc};reconcile_rc=${reconcile_rc};source=${CREATE_SOURCE};wait_forbidden=${WAIT_FORBIDDEN}"
+  echo "PLANNER_AUTONOMY status=warn action=autobatch_guard outcome=deferred issue=planner_active_cycle_pinned active_cycle=${active_batch_ids} cycle_id=${active_cycle_id} create_rc=${create_rc} create_reason=${create_reason:-none} sanitize_rc=${sanitize_rc} sync_rc=${sync_rc} collect_rc=${collect_rc} reconcile_rc=${reconcile_rc}"
   exit 0
 fi
 

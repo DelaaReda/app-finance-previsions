@@ -3,8 +3,11 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
+import urllib.error
+import urllib.request
 
 from orchestrator_paths import resolve_orchestrator_read_path
 
@@ -20,7 +23,31 @@ LEGACY_BRIDGE_FILES = (
 )
 READY_OWNER_TASK_STATES = {"ready", "ready_dev", "ready_planner", "ready_admin", "done", "closed"}
 RETRYABLE_RESIDUE_STATUSES = {"retryable", "failed", "blocked"}
+MERGE_RESIDUE_STATUSES = {"ready_to_merge"}
 INVALID_RESULT_MARKERS = ("invalid_subagent_result", "start_banner_only")
+DELIVERY_ACTIVE_STATUSES = {"running", "pending", "review", "in_progress", "blocked", "ready_to_merge", "retryable"}
+DELIVERY_ACTIVE_OWNER_STATES = {"in_progress", "ready", "ready_planner", "ready_dev", "review", "blocked", "waiting_dep"}
+PUBLIC_PROOF_OK_MARKERS = (
+    "http://3.98.20.77",
+    "ec2-3-98-20-77",
+    "public ec2",
+    "public-status",
+    "product_runtime=ok",
+    "public api healthy",
+    "monitor reports health=ok",
+    "monitor health=ok",
+    "api_health_ok",
+)
+PUBLIC_PROOF_ERROR_MARKERS = (
+    "502 bad gateway",
+    "bad gateway",
+    "status=502",
+    "returned 502",
+    "public api unhealthy",
+    "connection refused",
+    "timed out",
+    "timeout",
+)
 
 
 def _parse_iso(raw: Any) -> datetime | None:
@@ -49,7 +76,10 @@ def _truth_value_present(value: Any) -> bool:
     if not token:
         return False
     token_lower = token.lower()
-    if token_lower in {"none", "n/a", "na", "null", "unknown"}:
+    normalized = token_lower.rstrip(" .!?:;")
+    if normalized in {"none", "n/a", "na", "null", "unknown", "not yet", "pending"}:
+        return False
+    if normalized.startswith("skip("):
         return False
     if token_lower in {"...", "…", "before=...; after=...; test=..."}:
         return False
@@ -100,6 +130,7 @@ def _normalize_state(item: dict[str, Any]) -> dict[str, Any]:
         "checkpoint_id": str(item.get("checkpoint_id", "")).strip(),
         "tests_run": _proof_field(result.get("tests_run", ""), proof.get("tests_run", "")),
         "engine": str(item.get("engine", "")).strip(),
+        "summary": _proof_field(result.get("summary", ""), proof.get("summary", "")),
     }
 
 
@@ -122,12 +153,212 @@ def _load_workboard_task_index(root: Path) -> dict[str, dict[str, Any]]:
     return index
 
 
+def _load_projection_payload(root: Path, filename: str) -> dict[str, Any]:
+    path = resolve_orchestrator_read_path(root, filename)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _default_public_app_base_url() -> str:
+    return (
+        str(os.environ.get("FC_PUBLIC_APP_BASE_URL") or os.environ.get("FC_API_BASE_URL") or "http://3.98.20.77").strip()
+        or "http://3.98.20.77"
+    )
+
+
+def _probe_http_ok(url: str, timeout_s: float = 1.5) -> bool:
+    try:
+        req = urllib.request.Request(url, headers={"Accept": "application/json,text/html"})
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            status = int(getattr(resp, "status", 0) or 0)
+            return 200 <= status < 300
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
+        return False
+    except Exception:
+        return False
+
+
+def _active_cycle_batch_ids(queue_payload: dict[str, Any], workboard_payload: dict[str, Any]) -> set[str]:
+    ordered: list[str] = []
+    for payload in (queue_payload, workboard_payload):
+        active_cycle = payload.get("active_cycle")
+        if not isinstance(active_cycle, dict):
+            continue
+        raw_ids = active_cycle.get("active_batch_ids")
+        if not isinstance(raw_ids, list):
+            continue
+        for raw in raw_ids:
+            token = str(raw or "").strip().upper()
+            if token and token not in ordered:
+                ordered.append(token)
+    if ordered:
+        return set(ordered)
+
+    queue_items = queue_payload.get("items", []) if isinstance(queue_payload, dict) else []
+    if isinstance(queue_items, list):
+        for row in queue_items:
+            if not isinstance(row, dict):
+                continue
+            state = str(row.get("state", "") or row.get("status", "")).strip().upper()
+            if state in {"DONE", "CLOSED", "CANCELLED"}:
+                continue
+            token = _task_batch_id(row)
+            if token and token not in ordered:
+                ordered.append(token)
+
+    workboard_tasks = workboard_payload.get("tasks", []) if isinstance(workboard_payload, dict) else []
+    if isinstance(workboard_tasks, list):
+        for row in workboard_tasks:
+            if not isinstance(row, dict):
+                continue
+            state = str(row.get("state", "") or row.get("status", "")).strip().upper()
+            if state in {"DONE", "CLOSED", "CANCELLED"}:
+                continue
+            token = _task_batch_id(row)
+            if token and token not in ordered:
+                ordered.append(token)
+    return set(ordered)
+
+
+def _active_cycle_batch_id_list(queue_payload: dict[str, Any], workboard_payload: dict[str, Any]) -> list[str]:
+    ordered: list[str] = []
+    for payload in (queue_payload, workboard_payload):
+        active_cycle = payload.get("active_cycle")
+        if not isinstance(active_cycle, dict):
+            continue
+        raw_ids = active_cycle.get("active_batch_ids")
+        if not isinstance(raw_ids, list):
+            continue
+        for raw in raw_ids:
+            token = str(raw or "").strip().upper()
+            if token and token not in ordered:
+                ordered.append(token)
+    return ordered
+
+
+def _task_batch_id(task: dict[str, Any] | None) -> str:
+    if not isinstance(task, dict):
+        return ""
+    for key in ("stream_id", "batch_id"):
+        token = str(task.get(key, "") or "").strip().upper()
+        if token:
+            return token
+    task_id = str(task.get("id", "") or task.get("task_id", "")).strip().upper()
+    if task_id.startswith("BATCH-"):
+        parts = task_id.split("-")
+        if len(parts) >= 2:
+            return "-".join(parts[:2])
+    return ""
+
+
+def _state_batch_id(item: dict[str, Any], task_index: dict[str, dict[str, Any]]) -> str:
+    batch_id = str(item.get("batch_id", "") or "").strip().upper()
+    if batch_id:
+        return batch_id
+    task_id = str(item.get("task_id", "") or "").strip()
+    if task_id:
+        owner_task = task_index.get(task_id)
+        batch_id = _task_batch_id(owner_task)
+        if batch_id:
+            return batch_id
+    return ""
+
+
+def _state_matches_active_cycle(
+    item: dict[str, Any],
+    active_cycle_batch_ids: set[str],
+    task_index: dict[str, dict[str, Any]],
+) -> bool:
+    if not active_cycle_batch_ids:
+        return False
+    batch_id = _state_batch_id(item, task_index)
+    return bool(batch_id) and batch_id in active_cycle_batch_ids
+
+
+def _event_matches_active_cycle(
+    event: dict[str, Any],
+    active_cycle_batch_ids: set[str],
+    task_index: dict[str, dict[str, Any]],
+) -> bool:
+    if not active_cycle_batch_ids:
+        return False
+    payload = event.get("payload", {}) if isinstance(event.get("payload"), dict) else {}
+    batch_id = str(event.get("batch_id", "") or payload.get("batch_id", "")).strip().upper()
+    if not batch_id:
+        task_id = str(event.get("task_id", "") or payload.get("task_id", "")).strip()
+        if task_id:
+            batch_id = _task_batch_id(task_index.get(task_id))
+    return bool(batch_id) and batch_id in active_cycle_batch_ids
+
+
 def _task_operational_state(task: dict[str, Any]) -> str:
     status = str(task.get("status", "") or "").strip().lower()
     state = str(task.get("state", "") or "").strip().lower()
     if status in READY_OWNER_TASK_STATES:
         return status
     return state or status
+
+
+def _proof_text(item: dict[str, Any]) -> str:
+    return " ".join(
+        str(item.get(key, "") or "")
+        for key in ("artifact", "verify", "tests_run", "summary", "blocking_issue")
+        if str(item.get(key, "") or "").strip()
+    ).strip().lower()
+
+
+def _state_has_public_proof_ok(item: dict[str, Any]) -> bool:
+    blob = _proof_text(item)
+    if not blob:
+        return False
+    if any(marker in blob for marker in PUBLIC_PROOF_ERROR_MARKERS):
+        return False
+    return any(marker in blob for marker in PUBLIC_PROOF_OK_MARKERS)
+
+
+def _state_has_public_proof_error(item: dict[str, Any]) -> bool:
+    blob = _proof_text(item)
+    if not blob:
+        return False
+    return any(marker in blob for marker in PUBLIC_PROOF_ERROR_MARKERS)
+
+
+def _latest_matching_state(
+    states: list[dict[str, Any]],
+    predicate: Callable[[dict[str, Any]], bool],
+) -> dict[str, Any] | None:
+    for item in states:
+        if predicate(item):
+            return item
+    return None
+
+
+def _truthy_flag(value: Any) -> bool:
+    token = str(value or "").strip().lower()
+    return token in {"1", "true", "yes", "on", "ok"}
+
+
+def _batch_projection_index(queue_payload: dict[str, Any], workboard_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    index: dict[str, dict[str, Any]] = {}
+    for payload, key in ((queue_payload, "items"), (workboard_payload, "streams")):
+        rows = payload.get(key, [])
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            batch_id = _task_batch_id(row)
+            if not batch_id:
+                continue
+            current = index.setdefault(batch_id, {})
+            for field, value in row.items():
+                if value in (None, "", [], {}):
+                    continue
+                current[field] = value
+    return index
 
 
 def _quarantine_retryable_residue(
@@ -145,7 +376,11 @@ def _quarantine_retryable_residue(
         return None
 
     status = str(item.get("status", "")).strip().lower()
-    if status not in RETRYABLE_RESIDUE_STATUSES:
+    done_owner_state = task_state in {"done", "closed"}
+    if status in MERGE_RESIDUE_STATUSES:
+        if not done_owner_state or not _task_has_delivery_evidence(item):
+            return None
+    elif status not in RETRYABLE_RESIDUE_STATUSES:
         return None
 
     issue_bits = " | ".join(
@@ -154,9 +389,9 @@ def _quarantine_retryable_residue(
             str(item.get("next_action", "")),
         ]
     ).strip().lower()
-    if not any(marker in issue_bits for marker in INVALID_RESULT_MARKERS):
+    if status not in MERGE_RESIDUE_STATUSES and not done_owner_state and not any(marker in issue_bits for marker in INVALID_RESULT_MARKERS):
         return None
-    if _task_has_delivery_evidence(item):
+    if status not in MERGE_RESIDUE_STATUSES and _task_has_delivery_evidence(item):
         return None
 
     quarantined = dict(item)
@@ -191,31 +426,251 @@ def _legacy_bridge_snapshot(root: Path, *, hide_paths: bool = False) -> dict[str
     }
 
 
-def build_runtime_truth_snapshot(root: Path, *, state_limit: int = 12, event_limit: int = 50) -> dict[str, Any]:
+def _latest_meaningful_delta_at(
+    states: list[dict[str, Any]],
+    queue_payload: dict[str, Any],
+    workboard_payload: dict[str, Any],
+) -> str | None:
+    candidates: list[datetime] = []
+    for item in states:
+        status = str(item.get("status", "")).strip().lower()
+        if status in {"ready_to_merge", "done", "closed"} or _task_has_delivery_evidence(item):
+            dt = _parse_iso(item.get("updated_at"))
+            if dt is not None:
+                candidates.append(dt)
+
+    for payload, key in ((queue_payload, "items"), (workboard_payload, "tasks")):
+        rows = payload.get(key, [])
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            state = _task_operational_state(row)
+            if state not in {"done", "closed"}:
+                continue
+            dt = (
+                _parse_iso(row.get("updated_at"))
+                or _parse_iso(row.get("finished_at"))
+                or _parse_iso(row.get("completed_at"))
+                or _parse_iso(row.get("closed_at"))
+            )
+            if dt is not None:
+                candidates.append(dt)
+
+    if not candidates:
+        return None
+    return max(candidates).isoformat().replace("+00:00", "Z")
+
+
+def _build_product_delivery_state(
+    *,
+    all_states: list[dict[str, Any]],
+    normalized_states: list[dict[str, Any]],
+    queue_payload: dict[str, Any],
+    workboard_payload: dict[str, Any],
+    active_cycle_batch_ids: set[str],
+    ignored_historical_states: list[dict[str, Any]],
+    quarantined_retryable_residue: list[dict[str, Any]],
+    ec2_reachable: bool | None,
+    public_probe_status: str,
+    maintenance_active: bool,
+    maintenance_details: dict[str, Any] | None,
+    now: datetime,
+) -> dict[str, Any]:
+    batch_index = _batch_projection_index(queue_payload, workboard_payload)
+    active_batch_ids_ordered = _active_cycle_batch_id_list(queue_payload, workboard_payload)
+
+    active_batch_id = ""
+    for item in normalized_states:
+        batch_id = str(item.get("batch_id", "") or "").strip().upper()
+        status = str(item.get("status", "")).strip().lower()
+        if batch_id and status in DELIVERY_ACTIVE_STATUSES:
+            active_batch_id = batch_id
+            break
+    if not active_batch_id and active_batch_ids_ordered:
+        active_batch_id = active_batch_ids_ordered[0]
+    if not active_batch_id and active_cycle_batch_ids:
+        active_batch_id = sorted(active_cycle_batch_ids)[0]
+
+    if maintenance_active:
+        effective_public_status = "degraded"
+    elif ec2_reachable is True:
+        effective_public_status = "ok"
+    elif ec2_reachable is False:
+        effective_public_status = "error"
+    else:
+        effective_public_status = public_probe_status if public_probe_status in {"ok", "degraded", "error"} else "unknown"
+
+    recent_completed_batch_ids: list[str] = []
+    for payload in (queue_payload, workboard_payload):
+        active_cycle = payload.get("active_cycle")
+        if not isinstance(active_cycle, dict):
+            continue
+        raw_ids = active_cycle.get("recent_completed_batch_ids")
+        if not isinstance(raw_ids, list):
+            continue
+        for raw in raw_ids:
+            token = str(raw or "").strip().upper()
+            if token and token not in recent_completed_batch_ids:
+                recent_completed_batch_ids.append(token)
+
+    latest_meaningful_delta_at = _latest_meaningful_delta_at(all_states, queue_payload, workboard_payload)
+    public_proof_ok_state = _latest_matching_state(all_states, _state_has_public_proof_ok)
+    public_proof_error_state = _latest_matching_state(all_states, _state_has_public_proof_error)
+    scoped_public_proof_ok_state = None
+    candidate_batches = [active_batch_id] if active_batch_id else []
+    candidate_batches.extend(batch_id for batch_id in recent_completed_batch_ids if batch_id not in candidate_batches)
+    for batch_id in candidate_batches:
+        scoped_public_proof_ok_state = _latest_matching_state(
+            all_states,
+            lambda item, batch_id=batch_id: str(item.get("batch_id", "") or "").strip().upper() == batch_id
+            and _state_has_public_proof_ok(item),
+        )
+        if scoped_public_proof_ok_state is not None:
+            break
+    if scoped_public_proof_ok_state is None:
+        scoped_public_proof_ok_state = public_proof_ok_state
+
+    if scoped_public_proof_ok_state is not None:
+        effective_public_status = "ok"
+    elif effective_public_status == "unknown" and public_proof_error_state is not None:
+        effective_public_status = "error"
+    elif effective_public_status == "unknown" and active_batch_id and latest_meaningful_delta_at:
+        effective_public_status = "degraded"
+
+    proof_batch_id = str(
+        (scoped_public_proof_ok_state or {}).get("batch_id")
+        or active_batch_id
+        or (recent_completed_batch_ids[0] if recent_completed_batch_ids else "")
+    ).strip().upper()
+    batch_meta = batch_index.get(proof_batch_id, {}) if proof_batch_id else {}
+    visible_delta_hint = batch_meta.get("user_value_delta_visible")
+    user_visible_delta_confirmed = bool(scoped_public_proof_ok_state) and (
+        visible_delta_hint is None or _truthy_flag(visible_delta_hint) or bool(visible_delta_hint)
+    )
+
+    product_done = bool(
+        scoped_public_proof_ok_state is not None
+        and effective_public_status == "ok"
+        and user_visible_delta_confirmed
+    )
+    ops_clean = (
+        len(quarantined_retryable_residue) == 0
+        and len(ignored_historical_states) == 0
+        and len(normalized_states) == 0
+        and not active_batch_id
+    )
+
+    if effective_public_status == "error" and not maintenance_active:
+        phase = "external_outage"
+        freeze_reason = "external_outage"
+        next_batch_eligible = False
+    elif active_batch_id:
+        if scoped_public_proof_ok_state is not None and user_visible_delta_confirmed:
+            product_done = True
+            phase = "product_done_ops_dirty"
+            freeze_reason = "none"
+            next_batch_eligible = True
+        elif latest_meaningful_delta_at:
+            phase = "verifying_public_proof"
+            freeze_reason = "waiting_public_proof"
+            next_batch_eligible = False
+        else:
+            phase = "active_delivery"
+            freeze_reason = "none"
+            next_batch_eligible = False
+    else:
+        phase = "idle_ready_for_next_batch"
+        freeze_reason = "none"
+        next_batch_eligible = bool(effective_public_status != "error")
+
+    advisory_mismatch: list[str] = []
+    projection_open = any(
+        _task_operational_state(row) in DELIVERY_ACTIVE_OWNER_STATES
+        for payload in (queue_payload, workboard_payload)
+        for key in (("items",) if payload is queue_payload else ("tasks",))
+        for row in payload.get(key[0], [])
+        if isinstance(row, dict)
+    )
+    if not active_batch_id and projection_open:
+        advisory_mismatch.append("projection_non_terminal_without_canonical_active_batch")
+    if quarantined_retryable_residue:
+        advisory_mismatch.append("historical_runtime_residue_quarantined")
+    if active_batch_id and not normalized_states:
+        advisory_mismatch.append("active_cycle_projection_without_runtime_state")
+
+    return {
+        "active_batch_id": active_batch_id or None,
+        "phase": phase,
+        "product_done": bool(product_done),
+        "ops_clean": bool(ops_clean),
+        "public_proof_status": effective_public_status,
+        "user_visible_delta_confirmed": bool(user_visible_delta_confirmed),
+        "next_batch_eligible": bool(next_batch_eligible),
+        "ec2_reachable": bool(ec2_reachable or maintenance_active)
+        if ec2_reachable is not None or maintenance_active
+        else bool(effective_public_status == "ok"),
+        "freeze_reason": freeze_reason,
+        "maintenance_active": bool(maintenance_active),
+        "maintenance_reason": str((maintenance_details or {}).get("maintenance_reason") or "none").strip() or "none",
+        "maintenance_command": str((maintenance_details or {}).get("maintenance_command") or "").strip(),
+        "maintenance_age_s": (maintenance_details or {}).get("maintenance_age_s"),
+        "maintenance_source": str((maintenance_details or {}).get("maintenance_source") or "none").strip() or "none",
+        "last_meaningful_delta_at": latest_meaningful_delta_at,
+        "last_public_proof_ok_at": str((scoped_public_proof_ok_state or {}).get("updated_at") or "").strip() or None,
+        "advisory_mismatch": advisory_mismatch,
+        "generated_at": now.isoformat().replace("+00:00", "Z"),
+    }
+
+
+def build_runtime_truth_snapshot(
+    root: Path,
+    *,
+    state_limit: int = 12,
+    event_limit: int = 50,
+    ec2_reachable: bool | None = None,
+    public_probe_status: str | None = None,
+    maintenance_active: bool = False,
+    maintenance_details: dict[str, Any] | None = None,
+    public_probe_fn: Callable[[str], bool] | None = None,
+) -> dict[str, Any]:
     root = Path(root)
     sqlite_path = event_store_path(root)
+    queue_payload = _load_projection_payload(root, "priority-queue.json")
+    workboard_payload = _load_projection_payload(root, "parallel-workstreams.json")
     graph_states = latest_graph_states(root, limit=max(50, state_limit * 4))
     workboard_task_index = _load_workboard_task_index(root)
+    active_cycle_batch_ids = _active_cycle_batch_ids(queue_payload, workboard_payload)
     all_states = [_normalize_state(row) for row in graph_states if isinstance(row, dict)]
     all_states.sort(key=_sort_ts, reverse=True)
     quarantined_retryable_residue: list[dict[str, Any]] = []
     normalized_states: list[dict[str, Any]] = []
+    ignored_historical_states: list[dict[str, Any]] = []
     for item in all_states:
-      quarantined = _quarantine_retryable_residue(item, workboard_task_index)
-      if quarantined is not None:
-          quarantined_retryable_residue.append(quarantined)
-      else:
-          normalized_states.append(item)
+        quarantined = _quarantine_retryable_residue(item, workboard_task_index)
+        in_active_cycle = _state_matches_active_cycle(item, active_cycle_batch_ids, workboard_task_index)
+        if quarantined is not None:
+            quarantined_retryable_residue.append(quarantined)
+        elif in_active_cycle:
+            normalized_states.append(item)
+        else:
+            ignored_historical_states.append(item)
     shown_states = normalized_states[: max(1, state_limit)]
 
     state_counts = Counter(str(row.get("status", "")).strip().lower() or "unknown" for row in normalized_states)
-    recent_event_rows = [row for row in recent_events(root, hours=6, limit=max(20, event_limit)) if isinstance(row, dict)]
+    all_recent_event_rows = [row for row in recent_events(root, hours=6, limit=max(20, event_limit)) if isinstance(row, dict)]
+    recent_event_rows = [
+        row
+        for row in all_recent_event_rows
+        if _event_matches_active_cycle(row, active_cycle_batch_ids, workboard_task_index)
+    ]
     recent_event_rows.sort(key=_sort_ts, reverse=True)
     recent_event_types = Counter(str(row.get("event_type", "")).strip() or "unknown" for row in recent_event_rows)
 
     queue_projection = resolve_orchestrator_read_path(root, "priority-queue.json")
     workboard_projection = resolve_orchestrator_read_path(root, "parallel-workstreams.json")
-    event_store_primary = sqlite_path.exists() and bool(normalized_states or recent_event_rows)
+    event_store_primary = sqlite_path.exists() and bool(all_states or all_recent_event_rows)
     runtime_truth_source = "sqlite" if event_store_primary else "fallback"
     legacy_bridges = _legacy_bridge_snapshot(root, hide_paths=event_store_primary)
     if event_store_primary:
@@ -225,15 +680,38 @@ def build_runtime_truth_snapshot(root: Path, *, state_limit: int = 12, event_lim
     else:
         agentic_runtime_status = "unknown"
 
+    probe_status = str(public_probe_status or "").strip().lower()
+    if probe_status not in {"ok", "degraded", "error", "unknown"}:
+        probe_status = "unknown"
+    if ec2_reachable is None and probe_status == "unknown" and public_probe_fn is not None:
+        public_base_url = _default_public_app_base_url().rstrip("/")
+        probe = public_probe_fn or _probe_http_ok
+        probe_status = "ok" if probe(f"{public_base_url}/api/health") else "error"
+    delivery_state = _build_product_delivery_state(
+        all_states=all_states,
+        normalized_states=normalized_states,
+        queue_payload=queue_payload,
+        workboard_payload=workboard_payload,
+        active_cycle_batch_ids=active_cycle_batch_ids,
+        ignored_historical_states=ignored_historical_states,
+        quarantined_retryable_residue=quarantined_retryable_residue,
+        ec2_reachable=ec2_reachable,
+        public_probe_status=probe_status,
+        maintenance_active=bool(maintenance_active),
+        maintenance_details=maintenance_details if isinstance(maintenance_details, dict) else {},
+        now=datetime.now(timezone.utc),
+    )
+
     return {
         "event_store_primary": bool(event_store_primary),
         "runtime_truth_source": runtime_truth_source,
         "source": "event_store" if event_store_primary else "projection_fallback",
-        "projection_secondary_only": bool(event_store_primary),
+        "projection_secondary_only": not bool(event_store_primary),
         "legacy_registry_secondary_only": True,
         "sqlite_path": str(sqlite_path),
         "graph_state_count": len(normalized_states),
         "graph_state_count_total": len(all_states),
+        "ignored_historical_state_count": len(ignored_historical_states),
         "recent_event_count": len(recent_event_rows),
         "status_counts": dict(state_counts),
         "recent_event_types": dict(recent_event_types),
@@ -248,6 +726,7 @@ def build_runtime_truth_snapshot(root: Path, *, state_limit: int = 12, event_lim
             "recent_event_count": len(recent_event_rows),
         },
         "legacy_bridges": legacy_bridges,
+        "product_delivery_state": delivery_state,
         "projection_paths": {
             "queue": str(queue_projection),
             "workboard": str(workboard_projection),

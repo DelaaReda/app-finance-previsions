@@ -50,6 +50,13 @@ class PlannerGraphRuntime:
         state.queue_snapshot_ref = task.queue_snapshot_ref or state.queue_snapshot_ref
         state.workboard_snapshot_ref = task.workboard_snapshot_ref or state.workboard_snapshot_ref
         state.capability_request = task.model_dump()
+        # A redispatch starts a fresh capability attempt for the same owner task.
+        # Keep the new request, but drop any previous result/proof so runtime truth
+        # cannot mix the new running subagent with the last failed attempt.
+        state.capability_result = {}
+        state.delivery_proof = {}
+        state.guard_status = "unknown"
+        state.runtime_health = "unknown"
         state.current_node = "wait_or_collect_result"
         state.status = "running"
         state.next_action = "wait_or_collect_result"
@@ -187,7 +194,7 @@ class PlannerGraphRuntime:
             "engine": self.engine,
             "write_primary": True,
             "primary_source": "sqlite_event_store",
-            "projection_secondary_only": True,
+            "projection_secondary_only": False,
             "nodes": list(GRAPH_NODES),
             "states": self.store.latest_graph_states(limit=limit),
             "generated_at": _utc_now(),

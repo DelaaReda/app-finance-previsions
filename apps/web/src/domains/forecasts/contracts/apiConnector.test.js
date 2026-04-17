@@ -1470,6 +1470,32 @@ test('getCopilotStart maps open_copilot without explicit target to the copilot l
   );
 });
 
+test('getCopilotStart preserves brief story lines for changed today and matters now', async () => {
+  const sandbox = loadConnector(async () => ({
+    async json() {
+      return {
+        ok: true,
+        data: {
+          brief_of_day: {
+            summary: 'Leadership narrowed into a few AI names.',
+            what_changed_today: ['Breadth improved outside mega caps.'],
+            what_matters_now: ['NVDA remains the cleanest focus ticker.'],
+            generated_at: '2026-03-09T06:00:00.000Z',
+          },
+          ask: [],
+          open: [],
+        },
+      };
+    },
+  }));
+
+  const payload = await sandbox.window.FinanceAPI.getCopilotStart();
+  const brief = payload.copilot_start?.brief_of_day || {};
+
+  assert.deepEqual(brief.what_changed_today, ['Breadth improved outside mega caps.']);
+  assert.deepEqual(brief.what_matters_now, ['NVDA remains the cleanest focus ticker.']);
+});
+
 test('getCopilotStart falls back to copilot context when the starter route is unavailable', async () => {
   const calls = [];
   const sandbox = loadConnector(async (url) => {

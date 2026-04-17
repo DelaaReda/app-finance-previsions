@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-95-BATCH-95-ARCH-20260416T114850Z-675"
+stream_id: "BATCH-95"
+task_id: "BATCH-95-ARCH"
+role: "planner"
+produced_at_utc: "2026-04-16T11:48:50Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role planner --task BATCH-95-ARCH --artifact docs/architecture/ARCHITECTURE_MAP.md --tests-run SKIP(planner_arch_runtime_only) --source manual_tick --idempotency-key COMPLETE_BATCH_95_ARCH_DEV01_READY_P1776340011_4192"
+      rc: "0"
+      started_at_utc: "2026-04-16T11:48:50Z"
+      ended_at_utc: "2026-04-16T11:48:50Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_arch_runtime_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/architecture/ARCHITECTURE_MAP.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "COMPLETE_BATCH_95_ARCH_DEV01_READY_P1776340011_4192"
+  review_ref: "manual_tick:BATCH-95-ARCH"
+  note: "source=manual_tick | root_cause=BATCH-95-ARCH restait IN_PROGRESS avec claim planner non canonique et sans vision_alignment traçable | fix_applied=completion planner avec preuve architecture canonique backend-first alignée produit pour débloquer DEV-01 | verify=before=BATCH-95-ARCH:IN_PROGRESS; after=BATCH-95-DEV-01:READY; test=python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=batch_dependency_policy=single_batch,architecture_plan_ref=docs/architecture/ARCHITECTURE_MAP.md,architecture_audit=apps/api|apps/web|platform/automation,judge_parity_ref=docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md | vision_alignment=batch=BATCH-95; target=portfolio_first_brief_with_ranked_actions; impact=unlock_dev_delivery_for_personal_finance_copilot"

@@ -139,6 +139,14 @@ if sub == "reconcile-state":
     raise SystemExit(0)
 
 if sub == "planner-autobatch":
+    allow_active_queued = "--allow-active-queued" in args
+    active_cycle_ids = []
+    active_cycle = queue.get("active_cycle")
+    if isinstance(active_cycle, dict) and isinstance(active_cycle.get("active_batch_ids"), list):
+        active_cycle_ids = [str(item).strip().upper() for item in active_cycle.get("active_batch_ids", []) if str(item).strip()]
+    if active_cycle_ids and not allow_active_queued:
+        print(f"AUTOBATCH_SKIP reason=active_cycle_pinned batch_id={active_cycle_ids[0]}")
+        raise SystemExit(0)
     if (ROOT / "force_autobatch_duplicate").exists():
         print("AUTOBATCH_SKIP reason=duplicate_title batch_id=none")
         raise SystemExit(0)
@@ -211,13 +219,16 @@ def _setup_workspace() -> Path:
     return td
 
 
-def _run_script(workspace: Path) -> subprocess.CompletedProcess[str]:
+def _run_script(workspace: Path, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["FC_WORKSPACE_ROOT"] = str(workspace)
     env["FC_ROLE_STATE_DIR"] = str(workspace / "state")
     env["FC_PLANNER_AUTONOMY_ENABLED"] = "1"
     env["FC_PLANNER_AUTO_CREATE_ON_EMPTY"] = "1"
     env["FC_PLANNER_WAIT_FORBIDDEN"] = "1"
+    env["FC_PLANNER_AUTONOMY_EC2_REACHABLE"] = "1"
+    if extra_env:
+        env.update(extra_env)
     return subprocess.run(
         ["bash", str(SCRIPT)],
         cwd=REPO_ROOT,
@@ -298,11 +309,22 @@ class PlannerAutonomyTickTests(unittest.TestCase):
         ws = _setup_workspace()
         self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
 
+        queue_path = ws / STATE_ROOT / "priority-queue.json"
         board_path = ws / STATE_ROOT / "parallel-workstreams.json"
+        queue_path.write_text(
+            json.dumps(
+                {
+                    "active_cycle": {"active_batch_ids": ["BATCH-10"], "cycle_id": "cycle-10"},
+                    "items": [{"id": "BATCH-10", "state": "IN_PROGRESS"}],
+                }
+            ),
+            encoding="utf-8",
+        )
         board_path.write_text(
             json.dumps(
                 {
-                    "tasks": [{"id": "BATCH-10-ADMIN-01", "role": "admin", "state": "BLOCKED"}],
+                    "active_cycle": {"active_batch_ids": ["BATCH-10"], "cycle_id": "cycle-10"},
+                    "tasks": [{"id": "BATCH-10-ADMIN-01", "stream_id": "BATCH-10", "role": "admin", "state": "BLOCKED"}],
                     "streams": [{"id": "BATCH-10", "state": "BLOCKED"}],
                 }
             ),
@@ -317,6 +339,19 @@ class PlannerAutonomyTickTests(unittest.TestCase):
         state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
         self.assertEqual(state.get("last_action"), "repair_only")
         self.assertEqual(state.get("issue_code"), "planner_ready_runtime_dispatch_missing")
+
+    def test_external_outage_defers_planner_activity(self) -> None:
+        ws = _setup_workspace()
+        self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
+
+        cp = _run_script(ws, extra_env={"FC_PLANNER_AUTONOMY_EC2_REACHABLE": "0"})
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("action=delivery_governor", cp.stdout)
+        self.assertIn("issue=external_outage", cp.stdout)
+
+        state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state.get("last_action"), "delivery_governor")
+        self.assertEqual(state.get("issue_code"), "external_outage")
 
     def test_repair_only_dispatches_bridge_when_runway_not_empty(self) -> None:
         ws = _setup_workspace()
@@ -359,6 +394,41 @@ class PlannerAutonomyTickTests(unittest.TestCase):
         state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
         self.assertEqual(state.get("last_action"), "autobatch_skip")
         self.assertEqual(state.get("issue_code"), "autobatch_duplicate_nonfatal")
+
+    def test_active_cycle_keeps_repair_path_while_delivery_is_active(self) -> None:
+        ws = _setup_workspace()
+        self.addCleanup(lambda: shutil.rmtree(ws, ignore_errors=True))
+
+        queue_path = ws / STATE_ROOT / "priority-queue.json"
+        board_path = ws / STATE_ROOT / "parallel-workstreams.json"
+        queue_path.write_text(
+            json.dumps(
+                {
+                    "active_cycle": {"active_batch_ids": ["BATCH-10"], "cycle_id": "cycle-10"},
+                    "items": [{"id": "BATCH-10", "state": "IN_PROGRESS"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        board_path.write_text(
+            json.dumps(
+                {
+                    "active_cycle": {"active_batch_ids": ["BATCH-10"], "cycle_id": "cycle-10"},
+                    "tasks": [{"id": "BATCH-10-DEV-01", "stream_id": "BATCH-10", "role": "dev", "state": "IN_PROGRESS"}],
+                    "streams": [{"id": "BATCH-10", "state": "IN_PROGRESS"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        cp = _run_script(ws)
+        self.assertEqual(cp.returncode, 0, msg=cp.stderr)
+        self.assertIn("action=repair_only", cp.stdout)
+        self.assertIn("issue=planner_ready_runtime_dispatch_missing", cp.stdout)
+
+        state = json.loads((ws / "state" / "planner_autonomy_state.json").read_text(encoding="utf-8"))
+        self.assertEqual(state.get("last_action"), "repair_only")
+        self.assertEqual(state.get("issue_code"), "planner_ready_runtime_dispatch_missing")
 
 
 if __name__ == "__main__":

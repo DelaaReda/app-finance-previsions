@@ -363,7 +363,7 @@ normalize_seconds() {
 }
 
 normalize_model_name() {
-  local raw="${1:-gpt-5.2}"
+  local raw="${1:-gpt-5.4}"
   local stripped="${raw#openai-codex/}"
   case "$stripped" in
     gpt-5.2|gpt-5.3-codex-spark|gpt-5.3-codex|gpt-5.4)
@@ -373,7 +373,7 @@ normalize_model_name() {
     qwen)
       printf 'qwen\n' ;;
     *)
-      printf 'gpt-5.2\n' ;;
+      printf 'gpt-5.4\n' ;;
   esac
 }
 
@@ -381,11 +381,11 @@ resolve_role_model_early() {
   local role="${1:-${ROLE}}"
   local varname="LM_ROLE_${role^^}_MODEL"
   varname="${varname//-/_}"
-  printf '%s' "${TMUX_ROLE_CODEX_MODEL:-${!varname:-${LM_USED_ROLE_MODEL:-gpt-5.2}}}"
+  printf '%s' "${TMUX_ROLE_CODEX_MODEL:-${!varname:-${LM_USED_ROLE_MODEL:-gpt-5.4}}}"
 }
 
 model_cache_key() {
-  printf '%s' "${1:-gpt-5.2}" | tr '[:upper:]/.-' '[:lower:]___' | sed 's/[^a-z0-9_]/_/g'
+  printf '%s' "${1:-gpt-5.4}" | tr '[:upper:]/.-' '[:lower:]___' | sed 's/[^a-z0-9_]/_/g'
 }
 
 resolve_executable() {
@@ -678,7 +678,7 @@ resolve_role_model() {
   local role="${1:-${ROLE}}"
   local varname="LM_ROLE_${role^^}_MODEL"
   varname="${varname//-/_}"
-  printf '%s' "${!varname:-${LM_USED_ROLE_MODEL:-gpt-5.2}}"
+  printf '%s' "${!varname:-${LM_USED_ROLE_MODEL:-gpt-5.4}}"
 }
 
 resolve_role_thinking() {
@@ -689,7 +689,7 @@ resolve_role_thinking() {
 }
 
 normalize_codex_model() {
-  local raw="${1:-gpt-5.2}"
+  local raw="${1:-gpt-5.4}"
   local stripped="${raw#openai-codex/}"
   case "$stripped" in
     gpt-5.2|gpt-5.3-codex-spark|gpt-5.3-codex|gpt-5.4)
@@ -699,7 +699,7 @@ normalize_codex_model() {
     qwen)
       printf 'qwen\n' ;;
     *)
-      printf 'gpt-5.2\n' ;;
+      printf 'gpt-5.4\n' ;;
   esac
 }
 
@@ -892,10 +892,10 @@ case "$ROLE" in
   scrum_master)
     export TMUX_ROLE_ENABLE_SCRUM_MASTER="${FC_SCRUM_MASTER_ENABLED:-1}"
     export TMUX_ROLE_ENABLE_PO_SCRUM_MASTER="${TMUX_ROLE_ENABLE_PO_SCRUM_MASTER:-${TMUX_ROLE_ENABLE_SCRUM_MASTER}}"
-    export TMUX_ROLE_CODEX_MODEL="${TMUX_ROLE_CODEX_MODEL:-${FC_SCRUM_MASTER_MODEL:-${FC_PO_SCRUM_MASTER_MODEL:-gpt-5.3-codex-spark}}}"
+    export TMUX_ROLE_CODEX_MODEL="${TMUX_ROLE_CODEX_MODEL:-${FC_SCRUM_MASTER_MODEL:-${FC_PO_SCRUM_MASTER_MODEL:-${LM_ROLE_SCRUM_MASTER_MODEL:-${LM_USED_ROLE_MODEL:-gpt-5.4}}}}}"
     export TMUX_ROLE_CODEX_EXEC_RESUME="${FC_SCRUM_MASTER_CODEX_EXEC_RESUME:-${FC_PO_SCRUM_MASTER_CODEX_EXEC_RESUME:-1}}"
     export TMUX_ROLE_RATE_LIMIT_PRECHECK="${FC_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-${FC_PO_SCRUM_MASTER_RATE_LIMIT_PRECHECK:-${TMUX_ROLE_RATE_LIMIT_PRECHECK:-1}}}"
-    export TMUX_ROLE_CODEX_THINKING="${TMUX_ROLE_CODEX_THINKING:-${FC_SCRUM_MASTER_THINKING:-${FC_PO_SCRUM_MASTER_THINKING:-low}}}"
+    export TMUX_ROLE_CODEX_THINKING="${TMUX_ROLE_CODEX_THINKING:-${FC_SCRUM_MASTER_THINKING:-${FC_PO_SCRUM_MASTER_THINKING:-${LM_ROLE_SCRUM_MASTER_THINKING:-${LM_USED_ROLE_THINKING:-high}}}}}"
     export PROMPT_TIMEOUT_SECONDS="${FC_SCRUM_MASTER_PROMPT_TIMEOUT_SECONDS:-${FC_PO_SCRUM_MASTER_PROMPT_TIMEOUT_SECONDS:-300}}"
     export RETRY_PROMPT_TIMEOUT_SECONDS="${FC_SCRUM_MASTER_RETRY_TIMEOUT_SECONDS:-${FC_PO_SCRUM_MASTER_RETRY_TIMEOUT_SECONDS:-120}}"
     export PO_SCRUM_MASTER_ALLOW_BUS_POST="${FC_SCRUM_MASTER_ALLOW_BUS_POST:-${PO_SCRUM_MASTER_ALLOW_BUS_POST:-1}}"

@@ -39,738 +39,6 @@
 - [2026-03-20 21:03:17 EDT] role=planner source=primary_structured status=BLOCKED verdict=BLOCKED delta=DELIVERY_VALUE_INSUFFICIENT blocker=DELIVERY_VALUE_INSUFFICIENT stream_id=BATCH-72 task_id=BATCH-72-ANALYSIS next_action_unique=DELIVERY_VALUE_RETRY_PLANNER_1774054975 directive=none/none message=none/none exec_report=none issues=delivery_value_insufficient suggestions=none
 - [2026-03-20 21:38:01 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-72 task_id=BATCH-72-ARCH next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-72-DEV-01 directive=none/none message=none/none exec_report=none issues=planner_quality_autofill_missing,delivery_value_insufficient suggestions=none
 
-  - repeated “create batch now” wording from shared prompt
-  - repeated autonomy/novelty/stagnation wording already present in SYSTEM_PROMPT
-- move_out_of_prompt:
-  - none in this run; dynamic active-task steering already lives correctly in planner guardian patches
-- tool_usage_improvements:
-  - makes collect/repair/ack the explicit first move when canonical active work is downstream
-  - keeps batch creation as fallback only when no executable canonical task exists
-- expected_runtime_impact:
-  - direct anti-churn effect by reducing premature planner rebatching and redundant ANALYSIS relaunches
-
-Patch proposal
-- patch_type: anti-churn
-- create_now: yes
-- target_file: platform/automation/cron_tmux_role_runner.sh
-- exact_goal: shorten planner shared orchestration guidance and make canonical active-task follow-up win over automatic batch creation
-- expected_gain: less redispatch, less duplicate-scope churn, clearer choice between collect/repair/ack and create/reshaper batch
-- risk: low; planner still keeps the same policy in SYSTEM_PROMPT and guardian patches, only with less duplication
-
-Measurement
-- signals_to_watch:
-  - planner_autobatch_stagnation_alert
-  - planner_quality_autofill_missing
-  - planner_evidence_incomplete_soft
-  - ready_but_no_delta
-  - ready_but_none_task_update
-  - count of planner redispatch/retry on active downstream tasks
-- success_criteria:
-  - planner follows canonical downstream active tasks more often before creating new planner work
-  - fewer planner retries tied to stale ANALYSIS relaunch or duplicate-scope creation
-  - no increase in invalid 8-line contracts after the prompt shrink
-- rollback_condition:
-  - planner stops creating needed new batches when no executable canonical task exists
-  - or guardian starts showing more idle/no-action failures after the patch
-
-Decision
-- next_owner: planner
-- next_action: watch planner guardian/runtime signals after this shrink; if churn persists, target the planner-specific SYSTEM_PROMPT block next instead of broadening shared prompt text
-
-## 2026-04-15T04:24:01Z vision-batch-architect
-
-Continuity
-- previous_verdict: keep BATCH-85 as sole priority; do not create a new batch before VM proof
-- previous_top_priority: finish the low-cost brief/action/memo hardening and validate it on the VM
-- previous_next_delivery: ship the existing copilot/portfolio/monitor reliability slice independently of orchestration churn
-- changed_since_last_run: synced projections now show `BATCH-85-ANALYSIS=DONE` and `BATCH-85-ARCH=IN_PROGRESS`, but the batch object still lacks `summary`, `why_now`, and `user_visible_delta`; all `BATCH-85` work items still miss `runtime_role` and `runtime_kind`; local SQLite still has zero `BATCH-85` events; planner guardian and monitor latest still rely on stale or null secondary signals; and VM SSH remains sandbox-blocked
-
-Reality check
-- vision_alignment: mixed
-- priority_clarity: clear
-- active_batch_usefulness: moderate
-- delivered_value_now: moderate
-
-Top priorities
-1. Finish and prove the existing `apps/api` + `apps/monitor` hardening on the brief -> ask/open -> memo slice.
-2. Materialize the active batch canonically before counting progress: `BATCH-85` needs real Plane/runtime metadata and SQLite/runtime-truth presence, not just queue/workboard projection.
-3. Freeze new batch creation until the active slice is VM-proven or clearly invalidated.
-
-Rejected batch ideas
-- New frontend batch for brief/top-action/watchlist polish: rejected because the existing web contracts already consume `brief_of_day`, `ask/open`, and `/personal-finance/*`; there is no theme-preserving sibling delta worth creating now.
-- New memo explainability batch: rejected because `apps/api/src/domains/copilot/application/copilot_service.py` and `apps/api/src/domains/judge/application/judge_endpoint_service.py` already expose verdict, why, risks, confidence, freshness, and sources; the remaining gap is proof and reliability.
-- New runtime/Plane sync batch: rejected because it would duplicate active hardening already happening in `platform/automation/*`, is not independent from the live batch, and is still too orchestration-heavy to outrank the user-facing slice.
-
-Selected batch
-- title: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
-- why_now: This remains the only active scope with direct product value. The dirty worktree shows real backend-first hardening on copilot, saved-portfolio fallback, and monitor truthfulness, while no other candidate offers a clearer or more independent user-visible delta.
-- user_visible_delta: repeated `/api/copilot/start` and `/api/copilot/context` hits reuse cache, `/api/personal-finance/start` stays actionable without expensive live-risk fetches, `/api/personal-finance/ask` keeps an explainable memo contract, and monitor/status become more truthful about app health under degraded agentic/planning state.
-- novelty_target: deliver a low-cost reliable brief + ask/open + memo starter path with portfolio-aware fallback and truthful status surfaces
-- independence_from_active_batch: no
-- create_now: no
-- batch_class: hardening
-
-Architecture fit
-- aligned_with_backend_first: yes
-- preserves_frontend_theme: yes
-- adds_new_custom_plumbing: no
-- canonical_paths_respected: no
-- comments: The implementation slice uses the right product surfaces, but the active `BATCH-85` record itself is still projection-only and missing canonical batch/work-item metadata (`summary`, `why_now`, `user_visible_delta`, `runtime_role`, `runtime_kind`, `planning_source`), so creating another batch now would compound invalid planning state instead of fixing delivery.
-
-Implementation architecture
-- product slice: personal-first finance copilot starter flow: brief of the day -> immediate ask/open -> explainable investment memo -> lightweight portfolio/watchlist relevance -> honest degraded mode.
-- current reality: `apps/api/src/domains/copilot/api/copilot.py` exposes `/api/copilot/context`, `/api/copilot/start`, and `/api/copilot/ask`; `apps/api/src/domains/copilot/application/copilot_service.py` already builds cached starter/context payloads, saved-portfolio context, playbook context, allocation drift alerts, and memo normalization; `apps/web/src/domains/forecasts/*` already consumes these contracts; `apps/monitor/services/status_service.py` and `apps/monitor/server.py` are being hardened for app-first truthful health; `BATCH-85` exists only in projections and not in local SQLite runtime truth.
-- backend changes: finish and validate the active changes in `apps/api/src/domains/copilot/api/copilot.py` (start/context caching, namespace rewrites, never-empty payloads), `apps/api/src/domains/copilot/application/copilot_service.py` (saved portfolio fallback, low-cost context path, memo normalization, playbook/drift payloads), `apps/api/src/domains/judge/application/judge_endpoint_service.py` and `apps/api/src/domains/judge/api/judge.py` (keep personal-finance alias and explanation contract aligned), `apps/api/src/domains/market_data/application/portfolio_service.py` and `apps/api/src/domains/market_data/application/portfolio_performance_service.py` (composition-only / stale-cache fallback).
-- frontend changes: none required for a new batch. Reuse existing pages/components under `apps/web/src/domains/forecasts/pages/app.js` and related contract tests; only verify contract compatibility if backend payload shapes shift.
-- monitor/observability changes: keep `apps/monitor/services/status_service.py` focused on live-vs-doctor merge, runtime truth preference, OpenClaw probe correction, and app/product/agentic/planning split; keep `apps/monitor/server.py` limited to cached status endpoints and runtime-truth display, not planning logic.
-- runtime/orchestration changes: only if the active batch still cannot be proven after product hardening. Then the minimal canonical fix lives in `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/planner_subagent_manager.py`, and `platform/automation/runtime/truth/runtime_truth_reader.py` to materialize/import the active batch into SQLite and keep projections secondary. This is runtime debt tied to `BATCH-85`, not justification for a new sibling batch now.
-- existing code to reuse: `apps/api/src/services/brief_generator.py`, `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/web/src/domains/forecasts/pages/app.js`, `apps/web/src/domains/forecasts/contracts/apiConnector.test.js`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/monitor/tests/test_status_event_store_fallback.py`, `scripts/delivery_value_smoke.sh`.
-- files_or_modules_to_touch: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/judge/api/judge.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/market_data/application/portfolio_service.py`, `apps/api/src/domains/market_data/application/portfolio_performance_service.py`, `apps/api/src/platform/run_api.py`, `apps/monitor/server.py`, `apps/monitor/services/status_service.py`, `apps/monitor/tests/test_status_event_store_fallback.py`, `scripts/restart_api_if_stale.sh`, `scripts/delivery_value_smoke.sh`.
-- files_or_modules_not_to_touch: `apps/web/src/platform/*`, theme/shell CSS, `apps/api/runtime/*` for business logic, `docs/product/planning/*`, `memory/*` as planning truth, `logs-codex-runs/orchestrator-state/*.json`, and any new custom wrapper around Plane or runtime truth.
-- api_or_contract_changes: no new route family. Keep `/api/copilot/start`, `/api/copilot/context`, `/api/personal-finance/start`, `/api/personal-finance/ask`, and memo keys stable. Only additive `cache`, `context_influence`, `playbook_context`, `allocation_drift_alerts`, `warnings`, and degraded metadata are acceptable.
-- migration_or_compat_notes: `BATCH-85` is not Plane-ready and not runtime-real in this accessible environment: `priority-queue.json` has no `summary`, `why_now`, `user_visible_delta`, or `planning_source`; work items lack `runtime_role` and `runtime_kind`; and `orchestration-runtime.sqlite` has zero `BATCH-85` events. Plane MCP is unavailable here and VM SSH is sandbox-blocked, so this run cannot canonically fix creation or proof.
-- proof_requirements: targeted pytest for copilot route/service cache and status fallback; smoke `scripts/delivery_value_smoke.sh`; VM proof of repeated `GET /api/copilot/context`, `GET /api/personal-finance/start`, `POST /api/personal-finance/ask`, `GET /api/status?lite=1`, and `bash scripts/fc_doctor.sh --json`.
-- acceptance_criteria: the starter/context path is non-empty and cache-backed; ask returns verdict/horizon/why/risks/confidence/freshness/sources; saved portfolio/watchlist context remains useful without forced expensive live metrics; monitor/status reflect truthful app health even when planning/agentic surfaces are degraded; no frontend theme change; no projection-only batch counted as delivered.
-- implementation_order: 1. finalize backend cache/fallback/memo contract hardening, 2. finalize portfolio low-cost fallback behavior, 3. finalize monitor/status truthfulness, 4. run targeted tests locally if the toolchain exists, 5. run canonical VM proof, 6. only then repair Plane/runtime metadata if a blocking gap remains.
-- risks: cache TTL/signature bugs can hide freshness regressions; low-cost defaults can reduce richness if opt-in live paths disappear; `BATCH-85` still looks like false progress because projections advance without SQLite truth; VM proof is impossible in this sandbox due to SSH denial.
-- non_goals: no new frontend redesign, no new batch/module, no manual queue/workboard edits, no custom planning wrapper, no pure orchestration backlog padding, no provider-plane redesign.
-
-Decision
-- create_in_plane_now: no
-- if_no_reason: current batch should keep priority. No candidate is both independent and better than finishing the active hardening, and the active batch itself is not canonical enough to justify stacking a new module on top of it.
-- next_owner: planner
-- next_action: finish `BATCH-85` on real code surfaces, prove it on the VM, then either close it canonically or, if the backlog/runtime gap still blocks delivery, fix that gap as part of the same slice instead of creating a sibling batch.
-
-## 2026-04-15T04:32:17Z vision-batch-architect
-
-Continuity
-- previous_verdict: no new batch; keep BATCH-85 as the only credible delivery scope.
-- previous_top_priority: finish BATCH-85 hardening on the existing brief/action/memo slice and publish VM proof.
-- previous_next_delivery: finish BATCH-85 backend/monitor hardening and validate it on the VM before any backlog move.
-- changed_since_last_run: synced projections advanced BATCH-85 beyond planner-only setup (`BATCH-85-ANALYSIS` proof exists, `BATCH-85-ARCH` proof exists, `BATCH-85-DEV-01` now shows `IN_PROGRESS`), while the dirty worktree still matches the same backend-first hardening scope in `apps/api`, `apps/monitor`, and `platform/automation`; VM SSH and Plane MCP remain unavailable from this session.
-
-Reality check
-- vision_alignment: mixed
-- priority_clarity: clear
-- active_batch_usefulness: strong
-- delivered_value_now: moderate
-
-Top priorities
-1. Finish BATCH-85 on the real product slice already in flight: cache-backed brief/context start path, low-cost portfolio fallback, and truthful monitor health.
-2. Prove the slice on the VM with `/api/copilot/context`, `/api/personal-finance/start`, `/api/personal-finance/ask`, `api/status?lite=1`, and `fc_doctor`.
-3. Only after VM proof, clean up any remaining Plane/runtime metadata gap for BATCH-85; do not open a sibling batch for the same scope.
-
-Rejected batch ideas
-- New brief/ask/open batch: rejected as redundant because the frontend already consumes this slice and BATCH-85 is the active hardening scope on the same user flow.
-- New portfolio top-action batch: rejected as too dependent because the remaining delta is inside the current copilot + portfolio contract hardening already underway.
-- New runtime/planner hygiene batch: rejected as too orchestration-heavy right now; any necessary metadata/runtime correction belongs as tail work inside BATCH-85 after product proof.
-
-Selected batch
-- title: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
-- why_now: It is the only active scope with a direct user-visible delta and the worktree proves it is already being implemented on canonical product surfaces instead of being speculative backlog.
-- user_visible_delta: repeated starter/context hits become cache-backed, `/api/personal-finance/start` remains useful without forcing expensive live-risk fetches, `/api/personal-finance/ask` keeps a structured explainable memo, and monitor/status expose honest health even when planning or agentic surfaces degrade.
-- novelty_target: reliable low-cost brief + ask/open + memo path with portfolio-aware fallback and truthful health signals
-- independence_from_active_batch: no
-- create_now: no
-- batch_class: hardening
-
-Architecture fit
-- aligned_with_backend_first: yes
-- preserves_frontend_theme: yes
-- adds_new_custom_plumbing: no
-- canonical_paths_respected: yes
-- comments: The product implementation path is canonical (`apps/api/src/domains/*` first, existing `apps/web/src/domains/forecasts/*` reuse, `apps/monitor/*` only for truthful status). The only non-canonical part is planning provenance: BATCH-85 still appears projection-driven in this environment, which is a reason not to add another batch.
-
-Implementation architecture
-- product slice: personal-first Finance Copilot starter flow: daily brief -> immediate ask/open -> explainable memo -> portfolio/watchlist relevance -> honest degraded mode.
-- current reality: `apps/api/src/domains/copilot/api/copilot.py` already owns `/api/copilot/context`, `/api/copilot/start`, and `/api/copilot/ask`; `apps/api/src/domains/copilot/application/copilot_service.py` already normalizes memo payloads and fallback context; `apps/web/src/domains/forecasts/pages/app.js` already renders the memo/start contracts; the active diffs add caching, saved-portfolio fallback, portfolio performance cache, single-worker API startup, and more truthful monitor status.
-- backend changes: finish the in-flight changes in `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/judge/api/judge.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/market_data/application/dashboard_ui_service.py`, `apps/api/src/domains/market_data/application/portfolio_service.py`, `apps/api/src/domains/market_data/application/portfolio_performance_service.py`, and `apps/api/src/platform/run_api.py`.
-- frontend changes: no new frontend batch needed; preserve the existing shell/theme and only verify compatibility of the current backend contracts against `apps/web/src/domains/forecasts/pages/app.js` and its tests.
-- monitor/observability changes: keep the current work limited to `apps/monitor/server.py` and `apps/monitor/services/status_service.py` so app runtime, planning, provider, and runtime-truth surfaces stay truthful without adding planning logic to monitor.
-- runtime/orchestration changes: only if BATCH-85 cannot be proven/closed after product hardening; then the minimum justified surfaces are `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/planner_subagent_manager.py`, and `platform/automation/runtime/truth/runtime_truth_reader.py` to make active-state import/visibility consistent.
-- existing code to reuse: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/services/brief_generator.py`, `apps/api/src/domains/judge/application/intelligence_service.py`, `apps/web/src/domains/forecasts/pages/app.js`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/monitor/tests/test_status_event_store_fallback.py`, `platform/automation/tests/test_planner_runtime_actions.py`, `platform/automation/tests/test_planner_board_runtime.py`, and `scripts/delivery_value_smoke.sh`.
-- files_or_modules_to_touch: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/judge/api/judge.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/market_data/application/dashboard_ui_service.py`, `apps/api/src/domains/market_data/application/portfolio_service.py`, `apps/api/src/domains/market_data/application/portfolio_performance_service.py`, `apps/api/src/platform/run_api.py`, `apps/monitor/server.py`, `apps/monitor/services/status_service.py`, `apps/monitor/tests/test_status_event_store_fallback.py`, `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/tests/test_planner_runtime_actions.py`, `platform/automation/tests/test_planner_board_runtime.py`, `scripts/delivery_value_smoke.sh`.
-- files_or_modules_not_to_touch: `apps/web/src/platform/*`, theme/shell styling, `apps/api/runtime/*` for business logic, `docs/product/planning/*`, `memory/*` as planning truth, `logs-codex-runs/orchestrator-state/*.json`, and any custom wrapper around Plane/backlog.
-- api_or_contract_changes: no new route family; keep `/api/copilot/context`, `/api/copilot/start`, `/api/copilot/ask`, `/api/personal-finance/start`, and `/api/personal-finance/ask` stable, with only additive cache/fallback/degraded metadata.
-- migration_or_compat_notes: Plane creation is not possible here and VM proof is blocked by SSH denial, so this run cannot repair canonical planning provenance. Do not translate that limitation into a new batch or local projection mutation.
-- proof_requirements: targeted tests around copilot caching/memo contracts and monitor runtime-truth fallback, plus VM proofs for `/api/copilot/context`, `/api/personal-finance/start`, `/api/personal-finance/ask`, `/api/status?lite=1`, and `bash scripts/fc_doctor.sh --json`.
-- acceptance_criteria: the starter/context path is non-empty and cheap on repeated calls; ask returns verdict/horizon/why/risks/confidence/freshness/sources; saved portfolio/watchlist context remains useful under fallback; monitor reports app runtime truthfully even if planning/agentic surfaces degrade; no theme regression; no new batch created for the same scope.
-- implementation_order: 1. finish backend contract/cache/fallback hardening, 2. finish portfolio low-cost composition and performance cache behavior, 3. finish monitor/status truthfulness, 4. run targeted local tests where possible, 5. run canonical VM proof, 6. only then fix Plane/runtime metadata if still blocking.
-- risks: stale caches can hide freshness regressions; low-cost defaults can reduce richness if live enrichments silently disappear; planning/runtime projections may overstate progress before SQLite/VM proof catches up; SSH denial prevents final runtime confirmation in this session.
-- non_goals: no new frontend redesign, no sibling batch, no manual queue/workboard edits, no new custom orchestration plumbing, no backlog padding for pure runtime hygiene.
-
-Decision
-- create_in_plane_now: no
-- if_no_reason: current batch should keep priority. No candidate is independent enough to justify a new module, and the remaining gap is finishing and proving the existing BATCH-85 slice.
-- next_owner: planner
-- next_action: finish BATCH-85 on the current code surfaces, validate it on the VM, then fix any leftover Plane/runtime metadata only if that still blocks canonical closure.
-- [2026-04-15 00:32:59 EDT] role=planner source=primary_structured status=BLOCKED verdict=BLOCKED delta=PLANNER_RUNTIME_ACTIONS_FAILED blocker=PLANNER_RUNTIME_ACTIONS_FAILED stream_id=none task_id=none next_action_unique=PLANNER_RUNTIME_ACTIONS_FAILED directive=none/none message=none/none exec_report=none issues=none suggestions=none
-
-## 2026-04-15T04:40:36Z endpoint-architecture-steward
-
-Target endpoint
-- endpoint: `/api/copilot/context`
-- why_this_endpoint: active reliability work is already landing here, and this endpoint sits upstream of the brief/action/memo starter flow while still lacking a real shared contract.
-- current_product_role: backend-first context bootstrap for brief of day, starter entry points, portfolio-aware fallback, and the `/api/personal-finance/context` alias.
-
-Judge reference mapping
-- contract_reference: `/Users/venom/Documents/analyse-financiere/packages/contracts/judge_v1.py`
-- route_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/api/judge.py`
-- application_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_pipeline.py`
-- service_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_endpoint_service.py`
-- intelligence_or_context_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/intelligence_service.py`
-- invariants_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/INVARIANTS.md`
-
-Current state
-- current_contract: ad hoc dict payload from `apps/api/src/domains/copilot/application/copilot_service.py:build_context_payload`, with keys like `regime`, `confidence`, `daily_brief`, `entry_points`, `copilot_start`, `portfolio_context`, `context_influence`, `regime_detection`, and `allocation_drift_alerts`; `packages/contracts/copilot_v1.py` is still a placeholder.
-- route_thin_or_fat: medium-fat; `apps/api/src/domains/copilot/api/copilot.py` still owns cache keying, in-memory cache storage, singleflight, namespace rewriting, and fallback response assembly.
-- application_logic_present: yes; core aggregation and fallback building live in `apps/api/src/domains/copilot/application/copilot_service.py`.
-- service_layer_present: partial; there is domain application code, but no Judge-like endpoint facade dedicated to public response normalization.
-- metadata_present: partial; nested payloads expose `generated_at`, `freshness`, and `source`, but the top-level endpoint contract is not standardized.
-- never_empty_present: yes; route and service both fall back to snapshot/local payloads rather than raising a hard 500 in the nominal product path.
-- fallback_present: yes; explicit snapshot/local fallback exists for market context and starter payloads.
-- tests_present: yes for route fallback/cache and service behavior, but no shared typed contract enforcement tied to `packages/contracts/copilot_v1.py`.
-
-Gap vs Judge
-- contract_gap: Judge has a real typed shared contract in `packages/contracts/judge_v1.py`; copilot context still has no typed public DTO.
-- route_gap: Judge’s target pattern is orchestration-only routing, while copilot context still embeds cache, singleflight, namespace rewrite, and fallback shaping directly in the route.
-- application_gap: copilot aggregation exists, but public response normalization is still split between route helpers and application code instead of being isolated behind one endpoint-facing service.
-- service_gap: there is no reusable `copilot_endpoint_service` equivalent to `judge_endpoint_service.py`.
-- metadata_gap: metadata is nested and inconsistent rather than exposed as a stable top-level standard payload with explicit warnings/fallback flags.
-- never_empty_gap: behavior is already never-empty, but the degraded-mode contract is implicit and not typed.
-- fallback_gap: fallback is real but not standardized; frontend freshness/provenance/degradation still depend on nested conventions instead of one stable contract.
-- testing_gap: route/service tests exist, but there is no typed contract test matrix comparable to Judge’s contract/orchestration/fallback coverage.
-
-Target architecture
-- target_contract: implement a real `CopilotContextResponse` family in `packages/contracts/copilot_v1.py` covering `daily_brief`, `entry_points`, `copilot_start`, `portfolio_context`, `context_influence`, `regime_detection`, `allocation_drift_alerts`, and explicit degraded metadata.
-- target_route_design: keep `apps/api/src/domains/copilot/api/copilot.py` limited to input normalization, cache/singleflight, alias namespace rewrite, and service invocation.
-- target_application_design: keep `build_context_payload` as the domain aggregation layer for market context, portfolio enrichment, playbook context, and brief generation.
-- target_service_design: add a dedicated endpoint facade in `apps/api/src/domains/copilot/application/copilot_endpoint_service.py` to normalize metadata, fallback flags, warnings, and public shape before the route returns.
-- target_metadata: expose stable top-level metadata fields such as `generated_at`, `freshness`, `source`, `warnings`, `filters_applied`, `stats`, `fallback_used`, and `cache`.
-- target_fallback_model: preserve `ok=true` with snapshot-backed degraded payloads, but make degradation explicit and typed instead of route-specific.
-- target_test_matrix: shared contract tests for `copilot_v1`, route orchestration/cache tests, fallback/degraded-mode tests, alias parity tests for `/api/personal-finance/context`, and endpoint-service normalization tests.
-
-Implementation plan
-- files_or_modules_to_create: `packages/contracts/copilot_v1.py` real DTOs; `apps/api/src/domains/copilot/application/copilot_endpoint_service.py`; one new copilot context contract test module.
-- files_or_modules_to_modify: `apps/api/src/domains/copilot/api/copilot.py`; `apps/api/src/domains/copilot/application/copilot_service.py`; `apps/api/src/domains/copilot/tests/test_copilot_context_route_fallback.py`; `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`; any existing copilot contract tests that should validate the shared DTO.
-- files_or_modules_not_to_touch: Judge route/service implementation, frontend theme/shell files, monitor status logic, queue/workboard/docs as planning truth, and any new custom wrapper around Plane/runtime truth.
-- compatibility_notes: keep `/api/copilot/context` and `/api/personal-finance/context` stable; keep existing keys additive-compatible, especially `daily_brief`, `entry_points`, `copilot_start`, `portfolio_context`, `context_influence`, `regime_detection`, and `allocation_drift_alerts`.
-- implementation_order: 1. define typed shared contract, 2. extract endpoint facade for normalization and metadata, 3. slim the route to orchestration-only concerns, 4. wire tests to the shared contract, 5. prove alias/cache/fallback parity.
-- risks: extracting response normalization out of the route can regress namespace rewriting or cache semantics; hardening the contract can surface nested payload inconsistencies already tolerated by current consumers.
-- non_goals: no new route family, no frontend redesign, no duplication of Judge monolith internals, no movement of product logic into the frontend, no global refactor of the full copilot domain.
-
-Decision
-- patch_now: no
-- if_no_reason: this gap spans shared contract + new endpoint facade + route reshaping, while the current batch already contains a shippable reliability slice; host-only analysis is enough to define the next backend step, not to bundle a broader refactor blindly.
-- next_owner: backend_engineer
-- next_action: implement `packages/contracts/copilot_v1.py` and `copilot_endpoint_service.py`, then move `/api/copilot/context` response normalization out of the route and add shared contract coverage.
-
-## 2026-04-15T04:38:43Z vision-batch-architect
-
-Continuity
-- previous_verdict: no new batch created; BATCH-85 remains the sole valid scope.
-- previous_top_priority: finish BATCH-85 and publish VM proof on the brief/action/memo slice.
-- previous_next_delivery: complete the active copilot/portfolio/monitor hardening and validate `/api/copilot/context`, `/api/personal-finance/start`, `/api/personal-finance/ask`, `/api/status?lite=1`, and `fc_doctor` on the VM.
-- changed_since_last_run: the accessible runtime snapshot regressed to projection-only truth again (`priority-queue.json` still says `BATCH-85` should reopen ANALYSIS, `user_value_delta_visible=0`, and work items still lack `runtime_role`/`runtime_kind`), the local SQLite snapshot has no `events` or `planner_graph` tables at all, the dirty worktree is still concentrated on the active copilot/portfolio/monitor hardening slice, and SSH to `dev-vm-utm` is still sandbox-blocked before the remote safety gate can run.
-
-Reality check
-- vision_alignment: mixed
-- priority_clarity: clear
-- active_batch_usefulness: strong
-- delivered_value_now: moderate
-
-Top priorities
-1. Finish BATCH-85 on the existing product slice: low-cost starter/context, portfolio-aware fallback, explainable ask/memo, and truthful monitor health.
-2. Re-establish canonical proof for BATCH-85 after product hardening: VM runtime checks first, then Plane/runtime metadata convergence if still needed.
-3. Keep new backlog creation frozen until the current slice is either VM-proven or clearly shown to be the wrong scope.
-
-Rejected batch ideas
-- New Judge-parity batch for `/api/copilot/start`: rejected because the endpoint gap is real but it sits inside the active BATCH-85 hardening slice and is not independent enough to justify a sibling module now.
-- New watchlist/top-action batch: rejected as premature because the current starter payload, portfolio fallback, and memo contract are still the bottleneck before extra decision surfaces.
-- New planner/runtime cleanup batch: rejected as too orchestration-heavy right now; any necessary reconciliation belongs as tail work inside BATCH-85 after product proof.
-
-Selected batch
-- title: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
-- why_now: It remains the only scope with visible user value already under implementation on canonical product surfaces, and no independent candidate beats finishing it.
-- user_visible_delta: `/api/copilot/start` and `/api/copilot/context` stay fast and non-empty on repeated calls, `/api/personal-finance/start` stays actionable without forced live-risk fetches, `/api/personal-finance/ask` keeps an explainable memo contract, and monitor/status stop overstating runtime health.
-- novelty_target: reliable low-cost brief + ask/open + memo path with portfolio-aware fallback and truthful degraded status
-- independence_from_active_batch: no
-- create_now: no
-- batch_class: hardening
-
-Architecture fit
-- aligned_with_backend_first: yes
-- preserves_frontend_theme: yes
-- adds_new_custom_plumbing: no
-- canonical_paths_respected: yes
-- comments: the code changes stay inside `apps/api/src/domains/*`, `apps/monitor/*`, and minimal runtime truth readers. The blocker is not missing architecture detail; it is lack of canonical convergence and VM proof.
-
-Implementation architecture
-- product slice: personal-first starter flow: brief of the day -> ask/open -> explainable memo -> portfolio-aware fallback -> honest degraded mode.
-- current reality: `apps/api/src/domains/copilot/api/copilot.py` already exposes the main starter/context/ask routes; `apps/api/src/domains/copilot/application/copilot_service.py` already assembles daily brief, entry points, portfolio context, playbook context, regime detection, and memo normalization; `apps/web/src/domains/forecasts/pages/app.js` already consumes the existing contracts; the active diffs remain concentrated on those surfaces plus `apps/monitor`.
-- backend changes: finish the in-flight hardening in `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/judge/api/judge.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/market_data/application/dashboard_ui_service.py`, `apps/api/src/domains/market_data/application/portfolio_service.py`, `apps/api/src/domains/market_data/application/portfolio_performance_service.py`, and `apps/api/src/platform/run_api.py`.
-- frontend changes: no new frontend batch. Preserve existing shell/theme and only keep contract compatibility with `apps/web/src/domains/forecasts/pages/app.js` and its tests.
-- monitor/observability changes: keep the active work constrained to `apps/monitor/server.py`, `apps/monitor/services/status_service.py`, and status fallback tests so the monitor reflects app/runtime truth without becoming a planning engine.
-- runtime/orchestration changes: only after product proof if closure is still blocked; then the smallest justified surfaces are `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/truth/dispatch_snapshot.py`, and `platform/automation/runtime/truth/runtime_truth_reader.py`.
-- existing code to reuse: `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/services/brief_generator.py`, `apps/api/src/domains/judge/application/intelligence_service.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/market_data/tests/test_endpoint_cache_contracts.py`, `apps/monitor/tests/test_status_event_store_fallback.py`, and `scripts/delivery_value_smoke.sh`.
-- files_or_modules_to_touch: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/judge/api/judge.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/market_data/application/dashboard_ui_service.py`, `apps/api/src/domains/market_data/application/portfolio_service.py`, `apps/api/src/domains/market_data/application/portfolio_performance_service.py`, `apps/api/src/platform/run_api.py`, `apps/monitor/server.py`, `apps/monitor/services/status_service.py`, `apps/monitor/tests/test_status_event_store_fallback.py`, `platform/automation/runtime/planner/planner_board_runtime.py`, `platform/automation/runtime/planner/planner_runtime_actions.py`, `platform/automation/runtime/truth/dispatch_snapshot.py`, `platform/automation/runtime/truth/runtime_truth_reader.py`, and `scripts/delivery_value_smoke.sh`.
-- files_or_modules_not_to_touch: `apps/web/src/platform/*`, theme/shell styling, `apps/api/runtime/*` for product behavior, `docs/product/planning/*`, `memory/*` as backlog truth, `logs-codex-runs/orchestrator-state/*.json`, and any new custom wrapper around Plane/runtime truth.
-- api_or_contract_changes: no new route family. Keep `/api/copilot/start`, `/api/copilot/context`, `/api/personal-finance/start`, `/api/personal-finance/ask`, and the memo keys stable, with only additive cache/fallback/degraded metadata.
-- migration_or_compat_notes: accessible local snapshots are still non-canonical for proof: `priority-queue.json` and `parallel-workstreams.json` miss required metadata, and the local SQLite snapshot lacks runtime tables. Plane MCP is unavailable here and VM SSH is sandbox-blocked, so this run cannot create or reconcile canonically.
-- proof_requirements: targeted route/service tests for copilot start/context and status fallback; smoke `scripts/delivery_value_smoke.sh`; canonical VM proofs for `/api/copilot/context`, `/api/personal-finance/start`, `/api/personal-finance/ask`, `/api/status?lite=1`, and `bash scripts/fc_doctor.sh --json`.
-- acceptance_criteria: starter/context responses are non-empty and cache-backed; ask returns verdict/horizon/why/risks/confidence/freshness/sources; saved portfolio/watchlist fallback remains useful without forced expensive fetches; monitor exposes truthful degraded health; no theme changes; no sibling batch created for the same slice.
-- implementation_order: 1. finish backend contract/cache/fallback hardening, 2. finish portfolio low-cost composition and cache behavior, 3. finish monitor truthfulness, 4. run targeted local tests where possible, 5. run canonical VM proof, 6. only then repair Plane/runtime metadata if it still blocks closure.
-- risks: cache signature drift can hide freshness regressions; low-cost defaults can silently reduce richness if live enrichments disappear; projection-only planning state can overstate progress; sandboxed SSH prevents final VM validation in this session.
-- non_goals: no new frontend redesign, no sibling batch, no manual queue/workboard edits, no backlog padding, no pure orchestration batch detached from user value.
-
-Decision
-- create_in_plane_now: no
-- if_no_reason: current batch should keep priority. The strongest remaining gap is finishing and proving the existing slice, not creating another module.
-- next_owner: planner
-- next_action: finish BATCH-85 on the existing code surfaces, validate it on the VM, then repair Plane/runtime metadata only if canonical closure is still blocked.
-
-## 2026-04-15T04:38:43Z endpoint-architecture-steward
-
-Target endpoint
-- endpoint: GET `/api/copilot/start` (alias GET `/api/personal-finance/start`)
-- why_this_endpoint: it is the closest backend entrypoint to the target experience (`brief du jour` -> `ask/open` in 2-3 clicks) and it still carries route-level cache/fallback/orchestration logic that should converge toward Judge-style thin routing.
-- current_product_role: deliver the starter payload used by the personal finance home flow: brief of the day, immediate ask/open actions, portfolio-aware context, and degraded mode without breaking the frontend.
-
-Judge reference mapping
-- contract_reference: `packages/contracts/judge_v1.py`
-- route_reference: `apps/api/src/domains/judge/api/judge.py`
-- application_reference: `apps/api/src/domains/judge/application/judge_pipeline.py`
-- service_reference: `apps/api/src/domains/judge/application/judge_endpoint_service.py`
-- intelligence_or_context_reference: `apps/api/src/domains/judge/application/intelligence_service.py`
-- invariants_reference: `apps/api/src/domains/judge/INVARIANTS.md`
-
-Current state
-- current_contract: implicit route/service contract returning `ok/data` with `brief_of_day`, `ask`, `open`, `generated_at`, `freshness`, `source`, `sources`, `filters_applied`, `stats`, `warnings`, `cache`, and optional `note`, `context_influence`, `portfolio_context`, `regime_detection`, `allocation_drift_alerts`; no shared `packages/contracts/*` schema exists for this endpoint.
-- route_thin_or_fat: fat
-- application_logic_present: yes
-- service_layer_present: partial
-- metadata_present: yes
-- never_empty_present: yes
-- fallback_present: yes
-- tests_present: yes
-
-Gap vs Judge
-- contract_gap: no canonical shared contract file; frontend and tests rely on an implicit shape owned by route + service helpers.
-- route_gap: the route owns cache keys, cache storage, singleflight, namespace rewriting, fallback assembly, effective-scope resolution, and final response shaping instead of delegating most of it to an application/service facade.
-- application_gap: `copilot_service.build_context_payload()` exists, but starter-specific normalization (`_build_start_response`, namespace rewrites, effective-scope handling) still lives in the API layer.
-- service_gap: there is no dedicated reusable start endpoint service equivalent to `judge_endpoint_service.py`; reuse is partial and spread across route-private helpers.
-- metadata_gap: metadata is present but not standardized through a typed contract or a single service-level builder.
-- never_empty_gap: nominally solved, but the never-empty guarantee depends on route-local fallback assembly instead of a reusable service boundary.
-- fallback_gap: explicit fallback exists, but the degraded note/source/cache behavior is split across route-private helpers rather than one service decision point.
-- testing_gap: route cache tests and service tests exist, but there is no shared contract test matrix anchored to a typed starter schema and no explicit thin-route regression test.
-
-Target architecture
-- target_contract: add a canonical shared starter contract in `packages/contracts/` (for example `copilot_start_v1.py`) covering `brief_of_day`, `ask`, `open`, `freshness`, `source(s)`, `warnings`, `filters_applied`, `stats`, `cache`, and additive degraded metadata.
-- target_route_design: keep the FastAPI route as a thin adapter: parse `tickers/namespace/debug`, invoke a public service method, and return `{\"ok\": True, \"data\": ...}`. Cache/singleflight may stay at route boundary only if they wrap a single service call and do not own fallback logic.
-- target_application_design: move starter-specific shaping into the application layer: build effective scope, rewrite namespace targets, assemble response metadata, and decide degraded note/source in one public function.
-- target_service_design: expose a reusable facade (either a new `apps/api/src/domains/copilot/application/copilot_start_service.py` or a new public `build_start_payload(...)` entrypoint in `copilot_service.py`) that returns the final typed starter payload and keeps route helpers private-free.
-- target_metadata: standardized `freshness/generated_at`, `source(s)`, `warnings`, `filters_applied`, `stats`, and `cache`, plus explicit degraded note/context metadata when fallback is used.
-- target_fallback_model: service-level never-empty fallback using local brief + entry points + saved portfolio scope when context service is unavailable, preserving the public contract and making degradation explicit instead of inferred.
-- target_test_matrix: 1. typed contract validation test, 2. route orchestration test for thin adapter behavior, 3. cache/singleflight hit + debug bypass test, 4. degraded fallback test, 5. namespace alias parity test for `/personal-finance/start`.
-
-Implementation plan
-- files_or_modules_to_create: `packages/contracts/copilot_start_v1.py` (or equivalent canonical contract module), optionally `apps/api/src/domains/copilot/application/copilot_start_service.py` if the existing `copilot_service.py` would stay too monolithic.
-- files_or_modules_to_modify: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py` or the new `copilot_start_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, and `apps/api/src/domains/market_data/tests/test_endpoint_cache_contracts.py`.
-- files_or_modules_not_to_touch: `apps/web/src/platform/*`, theme/shell assets, `apps/api/runtime/*`, `apps/monitor/*`, and `platform/automation/*` for this endpoint-specific convergence.
-- compatibility_notes: keep `/api/copilot/start` and `/api/personal-finance/start` unchanged; preserve additive-only response evolution so existing frontend consumers keep working.
-- implementation_order: 1. freeze the public contract in `packages/contracts`, 2. introduce the reusable starter service/facade, 3. slim the route to parse/cache/delegate only, 4. harden tests for contract/fallback/cache/alias behavior.
-- risks: careless extraction can duplicate logic already inside `build_context_payload()`, break cache semantics, or regress namespace rewriting for `/personal-finance/start`.
-- non_goals: no new route family, no frontend redesign, no ask/memo behavior rewrite, no new custom runtime plumbing.
-
-Decision
-- patch_now: no
-- if_no_reason: the endpoint gap is real but still belongs to the active BATCH-85 hardening slice; patching it from this run would overlap in-flight work rather than clarify an independent next move.
-- next_owner: dev
-- next_action: fold `/api/copilot/start` Judge-parity convergence into BATCH-85 after the current hardening lands, starting with a shared contract and a dedicated service facade before any further frontend changes.
-
-## 2026-04-15T04:38:31Z endpoint-architecture-steward
-
-Target endpoint
-- endpoint: /api/copilot/context
-- why_this_endpoint: active BATCH-85 explicitly depends on the brief -> ask/open -> memo starter path, and `/api/copilot/context` is the backend-first entry surface that feeds both `/api/copilot/start` and the personal-finance aliases.
-- current_product_role: expose the brief of day, entry points, portfolio-aware fallback context, and starter payload in one low-cost response.
-
-Judge reference mapping
-- contract_reference: `/Users/venom/Documents/analyse-financiere/packages/contracts/judge_v1.py`
-- route_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/api/judge.py`
-- application_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_pipeline.py`
-- service_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_endpoint_service.py`
-- intelligence_or_context_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/intelligence_service.py`
-- invariants_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/INVARIANTS.md`
-
-Current state
-- current_contract: stable `ok/data` payload with `daily_brief`, `entry_points`, `copilot_start`, `scope_tickers`, `context_influence`, optional `playbook_context`, and allocation-drift context.
-- route_thin_or_fat: medium; the route is not a pure business blob, but it still owns cache, singleflight, namespace target rewriting, and some payload shaping.
-- application_logic_present: yes; `apps/api/src/domains/copilot/application/copilot_service.py::build_context_payload` centralizes fallback context, saved-portfolio resolution, regime/playbook enrichment, brief loading, and starter entry-point composition.
-- service_layer_present: partial; a reusable application service exists, but there is no Judge-style dedicated endpoint facade equivalent to `judge_endpoint_service.py`.
-- metadata_present: partial; payload fragments expose `source`, `generated_at`, `freshness`, and warnings, but there is no shared typed metadata contract for the endpoint family.
-- never_empty_present: yes; fallback tests confirm the route keeps a usable brief and entry points when context resolution fails.
-- fallback_present: yes; exceptions in the context service degrade to brief + starter payload instead of a 500.
-- tests_present: yes; route contract, alias, and fallback tests exist under `apps/api/src/domains/copilot/tests/`.
-
-Gap vs Judge
-- contract_gap: no shared typed contract in `packages/contracts/*` and no explicit stable response model comparable to `judge_v1.py`.
-- route_gap: cache, alias rewriting, and endpoint-specific response shaping still live in the route layer.
-- application_gap: business assembly exists, but endpoint-level normalization is not isolated into a typed builder/facade pair.
-- service_gap: missing Judge-style endpoint service that owns final metadata normalization, namespace alias policy, and contract guarantees.
-- metadata_gap: metadata is present but not standardized enough across `/copilot/context`, `/copilot/start`, and `/personal-finance/*`.
-- never_empty_gap: degraded mode works, but explicit `fallback_used` / standardized warnings could be clearer.
-- fallback_gap: provenance and freshness of fallback mode are visible only through mixed fragment fields, not a canonical endpoint-level contract.
-- testing_gap: route tests are good, but explicit shared-contract and metadata-parity tests versus the Judge standard are missing.
-
-Target architecture
-- target_contract: introduce a shared typed contract for the copilot starter/context family under `packages/contracts/*`, preserving the current public shape and adding explicit metadata/fallback semantics.
-- target_route_design: keep the FastAPI route focused on input parsing, cache/singleflight, and delegation only.
-- target_application_design: keep `build_context_payload` as the business assembler for brief, portfolio fallback, playbook, and entry points.
-- target_service_design: add a small Judge-style endpoint facade that normalizes metadata, namespace alias rewriting, and never-empty guarantees for `/copilot/context` and `/copilot/start`.
-- target_metadata: consistent `generated_at`, `freshness/last_update`, `source`, `warnings`, `filters_applied`, `stats`, and explicit degraded/fallback markers at endpoint level.
-- target_fallback_model: preserve current never-empty fallback, but surface a canonical endpoint-level degraded marker and provenance instead of relying on mixed nested fields.
-- target_test_matrix: route contract test, shared-contract serialization test, fallback/degraded metadata test, namespace alias test, and cache/singleflight orchestration test.
-
-Implementation plan
-- files_or_modules_to_create: none now; the next justified addition would be a minimal endpoint-service/contract module pair only after runtime recovery.
-- files_or_modules_to_modify: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_domain_router.py`, `apps/api/src/domains/copilot/tests/test_copilot_context_route_fallback.py`, and a shared contracts location under `packages/contracts/*` if the runtime blocker is cleared.
-- files_or_modules_not_to_touch: `apps/web/src/platform/*`, frontend theme/shell assets, Plane/backlog docs, and compatibility projections under `logs-codex-runs/orchestrator-state/*`.
-- compatibility_notes: keep `/api/copilot/context`, `/api/copilot/start`, `/api/personal-finance/start`, and `/api/personal-finance/ask` stable; only additive metadata is acceptable.
-- implementation_order: 1. recover VM runtime and prove BATCH-85, 2. if the endpoint still needs hardening, extract a minimal endpoint-service/typed-contract layer, 3. add contract/metadata tests, 4. re-run VM proof.
-- risks: doing architecture cleanup before VM recovery risks optimizing a non-blocking code path while the real blocker is runtime execution health.
-- non_goals: no new route family, no frontend redesign, no backlog mutation, no broad copilot refactor outside the active endpoint slice.
-
-Decision
-- patch_now: no
-- if_no_reason: runtime degradation on the VM is the primary blocker; an architecture patch here would improve structure but would not restore delivery without canonical runtime recovery and proof.
-- next_owner: admin
-- next_action: recover VM runtime first, then resume BATCH-85 proof and only apply the `/api/copilot/context` Judge-parity cleanup if the endpoint remains the limiting factor.
-
-## 2026-04-15T04:37:41Z role-prompt-engineer
-
-Continuity
-- previous_target_role: planner
-- previous_prompt_issue: shared orchestration prompt repeated planner autonomy rules and could push new batch creation before collect/repair/ack on canonical downstream active work
-- changed_since_last_run: planner guardian is still red on `missing_planner_artifact` plus proof-quality drift, dynamic prompt patches now inject canonical-active-task and proof instructions, and the base `ROLE=planner` prompt was still oversized at 7186 chars despite those runtime overlays
-
-Target
-- role: planner
-- prompt_source: /Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh
-- why_this_prompt_now: runtime signals still show planner churn risk (`PLANNER_RUNTIME_ACTIONS_FAILED`, proof gaps, canonical active dev task), and the main planner prompt was duplicating rules already injected by `SYSTEM_PROMPT`, `ORCHESTRATION_SHARED_PROMPT`, guardian feedback, and dynamic prompt patches
-
-Prompt audit
-- useful_rules: strict decision order; planner-owned completion rule for `PLAN|ANALYSIS|ARCH|GOV_REVIEW`; explicit canonical tool list (`planner_runtime_actions.py`, `planner_subagent_manager.py`); non-passive fallback `NEXT=create_or_claim_now`; batch creation constraints
-- redundant_rules: planning/runtime truth reminders, planner-only scheduler reminders, frontend-theme protection, evidence/output contract details, proof field formats, novelty/autonomy language already repeated in shared/system prompt layers
-- contradictory_rules: no hard contradiction found, but repeated autonomy plus batch-creation language competed with newer guardian/patch instructions that say follow canonical active downstream work first
-- too_long_or_noisy_sections: oversized planner block mixed mission, doctrine, product guardrails, evidence schema, output schema, novelty policy, and batch-creation mechanics in one layer
-- missing_tool_guidance: none at the prompt-source level for the chosen patch; canonical tools were already present but buried inside repeated doctrine
-- likely_output_failures_caused_by_prompt: `planner_quality_autofill_missing`; `planner_evidence_incomplete_soft`; redispatch churn toward fresh ANALYSIS or batch creation while a canonical downstream task is already active; `ready_but_no_delta`; `ready_but_none_task_update`
-
-Optimization
-- keep: ordered tick policy; planner-owned completion rule; single-subagent dispatch routing; batch creation as fallback only; critical proof rule for planner-owned closes
-- simplify: shorten tool list to command families; compress decision tree wording; remove repeated doctrine already enforced higher in the composed prompt
-- remove: repeated planning/runtime truth exposition, repeated product/theme reminders, repeated output-contract reminders, repeated evidence formatting details already covered in `SYSTEM_PROMPT`
-- move_out_of_prompt: no extraction now; keep scope local to the planner block only
-- tool_usage_improvements: clearer visibility that planner should `collect` before `run`, `sync-priority` before fallback batch creation, and treat prompt/runtime/spec fixes as direct planner work
-- expected_runtime_impact: direct reduction of prompt noise and clearer planner action selection under canonical-active-task pressure; should reduce useless redispatch/new-batch impulses more than it changes raw capability
-
-Patch proposal
-- patch_type: shorten
-- create_now: yes
-- target_file: /Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh
-- exact_goal: cut the `ROLE=planner` prompt to action-order, canonical tools, fallback batch creation, and planner-close proof rules only
-- expected_gain: less prompt-layer conflict, better salience for collect/repair/claim actions, and lower odds of planner drifting into duplicate analysis or batch creation
-- risk: low; some doctrinal reminders now live only in shared/system layers, so rollback is needed only if planner starts forgetting truths that those shared layers no longer cover in practice
-
-Measurement
-- signals_to_watch: `planner_quality_autofill_missing`; `planner_evidence_incomplete_soft`; `PLANNER_RUNTIME_ACTIONS_FAILED`; count of planner redispatches into fresh ANALYSIS or batch creation while `canonical.active_task_role != planner`; `none_no_signal` frequency on planner ticks
-- success_criteria: fewer planner proof-quality issues over the next ticks, no new premature ANALYSIS or batch recreation while `BATCH-85-DEV-01` stays canonical active, and planner outputs that claim/collect/complete instead of restating doctrine
-- rollback_condition: planner starts regressing on canonical truth usage or misses planner-owned close proof fields after the prompt reduction
-
-Decision
-- next_owner: planner
-- next_action: observe the next planner ticks against guardian issues and keep the patch only if collect/repair/claim behavior becomes more direct than create or reopen churn
-
-## 2026-04-15T04:39:36Z endpoint-architecture-steward
-
-Target endpoint
-- endpoint: GET /api/copilot/start
-- why_this_endpoint: surface d\entrée produit principale après judge
-## ${TS} endpoint-architecture-steward
-
-Target endpoint
-- endpoint: GET /api/copilot/start
-- why_this_endpoint: surface d\entrée produit principale après judge
-## 2026-04-15T04:42:36Z vision-batch-architect
-
-Continuity
-- previous_verdict: no new batch; BATCH-85 should remain the sole priority until VM proof exists
-- previous_top_priority: finish the active brief/action/memo hardening slice and validate it on the VM
-- previous_next_delivery: close the BATCH-85 delivery chain instead of opening parallel backlog
-- changed_since_last_run: synced queue/workboard still show BATCH-85 as the only active batch, proofs now include BATCH-85 ANALYSIS/ARCH completion plus DEV-01 delivery proof, and local code changes remain concentrated on the same copilot/portfolio/judge/monitor hardening slice
-
-Reality check
-- vision_alignment: mixed
-- priority_clarity: clear
-- active_batch_usefulness: strong
-- delivered_value_now: moderate
-
-Top priorities
-1. Finish BATCH-85 on the existing brief/action/memo slice and get canonical VM proof for `/api/personal-finance/start`, `/api/copilot/context`, and `/api/status`.
-2. Keep the backend-first hardening on `apps/api/src/domains/copilot/*`, `apps/api/src/domains/market_data/*`, and `apps/monitor/*` coherent so the brief, top action context, and memo path stay reliable without extra plumbing.
-3. After BATCH-85 proof only, converge `GET /api/copilot/start` toward Judge-parity with a shared contract and thinner route if the gap still blocks product reliability.
-
-Rejected batch ideas
-- New batch for `/api/copilot/start` Judge-parity now: rejected as too dependent on BATCH-85 because the active lot already modifies the same route, service, portfolio fallback, and monitor surfaces.
-- New batch for conversation history/follow-up UX: rejected as already implicitly delivered per `docs/operations/orchestrator/proofs/BATCH-85/BATCH-85-DEV-01/delivery-proof.json`.
-- New runtime/planner cleanup batch: rejected as too orchestration-heavy for this role and not a better product priority than finishing the active user-visible slice.
-
-Selected batch
-- title: BATCH-85 - Fiabiliser le slice brief/action/memo a faible cout
-- why_now: it is already the active batch, it targets the primary product entry path, and opening new backlog now would only fragment delivery before VM validation exists
-- user_visible_delta: more reliable brief-of-day entry, clearer ask/open starters, steadier portfolio-aware context, and fewer nominal-path failures on the existing personal-finance flow
-- novelty_target: harden the current backend-first slice so the existing product entry path becomes dependable without redesign or new orchestration surfaces
-- independence_from_active_batch: no
-- create_now: no
-- batch_class: hardening
-
-Architecture fit
-- aligned_with_backend_first: yes
-- preserves_frontend_theme: yes
-- adds_new_custom_plumbing: no
-- canonical_paths_respected: yes
-- comments: the useful work stays in `apps/api/src/domains/copilot/*`, `apps/api/src/domains/market_data/*`, and `apps/monitor/*`; no backlog JSON, runtime projection, or frontend shell invention is justified now
-
-Implementation architecture
-- product slice: personal finance copilot entry flow from brief-of-day to ask/open to memo, plus the supporting portfolio/watchlist context and monitor health visibility
-- current reality: `GET /api/copilot/start` and `/api/personal-finance/start` already exist and return starter payloads; local code changes are actively hardening context fallback, saved-portfolio defaulting, Judge reuse, and monitor status, while synced runtime projections show BATCH-85 as the only active batch
-- backend changes: continue hardening `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/judge/api/judge.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, and portfolio services so the starter and memo flows stay never-empty, low-cost, and provenance-aware
-- frontend changes: no structural redesign; only consume existing starter payloads and aliases already present in `apps/web/src/domains/forecasts/pages/app.js` and `personal-finance-start.html` if backend proof exposes a real rendering gap
-- monitor/observability changes: keep `apps/monitor/server.py` and `apps/monitor/services/status_service.py` aligned with runtime truth so `/api/status` reflects the same reliability slice and degraded states instead of stale planner/admin residue
-- runtime/orchestration changes: none as a new batch; runtime work remains validation/support for BATCH-85 and must not create new wrappers or backlog projections
-- existing code to reuse: `packages/contracts/judge_v1.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/copilot/application/copilot_service.py::build_context_payload`, namespace alias routes in `apps/api/src/domains/copilot/api/copilot.py`, and existing copilot/monitor tests
-- files_or_modules_to_touch: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/judge/api/judge.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/api/src/domains/market_data/application/dashboard_ui_service.py`, `apps/api/src/domains/market_data/application/portfolio_performance_service.py`, `apps/api/src/domains/market_data/application/portfolio_service.py`, `apps/monitor/server.py`, `apps/monitor/services/status_service.py`
-- files_or_modules_not_to_touch: `apps/web/src/platform/*`, theme/shell assets, `platform/automation/*` as a new product batch surface, Plane/runtime JSON projections, and memory/docs as planning truth substitutes
-- api_or_contract_changes: additive only; keep `/api/copilot/start`, `/api/personal-finance/start`, `/api/copilot/context`, and `/api/personal-finance/ask` stable while improving metadata consistency (`source`, `freshness`, `warnings`, `cache`, degraded notes)
-- migration_or_compat_notes: preserve personal-finance namespace rewriting and current frontend payload expectations; if a shared starter contract is introduced later, it must wrap the existing shape rather than break it
-- proof_requirements: canonical VM proof for `/api/personal-finance/start`, `/api/copilot/context`, and `/api/status`; route/service test proof for cache hit + debug bypass + never-empty fallback; evidence that portfolio defaulting does not force live risk fetch in nominal flow
-- acceptance_criteria: active BATCH-85 surfaces return stable starter/context payloads with explicit freshness and source metadata; nominal errors degrade instead of 500ing; monitor status stays non-null and aligned with runtime truth; no new duplicate batch is required
-- implementation_order: 1. finish active backend/service hardening in copilot + portfolio + judge, 2. finish monitor/status hardening, 3. run/collect tests locally, 4. validate on the VM, 5. only then decide whether shared-contract extraction is still needed
-- risks: local projections can overstate readiness because VM runtime proof is unavailable from this sandbox; route/service cleanup on `copilot/start` can duplicate active BATCH-85 work if started as a separate batch too early
-- non_goals: no new backlog stream, no frontend redesign, no new operator/runtime plumbing, no manual edits to queue/workboard/priority projections
-
-Decision
-- create_in_plane_now: no
-- if_no_reason: current batch should keep priority because it already covers the same product slice and code surfaces, and Plane creation is not justified without an independent user-visible delta
-- next_owner: dev
-- next_action: finish BATCH-85 and obtain canonical VM proof before reconsidering any new batch
-
-## 2026-04-15T04:42:36Z endpoint-architecture-steward
-
-Target endpoint
-- endpoint: GET /api/copilot/start
-- why_this_endpoint: it is the main starter endpoint for the brief -> ask/open -> memo journey and it still carries route-owned orchestration that Judge has already factored better
-- current_product_role: deliver the brief of the day, starter ask/open actions, and portfolio-aware degraded entry into the personal finance copilot in 2-3 clicks
-
-Judge reference mapping
-- contract_reference: `/Users/venom/Documents/analyse-financiere/packages/contracts/judge_v1.py`
-- route_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/api/judge.py`
-- application_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_pipeline.py`
-- service_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/judge_endpoint_service.py`
-- intelligence_or_context_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/application/intelligence_service.py`
-- invariants_reference: `/Users/venom/Documents/analyse-financiere/apps/api/src/domains/judge/INVARIANTS.md`
-
-Current state
-- current_contract: implicit but fairly stable `ok/data` response built by `_build_start_response(...)` around `brief_of_day`, `ask`, `open`, `generated_at`, `freshness`, `source`, `warnings`, `stats`, `filters_applied`, optional note, and portfolio/context fragments
-- route_thin_or_fat: fat relative to Judge; the route still owns cache lookup/store, singleflight, fallback branching, namespace rewriting, and response assembly
-- application_logic_present: yes; `apps/api/src/domains/copilot/application/copilot_service.py::build_context_payload` builds daily brief, entry points, saved-portfolio context, playbook context, regime detection, and `copilot_start`
-- service_layer_present: partial; there is a reusable application service, but no Judge-style dedicated endpoint facade comparable to `judge_endpoint_service.py`
-- metadata_present: partial; `generated_at`, `freshness`, `source`, `warnings`, `cache`, and `stats` exist, but there is no shared typed contract guaranteeing starter metadata parity
-- never_empty_present: yes; the route explicitly falls back to local brief + entry points instead of failing hard
-- fallback_present: yes; both service-level context fallback and route-level fallback exist, but provenance is spread across route helpers and service builders
-- tests_present: yes; cache/debug tests and service tests exist under `apps/api/src/domains/copilot/tests/`, but not a shared typed contract test
-
-Gap vs Judge
-- contract_gap: no canonical shared starter contract in `packages/contracts/*`; frontend and aliases still depend on a route-built shape rather than a typed public model
-- route_gap: `apps/api/src/domains/copilot/api/copilot.py:1007-1110` still mixes adapter work with business fallback and payload shaping
-- application_gap: application logic exists but starter-specific normalization remains split between the route and `_build_copilot_start_payload`
-- service_gap: missing endpoint facade to own final payload normalization, metadata standardization, and alias-safe degraded behavior
-- metadata_gap: metadata is present but not standardized enough across `/copilot/start`, `/copilot/context`, and `/personal-finance/start`
-- never_empty_gap: degraded mode works, but explicit `fallback_used` or clearer canonical degraded markers are still absent
-- fallback_gap: fallback policy is duplicated between route and service instead of being encapsulated in one reusable layer
-- testing_gap: no shared contract validation anchored to a typed starter schema and no thin-route regression test that proves route/business separation
-
-Target architecture
-- target_contract: introduce a shared typed starter contract under `packages/contracts/*` for `brief_of_day`, `ask`, `open`, `generated_at`, `freshness`, `source`, `warnings`, `filters_applied`, `stats`, `cache`, and explicit degraded metadata
-- target_route_design: keep `GET /api/copilot/start` as a thin FastAPI adapter that parses `tickers/namespace/debug`, handles cache/singleflight, delegates once, and returns `{\"ok\": true, \"data\": ...}`
-- target_application_design: keep `build_context_payload(...)` as the broad business assembler for scope, saved portfolio, regime, and brief creation without route-only namespace concerns
-- target_service_design: add a Judge-style endpoint facade for starter payload construction and degraded policy, either as `apps/api/src/domains/copilot/application/copilot_start_service.py` or a public facade extracted from `copilot_service.py`
-- target_metadata: canonical endpoint-level `generated_at`, `freshness`, `source`, `warnings`, `filters_applied`, `stats`, `cache`, and explicit degraded/fallback markers
-- target_fallback_model: one service-owned never-empty fallback that preserves the public contract and rewrites namespace targets consistently for `/personal-finance/start`
-- target_test_matrix: shared contract serialization test, route orchestration/thinness test, cache hit + debug bypass test, degraded fallback test, and namespace alias parity test
-
-Implementation plan
-- files_or_modules_to_create: `packages/contracts/copilot_start_v1.py` and optionally `apps/api/src/domains/copilot/application/copilot_start_service.py` if extraction from `copilot_service.py` remains cleanly scoped
-- files_or_modules_to_modify: `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`, `apps/api/src/domains/copilot/tests/test_copilot_service.py`, and any focused contract test file under `apps/api/src/domains/copilot/tests/`
-- files_or_modules_not_to_touch: `apps/web/src/platform/*`, frontend theme/shell assets, `apps/api/runtime/*`, `apps/monitor/*`, and `platform/automation/*` for this endpoint-specific convergence
-- compatibility_notes: keep `/api/copilot/start` and `/api/personal-finance/start` stable; only additive metadata evolution is acceptable
-- implementation_order: 1. freeze the starter contract, 2. extract a dedicated endpoint facade, 3. slim the route to parse/cache/delegate only, 4. add contract/fallback/cache/alias tests, 5. revalidate on VM
-- risks: doing this now would overlap BATCH-85 work already in progress on the same files and could create duplicate partial abstractions before runtime proof exists
-- non_goals: no new route family, no frontend redesign, no conversation-history work, no orchestration/runtime refactor disguised as endpoint work
-
-Decision
-- patch_now: no
-- if_no_reason: the gap is real but not independent; it belongs inside the active BATCH-85 hardening path and should not become a separate patch from this run
-- next_owner: dev
-- next_action: finish BATCH-85, then extract the starter contract/facade only if `/api/copilot/start` still remains the limiting reliability point after VM proof
-## 2026-04-15T04:49:00Z endpoint-architecture-steward
-
-Target endpoint
-- endpoint: GET /api/copilot/start
-- why_this_endpoint: surface d'entrée produit principale après judge; elle sert le brief du jour et les actions ask/open en 2-3 clics.
-- current_product_role: point d'entrée backend-first réutilisé par copilot et personal-finance pour lancer le parcours nominal utilisateur.
-
-Judge reference mapping
-- contract_reference: /home/venom/analyse-financiere/packages/contracts/judge_v1.py
-- route_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/api/judge.py
-- application_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/judge_pipeline.py
-- service_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/judge_endpoint_service.py
-- intelligence_or_context_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/intelligence_service.py
-- invariants_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/INVARIANTS.md
-
-Current state
-- current_contract: contrat public stable de fait avec `ok`, `data`, `generated_at`, `freshness`, `source`, `warnings`, `filters_applied`, `stats`, `cache`, `ask`, `open`, `brief_of_day`, mais il n'existe pas comme contrat partagé canonique.
-- route_thin_or_fat: fat; la route gère parsing, cache TTL, singleflight, bypass debug, normalisation de namespace, fallback et assemblage de la réponse.
-- application_logic_present: yes; l'agrégation métier vit surtout dans `/home/venom/analyse-financiere/apps/api/src/domains/copilot/application/copilot_service.py`.
-- service_layer_present: partial; il existe de la logique métier réutilisable mais pas de façade endpoint dédiée équivalente à `judge_endpoint_service.py`.
-- metadata_present: yes; les métadonnées utiles sont déjà exposées et exploitables côté frontend.
-- never_empty_present: yes; la route préserve un payload utile avec `ask/open` et brief fallback au lieu d'un vide structurel.
-- fallback_present: yes; snapshot-first et route fallback existent, mais la responsabilité est partagée entre route et service.
-- tests_present: yes; tests de route, cache, alias et fallback existent déjà.
-
-Gap vs Judge
-- contract_gap: absence de contrat partagé sous `packages/contracts/*`; le frontend dépend d'une shape implicite garantie seulement par la route et les tests.
-- route_gap: la route est trop chargée par rapport au modèle Judge; elle porte encore de la logique de cache/orchestration/fallback qui devrait être encapsulée.
-- application_gap: la logique métier n'est pas perdue, mais l'orchestration endpoint est répartie entre la route et le service au lieu d'être stabilisée dans une couche dédiée.
-- service_gap: absence d'une façade réutilisable `copilot_endpoint_service` responsable du payload final, de la metadata standard et du degraded mode.
-- metadata_gap: bonne base existante, mais pas de standardisation canonique de `fallback_used`, `source`, `freshness` et `warnings` via un builder/service unique.
-- never_empty_gap: le comportement never-empty existe mais n'est pas garanti par un contrat typé partagé ni centralisé dans une façade endpoint.
-- fallback_gap: fallback explicite mais distribué; il faut une chaîne unique snapshot-first -> degraded payload -> warning/source canonique.
-- testing_gap: couverture route correcte, mais pas encore de tests de contrat partagé ni de tests dédiés de façade service équivalents à Judge.
-
-Target architecture
-- target_contract: créer `/home/venom/analyse-financiere/packages/contracts/copilot_start_v1.py` avec contrat public typé pour `ok`, `data`, `generated_at`, `freshness`, `source`, `warnings`, `filters_applied`, `stats`, `cache`, `fallback_used`.
-- target_route_design: garder `/home/venom/analyse-financiere/apps/api/src/domains/copilot/api/copilot.py` comme adaptateur mince: parsing input, debug bypass simple, appel façade endpoint, enveloppe HTTP.
-- target_application_design: conserver `/home/venom/analyse-financiere/apps/api/src/domains/copilot/application/copilot_service.py` comme couche d'agrégation métier pour brief, entry points, enrichissement et contexte.
-- target_service_design: créer `/home/venom/analyse-financiere/apps/api/src/domains/copilot/application/copilot_endpoint_service.py` pour encapsuler cache/singleflight, payload final, fallback canonicalisé, normalisation metadata et compat alias.
-- target_metadata: standardiser `generated_at`, `freshness`, `source[]`, `warnings[]`, `filters_applied`, `stats`, `cache`, `fallback_used` avec provenance explicite lisible par le frontend.
-- target_fallback_model: une seule chaîne explicite snapshot-first; en cas de source partielle, retour `ok=true` dégradé avec provenance/warnings/fallback_used, sans 500 sur le parcours nominal.
-- target_test_matrix: ajouter test de contrat partagé, test de façade endpoint, test orchestration route, test degraded fallback, test metadata standard, test alias parity `/api/personal-finance/start`.
-
-Implementation plan
-- files_or_modules_to_create: `/home/venom/analyse-financiere/packages/contracts/copilot_start_v1.py`, `/home/venom/analyse-financiere/apps/api/src/domains/copilot/application/copilot_endpoint_service.py`, `/home/venom/analyse-financiere/apps/api/src/domains/copilot/tests/test_copilot_start_endpoint_service.py`.
-- files_or_modules_to_modify: `/home/venom/analyse-financiere/apps/api/src/domains/copilot/api/copilot.py`, `/home/venom/analyse-financiere/apps/api/src/domains/copilot/application/copilot_service.py`, `/home/venom/analyse-financiere/apps/api/src/domains/copilot/tests/test_copilot_domain_router.py`, `/home/venom/analyse-financiere/apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py`.
-- files_or_modules_not_to_touch: `/home/venom/analyse-financiere/apps/api/src/domains/judge/api/intelligence.py`, `/home/venom/analyse-financiere/apps/api/src/domains/judge/api/quality.py`, couches runtime/planner/operator, frontend theme/shell.
-- compatibility_notes: préserver strictement les routes publiques `/api/copilot/start` et `/api/personal-finance/start` ainsi que la shape actuelle pendant la migration.
-- implementation_order: 1. contrat partagé 2. façade endpoint 3. migration de la route vers la façade 4. alignement des tests 5. nettoyage des helpers route-locaux.
-- risks: casser l'alias `personal-finance/start`, perdre des champs implicites existants, introduire une divergence entre cache route et fallback métier si la migration est partielle.
-- non_goals: réécriture complète du domaine copilot, redesign frontend, clonage monolithique de Judge, ajout de plomberie runtime.
-
-Decision
-- patch_now: no
-- if_no_reason: le gain clair est structurel et nécessite un contrat partagé + une façade endpoint dédiée; ce n'est pas un patch local sans risque sur une route déjà en service.
-- next_owner: dev
-- next_action: implémenter `copilot_start_v1` et `copilot_endpoint_service`, puis migrer `/api/copilot/start` vers une route mince avec metadata/fallback standardisés.
-## 2026-04-15T05:05:00Z endpoint-architecture-steward
-
-Target endpoint
-- endpoint: GET /api/portfolios/{portfolio_id}/risk-profile
-- why_this_endpoint: surface portefeuille critique déjà consommée par le frontend; elle devait rendre sa dégradation explicite au lieu de la laisser implicite dans `source` et `warnings`.
-- current_product_role: snapshot de risque actionnable pour portefeuille/watchlist avec poids, métriques, justification et garde-fous utilisables côté dashboard et copilote.
-
-Judge reference mapping
-- contract_reference: /home/venom/analyse-financiere/packages/contracts/judge_v1.py
-- route_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/api/judge.py
-- application_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/judge_pipeline.py
-- service_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/judge_endpoint_service.py
-- intelligence_or_context_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/intelligence_service.py
-- invariants_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/INVARIANTS.md
-
-Current state
-- current_contract: contrat public déjà stable avec `portfolio`, `benchmark`, `weights`, `metrics`, `risk_profile`, `risk_level`, `risk`, `why`, `warnings`, `filters_applied`, `stats`, `confidence`, `generated_at`, `last_update`, `source`, enveloppé par `service_response_with_metadata`.
-- route_thin_or_fat: thin; la route délègue déjà à la façade `get_portfolio_risk_profile_payload(...)`.
-- application_logic_present: yes; la classification métier et les fallbacks composition/live vivent dans `/home/venom/analyse-financiere/apps/api/src/domains/market_data/application/portfolio_service.py`.
-- service_layer_present: yes; `/home/venom/analyse-financiere/apps/api/src/domains/market_data/application/portfolio_endpoint_service.py` joue déjà le rôle de façade endpoint.
-- metadata_present: yes; provenance, fraîcheur, filtres et stats existent déjà.
-- never_empty_present: yes; fallback service et fallback composition-only évitent le vide structurel.
-- fallback_present: yes; fallback service et fallback métriques existent.
-- tests_present: yes; `/home/venom/analyse-financiere/apps/api/src/domains/market_data/tests/test_portfolio_risk_profile_contract.py` couvre contrat, orchestration et fallback.
-
-Gap vs Judge
-- contract_gap: pas de contrat partagé `packages/contracts/*`; la shape reste locale au domaine market-data.
-- route_gap: faible; la route est déjà au bon niveau.
-- application_gap: faible; la logique métier est déjà isolée.
-- service_gap: faible; la façade existait déjà.
-- metadata_gap: la dégradation restait implicite pour `composition_only` et `metrics_unavailable`; le frontend devait l'inférer depuis `source`.
-- never_empty_gap: faible; le payload était déjà robuste.
-- fallback_gap: fallback présent mais `fallback_used` et `status=degraded` n'étaient pas explicitement normalisés pour tous les chemins non nominaux.
-- testing_gap: les tests existants couvrent bien la forme, mais ne forcent pas encore explicitement `fallback_used`.
-
-Target architecture
-- target_contract: conserver le contrat local existant; ne pas créer de nouveau fichier tant que la consolidation `market_data` partagée n'est pas nécessaire.
-- target_route_design: conserver la route mince actuelle.
-- target_application_design: conserver la logique métier dans `portfolio_service.py`.
-- target_service_design: enrichir `portfolio_endpoint_service.py` pour déduire et exposer explicitement la dégradation depuis les tags métier existants.
-- target_metadata: `fallback_used` explicite + `status=degraded` pour `composition_only`, `metrics_unavailable` et `service_fallback`.
-- target_fallback_model: garder le never-empty existant, mais rendre la provenance et le mode de fallback lisibles sans heuristique frontend.
-- target_test_matrix: conserver les tests actuels; ajouter plus tard des assertions explicites sur `fallback_used` et `status` si nécessaire.
-
-Implementation plan
-- files_or_modules_to_create: none
-- files_or_modules_to_modify: `/home/venom/analyse-financiere/apps/api/src/domains/market_data/application/portfolio_endpoint_service.py`
-- files_or_modules_not_to_touch: `/home/venom/analyse-financiere/apps/api/src/domains/market_data/api/portfolios.py`, `/home/venom/analyse-financiere/apps/api/src/domains/market_data/application/portfolio_service.py`
-- compatibility_notes: contrat public préservé; uniquement ajout de metadata additive sur la dégradation.
-- implementation_order: 1. normaliser les tags `source` 2. déduire `fallback_used` 3. propager `status=degraded` depuis la façade endpoint.
-- risks: consommateurs downstream non préparés à lire `fallback_used`, même si l'ajout reste backward-compatible.
-- non_goals: refonte métriques live, extraction d'un contrat partagé market-data, modification de la route.
-
-Decision
-- patch_now: yes
-- if_no_reason:
-- next_owner: dev
-- next_action: valider ensuite côté frontend/monitor que `composition_only` et `metrics_unavailable` s'affichent comme dégradés explicites.
-## 2026-04-15T05:14:00Z endpoint-architecture-steward
-
-Target endpoint
-- endpoint: GET /api/portfolios/{portfolio_id}/performance
-- why_this_endpoint: surface business critique pour juger la valeur d'un portefeuille; il répondait mais sans exposer clairement provenance, filtres, warnings ni fallback.
-- current_product_role: métriques synthétiques de performance portefeuille comparées au benchmark pour guider la lecture portfolio/dashboard.
-
-Judge reference mapping
-- contract_reference: /home/venom/analyse-financiere/packages/contracts/judge_v1.py
-- route_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/api/judge.py
-- application_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/judge_pipeline.py
-- service_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/judge_endpoint_service.py
-- intelligence_or_context_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/application/intelligence_service.py
-- invariants_reference: /home/venom/analyse-financiere/apps/api/src/domains/judge/INVARIANTS.md
-
-Current state
-- current_contract: modèle typé local `PortfolioPerformance`, mais initialement minimal: métriques de perf sans `filters_applied`, `warnings`, `source` ni `fallback_used`.
-- route_thin_or_fat: thin; la route lit le service et sérialise.
-- application_logic_present: yes; calcul et fallback vivent déjà dans `portfolio_service.py`.
-- service_layer_present: partial; pas de façade endpoint dédiée, mais un service métier existant suffisait pour un patch local.
-- metadata_present: partial avant patch; bonne après enrichissement local.
-- never_empty_present: yes; le service renvoyait déjà une structure avec `null` au lieu de casser.
-- fallback_present: yes; implicite avant patch, explicite après patch.
-- tests_present: partial; tests de perf existent dans `test_portfolio_risk_profile_contract.py`, mais la metadata enrichie n'était pas encore l'axe principal.
-
-Gap vs Judge
-- contract_gap: pas de contrat partagé canonique; contrat local seulement.
-- route_gap: faible; la route n'était pas le problème.
-- application_gap: faible; la logique était déjà dans le service.
-- service_gap: pas de façade dédiée, mais le plus gros manque était la normalisation de contrat métier.
-- metadata_gap: absence de `filters_applied`, `stats`, `warnings`, `source`, `generated_at`, `fallback_used`.
 - never_empty_gap: faible; structure vide évitée, mais sans signal de dégradation lisible.
 - fallback_gap: le fallback métriques indisponibles n'était pas explicitement exposé.
 - testing_gap: les tests existants ne figent pas encore cette metadata enrichie.
@@ -857,3 +125,732 @@ Decision
 - next_owner: dev
 - next_action: après le ship du lot fiabilité, implémenter `copilot_start_v1` puis `copilot_endpoint_service` pour rendre la route `/api/copilot/start` mince sans casser la compatibilité existante.
 - [2026-04-15 00:50:46 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-85 task_id=BATCH-85-DEV-01 next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-85-DEV-01 directive=none/none message=none/none exec_report=none issues=missing_result_payload suggestions=none
+
+## 2026-04-16T06:02:12Z po-vision-batch-architect
+
+Batch proposal
+- title: none
+- why_now: la vérification croisée vision/code/VM/EC2 montre que le flux cible `brief -> ask/open -> memo` est déjà implémenté et publiquement servi; le manque actuel n’est pas un slice produit net-new mais la convergence planner/runtime
+- user_visible_delta: none new; l’app publique EC2 expose déjà `/api/judge/personal-finance/start` avec brief structuré et `ranked_action`, et `/api/copilot/start` répond publiquement même si plus pauvre
+- novelty_target: none
+- independence_from_active_batch: no
+- create_now: no
+- batch_class: reuse_only
+
+Architecture fit
+- aligned_with_backend_first: yes
+- preserves_frontend_theme: yes
+- adds_new_custom_plumbing: no
+- canonical_paths_respected: yes
+- comments: le chemin canonique existe déjà via `packages/contracts/copilot_v1.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, route mince `apps/api/src/domains/copilot/api/copilot.py`, et consommation UI `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html`
+
+Implementation architecture
+- product slice: starter partagé `judge -> copilot -> personal-finance` pour brief du jour, ask/open immédiat, top action, et amorce du memo
+- current reality: la preuve publique EC2 est positive sur `/api/health`, `/api/copilot/start`, `/api/judge/personal-finance/start`, `/api/status?lite=1`; queue/workboard sont à vide (`active_batch_ids=[]`), mais `planner-graph-state.json` garde des reliquats `BATCH-88/BATCH-90`
+- backend changes: none recommended now
+- frontend changes: none recommended now
+- monitor/observability changes: none as a new batch; le vrai sujet restant est de ne plus laisser le monitor/planner sur-réagir à des reliquats quand aucun batch canonique n’est actif
+- runtime/orchestration changes: un seul plus petit blocage concret reste valide: quarantaine/consommation des résidus SQLite/runtime (`BATCH-88-ADMIN-01`, `BATCH-90-ADMIN-01` déjà livré mais encore traînant dans les surfaces) pour que le planner converge vers `idle` réel au lieu d’un faux besoin de batch
+- existing code to reuse: `packages/contracts/copilot_v1.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`, `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html`
+- files_or_modules_to_touch: none from this run
+- files_or_modules_not_to_touch: nouveaux contrats non partagés, `dashboard` ou `monitor` comme source de vérité produit, JSON runtime édités à la main
+- api_or_contract_changes: none
+- proof_requirements: conserver la preuve publique EC2 comme vérité produit; si un travail futur porte sur runtime/planner, sa preuve doit montrer réduction réelle des résidus et absence de relance planner sans delta utilisateur visible
+- acceptance_criteria: ne pas ouvrir de batch tant qu’aucun delta utilisateur net-new, indépendant, et publiquement livrable n’est identifié
+- implementation_order: 1. traiter les reliquats runtime si nécessaire 2. revalider que planner reste `idle` sans batch canonique 3. ne rouvrir un batch que s’il manque un endpoint/contrat/flux public EC2 visible
+- risks: créer un nouveau batch maintenant recréerait du backlog d’orchestration et détournerait l’équipe d’une convergence runtime simple
+- non_goals: nouveau batch monitor, batch purement planner, batch de refonte frontend, batch de contrat déjà couvert
+
+Decision
+- create_in_plane_now: no
+- if_no_reason: aucune proposition indépendante à forte valeur ne passe la grille; le produit utile est déjà là et le résiduel est surtout de la convergence runtime/planner
+- next_owner: planner/admin runtime
+- next_action: garder le backlog fermé; si intervention il doit s’agir d’une réparation de convergence runtime, pas d’un batch produit net-new
+- [2026-04-16 02:04:08 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-92 task_id=BATCH-92-ANALYSIS next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T060402Z directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+
+## 2026-04-16T06:05:34Z role-prompt-engineer
+
+Continuity
+- previous_target_role: orchestration-architect
+- previous_prompt_issue: le prompt d’audit continu avait été raccourci et hiérarchisé, mais aucun run n’avait encore reciblé la couche guardian planner après le redémarrage de `BATCH-92`
+- changed_since_last_run: lecture VM = contradiction active entre `planner-guardian-latest.json` (`status=IDLE`, `delta=NO_ACTIVE_CANONICAL_WORK`) et `planner-prompt-patches.json` (patch actif `claim_or_autobatch_now` sur `planner_passive_forbidden_violation`)
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- why_this_prompt_now: la couche guardian poussait encore une injonction claim/autobatch alors que la vérité canonique disait qu’il n’y avait plus aucun batch/tâche/runway actif
+
+Prompt audit
+- useful_rules: `follow_canonical_active_task`, `novelty_target_first`, backfill de preuve planner, non-passivité quand READY/runway existent vraiment
+- redundant_rules: le patch `claim_or_autobatch_now` répétait la même pression même en idle canonique
+- contradictory_rules: `IDLE/NO_ACTIVE_CANONICAL_WORK` côté guardian latest, mais patch actif + possible directive pour forcer claim/autobatch
+- too_long_or_noisy_sections: le bruit venait moins de la taille du texte que d’une activation trop large du patch anti-passivité
+- missing_tool_guidance: règle explicite “si la vérité canonique est vide, ne pas injecter claim/autobatch ni escalade immédiate”
+- likely_output_failures_caused_by_prompt: relances planner inutiles, churn autobatch, faux rouge guardian alors que le runtime est vide
+- architecture_doctrine_overcopy: no
+
+Optimization
+- keep: la garde anti-passivité quand un READY utile, un runway ouvert, ou une tâche downstream active existent vraiment
+- simplify: helper unique `_no_canonical_work(...)` réutilisé par les couches prompt/directive
+- remove: patch `claim_or_autobatch_now` et escalade immédiate quand queue/workboard/top-level/cycle sont tous vides
+- move_out_of_prompt: none
+- tool_usage_improvements: la pression guardian vers `planner-autobatch` n’existe plus sans runway réel
+- expected_runtime_impact: direct; moins de faux relaunches planner et moins de churn idle
+
+Patch proposal
+- patch_type: anti-churn / tool-guidance
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- exact_goal: supprimer l’instruction contradictoire `claim_or_autobatch_now` et l’escalade passive/autobatch quand la vérité canonique est vide
+- expected_gain: moins de ticks planner ré-ouverts artificiellement après fermeture réelle du travail
+- risk: low; le garde-fou ne se resserre que sur un état idle prouvé
+
+Measurement
+- signals_to_watch: `planner-prompt-patches.json.active`, directives `planner_guardian`, `planner_passive_forbidden_violation`, `planner_autobatch_missing_when_idle`, churn `none_no_signal`
+- success_criteria: sur un prochain état `active_batch_ids=[]`, `top_level_non_closed=0`, queue/workboard vides, plus aucun patch actif `claim_or_autobatch_now` ni directive immédiate guardian
+- rollback_condition: absence de relance planner alors qu’un READY utile ou un runway ouvert réapparaît
+
+Decision
+- next_owner: prompt-expert
+- next_action: relire le prochain run VM de `planner_guardian` pour confirmer que l’état idle n’émet plus de pression claim/autobatch
+- [2026-04-16 02:18:31 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_BACKFILL_REQUIRED blocker=NONE stream_id=BATCH-92 task_id=BATCH-92-ANALYSIS next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T061820Z directive=none/none message=none/none exec_report=none issues=local_wrapper_fix_uncommitted,planner_quality_autofill_missing suggestions=none
+- [2026-04-16 02:28:29 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-92 task_id=BATCH-92-ARCH next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T062822Z directive=none/none message=none/none exec_report=none issues=run_note_auto_fixed,planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 02:43:51 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-92 task_id=BATCH-92-ARCH next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-92-ARCH directive=none/none message=none/none exec_report=none issues=planner_quality_autofill_missing suggestions=none
+- [2026-04-16 02:52:44 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-92 task_id=BATCH-92-DEV-01 next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-92-DEV-01 directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 07:03:03 UTC] po-vision-batch-architect: audit vision/runtime confirmé. Ne pas créer de nouveau batch. `BATCH-92` est bien le scope actif utile car il vise directement le delta produit `portfolio_first_brief_with_ranked_actions`, mais il n’a pas encore convergé vers une livraison publique sur la vraie porte d’entrée produit. Preuve: `GET http://3.98.20.77/api/judge/personal-finance/start?tickers=NVDA` retourne un brief riche avec `ranked_action`, `ask/open`, `context_influence`, `regime_detection`; en revanche `GET http://3.98.20.77/api/copilot/start` et `GET http://3.98.20.77/api/personal-finance/start?tickers=NVDA` restent sur `fallback_used=copilot_start_never_empty` avec `No daily brief available yet.`. Le planner converge donc encore vers une vraie livraison visible, pas vers un batch additionnel. Architecture à suivre: réutiliser `apps/api/src/domains/judge/application/judge_endpoint_service.py:get_judge_personal_finance_start_payload` comme source de vérité backend pour la start route publique, garder `apps/api/src/domains/copilot/api/copilot.py` mince, et éviter tout nouveau plumbing d’orchestration. Bloqueur concret minimal: fermer l’écart public EC2 entre `judge` et `copilot/personal-finance` avant tout nouvel autobatch.
+
+## 2026-04-16T07:05:35Z role-prompt-engineer
+
+Continuity
+- previous_target_role: planner
+- previous_prompt_issue: `planner_guardian.py` forçait encore `claim_or_autobatch_now` sur un runtime idle; cette contradiction a été corrigée au run précédent
+- changed_since_last_run: lecture VM = `planner-guardian-latest.json` est vert avec `canonical_active_task_id=BATCH-92-DEV-01`, `active_task_role=dev`, `task_update=analysis_only`, et `planner-prompt-patches.json` active `follow_canonical_active_task`
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/scripts/planner_companion_tick.sh`
+- why_this_prompt_now: la couche companion restait la seule couche planner non retouchée aujourd’hui qui pouvait encore pousser un message generique de claim/delivery alors qu’une tache downstream canonique etait deja active
+
+Prompt audit
+- useful_rules: relance modee (`COLLECT_ACTIVE_CAPABILITY`, `CLAIM_PLANNER_TASK`, `DISPATCH_CAPABILITY`, `REPAIR_ORCHESTRATION`), anti-relaunch cooldown, focus EC2 public sur les deltas livrables
+- redundant_rules: les messages generiques `Priorise un delta livrable maintenant` et `Lancer la capability utile maintenant` repetaient deja le runner/planner prompt sans ajouter la route canonique concrete
+- contradictory_rules: branche `ready_planner_task` et branche `dev_ready_count` pouvaient encore orienter vers claim/dispatch pendant que le guardian disait deja `follow_canonical_active_task`
+- too_long_or_noisy_sections: peu de volume, mais bruit semantique car le texte custom etait moins precis que le patch guardian actif
+- missing_tool_guidance: absence de `planner_subagent_manager.py collect` et `planner_runtime_actions.py handoff-ack|handoff-close` quand une tache downstream canonique est active
+- likely_output_failures_caused_by_prompt: `analysis_only`, redispatch planner, claim inutile d’une tache planner READY, churn autour de `BATCH-92-DEV-01`
+- architecture_doctrine_overcopy: no
+
+Optimization
+- keep: modes de relance, anti-cooldown, consigne EC2 public pour la preuve produit
+- simplify: une seule consigne canonique reutilisable `collect/ack/repair` derivee du guardian summary
+- remove: appel generique au "delta livrable maintenant" quand une tache downstream active a deja la priorite
+- move_out_of_prompt: aucune doctrine supplementaire; reutiliser la verite guardian existante
+- tool_usage_improvements: parser `canonical_active_task_*` depuis `planner-guardian-latest.json` puis injecter explicitement `planner_subagent_manager.py collect` et `planner_runtime_actions.py handoff-ack|handoff-close`
+- expected_runtime_impact: direct; moins de kicks planner contradictoires et moins de `analysis_only`/redispatch quand un downstream IN_PROGRESS existe deja
+
+Patch proposal
+- patch_type: tool-guidance / anti-churn
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/scripts/planner_companion_tick.sh`
+- exact_goal: quand `canonical_active_task_role != planner`, faire gagner dans le message custom la route `collect/ack/repair` sur les branches `ready_planner_task` et `dev_ready_count`
+- expected_gain: meilleure coherence entre guardian, companion et prompt planner; moins de churn claim/autobatch/analysis sur un downstream deja actif
+- risk: low; aucun nouveau garde-fou doctrinal, seulement une priorisation plus nette dans le texte de relance
+
+Measurement
+- signals_to_watch: `planner-guardian-latest.json.summary.task_update`, `planner-prompt-patches.json.active`, `next_action_unique`, `analysis_only`, `ready_but_none_task_update`, `handoff_same_task_streak`
+- success_criteria: au prochain cycle avec `canonical_active_task_role=dev`, le planner suit `collect/ack/repair` sans retomber en message generique de claim ni en `analysis_only`
+- rollback_condition: si les relances companion deviennent trop insistantes ou bloquent un vrai `ready_planner_task` quand aucun downstream actif n’existe
+
+Decision
+- next_owner: prompt-expert
+- next_action: relire le prochain tick VM `planner_companion`/`planner_guardian` sur `BATCH-92-DEV-01` et verifier la baisse de churn `analysis_only`
+- [2026-04-16 03:06:04 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-92 task_id=BATCH-92-DEV-01 next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-92-DEV-01 directive=none/none message=MSG_ADMIN_20260416T070043Z_ebae00f0_022554/done:blocker_exact_collected exec_report=none issues=public_runtime_route_wiring suggestions=none
+- [2026-04-16 03:18:48 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-92 task_id=BATCH-92-DEV-02 next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-92-DEV-02 directive=none/none message=none/none exec_report=none issues=qa_worker_failed,dirty_worktree,planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 03:32:10 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=none task_id=none next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-92-DEV-03 directive=none/none message=none/none exec_report=none issues=none suggestions=none
+- [2026-04-16 03:44:31 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-92 task_id=BATCH-92-ADMIN-01 next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T074425Z directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 03:56:26 EDT] role=planner source=primary_structured status=BLOCKED verdict=BLOCKED delta=PLANNER_RUNTIME_ACTIONS_FAILED blocker=PLANNER_RUNTIME_ACTIONS_FAILED stream_id=none task_id=none next_action_unique=PLANNER_RUNTIME_ACTIONS_FAILED directive=none/none message=none/none exec_report=none issues=none suggestions=none
+
+## 2026-04-16T08:06:00Z po-vision-batch-architect
+
+- Vision audit rerun against canonical docs, current code, VM workboard, and EC2 public endpoints.
+- Result: **no new batch**. `BATCH-92` is already fully closed in the canonical VM workboard (`STREAM DONE`; all tasks DONE), so backlog expansion would be false progress.
+- Public delivery gap still exists on EC2:
+  - `GET /api/judge/personal-finance/start?tickers=NVDA` returns the rich brief + ranked_action + ask/open starter contract.
+  - `GET /api/copilot/start?tickers=NVDA&debug=true` and `GET /api/personal-finance/start?tickers=NVDA&debug=true` still return `fallback_used=copilot_start_never_empty` with `No daily brief available yet.`
+- Code reality shows the rescue path is already implemented in [`apps/api/src/domains/copilot/api/copilot.py`](/Users/venom/Documents/analyse-financiere/apps/api/src/domains/copilot/api/copilot.py) and covered by [`apps/api/src/domains/copilot/tests/test_personal_finance_start_judge_rescue.py`](/Users/venom/Documents/analyse-financiere/apps/api/src/domains/copilot/tests/test_personal_finance_start_judge_rescue.py), so the smallest blocker is **publication/runtime convergence**, not missing product architecture.
+- Planner conclusion: do not open a new batch for this. Next useful action is admin/operator proof that the current AWS app snapshot actually serves the already-merged copilot rescue path, or identify why EC2 still exposes stale fallback behavior.
+
+## 2026-04-16T08:04:15Z role-prompt-engineer
+
+Continuity
+- previous_target_role: planner
+- previous_prompt_issue: `scripts/planner_companion_tick.sh` could still send generic claim/dispatch pressure while a downstream canonical task was already active
+- changed_since_last_run: recent planner runtime now shows a direct claim misfire instead of only message churn: `planner_runtime_actions_failed` with `CLAIM_ERROR: task BATCH-92-GOV_REVIEW not READY for role planner`
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- why_this_prompt_now: the main planner decision prompt still mixed `IN_PROGRESS` and `READY` in one rule, which left room for non-READY planner claims and immediate runtime-action failure
+
+Prompt audit
+- useful_rules: collect active subagent first; follow downstream canonical active task; autobatch only when no executable canonical work; no passive `none_no_signal` without proof; prefer one targeted subagent for delivery/runtime/flow
+- redundant_rules: the old `reprendre/claim la meilleure tâche planner` wording overlapped two different actions with different runtime preconditions
+- contradictory_rules: the old step 3 could imply "claim a planner-owned task" even when runtime truth says the task is not READY, which conflicts with `planner_runtime_actions.py claim`
+- too_long_or_noisy_sections: one mixed bullet encoded both resume and claim semantics, which is short on paper but noisy in execution because it hides the readiness gate
+- missing_tool_guidance: the prompt did not explicitly say `IN_PROGRESS => resume same task` and `READY => claim exact READY task only`
+- likely_output_failures_caused_by_prompt: `PLANNER_RUNTIME_ACTIONS_FAILED`, `CLAIM_ERROR ... not READY`, avoidable repair loops after a bad claim attempt, stale blocked outputs with weak planner artifact value
+- architecture_doctrine_overcopy: no
+
+Optimization
+- keep: collect-first ordering, downstream-active gating, planner-owned task families, autobatch as last resort, runtime-proof discipline
+- simplify: split resume and claim into separate numbered rules
+- remove: ambiguous `reprendre/claim la meilleure tâche planner`
+- move_out_of_prompt: none
+- tool_usage_improvements: makes `planner_runtime_actions.py claim` usage exact instead of heuristic; reduces needless collect/repair after a bad claim attempt
+- expected_runtime_impact: direct
+
+Patch proposal
+- patch_type: anti-churn / tool-guidance
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- exact_goal: make planner resume `IN_PROGRESS` tasks without new claim, and claim only the exact planner task that is explicitly READY
+- expected_gain: fewer `planner_runtime_actions_failed`, fewer non-READY planner claims, clearer next action selection on GOV_REVIEW/ARCH-like planner-owned tasks
+- risk: low
+
+Measurement
+- signals_to_watch: `planner_runtime_actions_failed`, `CLAIM_ERROR: task ... not READY`, `fatal_error detail=... planner_runtime_actions.py`, `planner_quality_autofix_applied`, `next_action_unique`
+- success_criteria: next planner ticks stop attempting claims on non-READY planner tasks; `IN_PROGRESS` tasks are resumed directly; READY planner tasks are claimed cleanly
+- rollback_condition: planner stops claiming legitimate READY work or becomes overly sticky on stale `IN_PROGRESS` state
+
+Decision
+- next_owner: prompt-expert
+- next_action: watch the next planner VM ticks for disappearance of `CLAIM_ERROR ... not READY` before touching another prompt layer
+- [2026-04-16 04:08:43 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-93 task_id=BATCH-93-ANALYSIS next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T080836Z directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 04:22:49 EDT] role=planner source=primary_structured status=BLOCKED verdict=BLOCKED delta=DELIVERY_VALUE_INSUFFICIENT blocker=DELIVERY_VALUE_INSUFFICIENT stream_id=BATCH-93 task_id=BATCH-93-ANALYSIS next_action_unique=DELIVERY_VALUE_INSUFFICIENT_PLANNER_1776327761 directive=none/none message=none/none exec_report=none issues=planner_quality_autofill_missing,delivery_value_insufficient suggestions=none
+- [2026-04-16 04:34:07 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-93 task_id=BATCH-93-ARCH next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-93-DEV-01 directive=none/none message=none/none exec_report=none issues=planner_quality_autofill_missing suggestions=none
+- [2026-04-16 04:44:25 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=none task_id=none next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-93-DEV-02 directive=none/none message=none/none exec_report=none issues=dependency_policy_not_enforced,run_note_auto_fixed suggestions=none
+- [2026-04-16 04:58:47 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-93 task_id=BATCH-93-DEV-03 next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-93-DEV-03 directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 05:14:00 EDT] po-vision-batch-architect: vision/runtime audit confirms no new batch. `BATCH-93` is the sole canonical active stream and already carries the right novelty target (`portfolio_first_brief_with_ranked_actions`). Public EC2 now proves `/api/copilot/start?tickers=NVDA` and `/api/personal-finance/start?tickers=NVDA` return a live Judge-backed brief with ask/open, while `planner-guardian-latest.json` points to `BATCH-93-DEV-03` IN_PROGRESS. Planner must close `BATCH-93`, not create `BATCH-94`.
+
+## 2026-04-16T09:04:44Z role-prompt-engineer
+
+Continuity
+- previous_target_role: planner
+- previous_prompt_issue: le patch précédent a corrigé les claims planner non-READY, mais le contrat planner restait rouge côté guardian sur des `claim` sans traceabilité architecture/vision
+- changed_since_last_run: la VM montre `planner-guardian-latest.json` à `score=55` sur `BATCH-93-DEV-03` avec `missing_architecture_plan_ref`, `missing_vision_alignment`, `missing_architecture_audit`; `planner.last_contract` confirme un `task_update=claim` avec `planner_evidence_incomplete_soft` et sans ces champs
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- why_this_prompt_now: le bruit dominant est dans la preuve planner au moment du `claim`, pas dans la logique runtime ni dans les prompts subagents
+
+Prompt audit
+- useful_rules: ordre collect-first, suivi de tâche canonique downstream, autobatch en dernier recours, preuve complète sur `complete`, conscience produit courte backend-first
+- redundant_rules: répétition des champs de traceabilité sur `handoff` et `complete` alors que `claim` restait sous-spécifié
+- contradictory_rules: le guardian exige la traceabilité architecture/vision sur `claim|handoff|complete`, alors que le prompt ne l’imposait qu’à `handoff|complete`
+- too_long_or_noisy_sections: la section `Preuve planner` répétait des champs identiques sur plusieurs bullets sans poser la règle commune
+- missing_tool_guidance: aucune exigence explicite de `batch_dependency_policy=single_batch` ni de traceabilité minimale `architecture_*` / `vision_alignment` dès `claim`
+- likely_output_failures_caused_by_prompt: `planner_evidence_incomplete_soft`, `planner_quality_autofill_missing`, `missing_architecture_plan_ref`, `missing_vision_alignment`, `missing_architecture_audit`, guardian rouge malgré un dispatch utile
+- architecture_doctrine_overcopy: non; le problème est un manque de format de preuve, pas un excès de doctrine Judge-parity
+
+Optimization
+- keep: les garde-fous de décision planner et le fait de réserver `root_cause/fix_applied/verify` au `complete`
+- simplify: une règle commune de traceabilité pour `claim|handoff|complete`, puis des bullets légers par action
+- remove: la duplication implicite qui laissait croire que `claim` pouvait rester sans traceabilité
+- move_out_of_prompt: aucune doctrine supplémentaire; on reste sur des tokens de preuve, pas sur un appendice d’architecture
+- tool_usage_improvements: `claim` doit désormais produire des champs que le guardian sait scorer sans autofill mou
+- expected_runtime_impact: direct sur la qualité de contrat planner; structurel sur le churn guardian/quality
+
+Patch proposal
+- patch_type: cleanup / tool-guidance / anti-churn
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- exact_goal: rendre obligatoire sur `claim|handoff|complete` la traceabilité `batch_dependency_policy=single_batch` + `architecture_plan_ref|architecture_check` + `architecture_audit(paths impactés)` + `vision_alignment(batch/target/impact)` sans élargir la preuve de clôture
+- expected_gain: moins de soft quality churn et un guardian moins rouge pendant les dispatch utiles
+- risk: low; le patch ajoute une exigence de forme claire sans changer la logique runtime
+
+Measurement
+- signals_to_watch: `planner-guardian-latest.json.issues`, `planner.last_contract`, `planner_evidence_incomplete_soft`, `planner_quality_autofill_missing`, `missing_architecture_plan_ref`, `missing_vision_alignment`, `missing_architecture_audit`
+- success_criteria: au prochain `task_update=claim`, le contrat planner inclut la traceabilité requise et le guardian ne remonte plus ces trois manques sur un dispatch utile
+- rollback_condition: si les sorties `claim` deviennent inutilement lourdes, ralentissent le dispatch, ou réintroduisent du bruit de clôture (`root_cause/fix_applied/verify`) avant `complete`
+
+Decision
+- next_owner: prompt-expert
+- next_action: relire le prochain tick VM planner sur `BATCH-93-DEV-03` et vérifier que la baisse de churn vient bien du contrat `claim`, pas d’un simple autofill
+- [2026-04-16 05:10:26 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-93 task_id=BATCH-93-ADMIN-01 next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T091016Z directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 05:22:48 EDT] role=planner source=primary_structured status=BLOCKED verdict=BLOCKED delta=PLANNER_RUNTIME_ACTIONS_FAILED blocker=PLANNER_RUNTIME_ACTIONS_FAILED stream_id=none task_id=none next_action_unique=PLANNER_RUNTIME_ACTIONS_FAILED directive=none/none message=none/none exec_report=none issues=none suggestions=none
+- [2026-04-16 05:34:55 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-94 task_id=BATCH-94-ANALYSIS next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T093447Z directive=none/none message=none/none exec_report=none issues=projection_context_stale,planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 05:47:53 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_BACKFILL_REQUIRED blocker=NONE stream_id=BATCH-94 task_id=BATCH-94-ANALYSIS next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T094745Z directive=none/none message=none/none exec_report=none issues=planner_quality_autofill_missing suggestions=none
+- [2026-04-16 05:58:42 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-94 task_id=BATCH-94-ARCH next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T095834Z directive=none/none message=none/none exec_report=none issues=projection_ready_stale,planner_evidence_incomplete_soft suggestions=none
+
+## 2026-04-16T10:08:00Z po-vision-batch-architect
+
+- Vision/runtime audit redone against canonical sources plus VM and EC2 public proofs.
+- Planner truth on VM: `planner-guardian-latest.json` shows a single canonical active batch `BATCH-94`, task `BATCH-94-ARCH`, state `IN_PROGRESS`.
+- Public EC2 truth changed versus the previous run: `GET /api/copilot/start`, `GET /api/personal-finance/start?tickers=NVDA`, and `GET /api/judge/personal-finance/start?tickers=NVDA` now all return a visible brief + ask/open payload.
+- Remaining product gap is narrower and already inside `BATCH-94`: `ranked_action` is still generic (`market`), the top risk still centers on `AAPL` even with `tickers=NVDA`, and the flow is not yet clearly portfolio/watchlist-first despite reusing `judge`.
+- Decision for this run: `create_now=no`; no new batch should be created because it would duplicate the active novelty target (`portfolio_first_brief_with_ranked_actions`) without adding user-visible delta.
+
+## 2026-04-16T10:03:13Z role-prompt-engineer
+
+Continuity
+- previous_target_role: planner
+- previous_prompt_issue: le patch précédent avait durci la preuve planner, mais laissait encore glisser une doc de doctrine comme `architecture_plan_ref`
+- changed_since_last_run: la VM publie un guardian green (`score=92`) et aucun patch dynamique actif; le seul résidu est `architecture_ref_not_canonical` sur `BATCH-94-ARCH`
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- why_this_prompt_now: le dernier défaut prompt visible venait d’une confusion entre conscience d’architecture et preuve `architecture_plan_ref`
+
+Prompt audit
+- useful_rules: collect-first, preuve planner, `architecture_audit`, `vision_alignment`, conscience produit courte
+- redundant_rules: `architecture_plan_ref|architecture_check` mélangeait deux champs de preuve distincts
+- contradictory_rules: le guardian attend une ref canonique (`docs/architecture` ou chemins impactés), mais le prompt laissait implicitement passer une doc de doctrine
+- too_long_or_noisy_sections: la première ligne de `Preuve planner` compressait trop de sens en une seule règle
+- missing_tool_guidance: différence explicite entre `architecture_plan_ref` et `architecture_check`
+- likely_output_failures_caused_by_prompt: `architecture_ref_not_canonical`, backfills planner inutiles après un tick pourtant utile
+- architecture_doctrine_overcopy: oui, indirectement; Judge-parity pouvait être recopié comme preuve au lieu de rester une doc de référence
+
+Optimization
+- keep: garde-fous de preuve planner et conscience produit courte
+- simplify: séparer `architecture_plan_ref` canonique de `architecture_check`
+- remove: l’ambiguïté qui autorisait `PRODUCT_VISION` / `JUDGE_PARITY` / `API_ENDPOINT_BEST_PRACTICES` comme valeur de preuve
+- move_out_of_prompt: none
+- tool_usage_improvements: meilleur mapping entre sortie planner et scoring guardian
+- expected_runtime_impact: direct mais étroit, sur la disparition du seul issue prompt résiduel
+
+Patch proposal
+- patch_type: tool-guidance / anti-churn / cleanup
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- exact_goal: forcer `architecture_plan_ref` = `docs/architecture/ARCHITECTURE_MAP.md` ou racines impactées, et reléguer les docs de doctrine au contexte de décision
+- expected_gain: moins de `architecture_ref_not_canonical` et moins de backfill planner sur preuve déjà utile
+- risk: low
+
+Measurement
+- signals_to_watch: `planner-guardian-latest.json.issues`, `planner.last_contract` (`architecture_plan_ref`), `planner-prompt-patches.json`
+- success_criteria: prochain `claim|handoff|complete` planner avec `architecture_plan_ref` canonique; issue `architecture_ref_not_canonical` absente
+- rollback_condition: si le planner perd la référence d’architecture ou remplace la preuve par une racine trop vague
+
+Decision
+- next_owner: prompt-expert
+- next_action: attendre le prochain tick VM planner sur `BATCH-94-ARCH` et vérifier que le résidu guardian disparaît sans réintroduire de churn
+- [2026-04-16 06:16:16 EDT] role=planner source=fallback_checkpoint status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=none task_id=none next_action_unique=PLANNER_DISPATCH_ACTIVE_unknown directive=none/none message=none/none exec_report=none issues=signal_unparseable,channels_autofill_fallback suggestions=none
+- [2026-04-16 06:23:46 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-94 task_id=BATCH-94-DEV-02 next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-94-DEV-02 directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 06:36:56 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-94 task_id=BATCH-94-DEV-03 next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-94-DEV-03 directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 06:48:41 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-94 task_id=BATCH-94-ADMIN-01 next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T104831Z directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 06:59:25 EDT] role=planner source=primary_structured status=BLOCKED verdict=BLOCKED delta=PLANNER_RUNTIME_ACTIONS_FAILED blocker=PLANNER_RUNTIME_ACTIONS_FAILED stream_id=none task_id=none next_action_unique=PLANNER_RUNTIME_ACTIONS_FAILED directive=none/none message=none/none exec_report=none issues=none suggestions=none
+
+## 2026-04-16T11:06:00Z po-vision-batch-architect
+
+- VM truth now shows no active canonical batch: `priority-queue.json` and `parallel-workstreams.json` both expose `active_batch_ids=[]`, `recent_completed_batch_ids=["BATCH-94","BATCH-93","BATCH-92","BATCH-91","BATCH-90"]`, and `planner-guardian-latest.json` is green/idle with `NO_ACTIVE_CANONICAL_WORK`.
+- This means the planner did behave as a delivery engine on the last cycle: `BATCH-94` is closed, public EC2 proof exists for the brief + ask/open slice, and there is no currently open batch spinning without user-visible delta.
+- Public EC2 still misses the strongest product target: `GET /api/copilot/start`, `GET /api/personal-finance/start?tickers=NVDA`, and `GET /api/judge/personal-finance/start?tickers=NVDA` all return a usable brief, but `ranked_action` remains `market` and `brief_of_day.top_risks[0].ticker` is still `AAPL` even under `scope_tickers=["NVDA"]`.
+- Next batch candidate is now valid and independent because the active stream is closed: backend-first `portfolio/watchlist-first starter ranking`, focused on making the starter CTA and top brief focus follow scope/portfolio/watchlist rather than generic market fallback.
+- Create status for this run: proposal ready, not created in Plane here (`create_now=no`) because Plane is not available in this environment.
+- Canonical implementation slice for the next batch:
+  - reuse `packages/contracts/copilot_v1.py` (no new public contract needed unless new metadata becomes necessary),
+  - adjust ranking/focus assembly in `apps/api/src/domains/judge/application/intelligence_service.py`,
+  - keep `apps/api/src/domains/judge/application/judge_endpoint_service.py` as the ranking/reference assembly layer,
+  - keep `apps/api/src/domains/copilot/application/copilot_service.py` as the copilot starter adapter only,
+  - keep `apps/api/src/domains/copilot/api/copilot.py` thin, with route rewrite logic only.
+- Proof target for the next batch should stay public EC2 only: `/api/personal-finance/start?tickers=NVDA` and `/api/copilot/start?tickers=NVDA` must expose `ranked_action.target=/personal-finance/ask` or `/copilot/ask` and a brief focus aligned with `NVDA`/portfolio scope, not a generic `market` or unrelated `AAPL`.
+
+## 2026-04-16T11:03:07Z role-prompt-engineer
+
+Continuity
+- previous_target_role: planner
+- previous_prompt_issue: `architecture_ref_not_canonical` était la dernière dérive visible du prompt planner principal
+- changed_since_last_run: `planner-guardian-latest.json` est désormais vert/idle (`score=100`) et `planner-prompt-patches.json` est vide, mais le guardian publiait encore `task_update=none_no_signal` pour un idle canonique propre
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- why_this_prompt_now: retirer un faux signal de churn restant dans la couche guardian sans réélargir les prompts ni retoucher la décision planner
+
+Prompt audit
+- useful_rules: override canonical idle, scoring proof-aware, patches dynamiques ciblés
+- redundant_rules: none significatif dans la couche ciblée
+- contradictory_rules: `no_canonical_work` réécrivait le résumé en `task_update=none_no_signal` alors que le prompt planner réserve ce code à un runtime indisponible prouvé
+- too_long_or_noisy_sections: pas un problème de longueur; le défaut est sémantique et concentré sur une seule ligne
+- missing_tool_guidance: none
+- likely_output_failures_caused_by_prompt: faux comptage `none_no_signal`, lecture monitor/admin plus bruitée, anti-stall ou reporting faussement orienté vers “absence de signal” plutôt que “aucun travail prêt”
+- architecture_doctrine_overcopy: no
+
+Optimization
+- keep: `status=IDLE`, `delta=NO_ACTIVE_CANONICAL_WORK`, `planner_artifact=canonical_runtime_truth_idle`
+- simplify: idle propre => `none_no_ready`
+- remove: l’association implicite idle propre -> `none_no_signal`
+- move_out_of_prompt: none
+- tool_usage_improvements: none
+- expected_runtime_impact: direct sur la sémantique des publications guardian; structurel sur les métriques de churn/no-signal
+
+Patch proposal
+- patch_type: cleanup / anti-churn
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- exact_goal: faire publier `task_update=none_no_ready` quand le runtime canonique est idle et qu’aucune tâche canonique n’est exécutable
+- expected_gain: moins de faux `none_no_signal` sans relâcher les garde-fous planner
+- risk: low
+
+Measurement
+- signals_to_watch: `logs-codex-runs/orchestrator-state/planner-guardian-latest.json` (`summary.task_update`), éventuels agrégats/rapports qui comptent `none_no_signal`, absence de régression sur `planner_autobatch_missing_when_idle`
+- success_criteria: au prochain idle canonique, le guardian publie `none_no_ready` au lieu de `none_no_signal` tout en gardant `status=IDLE` / `delta=NO_ACTIVE_CANONICAL_WORK`
+- rollback_condition: si les états idle ne sont plus reconnus comme idle propres ou si les heuristiques autobatch/ready-idle se dégradent
+
+Decision
+- next_owner: prompt-expert
+- next_action: relire la prochaine publication guardian idle et vérifier que le faux `none_no_signal` a disparu sans réintroduire de pression autobatch erronée
+- [2026-04-16 07:11:29 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-95 task_id=BATCH-95-ANALYSIS next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T111118Z directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 07:25:06 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_BACKFILL_REQUIRED blocker=NONE stream_id=BATCH-95 task_id=BATCH-95-ANALYSIS next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T112457Z directive=none/none message=none/none exec_report=none issues=planner_quality_autofill_missing suggestions=none
+- [2026-04-16 07:36:50 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-95 task_id=BATCH-95-ARCH next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T113640Z directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 07:49:43 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-95 task_id=BATCH-95-ARCH next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-95-DEV-01 directive=none/none message=none/none exec_report=none issues=planner_quality_autofill_missing suggestions=none
+- [2026-04-16 08:01:52 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-95 task_id=BATCH-95-DEV-02 next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-95-DEV-02 directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 12:03:41 UTC] po-vision-batch-architect: audit vision/runtime/public EC2 refait. Ne pas creer de nouveau batch. `BATCH-95` est bien le scope actif utile et son `DEV-01` a deja livre un delta public visible: `/api/copilot/start?tickers=NVDA` et `/api/personal-finance/start?tickers=NVDA` renvoient maintenant `ranked_action=open_nvda` avec `target=ticker:NVDA`. Le plus petit blocage concret n’est plus un manque de backlog mais un manque de convergence runtime: `BATCH-95-DEV-02` est canonique `IN_PROGRESS` dans `planner-guardian-latest.json` et `parallel-workstreams.json`, tandis que `executors-monitoring-latest.json` reste `STALE` avec `dev/admin delta=NO_DELTA`. Tant que ce batch n’atterrit pas sur un second delta utilisateur visible/public EC2, `create_now=no` et aucun autobatch/Plane supplementaire ne doit etre ouvert.
+
+## 2026-04-16T12:06:33Z role-prompt-engineer
+
+Continuity
+- previous_target_role: planner
+- previous_prompt_issue: le guardian idle summary était corrigé; la prochaine couche utile était le patch dynamique live qui suivait la tâche canonique downstream
+- changed_since_last_run: `planner-prompt-patches.json` n’est plus vide; il active `follow_canonical_active_task` sur `BATCH-95-DEV-02`, donc cette instruction est désormais la principale couche réellement injectée dans le prompt planner
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- why_this_prompt_now: c’est la seule consigne dynamique active du planner; elle doublonnait le protocole commun et utilisait un wording endpoint (`route bloquante`) trop spécifique
+
+Prompt audit
+- useful_rules:
+  - priorité à la tâche canonique active
+  - collect via `planner_subagent_manager.py collect`
+  - chemin explicite `planner_runtime_actions.py handoff-ack|handoff-close`
+  - interdiction de nouveau batch / ANALYSIS / redispatch avant transition
+- redundant_rules:
+  - `Priorité absolue`
+  - `Collect d'abord`
+  - répétition du bannissement batch/analysis/redispatch déjà présent dans le prompt partagé
+- contradictory_rules:
+  - `corrige la route bloquante` oriente vers un cas endpoint alors que la lane active peut être n’importe quel travail downstream
+- too_long_or_noisy_sections:
+  - l’instruction `follow_canonical_active_task` elle-même, seule ligne active du patch loader
+- missing_tool_guidance:
+  - formulation lane-generic pour débloquer le travail actif sans retomber sur un biais endpoint
+- likely_output_failures_caused_by_prompt:
+  - redispatch inutile
+  - retour ANALYSIS au lieu de collect
+  - sur-spécification planner sur un blocage qui n’est pas forcément une route
+- architecture_doctrine_overcopy:
+  - non, mais un vocabulaire endpoint a fuité dans un patch planner générique
+
+Optimization
+- keep:
+  - priorité tâche canonique
+  - collect d’abord
+  - wrappers `handoff-ack|handoff-close`
+  - interdiction de nouveau batch / ANALYSIS / redispatch
+- simplify:
+  - instruction unique plus courte et plus directe
+- remove:
+  - `absolue`
+  - `d'abord`
+  - `route bloquante`
+- move_out_of_prompt:
+  - none
+- tool_usage_improvements:
+  - `debloque la lane active` remplace le wording endpoint et laisse les outils canoniques explicites
+- expected_runtime_impact:
+  - direct sur le patch planner actif; moins de bruit, meilleure clarté d’action sur une lane downstream déjà canonique
+
+Patch proposal
+- patch_type: shorten / anti-churn / tool-guidance
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- exact_goal: raccourcir `follow_canonical_active_task` et le rendre lane-generic sans perdre `collect` ni `handoff-ack|handoff-close`
+- expected_gain: moins de bruit prompt live et moins de confusion endpoint-vs-lane quand une tâche downstream est déjà `IN_PROGRESS`
+- risk: low
+
+Measurement
+- signals_to_watch:
+  - `logs-codex-runs/orchestrator-state/planner-prompt-patches.json`
+  - `logs-codex-runs/orchestrator-state/planner-guardian-latest.json`
+  - `handoff_same_task_streak`
+  - `planner_evidence_incomplete_soft`
+  - churn `retry/takeover`
+- success_criteria:
+  - prochain patch actif toujours collectable, sans wording `route bloquante`, avec suivi downstream sans nouveau batch/ANALYSIS
+- rollback_condition:
+  - si le planner perd la clarté `collect` / `handoff-ack|handoff-close` ou recommence à ignorer la tâche canonique active
+
+Decision
+- next_owner: prompt-expert
+- next_action: attendre le prochain cycle planner non-idle avec tâche downstream canonique active et vérifier que le patch live reste court, lane-generic et sans redispatch inutile
+
+Validation
+- command_or_check: `python3 platform/automation/tests/test_planner_guardian.py`
+- observed_result: PASS (`20 tests`)
+- targeted_check: `PYTHONPATH=/Users/venom/Documents/analyse-financiere/platform/automation python3 - <<'PY' ... build_prompt_patches(...) ... PY`
+- observed_patch: instruction active = `Priorité: faire avancer ... debloque la lane active. Aucun nouveau batch, ANALYSIS ou redispatch avant transition.`
+- [2026-04-16 08:09:46 EDT] role=planner source=fallback_checkpoint status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=none task_id=none next_action_unique=PLANNER_DISPATCH_ACTIVE_unknown directive=none/none message=none/none exec_report=none issues=signal_unparseable,channels_autofill_fallback suggestions=none
+
+## 2026-04-16T12:11:47Z role-prompt-engineer
+
+Continuity
+- previous_target_role: planner
+- previous_prompt_issue: le guardian idle + patch actif étaient déjà nettoyés; le vrai blocage restant était l’autobatch planner qui ne remplissait pas le runway derrière un batch actif
+- changed_since_last_run: la lecture live a confirmé `BATCH-95` actif sans batch planner suivant, avec seed autobatch générique `PRODUCT_VISION#One sentence` et priorité forcée `P2`
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/compat/projections/parallel_workstream.py` + `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- why_this_prompt_now: la panne visible n’était plus un wording planner; c’était la logique autobatch/runtime qui empêchait la création du batch suivant et ignorait la priorité de la vision
+
+Prompt audit
+- useful_rules:
+  - politique `single_batch`
+  - hook preflight planner -> `planner-autobatch`
+  - intention de seed depuis `PRODUCT_VISION`
+- redundant_rules:
+  - seed systématique depuis `## One sentence`
+  - priorité hardcodée `P2`
+- contradictory_rules:
+  - le runner n’activait pas `--allow-active-queued` alors que le runtime supportait déjà ce mode
+  - l’autobatch se disait vision-driven mais fabriquait des batches génériques non priorisés
+- too_long_or_noisy_sections:
+  - none; l’échec principal était logique, pas textuel
+- missing_tool_guidance:
+  - absence de `--allow-active-queued` dans le runner planner
+  - aucune traduction des sections `P0/P1` de `PRODUCT_VISION` vers le seed autobatch
+- likely_output_failures_caused_by_prompt:
+  - pas de batch suivant derrière une tâche downstream active
+  - répétition de batches génériques `P2`
+  - runway vide alors que la vision contient encore du travail prioritaire
+- architecture_doctrine_overcopy:
+  - no
+
+Optimization
+- keep:
+  - `single_batch`
+  - gate planner-lane idle
+  - garde-fou duplicate reuse
+- simplify:
+  - seed autobatch sur les bullets `P0/P1` avant fallback texte libre
+- remove:
+  - hardcode `P2`
+  - blocage runway sur le batch canonique déjà actif
+- move_out_of_prompt:
+  - none; la correction était dans la logique runtime
+- tool_usage_improvements:
+  - le runner preflight appelle maintenant `planner_runtime_actions.py planner-autobatch ... --allow-active-queued`
+- expected_runtime_impact:
+  - direct; le planner peut maintenant queue exactement un prochain batch derrière le batch canonique actif, avec priorité/titre issus de la vision produit
+
+Patch proposal
+- patch_type: anti-churn / tool-guidance / cleanup
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/compat/projections/parallel_workstream.py`; `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- exact_goal: ignorer seulement le batch canonique actif dans le calcul de runway autobatch et seed les nouveaux batches depuis `PRODUCT_VISION` `P0/P1` au lieu du `One sentence` générique `P2`
+- expected_gain: moins de runway vide, moins de batches génériques répétés, meilleure continuité planner alignée sur la vision
+- risk: medium-low
+
+Measurement
+- signals_to_watch:
+  - `logs-codex-runs/orchestrator-state/priority-queue.json`
+  - `logs-codex-runs/orchestrator-state/parallel-workstreams.json`
+  - événements `planner_autobatch_created` / `planner_autobatch_reused`
+  - champs `priority`, `title`, `vision_ref`, `queued_only` du batch créé
+- success_criteria:
+  - avec un seul batch canonique actif et la lane planner idle, le tick suivant crée exactement un batch planner en attente
+  - le titre créé vient d’un bullet `P0/P1` de `PRODUCT_VISION`, pas de `## One sentence`
+  - la priorité du stream/task créé suit la priorité vision sélectionnée
+- rollback_condition:
+  - plusieurs batches planner s’accumulent derrière un seul batch actif
+  - retour au seed générique `One sentence` / `P2`
+  - duplicate reuse rouvre le batch actif au lieu de préparer le suivant
+
+Decision
+- next_owner: prompt-expert
+- next_action: observer le prochain vrai preflight planner VM et vérifier qu’il queue un seul batch `P0/P1` derrière le cycle actif sans dérive de runway
+
+Validation
+- command_or_check: `python3 -m py_compile platform/automation/compat/projections/parallel_workstream.py platform/automation/tests/test_parallel_workstream_queue_sync.py platform/automation/tests/test_role_runtime_context.py platform/automation/runtime/planner/planner_runtime_actions.py`; `bash -n platform/automation/cron_tmux_role_runner.sh`; `python3 -m unittest discover -s platform/automation/tests -p "test_parallel_workstream_queue_sync.py"`
+- observed_result: PASS (`21 tests`, `OK`)
+- targeted_check: `PlannerRuntimeActionsAutobatchGuardTests.test_planner_autobatch_creates_queued_batch_while_active_cycle_exists_when_allowed`
+- observed_patch: PASS; le runner planner contient désormais `--allow-active-queued`
+- [2026-04-16 08:16:00 EDT] role=planner source=rate_limit_gate_cache status=RATE_LIMIT_SKIP verdict=WAIT delta=RATE_LIMIT_BACKOFF blocker=NONE stream_id=RATELIMIT_planner task_id=RATELIMIT_planner next_action_unique=RATE_LIMIT_CODEX_WAIT_planner_1776341760 directive=none/none message=none/none exec_report=none issues=rate_limit_detected,channels_autofill_fallback suggestions=none
+- [2026-04-16 08:16:46 EDT] role=planner source=rate_limit_gate_probe status=RATE_LIMIT_SKIP verdict=WAIT delta=RATE_LIMIT_BACKOFF blocker=NONE stream_id=RATELIMIT_planner task_id=RATELIMIT_planner next_action_unique=RATE_LIMIT_CODEX_WAIT_planner_1776341806 directive=none/none message=none/none exec_report=none issues=rate_limit_detected,channels_autofill_fallback suggestions=none
+- [2026-04-16 08:17:28 EDT] role=planner source=rate_limit_gate_probe status=RATE_LIMIT_SKIP verdict=WAIT delta=RATE_LIMIT_BACKOFF blocker=NONE stream_id=RATELIMIT_planner task_id=RATELIMIT_planner next_action_unique=RATE_LIMIT_CODEX_WAIT_planner_1776341848 directive=none/none message=none/none exec_report=none issues=rate_limit_detected,channels_autofill_fallback suggestions=none
+- [2026-04-16 08:19:56 EDT] role=planner source=rate_limit_gate_probe status=RATE_LIMIT_SKIP verdict=WAIT delta=RATE_LIMIT_BACKOFF blocker=NONE stream_id=RATELIMIT_planner task_id=RATELIMIT_planner next_action_unique=RATE_LIMIT_CODEX_WAIT_planner_1776341996 directive=none/none message=none/none exec_report=none issues=rate_limit_detected,channels_autofill_fallback suggestions=none
+- [2026-04-16 08:37:27 EDT] role=planner source=rate_limit_gate_cache status=RATE_LIMIT_SKIP verdict=WAIT delta=RATE_LIMIT_BACKOFF blocker=NONE stream_id=RATELIMIT_planner task_id=RATELIMIT_planner next_action_unique=RATE_LIMIT_QWEN_WAIT_planner_1776343047 directive=none/none message=none/none exec_report=none issues=rate_limit_detected,channels_autofill_fallback suggestions=none
+- [2026-04-16 08:42:56 EDT] role=planner source=rate_limit_gate_checkpoint status=RATE_LIMIT_SKIP verdict=WAIT delta=RATE_LIMIT_BACKOFF blocker=NONE stream_id=RATELIMIT_planner task_id=RATELIMIT_planner next_action_unique=RATE_LIMIT_QWEN_WAIT_planner_1776343376 directive=none/none message=none/none exec_report=none issues=rate_limit_detected,channels_autofill_fallback suggestions=none
+
+## 2026-04-16T22:27:24Z role-prompt-engineer
+
+Continuity
+- previous_target_role: planner
+- previous_prompt_issue: `planner_guardian` traitait toute tâche downstream non terminale comme déjà active, même quand l’état réel était `READY_DEV`
+- changed_since_last_run: lecture VM de `planner-guardian-latest.json` et `planner-prompt-patches.json` = score 50/red, `ready_but_none_task_update`, tâche canonique `BATCH-95-DEV-03` en `READY_DEV`, mais patch actif `follow_canonical_active_task` disait encore `collect`/`handoff-ack`
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- why_this_prompt_now: c’est la seule couche de prompt qui contredisait explicitement l’état runtime réel du planner ce tick
+
+Prompt audit
+- useful_rules: patchs dynamiques courts, tool-explicites, et bons pour empêcher nouveau batch/ANALYSIS quand une lane downstream travaille déjà
+- redundant_rules: `READY_*` downstream recevait la même consigne que `IN_PROGRESS|BLOCKED`, ce qui dupliquait à tort la doctrine collect/ack
+- contradictory_rules: le patch disait `planner_subagent_manager.py collect` et `handoff-ack|handoff-close` sur une lane seulement `READY_DEV`, alors que le runner/companion attendent un `run/dispatch`
+- too_long_or_noisy_sections: pas de bruit volumique majeur; le défaut est sémantique
+- missing_tool_guidance: aucune branche courte n’expliquait que `READY_*` downstream = lancer `planner_subagent_manager.py run`, pas collecter
+- likely_output_failures_caused_by_prompt: `ready_but_none_task_update`, `none_no_signal`, waits/collect impossibles, churn de redispatch
+- architecture_doctrine_overcopy: no
+
+Optimization
+- keep: patch `follow_canonical_active_task` pour les lanes downstream réellement actives
+- simplify: distinguer `READY_*` downstream des états déjà actifs
+- remove: wording `collect/handoff-ack` sur une lane seulement prête
+- move_out_of_prompt: none
+- tool_usage_improvements: `READY_*` downstream -> `planner_subagent_manager.py run`; `IN_PROGRESS|BLOCKED` downstream -> `collect`/`handoff-ack|handoff-close`
+- expected_runtime_impact: direct au prochain cycle guardian/planner, avec prochaine action plus claire et moins de passivité artificielle
+
+Patch proposal
+- patch_type: tool-guidance / anti-churn
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- exact_goal: arrêter d’injecter une consigne de `collect` sur un downstream `READY_*`, injecter une consigne de `run` ciblé et continuer à supprimer `claim_or_autobatch_now` dans ce cas
+- expected_gain: moins de waits/collect impossibles, moins de `ready_but_none_task_update`, meilleur dispatch réel vers la lane prête
+- risk: low
+
+Measurement
+- signals_to_watch: `ready_but_none_task_update`, `none_no_signal` alors qu’un `READY_DEV` canonique existe, contenu publié de `planner-prompt-patches.json`, disparition des consignes `collect` pour `READY_*`
+- success_criteria: prochain patch guardian sur `READY_DEV` mentionne `planner_subagent_manager.py run`; planner cesse de répondre passivement sur une lane prête
+- rollback_condition: si une lane `READY_*` déclenche du dispatch spam ou si les lanes `IN_PROGRESS|BLOCKED` perdent la bonne guidance `collect/ack`
+
+Decision
+- next_owner: prompt-expert
+- next_action: relire le prochain couple VM `planner-guardian-latest.json` / `planner-prompt-patches.json` et ne repatcher que si le churn `READY_* -> none_no_signal` persiste
+- [2026-04-16 18:46:04 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-95 task_id=BATCH-95-DEV-03 next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-95-DEV-03 directive=none/none message=none/none exec_report=none issues=guardian_ready_stale suggestions=none
+- [2026-04-16 18:55:53 EDT] role=planner source=fallback_checkpoint status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=NO_DELTA blocker=NONE stream_id=none task_id=none next_action_unique=CONTINUE_PLANNER_FROM_PRIORITY_QUEUE directive=none/none message=none/none exec_report=none issues=signal_unparseable,channels_autofill_fallback suggestions=none
+
+## 2026-04-16T23:08:00Z po-vision-batch-architect
+
+- Audit vision refait avec sources canoniques produit/API/judge-parity, mémoire récente, projections locales, et endpoints publics EC2.
+- Décision: ne pas créer de nouveau batch maintenant. `BATCH-95` a déjà livré son delta principal publiquement et la vérité canonique actuelle expose `active_batch_ids=[]`.
+- Preuve publique confirmée:
+  - `GET http://3.98.20.77/api/health` => `ok`
+  - `GET http://3.98.20.77/api/copilot/start?tickers=NVDA&debug=true` => brief + `ranked_action=open_nvda`
+  - `GET http://3.98.20.77/api/personal-finance/start?tickers=NVDA&debug=true` => brief + ask/open scope-first
+  - `GET http://3.98.20.77/api/judge/personal-finance/start?tickers=NVDA&debug=true` => même flux livrable côté judge
+- Vérité control-plane actuelle:
+  - `priority-queue.json` et le monitor lite exposent `active_batch_ids=[]` / `active_batch=null`
+- `planner-graph-state.json` conserve seulement les preuves mergées de `BATCH-95-DEV-01/02/03`
+- `planner-guardian-latest.json` et `executors-monitoring-latest.json` gardent du bruit résiduel (`ready_but_no_delta`, planner stale) sans nouveau delta public
+- Conclusion explicite: le planner ne converge pas actuellement vers une nouvelle livraison; il recycle un signal de projection/monitor alors que le flux prioritaire est déjà live. Ouvrir un nouveau batch maintenant ajouterait du backlog sans moteur de convergence réel.
+- Prochain batch candidat, prêt à créer plus tard seulement si le planner redevient convergent:
+  - titre: `Ask/Open -> investment memo shared contract`
+  - cible: rendre `ask/open immédiat` pleinement judge-parity via contrat partagé + façade endpoint service réutilisée par `copilot` et `personal-finance`, sans réimplémenter `judge`
+  - ancrage code: `packages/contracts/copilot_v1.py`, `apps/api/src/domains/copilot/application/copilot_service.py`, `apps/api/src/domains/copilot/api/copilot.py`, `apps/api/src/domains/judge/application/judge_endpoint_service.py`
+- Décision finale: `create_now=no` tant que le control-plane reste en mode projection/fallback avec batch actif nul.
+
+## 2026-04-16T23:04:37Z role-prompt-engineer
+
+Continuity
+- previous_target_role: planner
+- previous_prompt_issue: la branche `READY_*` downstream du guardian a été corrigée au run précédent, mais le guardian restait encore rouge sur runtime canonique idle
+- changed_since_last_run: `logs-codex-runs/orchestrator-state/planner-guardian-latest.json` publiait `status=IDLE`, `delta=NO_ACTIVE_CANONICAL_WORK`, `task_update=none_no_ready`, tout en gardant `issues=[ready_but_no_delta, ready_but_none_task_update]` et la reco `Claim une tache READY`
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- why_this_prompt_now: le guardian injectait encore un faux rouge contradictoire dans le prompt planner, donc un bruit direct et actif
+
+Prompt audit
+- useful_rules: lecture canonique du runtime, patches dynamiques courts, suppression des prompts d’autobatch quand une lane downstream canonique existe
+- redundant_rules: pénalités `ready_but_*` basées sur queue/workboard projetés alors que la vérité canonique est idle
+- contradictory_rules: résumé `NO_ACTIVE_CANONICAL_WORK` mais recommandations demandant quand même de claim une tâche READY
+- too_long_or_noisy_sections: la section guardian restait injectée en rouge pour un état idle qui devrait être neutre
+- missing_tool_guidance: absence d’une règle explicite “idle canonique = ne pas pousser claim/autobatch depuis un résidu projeté”
+- likely_output_failures_caused_by_prompt: faux `ready_idle_streak`, claims inutiles, faux retry/autobatch, churn de supervision planner
+- architecture_doctrine_overcopy: no
+
+Optimization
+- keep: feedback guardian court, suivi de lane canonique active, hard guard novelty, patches anti-passivité quand un vrai READY existe
+- simplify: si le runtime canonique est idle, le guardian doit devenir neutre
+- remove: pénalités `ready_but_*`, recommandation `Claim une tache READY`, et streak `ready_idle_streak` quand l’idle est canonique
+- move_out_of_prompt: none
+- tool_usage_improvements: plus aucun nudge `claim/sync-priority/autobatch` quand `projection_decision_reason=runtime_idle_no_active_cycle` sans batch/tâche active
+- expected_runtime_impact: direct sur le prochain tick planner fallback/guardian, avec moins de faux rouges et moins de churn
+
+Patch proposal
+- patch_type: anti-churn / cleanup / tool-guidance
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/planner_guardian.py`
+- exact_goal: neutraliser les signaux READY projetés quand le runtime canonique est idle et supprimer la reco contradictoire associée
+- expected_gain: moins de `ready_but_no_delta`, moins de `ready_but_none_task_update`, moins de claims/autobatch/planner patches inutiles
+- risk: low; le seul risque est de masquer un vrai READY si la détection `runtime_idle_no_active_cycle` ment
+
+Measurement
+- signals_to_watch: `planner-guardian-latest.json.level`, `issues`, `recommendations`, `streaks.ready_idle_streak`, `summary.delta`, `planner-prompt-patches.json.active`
+- success_criteria: un tick `fallback_checkpoint` ou équivalent avec `summary.delta=NO_ACTIVE_CANONICAL_WORK` ne publie plus `ready_but_*`, ne recommande plus de claim READY, et garde `ready_idle_streak=0`
+- rollback_condition: un vrai READY canonique apparaît mais le guardian cesse de signaler la passivité planner alors qu’une action réelle est requise
+
+Decision
+- next_owner: prompt-expert
+- next_action: surveiller le prochain couple `planner-guardian-latest.json` / `planner-prompt-patches.json`; rollback seulement si un READY canonique réel devient silencieux
+- [2026-04-16 19:10:36 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-96 task_id=BATCH-96-ANALYSIS next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T231022Z directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 19:23:16 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_QUALITY_INCOMPLETE blocker=NONE stream_id=BATCH-96 task_id=BATCH-96-ARCH next_action_unique=PLANNER_QUALITY_BACKFILL_20260416T232302Z directive=none/none message=HO-20260416225444-699/done:planner_ack_batch95_admin01 exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16T23:28:06Z] delivery-first-governor
+  - Canonical authority added in `platform/automation/runtime/truth/runtime_truth_reader.py` as `product_delivery_state`.
+  - Planner autonomy now reads canonical delivery phase before acting:
+    - `external_outage` => early defer / no costly autonomy
+    - `idle_ready_for_next_batch` or `product_done` states => runway residue no longer forces repair churn
+    - canonical delivery batch outranks projection-only active cycle
+  - Portability hardening added in `planner_autonomy_tick.sh` for hosts without `flock` / `timeout`.
+  - Validation passed: `python3 platform/automation/tests/test_planner_autonomy_tick.py`.
+- [2026-04-16 19:35:35 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-96 task_id=BATCH-96-ARCH next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-96-DEV-01 directive=none/none message=none/none exec_report=none issues=planner_quality_autofill_missing,delivery_value_insufficient suggestions=none
+- [2026-04-16 19:46:30 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=none task_id=none next_action_unique=PLANNER_DISPATCH_ACTIVE_unknown directive=none/none message=none/none exec_report=none issues=subagent_result_pending suggestions=none
+- [2026-04-16 19:59:07 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=none task_id=none next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-96-DEV-02 directive=none/none message=none/none exec_report=none issues=none suggestions=none
+
+## 2026-04-17T00:03:08Z role-prompt-engineer
+
+Target
+- role: planner
+- prompt_source: `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- why_this_prompt_now: le bloc `ROLE=planner` restait la couche parent la plus rentable à corriger; il ne verrouillait pas encore explicitement l’autorité produit, la continuité EC2, ni le backoff des lanes stériles
+
+Prompt audit
+- useful_rules: collect-first sur subagent/downstream actif, reprise d’une tâche `IN_PROGRESS`, claim exact d’une tâche `READY`, subagent unique et ciblé, `none_no_signal` réservé à une indisponibilité runtime prouvée, preuve planner déjà compacte
+- redundant_rules: la non-passivité était déjà exprimée deux fois (`jamais passif...` puis la règle `claim/collect/autobatch échoue`); le vrai manque était la hiérarchie d’autorité, pas davantage de verbes
+- contradictory_rules: pas de contradiction dure interne, mais une omission contradictoire avec l’architecture cible: le prompt laissait encore l’état produit ambigu entre EC2 public, runtime truth et projections
+- authority_confusion_found: oui; `dashboard/monitor/docs = derives` ne suffisait pas à verrouiller `EC2 public > runtime truth > projections`, ni à interdire à `guardian/monitor/queue` de réouvrir un batch `product_done`
+- continuity_gap_tolerated: yes
+- token_burn_backoff_missing: yes
+- likely_output_failures_caused_by_prompt: passivité planner alors que l’EC2 est joignable, réouvertures pilotées par projections, churn `none_no_signal/retry/takeover`, redispatch décoratif au lieu de collect/backoff/claim utile
+
+Optimization
+- keep: la décision tick collect-first, la distinction `IN_PROGRESS` vs `READY`, le subagent ciblé, la règle résidu historique -> cleanup admin + retry, et la preuve planner existante
+- simplify: une ligne d’autorité compacte au lieu de recopier la doctrine Judge-parity
+- remove: l’ambiguïté implicite qui laissait `monitor/guardian/queue` influencer l’état actif ou la clôture produit
+- authority_fix: ajout explicite `EC2 public = vérité produit; VM runtime truth = vérité exécution; projections = advisory` + verrou `product_done`
+- continuity_fix: ajout explicite `EC2 joignable + aucun batch actif runtime => create_or_claim_now ou repair immédiat`
+- backoff_fix: ajout explicite `none_no_signal|retry|takeover` stériles => backoff + action d’unblock/fix
+- expected_runtime_impact: direct sur le prochain tick planner, avec meilleure priorisation claim/collect/backoff et moins de faux blockers advisory
+
+Patch proposal
+- patch_type: cleanup / authority-fix / anti-churn
+- create_now: yes
+- target_file: `/Users/venom/Documents/analyse-financiere/platform/automation/cron_tmux_role_runner.sh`
+- exact_goal: injecter la hiérarchie d’autorité, la continuité EC2 et le backoff stérile dans `ROLE=planner` sans regonfler le prompt
+- expected_gain: moins de `none_no_signal`, moins de réouvertures projection-only, moins de lanes wait-only, plus de `create_or_claim_now` ou `product_done` corrects
+- risk: low-to-medium; le bloc planner est central, donc une sur-agressivité serait visible vite
+
+Measurement
+- signals_to_watch: `none_no_signal`, `retry/takeover` récurrents, batch re-open après preuve EC2, outputs planner qui classent `ops_clean=no` comme blocage produit, présence d’un backoff quand des lanes stériles persistent
+- success_criteria: baisse des sorties passives quand EC2 est joignable; un batch prouvé sur EC2 n’est plus rouvert par `guardian/monitor/queue`; les lanes stériles passent en backoff au lieu de reconsommer
+- rollback_condition: hausse des claims/autobatches agressifs alors qu’une lane active canonique existe, ou perte du collect-first sur une vraie tâche downstream active
+- [2026-04-16 20:11:06 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=none task_id=none next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-96-DEV-02 directive=none/none message=none/none exec_report=none issues=ec2_public_502 suggestions=none
+- [2026-04-16 20:25:07 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=none task_id=none next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-96-DEV-03 directive=none/none message=none/none exec_report=none issues=none suggestions=none
+- [2026-04-16 20:52:21 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-96 task_id=BATCH-96-ADMIN-01 next_action_unique=collecter_le_resultat_de_planner_admin_973d14d25f_pour_BATCH-96-ADMIN-01_P1776386963_16788 directive=none/none message=none/none exec_report=none issues=run_note_auto_fixed suggestions=none
+- [2026-04-16 21:46:48 EDT] role=planner source=primary_structured status=IN_PROGRESS verdict=GO_WITH_CAUTION delta=PLANNER_DISPATCH_ACTIVE blocker=NONE stream_id=BATCH-97 task_id=BATCH-97-ANALYSIS next_action_unique=PLANNER_DISPATCH_ACTIVE_BATCH-96-ADMIN-01 directive=none/none message=none/none exec_report=none issues=planner_evidence_incomplete_soft suggestions=none
+- [2026-04-16 22:00:38 EDT] role=planner source=primary_structured status=WAIT verdict=BLOCKED delta=COLLECT_RUNTIME_BATCH96_EFFECTUE_ET_REPAIR_ADMIN_REQUISE blocker=BATCH-96-ADMIN-01 stream_id=none task_id=none next_action_unique=REPAIR_INVALID_SUBAGENT_RESULT_BATCH_96_ADMIN_01_P1776391047_20083 directive=none/none message=none/none exec_report=none issues=invalid_subagent_result,qa_failed suggestions=none

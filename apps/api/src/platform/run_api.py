@@ -60,6 +60,12 @@ def _run_uvicorn(reload_enabled: bool = True) -> None:
     from pathlib import Path as _Path
     _src = _Path(__file__).resolve().parents[1]
     _reload_dirs = [str(_src)] if reload_enabled else None
+    host = _os.getenv("FINANCE_COPILOT_API_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    port_token = str(_os.getenv("FINANCE_COPILOT_API_PORT", "8050") or "8050").strip()
+    try:
+        port = int(port_token)
+    except Exception:
+        port = 8050
     worker_count = 1
     if not reload_enabled:
         # The backend owns startup jobs and local runtime state; a multi-worker
@@ -72,8 +78,8 @@ def _run_uvicorn(reload_enabled: bool = True) -> None:
             worker_count = default_workers
     uvicorn.run(
         "api.main:create_app",
-        host="127.0.0.1",
-        port=8050,
+        host=host,
+        port=port,
         reload=reload_enabled,
         reload_dirs=_reload_dirs,
         factory=True,
@@ -83,9 +89,11 @@ def _run_uvicorn(reload_enabled: bool = True) -> None:
 
 
 if __name__ == "__main__":
+    host = os.getenv("FINANCE_COPILOT_API_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    port = os.getenv("FINANCE_COPILOT_API_PORT", "8050").strip() or "8050"
     print("🚀 Lancement de l'API Finance Copilot...")
-    print("📍 URL: http://127.0.0.1:8050")
-    print("📖 Docs: http://127.0.0.1:8050/docs")
+    print(f"📍 URL: http://{host}:{port}")
+    print(f"📖 Docs: http://{host}:{port}/docs")
     print()
 
     reload_env = os.getenv("FINANCE_COPILOT_RELOAD", "1").strip().lower()
@@ -103,8 +111,8 @@ if __name__ == "__main__":
             import uvicorn
             uvicorn.run(
                 "api.main:create_app",
-                host="127.0.0.1",
-                port=8050,
+                host=host,
+                port=int(port),
                 reload=False,
                 factory=True,
                 log_level="info",

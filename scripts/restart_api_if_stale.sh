@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# MODE: LOCAL_ONLY_RUNTIME
 # restart_api_if_stale.sh — Redémarre l'API si le process est stale (code plus récent que process)
 # Vérifie aussi que edge/contracts.py est bien chargé (smoke test)
 set -uo pipefail

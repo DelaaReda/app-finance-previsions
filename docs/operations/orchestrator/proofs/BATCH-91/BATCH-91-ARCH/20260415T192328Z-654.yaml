@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-91-BATCH-91-ARCH-20260415T192328Z-654"
+stream_id: "BATCH-91"
+task_id: "BATCH-91-ARCH"
+role: "planner"
+produced_at_utc: "2026-04-15T19:23:28Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role planner --task BATCH-91-ARCH --source planner_autonomy_tick --artifact docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md --proof-root docs/operations/orchestrator/proofs"
+      rc: "0"
+      started_at_utc: "2026-04-15T19:23:28Z"
+      ended_at_utc: "2026-04-15T19:23:28Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "bash scripts/runtime_host_check.sh && python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "COMPLETE_BATCH_91_ARCH_TO_DEV_01_P1776280786_21952"
+  review_ref: "planner_autonomy_tick:BATCH-91-ARCH"
+  note: "source=planner_autonomy_tick | root_cause=BATCH-91-ARCH_is_the_only_canonical_planner_IN_PROGRESS_item_and_BATCH-91-DEV-01_is_blocked_without_planner_architecture_proof | fix_applied=completed_the_active_architecture_step_with_explicit_reuse_boundaries_for_copilot_and_judge_surfaces | verify=before=BATCH-91-ARCH:IN_PROGRESS|BATCH-91-DEV-01:WAITING_DEP,after=BATCH-91-ARCH:DONE|BATCH-91-DEV-01:READY_DEV,test=planner_context_refresh | architecture_check=active_docs_index,judge_parity_endpoint_architecture,reuse_existing_copilot_judge_surfaces,backend_first_theme_preserved | vision_alignment=batch=BATCH-91|target=personal_finance_copilot_brief_ask_open|impact=unlock_dev_reuse_path_without_duplicate_batch"

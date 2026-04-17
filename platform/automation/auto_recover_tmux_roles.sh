@@ -425,13 +425,15 @@ start_or_restart_session() {
   local session="$1"
   local target="${session}:0.0"
   local launch_cmd=""
+  local session_model="${FC_ROLE_SESSION_MODEL:-gpt-5.4}"
+  local session_thinking="${FC_ROLE_SESSION_THINKING:-high}"
 
   tmux start-server >/dev/null 2>&1 || true
   if tmux has-session -t "$session" 2>/dev/null; then
     tmux kill-session -t "$session" >/dev/null 2>&1 || true
   fi
   preseed_codex_version_dismissal
-  printf -v launch_cmd 'cd %q && unset NO_COLOR && if [ "${TERM:-dumb}" = "dumb" ]; then export TERM=xterm-256color; fi; export COLORTERM="${COLORTERM:-truecolor}"; export FORCE_COLOR="${FORCE_COLOR:-1}"; exec codex --cd %q --no-alt-screen' "$ROOT" "$ROOT"
+  printf -v launch_cmd 'cd %q && unset NO_COLOR && if [ "${TERM:-dumb}" = "dumb" ]; then export TERM=xterm-256color; fi; export COLORTERM="${COLORTERM:-truecolor}"; export FORCE_COLOR="${FORCE_COLOR:-1}"; exec codex --model %q -c %q --cd %q --no-alt-screen' "$ROOT" "$session_model" "model_reasoning_effort=\"${session_thinking}\"" "$ROOT"
   # Do not let the recovery flock FD leak into tmux. If tmux inherits FD 9,
   # it keeps /tmp/fc-codex-role-recovery.lock open after the script exits and
   # every later recovery run sees a false "already running" state.
@@ -447,7 +449,7 @@ start_or_restart_session() {
     tmux send-keys -t "$target" C-c >/dev/null 2>&1 || true
     tmux send-keys -t "$target" "cd $ROOT" C-m >/dev/null 2>&1 || true
     preseed_codex_version_dismissal
-    tmux send-keys -t "$target" "codex --cd $ROOT --no-alt-screen" C-m >/dev/null 2>&1 || true
+    tmux send-keys -t "$target" "codex --model $session_model -c 'model_reasoning_effort=\"$session_thinking\"' --cd $ROOT --no-alt-screen" C-m >/dev/null 2>&1 || true
     sleep 2
     dismiss_interactive_codex_prompt "$target" || true
     sleep 1

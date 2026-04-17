@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-93-BATCH-93-ADMIN-01-20260416T091114Z-100"
+stream_id: "BATCH-93"
+task_id: "BATCH-93-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-04-16T09:11:14Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [admin-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[admin-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T09:11:14Z"
+      ended_at_utc: "2026-04-16T09:11:14Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "Public runtime probes only: runtime_host_check, aws_remote_app_control public-status, API health probe, monitor lite probe, public copilot start probe, public copilot ask probe, frontend HTML fetch."
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+  artifacts:
+    - "public_ec2_runtime_proof=api_health_ok@2026-04-16T09:10:29Z; monitor_health=OK product_runtime=ok doctor_overall_status=error(advisory_app_only_host)@2026-04-16T09:10:29Z; start_ok=true brief_summary_present=true ask_cou"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-93-ADMIN-01"
+  review_ref: "planner_subagent_manager:BATCH-93-ADMIN-01"
+  note: "source=planner_subagent_manager | root_cause=No in-scope runtime/control-plane blocker was present. The only degraded signal observed was monitor `doctor_overall_status=error`, which is advisory on the app-only EC2 host because remote control-plane checks are absen | fix_applied=SKIP(no code/config change required); captured public EC2 runtime proof for `/`, `/api/health`, `/api/copilot/start`, `/api/copilot/ask`, and monitor lite status, and validated that the control-plane degradation is non-b | verify=`bash scripts/runtime_host_check.sh` => runtime_is_vm=1; `scripts/aws_remote_app_control.sh public-status` => public API healthy and monitor reports health=OK; public `GET http://3.98.20.77/api/health` => ok=true; public | architecture_check=PASS(app-serving proof anchored to public EC2 endpoints only; localhost avoided; app-only host monitor semantics respected so advisory control-plane degradation is not misclassified as product outage). | vision_alignment=PASS(the shipped public flow still starts from a live brief of the day, exposes ask/open entry points, and returns an explainable ask response with verdict/confidence/source coverage)."

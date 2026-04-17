@@ -1,5 +1,7 @@
 # BATCH-79-ADMIN-01: Personal Finance Copilot - Runtime Validation Report
 
+> Historical runtime validation snapshot. The `localhost:*` endpoints below reflect pre-EC2 validation context and are kept as evidence only. Current public app proof lives on AWS EC2 (`http://3.98.20.77`, `/api/...`, `:8080`).
+
 **Task:** Build a personal finance copilot that starts with a brief of the day, lets the user ask or open [ADMIN-01]
 
 **Stream:** BATCH-79  

@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-91-BATCH-91-ADMIN-01-20260415T194138Z-643"
+stream_id: "BATCH-91"
+task_id: "BATCH-91-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-04-15T19:41:38Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [admin-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[admin-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T19:41:38Z"
+      ended_at_utc: "2026-04-15T19:41:38Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 -m pytest -q platform/automation/tests/test_health_snapshot_widget_fallback.py (pass); bash scripts/health_snapshot.sh (live snapshot refresh/proof)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+  artifacts:
+    - "Live proof after rerunning `bash scripts/health_snapshot.sh`: `logs-codex-runs/orchestrator-state/executors-monitoring-latest.json` now shows `generated_at=updated_at_utc=2026-04-15T19:40:21Z`, `summary.context_versions`"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-91-ADMIN-01"
+  review_ref: "planner_subagent_manager:BATCH-91-ADMIN-01"
+  note: "source=planner_subagent_manager | root_cause=`scripts/health_snapshot.sh` was overwriting per-role monitor entries with fresh `queue_version`/`workboard_version` values but leaving the previous `summary` and `generated_at` untouched. That produced false observabili | fix_applied=Patched `scripts/health_snapshot.sh` to compute queue/workboard versions once per run, stamp `generated_at`, and rebuild the monitor summary (`stale_context_*`, blocker/request counts, context_versions) from the refreshe | verify=Automated: `python3 -m pytest -q platform/automation/tests/test_health_snapshot_widget_fallback.py` => `2 passed in 1.12s`. Runtime evidence: reran `bash scripts/health_snapshot.sh` on the VM and inspected the live snaps | architecture_check=Runtime/control-plane only; no queue/workboard mutation. The fix stays on the existing cron observability path and makes monitor summary fields derive from canonical queue/workboard versions already written into the role | vision_alignment=Improves the personal-finance copilot brief+ask delivery path by making post-dev runtime health truthful and mergeable for planner decisions, removing a false monitor state that could hide or misstate the next delivery b"

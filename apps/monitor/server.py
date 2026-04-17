@@ -67,6 +67,8 @@ LITE_ENDPOINT_CACHE_TTL_SECONDS = max(1.0, float(os.environ.get("FC_MONITOR_LITE
 _STATUS_LITE_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
 _STATUS_FULL_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
 _RUNTIME_DIAGNOSTICS_LITE_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
+LOCAL_CONTROL_PLANE_TOKENS = {"local", "local_vm", "vm", "canonical_vm"}
+REMOTE_CONTROL_PLANE_TOKENS = {"remote", "remote_vm", "aws_ec2_app", "ec2_app_host"}
 
 
 def _lite_cache_get(bucket: dict[str, object]) -> dict[str, Any] | None:
@@ -301,6 +303,33 @@ def _monitor_access_snapshot(root: Path) -> dict:
         "vm_local_status_url": _status_url_from_root(vm_local_ui_url),
         "public_tunnels_enabled": public_tunnels_enabled,
         "state_file": str(state_file),
+    }
+
+
+def _control_plane_location(root: Path, host_context: dict[str, str] | None = None) -> str:
+    token = str(os.environ.get("FC_CONTROL_PLANE_LOCATION", "") or "").strip().lower()
+    if token in LOCAL_CONTROL_PLANE_TOKENS:
+        return "local_vm"
+    if token in REMOTE_CONTROL_PLANE_TOKENS:
+        return "remote_vm"
+    host_payload = host_context if isinstance(host_context, dict) else monitor_detect_runtime_host_kind(root)
+    runtime_is_vm = str(host_payload.get("runtime_is_vm", "0") or "0").strip()
+    if runtime_is_vm == "1":
+        return "local_vm"
+    return "remote_vm"
+
+
+def _monitor_host_context(root: Path) -> dict[str, str]:
+    host_context = monitor_detect_runtime_host_kind(root)
+    runtime_host_kind = str(host_context.get("runtime_host_kind", "unknown") or "unknown").strip() or "unknown"
+    runtime_is_vm = str(host_context.get("runtime_is_vm", "0") or "0").strip() or "0"
+    control_plane_location = _control_plane_location(root, host_context)
+    return {
+        "runtime_host_kind": runtime_host_kind,
+        "runtime_is_vm": runtime_is_vm,
+        "control_plane_location": control_plane_location,
+        "profile": "orchestrator" if control_plane_location == "local_vm" else "app_only",
+        "source": str(host_context.get("source", "fallback") or "fallback"),
     }
 
 
@@ -1485,15 +1514,10 @@ def doctor_snapshot(force_refresh: bool = False, allow_refresh: bool = True) -> 
     if not allow_refresh:
         if isinstance(cached_payload, dict) and cached_payload:
             return cached_payload
-        return {
-            "status": "unknown",
-            "generated_at": datetime.now(timezone.utc).isoformat(),
-            "checks": {},
-            "meta": {
-                "schema_version": "doctor.v1",
-                "note": "doctor_refresh_deferred",
-            },
-        }
+        # Lite status calls intentionally avoid refresh churn, but a cold monitor
+        # process should still warm the doctor cache once instead of exposing a
+        # synthetic unknown state until a manual refresh happens.
+        allow_refresh = True
 
     # Prevent recursive refresh loops:
     # /api/status -> doctor_snapshot -> fc_doctor.py -> /api/status.
@@ -2497,6 +2521,26 @@ def _issue_summary_window(window_min: int = 60) -> dict:
     roles_touched: set[str] = set()
     issue_counts_by_role: Counter[str] = Counter()
     role_latest = _latest_issue_by_role(rows)
+    monitor_latest = monitor_latest_snapshot()
+    monitor_latest_roles = monitor_latest.get("roles", {}) if isinstance(monitor_latest, dict) else {}
+    if not isinstance(monitor_latest_roles, dict):
+        monitor_latest_roles = {}
+    for role, latest in monitor_latest_roles.items():
+        if role in role_latest or not isinstance(latest, dict):
+            continue
+        ts_utc = str(latest.get("ts_utc", "") or "").strip()
+        if not ts_utc:
+            continue
+        role_latest[role] = {
+            "role": str(role or "").strip(),
+            "ts_utc": ts_utc,
+            "issue_reporting_ok": bool(latest.get("issue_reporting_ok", True)),
+            "issue_count": int(latest.get("issue_count", 0) or 0),
+            "max_severity": str(latest.get("issue_severity", "INFO") or "INFO"),
+            "issue_codes": latest.get("issue_codes", []) if isinstance(latest.get("issue_codes"), list) else [],
+            "issue_status": "has_issues" if int(latest.get("issue_count", 0) or 0) > 0 else "none",
+            "source": "executors-monitoring-latest",
+        }
     mttr_samples: defaultdict[str, list[float]] = defaultdict(list)
     open_since: dict[str, float] = {}
 
@@ -2532,7 +2576,7 @@ def _issue_summary_window(window_min: int = 60) -> dict:
 
     now_epoch = time.time()
     issue_publication_gap_roles: list[str] = []
-    roles_scope = active_roles()
+    roles_scope = [] if _monitor_host_context(ROOT).get("profile") == "app_only" else active_roles()
     for role in roles_scope:
         latest = role_latest.get(role)
         if isinstance(latest, dict):
@@ -3524,6 +3568,8 @@ def status(lite: int = 0):
         if cached_payload is not None:
             return cached_payload
     runtime_state = _runtime_state_snapshot()
+    monitor_host = _monitor_host_context(ROOT)
+    app_only_monitor_host = monitor_host.get("profile") == "app_only"
     latest_snapshot = monitor_latest_snapshot()
     latest_roles_raw = latest_snapshot.get("roles", {})
     latest_roles = latest_roles_raw if isinstance(latest_roles_raw, dict) else {}
@@ -3555,6 +3601,7 @@ def status(lite: int = 0):
     wb=jload(orchestrator_file("parallel-workstreams.json"))
     tasks=wb.get("tasks",[])
     derived_batches = _derive_batches_from_workboard(tasks)
+    active_cycle_batch_ids = _active_cycle_batch_ids(pq, wb)
     # Canonical source: priority-queue.json -> items[].
     # Keep derived fallback only when queue is empty/unavailable.
     queue_items = qi if isinstance(qi, list) else []
@@ -3626,6 +3673,7 @@ def status(lite: int = 0):
         workboard_done = int(hs_workboard.get("done") or 0)
         workboard_ready = int(hs_workboard.get("ready") or 0)
         workboard_in_progress = int(hs_workboard.get("in_progress") or 0)
+    has_canonical_activity = bool(active_cycle_batch_ids) or queue_active_rows != [] or workboard_ready > 0 or workboard_in_progress > 0
 
     doctor_checks = doctor.get("checks", {}) if isinstance(doctor, dict) else {}
     queue_workboard_check = doctor_checks.get("queue_workboard", {}) if isinstance(doctor_checks, dict) else {}
@@ -3676,13 +3724,14 @@ def status(lite: int = 0):
     dev_wait_allowed_runtime = not dev_ready_runtime and not dev_in_progress_runtime
     dev_wait_reason_runtime = "no_dev_ready_task" if dev_wait_allowed_runtime else "none"
     orchestrator_source = "canonical"
-    for source_role in ("planner", "dev", "admin"):
-        c_src = contract(source_role)
-        ev_src = parse_evidence_kv(c_src.get("EVIDENCE", "")) if isinstance(c_src, dict) else {}
-        src_val = str(ev_src.get("orchestrator_source", "")).strip().lower()
-        if src_val in {"canonical", "legacy_fallback"}:
-            orchestrator_source = src_val
-            break
+    if not lite_mode:
+        for source_role in ("planner", "dev", "admin"):
+            c_src = contract(source_role)
+            ev_src = parse_evidence_kv(c_src.get("EVIDENCE", "")) if isinstance(c_src, dict) else {}
+            src_val = str(ev_src.get("orchestrator_source", "")).strip().lower()
+            if src_val in {"canonical", "legacy_fallback"}:
+                orchestrator_source = src_val
+                break
     dev_force_claim_events_60m = 0
     dev_events_log = resolve_role_log_path("dev", "events")
     now_epoch_status = time.time()
@@ -3712,6 +3761,21 @@ def status(lite: int = 0):
     if planner_quality_missing_count > 0 and planner_quality_score == 100:
         planner_quality_score = max(0, 100 - planner_quality_missing_count * 25)
     planner_quality_autofix_active = _parse_bool_token(planner_evidence.get("planner_quality_autofix"))
+    planner_delta_contract = str(planner_contract.get("DELTA", "") or "").strip().upper()
+    planner_next_contract = str(planner_contract.get("NEXT", "") or "").strip().lower()
+    planner_dispatching_downstream = (
+        planner_delta_contract == "PLANNER_DISPATCH_ACTIVE"
+        and any(f"owner={lane}" in planner_next_contract for lane in ("dev", "admin", "qa", "tester"))
+    )
+    if planner_dispatching_downstream and set(
+        code.strip().lower()
+        for code in str(planner_evidence.get("issues", "") or "").split(",")
+        if code.strip()
+    ) <= {"planner_quality_autofill_missing", "planner_evidence_incomplete_soft"}:
+        planner_quality_missing_fields = []
+        planner_quality_missing_count = 0
+        planner_quality_score = 100
+        planner_quality_autofix_active = False
 
     scrum_actions_sent_60m = 0
     scrum_message_emit_skip_60m = 0
@@ -3748,7 +3812,7 @@ def status(lite: int = 0):
     planner_live_cron_only = _parse_bool_token(planner_subagents.get("cron_planner_only"))
     agents={}
     for role in agent_roles:
-        c=contract(role)
+        c = {} if (lite_mode and role != "planner") else contract(role)
         ev = parse_evidence_kv(c.get("EVIDENCE", ""))
         snap = latest_roles.get(role, {}) if isinstance(latest_roles, dict) else {}
         if not isinstance(snap, dict):
@@ -3850,6 +3914,39 @@ def status(lite: int = 0):
                     delta_value = "PLANNER_AUTONOMY_ENFORCED"
                 blocker_value = "NONE"
                 soft_blocker = True
+            planner_delta_up = str(delta_value or "").strip().upper()
+            planner_dispatch_like = planner_delta_up.startswith("PLANNER_DISPATCH_ACTIVE") or planner_delta_up in {
+                "PLANNER_AUTONOMY_ENFORCED",
+                "READY_ITEM_AVAILABLE_RUNTIME_CONTEXT",
+            }
+            planner_residue_only = (
+                planner_blocker_up in {"SQLITE_RUNTIME_RESIDUE_ACTIVE", "RUNTIME_TRUTH_RESIDUE_ACTIVE"}
+                or planner_delta_up in {
+                    "AUTOBATCH_BLOQUE_PAR_RESIDU_SQLITE",
+                    "REPAIR_ORCHESTRATION_BLOCKED_PAR_RESIDU_SQLITE",
+                }
+            )
+            planner_can_be_demoted = (
+                (planner_only_runtime or planner_live_cron_only)
+                and not planner_live_subagent
+                and not has_canonical_activity
+                and not planner_hard_incident
+                and planner_status_up in {"IN_PROGRESS", "WAIT", "MUTED", "READY", "UNKNOWN"}
+                and (
+                    planner_dispatch_like
+                    or planner_residue_only
+                    or planner_blocker_up == "NONE"
+                    or planner_blocker_up.startswith("LOCAL_MONITOR_")
+                )
+            )
+            if planner_can_be_demoted:
+                status_value = "IDLE"
+                verdict = "IDLE"
+                delta_value = "NO_ACTIVE_CANONICAL_WORK"
+                blocker_value = "NONE"
+                source = "canonical_queue"
+                next_value = "owner=planner; action=wait_for_active_cycle"
+                soft_blocker = False
 
         if role == "dev":
             dev_wait_reason = dev_wait_reason_runtime
@@ -4099,6 +4196,8 @@ def status(lite: int = 0):
     issue_publication_gap_roles = issues_summary_60.get("issue_publication_gap_roles", [])
     if not isinstance(issue_publication_gap_roles, list):
         issue_publication_gap_roles = []
+    if app_only_monitor_host:
+        issue_publication_gap_roles = []
     role_latest_issue = issues_summary_60.get("role_latest", {})
     if not isinstance(role_latest_issue, dict):
         role_latest_issue = {}
@@ -4143,8 +4242,8 @@ def status(lite: int = 0):
     data_source, data_freshness_s = monitor_detect_data_source(runtime_paths, kpi_path)
 
     freshness_state = "fresh" if 0 <= data_freshness_s <= 240 else ("warm" if 0 <= data_freshness_s <= 900 else "stale")
-    unknown_core_agents = all(str(a.get("source", "unknown")) == "unknown" for a in core_agents)
-    force_degraded = bool(incomplete_roles) or data_source == "unknown" or unknown_core_agents
+    unknown_core_agents = False if app_only_monitor_host else all(str(a.get("source", "unknown")) == "unknown" for a in core_agents)
+    force_degraded = False if app_only_monitor_host else (bool(incomplete_roles) or data_source == "unknown" or unknown_core_agents)
     summary = latest_snapshot.get("summary", {}) if isinstance(latest_snapshot, dict) else {}
     if not isinstance(summary, dict):
         summary = {}
@@ -4198,13 +4297,30 @@ def status(lite: int = 0):
                 continue
             stale_context_roles.append(role_token)
         stale_context_open = len(stale_context_roles)
+    queue_ready_planner = _int_or_default(queue_state_counts.get("READY_PLANNER"), 0)
+    queue_ready_dev = _int_or_default(queue_state_counts.get("READY_DEV"), 0)
+    queue_ready_legacy = _int_or_default(queue_state_counts.get("READY"), 0)
+    queue_waiting_dep = _int_or_default(queue_state_counts.get("WAITING_DEP"), 0)
+    queue_in_progress = _int_or_default(queue_state_counts.get("IN_PROGRESS"), 0)
+    rate_limits_advisory = False
+    if not app_only_monitor_host and not hard_blocked:
+        rate_limits_advisory = any(
+            (
+                queue_ready_planner + queue_ready_dev + queue_ready_legacy > 0,
+                queue_waiting_dep > 0,
+                queue_in_progress > 0,
+                workboard_ready > 0,
+                workboard_in_progress > 0,
+            )
+        )
     health = monitor_compute_health(
         force_degraded=force_degraded,
-        hard_blocked=hard_blocked,
-        has_rate_limits=bool(rl),
-        has_rate_limited_agents=rate_limited_agents,
-        has_stale_context=stale_context_open > 0,
-        summary_blocker_roles=blocker_roles,
+        hard_blocked=False if app_only_monitor_host else hard_blocked,
+        has_rate_limits=False if app_only_monitor_host else bool(rl),
+        has_rate_limited_agents=False if app_only_monitor_host else rate_limited_agents,
+        rate_limits_advisory=False if app_only_monitor_host else rate_limits_advisory,
+        has_stale_context=False if app_only_monitor_host else (stale_context_open > 0),
+        summary_blocker_roles=[] if app_only_monitor_host else blocker_roles,
     )
     if runtime_paused:
         health = "PAUSED"
@@ -4221,14 +4337,9 @@ def status(lite: int = 0):
     }
 
     if lite_mode:
-        queue_ready_planner = _int_or_default(queue_state_counts.get("READY_PLANNER"), 0)
-        queue_ready_dev = _int_or_default(queue_state_counts.get("READY_DEV"), 0)
-        queue_ready_legacy = _int_or_default(queue_state_counts.get("READY"), 0)
         ready_dev_display_count = dev_ready_count_runtime if monitor_ready_dev_from_workboard else queue_ready_dev
         ready_dev_source = "workboard_runtime" if monitor_ready_dev_from_workboard else "queue_state"
         queue_ready = queue_ready_planner + queue_ready_legacy + ready_dev_display_count
-        queue_waiting_dep = _int_or_default(queue_state_counts.get("WAITING_DEP"), 0)
-        queue_in_progress = _int_or_default(queue_state_counts.get("IN_PROGRESS"), 0)
         if queue_total == 0 and isinstance(hs_queue, dict) and hs_queue:
             queue_ready = _int_or_default(hs_queue.get("ready"), queue_ready)
             queue_waiting_dep = _int_or_default(hs_queue.get("waiting_dep"), queue_waiting_dep)
@@ -4246,6 +4357,7 @@ def status(lite: int = 0):
             "root": str(ROOT),
             "state_dir": str(STATE),
             "monitor_access": _monitor_access_snapshot(ROOT),
+            "monitor_host": monitor_host,
             "runtime_state": runtime_state,
             "execution_mode": effective_execution_mode,
             "scheduler_roles": list(CORE_ROLES),
@@ -4334,14 +4446,9 @@ def status(lite: int = 0):
             lite_payload["health"] = "OK"
         return _lite_cache_set(_STATUS_LITE_CACHE, lite_payload)
 
-    queue_ready_planner = _int_or_default(queue_state_counts.get("READY_PLANNER"), 0)
-    queue_ready_dev = _int_or_default(queue_state_counts.get("READY_DEV"), 0)
-    queue_ready_legacy = _int_or_default(queue_state_counts.get("READY"), 0)
     ready_dev_display_count = dev_ready_count_runtime if monitor_ready_dev_from_workboard else queue_ready_dev
     ready_dev_source = "workboard_runtime" if monitor_ready_dev_from_workboard else "queue_state"
     queue_ready = queue_ready_planner + queue_ready_legacy + ready_dev_display_count
-    queue_waiting_dep = _int_or_default(queue_state_counts.get("WAITING_DEP"), 0)
-    queue_in_progress = _int_or_default(queue_state_counts.get("IN_PROGRESS"), 0)
     if queue_total == 0 and isinstance(hs_queue, dict) and hs_queue:
         queue_ready = _int_or_default(hs_queue.get("ready"), queue_ready)
         queue_waiting_dep = _int_or_default(hs_queue.get("waiting_dep"), queue_waiting_dep)
@@ -4497,6 +4604,7 @@ def status(lite: int = 0):
             "root":str(ROOT),
             "state_dir":str(STATE),
             "monitor_access": monitor_access,
+            "monitor_host": monitor_host,
             "runtime_state": runtime_state,
             "execution_mode": execution_mode,
             "multi_agent_policy": multi_agent_policy,

@@ -203,6 +203,32 @@ class IterationIssueReportTests(unittest.TestCase):
             self.assertEqual(record["issue_status"], "none")
             self.assertEqual(record["issue_count"], 0)
 
+    def test_rate_limit_probe_error_does_not_escalate_to_critical_on_repeats(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            base_payload = _payload("issues=none; task_update=none_no_signal")
+            for tick_id in ("RL1", "RL2", "RL3"):
+                record = self._run_report(
+                    tmp=tmp,
+                    role="planner",
+                    source="rate_limit_gate_probe",
+                    tick_id=tick_id,
+                    contract_text=base_payload.replace("IN_PROGRESS", "RATE_LIMIT_SKIP", 1).replace("NO_DELTA", "RATE_LIMIT_BACKOFF", 1),
+                    rc_primary=1,
+                    rc_retry=0,
+                    rc_final=0,
+                    rc_codex=-1,
+                    raw_primary="{\"type\":\"error\",\"message\":\"You've hit your usage limit.\"}",
+                )
+
+            rate_limit_issue = [
+                i for i in record.get("issues", [])
+                if isinstance(i, dict) and i.get("code") == "RATE_LIMIT_PROBE_ERROR"
+            ]
+            self.assertTrue(rate_limit_issue)
+            self.assertEqual(rate_limit_issue[0].get("severity"), "WARN")
+            self.assertEqual(record["max_severity"], "WARN")
+
 
 if __name__ == "__main__":
     unittest.main()

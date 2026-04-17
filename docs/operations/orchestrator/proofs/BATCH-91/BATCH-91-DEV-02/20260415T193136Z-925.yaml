@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-91-BATCH-91-DEV-02-20260415T193136Z-925"
+stream_id: "BATCH-91"
+task_id: "BATCH-91-DEV-02"
+role: "dev"
+produced_at_utc: "2026-04-15T19:31:36Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T19:31:36Z"
+      ended_at_utc: "2026-04-15T19:31:36Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS node --test apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js; PASS node --test apps/web/src/domains/forecasts/pages/personal-finance-start.test.js; PASS node --test apps/web/src/domains/foreca"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "UI artifact: personal finance start page now renders the ranked finance copilot action first as `Top action: ...` and keeps its target on `/personal-finance/ask`; commit `ebd342ce7a586fad672a8b0367464812e1cab39c`."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-91-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-91-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=The web slice already loaded brief/ask/open data, but it ignored `ranked_action` from the shared copilot start contract, so the highest-priority action never reached the user path; the personal-finance page rewriter also | fix_applied=Updated `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html` to promote `briefData.ranked_action` into the rendered ask/open actions with top-action labeling and dedupe, updated `apps/web/src/domains/fo | verify=before=ranked_action existed in the shared start payload but the widget/render path dropped it and the page namespace rewriter only handled ask/open arrays; after=ranked_action is promoted into the visible action list an | architecture_check=layer=frontend page/widget reuse only, no backend contract widening; imports_ok=yes, reused existing forecasts widget + platform wiring with no new module tree; path_target=apps/web/src/domains/forecasts/components/widge | vision_alignment=batch=BATCH-91; target=brief-of-day start flow with ask/open entry improved now; impact=the highest-value explainable memo/ask path is visible and actionable instead of being hidden in payload-only contract data"

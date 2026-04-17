@@ -596,6 +596,207 @@ class MonitorStatusPlannerDevPolicyTests(unittest.TestCase):
         self.assertEqual(planner.get("blocker"), "NONE")
         self.assertEqual(planner.get("delta"), "PLANNER_DISPATCH_ACTIVE")
 
+    def test_status_demotes_stale_planner_dispatch_without_active_cycle(self) -> None:
+        cfg_dir = self.root / "platform" / "config" / "runner"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / "runner.v1.yaml").write_text(
+            json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+            encoding="utf-8",
+        )
+        runtime_state_dir = self.root / "logs-codex-runs" / "orchestrator-state"
+        runtime_state_dir.mkdir(parents=True, exist_ok=True)
+        (runtime_state_dir / "runtime-state.json").write_text(
+            json.dumps(
+                {
+                    "lifecycle": "running",
+                    "execution_mode": "planner_experimental",
+                    "operator_mode": "planner-only",
+                    "source": "unit_test",
+                }
+            ),
+            encoding="utf-8",
+        )
+        orch = self.root / "docs" / "operations" / "orchestrator"
+        (orch / "priority-queue.json").write_text(
+            json.dumps({"items": [], "active_cycle": {"active_batch_ids": []}}),
+            encoding="utf-8",
+        )
+        (orch / "parallel-workstreams.json").write_text(
+            json.dumps({"tasks": [], "active_cycle": {"active_batch_ids": []}}),
+            encoding="utf-8",
+        )
+
+        module = _load_server_module(self.root, self.state)
+        contracts = {
+            "planner": {
+                "STATUS": "IN_PROGRESS",
+                "VERDICT": "GO_WITH_CAUTION",
+                "DELTA": "PLANNER_DISPATCH_ACTIVE",
+                "BLOCKER_ID": "NONE",
+                "NEXT": "owner=planner; action=stale legacy",
+                "EVIDENCE": "task_update=handoff",
+            }
+        }
+        with mock.patch.object(module, "active_roles", lambda: ("planner", "dev", "admin")), mock.patch.object(
+            module, "contract", lambda role: contracts.get(role, {})
+        ), mock.patch.object(module, "tick_age", lambda role: 1), mock.patch.object(
+            module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
+        ), mock.patch.object(module, "rate_limits", lambda: []), mock.patch.object(
+            module, "_planner_subagents_snapshot",
+            lambda: {
+                "enabled": True,
+                "cron_planner_only": True,
+                "active_count": 0,
+                "active": [],
+                "recent": [],
+                "status": "ok",
+            },
+        ), mock.patch.object(
+            module, "doctor_snapshot", lambda force_refresh=False: {"status": "ok", "checks": {}}
+        ):
+            payload = module.status()
+
+        planner = payload.get("agents", {}).get("planner", {})
+        self.assertEqual(planner.get("status"), "IDLE")
+        self.assertEqual(planner.get("verdict"), "IDLE")
+        self.assertEqual(planner.get("delta"), "NO_ACTIVE_CANONICAL_WORK")
+        self.assertEqual(planner.get("source"), "canonical_queue")
+        self.assertEqual(planner.get("next"), "owner=planner; action=wait_for_active_cycle")
+
+    def test_status_demotes_residue_only_planner_delta_without_active_cycle(self) -> None:
+        cfg_dir = self.root / "platform" / "config" / "runner"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / "runner.v1.yaml").write_text(
+            json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+            encoding="utf-8",
+        )
+        runtime_state_dir = self.root / "logs-codex-runs" / "orchestrator-state"
+        runtime_state_dir.mkdir(parents=True, exist_ok=True)
+        (runtime_state_dir / "runtime-state.json").write_text(
+            json.dumps(
+                {
+                    "lifecycle": "running",
+                    "execution_mode": "planner_experimental",
+                    "operator_mode": "planner-only",
+                    "source": "unit_test",
+                }
+            ),
+            encoding="utf-8",
+        )
+        orch = self.root / "docs" / "operations" / "orchestrator"
+        (orch / "priority-queue.json").write_text(
+            json.dumps({"items": [], "active_cycle": {"active_batch_ids": []}}),
+            encoding="utf-8",
+        )
+        (orch / "parallel-workstreams.json").write_text(
+            json.dumps({"tasks": [], "active_cycle": {"active_batch_ids": []}}),
+            encoding="utf-8",
+        )
+
+        module = _load_server_module(self.root, self.state)
+        contracts = {
+            "planner": {
+                "STATUS": "IN_PROGRESS",
+                "VERDICT": "GO_WITH_CAUTION",
+                "DELTA": "AUTOBATCH_BLOQUE_PAR_RESIDU_SQLITE",
+                "BLOCKER_ID": "NONE",
+                "NEXT": "owner=admin; action=quarantine stale sqlite residue",
+                "EVIDENCE": "task_update=blocked",
+            }
+        }
+        with mock.patch.object(module, "active_roles", lambda: ("planner", "dev", "admin")), mock.patch.object(
+            module, "contract", lambda role: contracts.get(role, {})
+        ), mock.patch.object(module, "tick_age", lambda role: 1), mock.patch.object(
+            module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
+        ), mock.patch.object(module, "rate_limits", lambda: []), mock.patch.object(
+            module, "_planner_subagents_snapshot",
+            lambda: {
+                "enabled": True,
+                "cron_planner_only": True,
+                "active_count": 0,
+                "active": [],
+                "recent": [],
+                "status": "ok",
+            },
+        ), mock.patch.object(
+            module, "doctor_snapshot", lambda force_refresh=False: {"status": "ok", "checks": {}}
+        ):
+            payload = module.status()
+
+        planner = payload.get("agents", {}).get("planner", {})
+        self.assertEqual(planner.get("status"), "IDLE")
+        self.assertEqual(planner.get("verdict"), "IDLE")
+        self.assertEqual(planner.get("delta"), "NO_ACTIVE_CANONICAL_WORK")
+        self.assertEqual(planner.get("source"), "canonical_queue")
+        self.assertEqual(planner.get("next"), "owner=planner; action=wait_for_active_cycle")
+
+    def test_status_demotes_unknown_planner_without_active_cycle(self) -> None:
+        cfg_dir = self.root / "platform" / "config" / "runner"
+        cfg_dir.mkdir(parents=True, exist_ok=True)
+        (cfg_dir / "runner.v1.yaml").write_text(
+            json.dumps({"features": {"planner_orchestrator": {"enabled": 1, "cron_planner_only": 1}}}),
+            encoding="utf-8",
+        )
+        runtime_state_dir = self.root / "logs-codex-runs" / "orchestrator-state"
+        runtime_state_dir.mkdir(parents=True, exist_ok=True)
+        (runtime_state_dir / "runtime-state.json").write_text(
+            json.dumps(
+                {
+                    "lifecycle": "running",
+                    "execution_mode": "planner_experimental",
+                    "operator_mode": "planner-only",
+                    "source": "unit_test",
+                }
+            ),
+            encoding="utf-8",
+        )
+        orch = self.root / "docs" / "operations" / "orchestrator"
+        (orch / "priority-queue.json").write_text(
+            json.dumps({"items": [], "active_cycle": {"active_batch_ids": []}}),
+            encoding="utf-8",
+        )
+        (orch / "parallel-workstreams.json").write_text(
+            json.dumps({"tasks": [], "active_cycle": {"active_batch_ids": []}}),
+            encoding="utf-8",
+        )
+
+        module = _load_server_module(self.root, self.state)
+        contracts = {
+            "planner": {
+                "STATUS": "UNKNOWN",
+                "VERDICT": "UNKNOWN",
+                "DELTA": "NO_DATA",
+                "BLOCKER_ID": "NONE",
+                "NEXT": "",
+                "EVIDENCE": "",
+            }
+        }
+        with mock.patch.object(module, "active_roles", lambda: ("planner", "dev", "admin")), mock.patch.object(
+            module, "contract", lambda role: contracts.get(role, {})
+        ), mock.patch.object(module, "tick_age", lambda role: 1), mock.patch.object(
+            module, "monitor_latest_snapshot", lambda: {"roles": {}, "velocity": {}, "summary": {}, "health_snapshot": {}}
+        ), mock.patch.object(module, "rate_limits", lambda: []), mock.patch.object(
+            module, "_planner_subagents_snapshot",
+            lambda: {
+                "enabled": True,
+                "cron_planner_only": True,
+                "active_count": 0,
+                "active": [],
+                "recent": [],
+                "status": "ok",
+            },
+        ), mock.patch.object(
+            module, "doctor_snapshot", lambda force_refresh=False: {"status": "ok", "checks": {}}
+        ):
+            payload = module.status()
+
+        planner = payload.get("agents", {}).get("planner", {})
+        self.assertEqual(planner.get("status"), "IDLE")
+        self.assertEqual(planner.get("verdict"), "IDLE")
+        self.assertEqual(planner.get("delta"), "NO_ACTIVE_CANONICAL_WORK")
+        self.assertEqual(planner.get("source"), "canonical_queue")
+        self.assertEqual(planner.get("next"), "owner=planner; action=wait_for_active_cycle")
+
 
 if __name__ == "__main__":
     unittest.main()

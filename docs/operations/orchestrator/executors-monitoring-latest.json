@@ -1,66 +1,24 @@
 {
-  "updated_at_utc": "2026-04-15T04:38:02Z",
+  "updated_at_utc": "2026-04-16T22:58:57Z",
   "roles": {
     "dev": {
-      "ts_utc": "2026-04-15T04:38:02Z",
+      "ts_utc": "2026-04-16T22:58:57Z",
       "role": "dev",
       "source": "health_snapshot",
-      "status": "PASS",
-      "delta": "NO_DELTA",
+      "status": "WAIT",
+      "delta": "NO_ACTIVE_CAPABILITY",
       "verdict": "PASS",
       "blocker_id": "NONE",
-      "next_action_unique": "FIX_DEV_20260306T121640Z",
-      "next": "owner=dev; action=corriger le contrat puis relancer",
-      "task_update": "blocked",
+      "next_action_unique": "none",
+      "next": "owner=none; action=none",
+      "task_update": "none_no_signal",
       "exec_report": "none",
-      "issues": "contract_guard_dev_arch_check_format_invalid",
-      "issue_count": 1,
-      "issue_severity": "high",
-      "issue_codes": [
-        "contract_guard_dev_arch_check_format_invalid"
-      ],
-      "issue_reporting_ok": true,
-      "issue_reporting_errors": [],
-      "suggestions": "none",
-      "stream_id": "none",
-      "task_id": "none",
-      "tool_request": "none",
-      "skill_request": "none",
-      "tools_used": "",
-      "channels_read": "",
-      "impact_assessment": "",
-      "impact_action": "",
-      "queue_version": "",
-      "workboard_version": ""
-    },
-    "planner": {
-      "ts_utc": "2026-04-15T04:38:02Z",
-      "role": "planner",
-      "source": "health_snapshot",
-      "status": "BLOCKED",
-      "delta": "PLANNER_RUNTIME_ACTIONS_FAILED",
-      "verdict": "BLOCKED",
-      "blocker_id": "PLANNER_RUNTIME_ACTIONS_FAILED",
-      "next_action_unique": "PLANNER_ORCHESTRATOR_BRIDGE_FAILED",
-      "next": "owner=planner; action=repair planner capability bridge now",
-      "action_summary": "inspect_bridge_stdout_and_stderr",
-      "task_update": "blocked",
-      "exec_report": "none",
-      "run_note": "none",
-      "root_cause": "planner_orchestrator_bridge_failed",
-      "fix_applied": "inspect_bridge_stdout_and_stderr",
-      "verify": "source=primary_structured",
       "issues": "none",
       "issue_count": 0,
       "issue_severity": "none",
       "issue_codes": [],
-      "issue_reporting_ok": false,
-      "issue_reporting_errors": [
-        "blocked_without_issue_report",
-        "issue_count",
-        "issue_severity",
-        "issues"
-      ],
+      "issue_reporting_ok": true,
+      "issue_reporting_errors": [],
       "suggestions": "none",
       "stream_id": "none",
       "task_id": "none",
@@ -70,27 +28,35 @@
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "",
-      "workboard_version": ""
+      "queue_version": "queue_1776380149_c9c802099284",
+      "workboard_version": "workboard_1776380288_7676f00826e7",
+      "action_summary": "none",
+      "run_note": "none",
+      "root_cause": "none",
+      "fix_applied": "none",
+      "verify": "none"
     },
-    "admin": {
-      "ts_utc": "2026-04-15T04:38:02Z",
-      "role": "admin",
+    "planner": {
+      "ts_utc": "2026-04-16T22:58:57Z",
+      "role": "planner",
       "source": "health_snapshot",
-      "status": "PASS",
+      "status": "IN_PROGRESS",
       "delta": "NO_DELTA",
-      "verdict": "BLOCKER_RUNTIME_INFERENCE_CONFIRME",
+      "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
-      "next_action_unique": "TAKEOVER_CLAIM_BATCH_27_DEV_01_P1772799402_22370",
-      "next": "owner=admin; action=takeover claim BATCH-27-DEV-01 via parallel_workstream role=dev",
-      "task_update": "analysis_only",
+      "next_action_unique": "none",
+      "next": "owner=none; action=none",
+      "action_summary": "none",
+      "task_update": "none_no_signal",
       "exec_report": "none",
-      "issues": "dev_arch_check_format_invalid",
-      "issue_count": 1,
-      "issue_severity": "high",
-      "issue_codes": [
-        "dev_arch_check_format_invalid"
-      ],
+      "run_note": "none",
+      "root_cause": "none",
+      "fix_applied": "none",
+      "verify": "none",
+      "issues": "none",
+      "issue_count": 0,
+      "issue_severity": "none",
+      "issue_codes": [],
       "issue_reporting_ok": true,
       "issue_reporting_errors": [],
       "suggestions": "none",
@@ -99,11 +65,46 @@
       "tool_request": "none",
       "skill_request": "none",
       "tools_used": "",
-      "channels_read": "runtime_context,admin_tshape_context,peer_contracts,trace_tail",
-      "impact_assessment": "high",
-      "impact_action": "takeover_claim_batch_27_dev_01",
-      "queue_version": "queue_1772799401_8c541bc7c526",
-      "workboard_version": "workboard_1772799402_c7676ee5b091"
+      "channels_read": "",
+      "impact_assessment": "",
+      "impact_action": "",
+      "queue_version": "queue_1776380149_c9c802099284",
+      "workboard_version": "workboard_1776380288_7676f00826e7"
+    },
+    "admin": {
+      "ts_utc": "2026-04-16T22:58:57Z",
+      "role": "admin",
+      "source": "health_snapshot",
+      "status": "WAIT",
+      "delta": "NO_ACTIVE_CAPABILITY",
+      "verdict": "PASS",
+      "blocker_id": "NONE",
+      "next_action_unique": "none",
+      "next": "owner=none; action=none",
+      "task_update": "none_no_signal",
+      "exec_report": "none",
+      "issues": "none",
+      "issue_count": 0,
+      "issue_severity": "none",
+      "issue_codes": [],
+      "issue_reporting_ok": true,
+      "issue_reporting_errors": [],
+      "suggestions": "none",
+      "stream_id": "none",
+      "task_id": "none",
+      "tool_request": "none",
+      "skill_request": "none",
+      "tools_used": "",
+      "channels_read": "",
+      "impact_assessment": "",
+      "impact_action": "",
+      "queue_version": "queue_1776380149_c9c802099284",
+      "workboard_version": "workboard_1776380288_7676f00826e7",
+      "action_summary": "none",
+      "run_note": "none",
+      "root_cause": "none",
+      "fix_applied": "none",
+      "verify": "none"
     },
     "scrum_master": {
       "ts_utc": "2026-03-06T22:18:27Z",
@@ -138,177 +139,175 @@
   },
   "summary": {
     "roles_total": 4,
-    "fresh_roles_total": 2,
-    "stale_context_open": 2,
-    "issues_open": 1,
-    "issue_reports_open": 1,
-    "issue_reporting_missing_count": 1,
-    "issue_reporting_missing_roles": [
-      "planner"
-    ],
+    "fresh_roles_total": 3,
+    "stale_context_open": 1,
+    "issues_open": 0,
+    "issue_reports_open": 0,
+    "issue_reporting_missing_count": 0,
+    "issue_reporting_missing_roles": [],
     "critical_count": 0,
     "critical_issue_roles": [],
     "process_issues_open": 0,
-    "delivery_gaps_open": 1,
+    "delivery_gaps_open": 0,
     "delivery_probe_loops_open": 0,
     "flow_gaps_open": 0,
-    "blockers_open": 1,
+    "blockers_open": 0,
     "tool_skill_requests_open": 0,
-    "issue_roles": [
-      "dev"
-    ],
+    "issue_roles": [],
     "process_issue_roles": [],
     "delivery_probe_roles": [],
     "flow_gap_roles": [],
-    "delivery_gap_roles": [
-      "dev"
-    ],
-    "blocker_roles": [
-      "planner"
-    ],
+    "delivery_gap_roles": [],
+    "blocker_roles": [],
     "tool_skill_request_roles": [],
     "stale_context_roles": [
-      "admin",
       "scrum_master"
     ],
     "context_versions": {
-      "queue_version": "queue_1773424805_a62cef05e4e7",
-      "workboard_version": "workboard_1773424900_884e6aaf148b"
+      "queue_version": "queue_1776380149_c9c802099284",
+      "workboard_version": "workboard_1776380288_7676f00826e7"
     }
   },
-  "updated_at": "2026-04-15T04:38:02Z",
+  "updated_at": "2026-04-16T22:58:57Z",
   "health_snapshot": {
-    "ts_utc": "2026-04-15T04:38:02Z",
-    "health": "DEGRADED",
+    "ts_utc": "2026-04-16T22:58:57Z",
+    "health": "STALE",
+    "health_reason": "stale_ticks",
     "execution_mode": "planner_experimental",
     "scheduled_roles": [
       "planner"
     ],
     "capability_roles": [],
+    "delivery_runway_present": false,
+    "rate_limit_backoff_non_blocking": false,
     "workboard": {
-      "total": 554,
-      "done": 548,
+      "total": 624,
+      "done": 624,
       "ready": 0,
-      "in_progress": 2
+      "in_progress": 0,
+      "waiting_dep": 0
     },
     "velocity": {
-      "done_24h": 545,
-      "done_7d": 545,
-      "proofs": 106
+      "done_24h": 596,
+      "done_7d": 624,
+      "proofs": 118
     },
     "queue": {
-      "total": 83,
+      "total": 93,
       "ready": 0,
-      "closed": 82
+      "closed": 93,
+      "waiting_dep": 0,
+      "in_progress": 0
     },
     "agents": {
       "planner": {
-        "verdict": "BLOCKED",
-        "status": "BLOCKED",
-        "blocker": "PLANNER_RUNTIME_ACTIONS_FAILED",
-        "delta": "PLANNER_RUNTIME_ACTIONS_FAILED"
+        "verdict": "GO_WITH_CAUTION",
+        "status": "IN_PROGRESS",
+        "blocker": "NONE",
+        "delta": "NO_DELTA"
       },
       "dev": {
         "verdict": "PASS",
-        "status": "PASS",
+        "status": "WAIT",
         "blocker": "NONE",
-        "delta": "NO_DELTA"
+        "delta": "NO_ACTIVE_CAPABILITY"
       },
       "admin": {
-        "verdict": "BLOCKER_RUNTIME_INFERENCE_CONFIRME",
-        "status": "PASS",
+        "verdict": "PASS",
+        "status": "WAIT",
         "blocker": "NONE",
-        "delta": "NO_DELTA"
+        "delta": "NO_ACTIVE_CAPABILITY"
       }
     },
-    "blocked_agents": [
+    "blocked_agents": [],
+    "rate_limited_agents": [],
+    "stale_agents": [
       "planner"
     ],
-    "rate_limited_agents": [],
-    "stale_agents": [],
     "rate_limits": [],
     "tick_age_min": {
-      "planner": 5,
-      "dev": 56732,
-      "admin": 56718
+      "planner": 1030,
+      "dev": 59272,
+      "admin": 59258
     },
     "critical_widget_health": {
-      "ts_utc": "2026-04-15T04:38:02Z",
-      "state": "unknown",
-      "monitor_base_url": "http://127.0.0.1:7779",
-      "api_base_url": "http://127.0.0.1:8050",
+      "ts_utc": "2026-04-16T22:58:57Z",
+      "state": "ok",
+      "monitor_base_url": "http://3.98.20.77:8080",
+      "api_base_url": "http://3.98.20.77",
       "widgets": {
         "hero": {
-          "state": "unknown",
-          "monitor_health": "unknown",
+          "state": "ok",
+          "monitor_health": "OK",
           "recommendations_status": "ok"
         },
         "news": {
-          "state": "unknown",
-          "freshness": "unknown",
-          "updated_at": ""
+          "state": "ok",
+          "freshness": "fresh",
+          "updated_at": "2026-04-16T22:47:52.516670"
         },
         "forecasts": {
-          "state": "unknown",
+          "state": "ok",
           "status": "ok",
-          "freshness": "unknown",
-          "updated_at": ""
+          "freshness": "fresh",
+          "updated_at": "2026-04-16T22:47:47.539830Z"
         },
         "judge": {
-          "state": "unknown",
-          "monitor_health": "unknown",
+          "state": "ok",
+          "monitor_health": "OK",
           "recommendations_status": "ok"
         },
         "deep-dive": {
-          "state": "unknown",
-          "monitor_health": "unknown",
+          "state": "ok",
+          "monitor_health": "OK",
           "recommendations_status": "ok",
           "forecasts_status": "ok"
         }
       }
     }
   },
-  "health": "DEGRADED",
+  "health": "STALE",
   "velocity": {
-    "done_24h": 545,
-    "done_7d": 545,
-    "proofs": 106
+    "done_24h": 596,
+    "done_7d": 624,
+    "proofs": 118
   },
   "_cleanup_ts": "2026-03-04T11:59:09.835863+00:00",
   "_cleanup_note": "Removed 12 phantom roles (not in active topology): ['frontend_engineer', 'infra_engineer', 'backend_engineer', 'integrator', 'analyst', 'architect', 'data_analyst', 'tester', 'qa', 'scrum_master', 'clawsentinel', 'po']",
   "critical_widget_health": {
-    "ts_utc": "2026-04-15T04:38:02Z",
-    "state": "unknown",
-    "monitor_base_url": "http://127.0.0.1:7779",
-    "api_base_url": "http://127.0.0.1:8050",
+    "ts_utc": "2026-04-16T22:58:57Z",
+    "state": "ok",
+    "monitor_base_url": "http://3.98.20.77:8080",
+    "api_base_url": "http://3.98.20.77",
     "widgets": {
       "hero": {
-        "state": "unknown",
-        "monitor_health": "unknown",
+        "state": "ok",
+        "monitor_health": "OK",
         "recommendations_status": "ok"
       },
       "news": {
-        "state": "unknown",
-        "freshness": "unknown",
-        "updated_at": ""
+        "state": "ok",
+        "freshness": "fresh",
+        "updated_at": "2026-04-16T22:47:52.516670"
       },
       "forecasts": {
-        "state": "unknown",
+        "state": "ok",
         "status": "ok",
-        "freshness": "unknown",
-        "updated_at": ""
+        "freshness": "fresh",
+        "updated_at": "2026-04-16T22:47:47.539830Z"
       },
       "judge": {
-        "state": "unknown",
-        "monitor_health": "unknown",
+        "state": "ok",
+        "monitor_health": "OK",
         "recommendations_status": "ok"
       },
       "deep-dive": {
-        "state": "unknown",
-        "monitor_health": "unknown",
+        "state": "ok",
+        "monitor_health": "OK",
         "recommendations_status": "ok",
         "forecasts_status": "ok"
       }
     }
-  }
+  },
+  "generated_at": "2026-04-16T22:58:57Z"
 }

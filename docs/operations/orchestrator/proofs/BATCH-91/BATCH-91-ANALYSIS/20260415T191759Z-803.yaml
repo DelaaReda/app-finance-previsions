@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-91-BATCH-91-ANALYSIS-20260415T191759Z-803"
+stream_id: "BATCH-91"
+task_id: "BATCH-91-ANALYSIS"
+role: "planner"
+produced_at_utc: "2026-04-15T19:17:59Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 /home/venom/shared/analyse-financiere/platform/automation/runtime/planner/planner_runtime_actions.py complete --role planner --task BATCH-91-ANALYSIS --source planner_autonomy_tick --proof-root docs/operations/orchestrator/proofs"
+      rc: "0"
+      started_at_utc: "2026-04-15T19:17:59Z"
+      ended_at_utc: "2026-04-15T19:17:59Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "bash scripts/runtime_host_check.sh && python3 /home/venom/shared/analyse-financiere/platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "COMPLETE_BATCH_91_ANALYSIS_TO_ARCH_P1776280542_25095"
+  review_ref: "planner_autonomy_tick:BATCH-91-ANALYSIS"
+  note: "source=planner_autonomy_tick | root_cause=BATCH-91-ANALYSIS is the only canonical planner IN_PROGRESS item and priority queue next_action already requests its completion | fix_applied=completed the active planner analysis to unblock BATCH-91-ARCH without creating another autobatch | verify=before=BATCH-91-ANALYSIS:IN_PROGRESS|queue_next=complete_analysis; after=BATCH-91-ANALYSIS:DONE|BATCH-91-ARCH:READY_PLANNER; test=planner_context_refresh | architecture_check=follow_canonical_active_task,queue_runtime_truth_primary,one_transition_only | vision_alignment=batch=BATCH-91; target=advance_existing_personal_finance_flow; impact=keep planner lane active on the existing stream"

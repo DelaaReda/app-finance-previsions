@@ -13,7 +13,12 @@ Canonical location for the orchestration monitor dashboard server.
 python3 scripts/monitor_server.py
 ```
 
-Server URL: `http://localhost:7779`
+VM-local orchestration URL: `http://127.0.0.1:7779`
+
+Public app-serving monitor on EC2 is separate:
+- `http://3.98.20.77:8080/`
+- use that public URL for product proof
+- use `127.0.0.1:7779` only for VM control-plane/orchestration proof
 
 ## Notes
 

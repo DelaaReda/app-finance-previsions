@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-89-BATCH-89-ARCH-20260415T155522Z-120"
+stream_id: "BATCH-89"
+task_id: "BATCH-89-ARCH"
+role: "planner"
+produced_at_utc: "2026-04-15T15:55:22Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "python3 platform/automation/runtime/planner/planner_runtime_actions.py complete --role planner --task BATCH-89-ARCH"
+      rc: "0"
+      started_at_utc: "2026-04-15T15:55:22Z"
+      ended_at_utc: "2026-04-15T15:55:22Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "git show --stat --oneline d2af266f && python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-89/BATCH-89-ARCH.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_COMPLETE_BATCH-89-ARCH_P1776268260_25178"
+  review_ref: "runner:BATCH-89-ARCH"
+  note: "source=runner | root_cause=BATCH-89-ARCH was claimed with proof_count=0 and no architecture contract artifact, so downstream dev work stayed blocked behind a planner-owned gap | fix_applied=planner committed the canonical architecture contract for the existing copilot surfaces and route-to-service split before closing ARCH | verify=before=planner_context_ready0_inprogress1_task_B89_ARCH; after=complete_requested_and_B89_DEV01_should_be_unblocked; test=python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5 | architecture_check=layer=application+frontend+runtime+automation; imports_ok=yes; path_target=apps/api/src/domains/copilot/api/copilot.py,apps/api/src/domains/copilot/application/copilot_service.py,packages/contracts/copilot_v1.py,apps/web/src/domains/forecasts/pages/personal-finance-start.html,apps/web/src/domains/forecasts/components/widgets/copilot-panel.html | vision_alignment=batch=BATCH-89; target=portfolio_first_brief_with_ranked_actions; impact=unlock_dev01_endpoint_facade_work_without_new_batch_or_redesign"

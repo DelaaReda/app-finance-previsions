@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-93-BATCH-93-DEV-01-20260416T083946Z-244"
+stream_id: "BATCH-93"
+task_id: "BATCH-93-DEV-01"
+role: "dev"
+produced_at_utc: "2026-04-16T08:39:46Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T08:39:46Z"
+      ended_at_utc: "2026-04-16T08:39:46Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`pytest -q apps/api/src/domains/copilot/tests/test_copilot_start_route_cache.py -q`; public EC2 checks via `curl -fsS http://3.98.20.77/api/copilot/start?tickers=NVDA`; `curl -fsS http://3.98.20.77/api/personal-finance/s"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "`http://3.98.20.77/api/personal-finance/start?tickers=NVDA` now returns a BEARISH daily brief from `judge_personal_finance_start_service` with `fallback_used=null`, 4 ask actions, and namespace-aware ask targets like `/p"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-93-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-93-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=`_copilot_start_cache_key()` in `apps/api/src/domains/copilot/api/copilot.py` had the `stable_cache_key(...)` return nested under the guard, making it unreachable and disabling Judge-style start caching; the EC2 app stac | fix_applied=Dedented the `stable_cache_key(...)` return in `apps/api/src/domains/copilot/api/copilot.py`, committed the fix, then synced and restarted the EC2 app stack with `scripts/aws_app_sync_and_restart.sh sync` so the public s | verify=before=public `http://3.98.20.77/api/copilot/start?tickers=NVDA` and `http://3.98.20.77/api/personal-finance/start?tickers=NVDA` returned `No daily brief available yet.` with `fallback_used=copilot_start_never_empty`; af | architecture_check=layer=route-cache helper only in `domains/copilot/api`, preserving application-layer reuse; imports_ok=yes, no new imports or cross-layer coupling added; path_target=`apps/api/src/domains/copilot/api/copilot.py` | vision_alignment=batch=BATCH-93; target=personal finance copilot starts with a brief of the day and immediate ask/open actions; impact=public starter path now surfaces the live brief and actionable entry points on EC2 while restoring the"

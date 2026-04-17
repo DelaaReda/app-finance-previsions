@@ -1,5 +1,7 @@
 # BATCH-76-DEV-02: Conversation History + Follow-up Questions - Delivery Proof
 
+> Historical proof snapshot. Any `localhost:*` examples in this file are legacy validation evidence, not current team guidance. Current public app proof lives on AWS EC2 (`http://3.98.20.77`, `/api/...`, `:8080`).
+
 **Task:** Build a personal finance copilot that starts with a brief of the day, lets the user ask or open [DEV-02]
 
 **Stream:** BATCH-76

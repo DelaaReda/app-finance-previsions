@@ -1,0 +1,57 @@
+proof_id: "PRF-BATCH-95-BATCH-95-DEV-01-20260416T115914Z-990"
+stream_id: "BATCH-95"
+task_id: "BATCH-95-DEV-01"
+role: "dev"
+produced_at_utc: "2026-04-16T11:59:14Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "layer=api"
+    - "imports_ok=yes"
+    - "path_target=public_ec2_responses_for_`get_/api/copilot/start?tickers=nvda`_and_`get_/api/personal-finance/start?tickers=nvda`_now_expose_`ranked_action={id:\"open_nvda\""
+    - "kind:\"open\""
+    - "label:\"open_nvda_deep_dive\""
+    - "target:\"ticker:nvda\"}`_a"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T11:59:14Z"
+      ended_at_utc: "2026-04-16T11:59:14Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "python3 -m pytest apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py apps/api/src/domains/judge/tests/test_judge_route_orchestration.py -k 'personal_finance_start_service or TestPersonalFinanceCopi"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Public EC2 responses for `GET /api/copilot/start?tickers=NVDA` and `GET /api/personal-finance/start?tickers=NVDA` now expose `ranked_action={id:\"open_nvda\",kind:\"open\",label:\"Open NVDA deep dive\",target:\"ticker:NVDA\"}` a"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-95-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-95-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The starter contract only propagated scope tickers into ask prefill; open actions and ranked_action stayed generic (`market`/copilot targets), so the brief+open flow was not scope-first on the public API. | fix_applied=Added shared application-layer scope-action enrichment in `domains/copilot/application/copilot_service.py` to derive `ticker:<TICKER>` open actions and prefer them for ranked_action, then reused that helper from `domains | verify=before=public EC2 `copilot/start` and `personal-finance/start` with `tickers=NVDA` returned `ranked_action.id=market` and generic open targets; after=both public endpoints return `ranked_action.id=open_nvda` and `open[0] | architecture_check=layer=scope-open enrichment stays in copilot/judge application services and routes remain thin adapters; imports_ok=yes (judge application reuses copilot application helper without route imports); path_target=apps/api/sr | vision_alignment=batch=BATCH-95; target=make the brief+ask/open starter immediately open the requested ticker/theme from public start endpoints; impact=users now land on a scoped deep-dive action instead of a generic market view when the"

@@ -289,6 +289,7 @@ TMUX_ROLE_PLANNER_SOFT_ACTION_REQUIRED="${TMUX_ROLE_PLANNER_SOFT_ACTION_REQUIRED
 TMUX_ROLE_PLANNER_NEVER_WAIT="${TMUX_ROLE_PLANNER_NEVER_WAIT:-1}"
 TMUX_ROLE_PLANNER_IDLE_AUTOBATCH="${TMUX_ROLE_PLANNER_IDLE_AUTOBATCH:-1}"
 TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S="${TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S:-0}"
+TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_ALLOW_ACTIVE_QUEUED="${TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_ALLOW_ACTIVE_QUEUED:-0}"
 TMUX_ROLE_PLANNER_DEP_POLICY_ENFORCE="${TMUX_ROLE_PLANNER_DEP_POLICY_ENFORCE:-1}"
 PLANNER_QUALITY_SOFT_ENFORCE="${PLANNER_QUALITY_SOFT_ENFORCE:-1}"
 TMUX_ROLE_SCRUM_PREFLIGHT_TIMEOUT_SECONDS="${TMUX_ROLE_SCRUM_PREFLIGHT_TIMEOUT_SECONDS:-20}"
@@ -407,6 +408,7 @@ TRACE_LAST_EVENT_FILE="${STATE_DIR}/${ROLE}.trace_event_last"
 ADMIN_TSHAPE_STATE_FILE="${STATE_DIR}/admin.tshape.state.json"
 PO_SCRUM_MASTER_MSG_COOLDOWN_FILE="${STATE_DIR}/scrum_master.message.cooldown.json"
 RATE_LIMIT_STATE_NOTE=""
+RUNTIME_CONTEXT=""
 TRILOCK_ORDER="tick>run>memory"
 RUN_LOCK_ACQUIRED_AT=0
 FORCED_CORE_BIN_NOTE=""
@@ -605,6 +607,9 @@ if ! [[ "$TMUX_ROLE_ORCH_CANONICAL_ONLY" =~ ^[01]$ ]]; then
 fi
 if ! [[ "$TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S" =~ ^[0-9]+$ ]] || [[ "$TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S" -lt 0 ]]; then
   TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S=0
+fi
+if ! [[ "$TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_ALLOW_ACTIVE_QUEUED" =~ ^[01]$ ]]; then
+  TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_ALLOW_ACTIVE_QUEUED=0
 fi
 if ! [[ "$TMUX_ROLE_ACTIONABILITY_FORCE_THRESHOLD" =~ ^[0-9]+$ ]] || [[ "$TMUX_ROLE_ACTIONABILITY_FORCE_THRESHOLD" -lt 1 ]]; then
   TMUX_ROLE_ACTIONABILITY_FORCE_THRESHOLD=3
@@ -1464,6 +1469,9 @@ planner_preflight_sync_if_needed() {
   local sanitize_cmd="python3 platform/automation/runtime/planner/planner_runtime_actions.py sanitize-dependencies --queue ${CANONICAL_QUEUE_FILE} --all-batches"
   local sync_cmd="python3 platform/automation/runtime/planner/planner_runtime_actions.py sync-priority --queue ${CANONICAL_QUEUE_FILE}"
   local autobatch_cmd="python3 platform/automation/runtime/planner/planner_runtime_actions.py planner-autobatch --queue ${CANONICAL_QUEUE_FILE} --reason idle_no_ready --cooldown-s ${TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S}"
+  if [[ "$TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_ALLOW_ACTIVE_QUEUED" == "1" ]]; then
+    autobatch_cmd+=" --allow-active-queued"
+  fi
   local output=""
   local rc=0
   local compact=""
@@ -2043,18 +2051,20 @@ fallback_to_qwen_on_rate_limit() {
     return 1
   fi
 
+  local secondary_active="${TMUX_ROLE_RATE_LIMIT_SECONDARY_ACTIVE:-0}"
   local fallback_model="${TMUX_ROLE_RATE_LIMIT_SECONDARY_MODEL:-$RATE_LIMIT_SECONDARY_MODEL}"
   local current_model="$(normalize_model "${CODEX_EXEC_MODEL}")"
   local fallback_thinking="${TMUX_ROLE_RATE_LIMIT_SECONDARY_THINKING:-$RATE_LIMIT_SECONDARY_THINKING}"
   fallback_model="${fallback_model#openai-codex/}"
   fallback_model="$(normalize_model "$fallback_model")"
-  if [[ -n "$fallback_model" && "$fallback_model" != "qwen" && "$fallback_model" != "$current_model" ]]; then
+  if [[ "$secondary_active" != "1" && -n "$fallback_model" && "$fallback_model" != "qwen" && "$fallback_model" != "$current_model" ]]; then
     local fallback_cache_key
     local fallback_cache_file
     fallback_cache_key="$(printf '%s' "$fallback_model" | tr '[:upper:]/.-' '[:lower:]___' | sed 's/[^a-z0-9_]/_/g')"
     fallback_cache_file="${STATE_DIR}/codex.${fallback_cache_key}.rate_limit_gate_cache"
     trace_event "rate_limit_secondary_fallback source=${source} model=${fallback_model} from=${current_model} reason=$(sanitize_rate_limit_reason "$reason")"
     exec env \
+      TMUX_ROLE_RATE_LIMIT_SECONDARY_ACTIVE=1 \
       TMUX_ROLE_RATE_LIMIT_SECONDARY_MODEL="" \
       TMUX_ROLE_RATE_LIMIT_SECONDARY_THINKING="" \
       TMUX_ROLE_CODEX_MODEL="${fallback_model}" \
@@ -2062,6 +2072,9 @@ fallback_to_qwen_on_rate_limit() {
       TMUX_ROLE_RATE_LIMIT_CACHE_FILE="${fallback_cache_file}" \
       TMUX_ROLE_RATE_LIMIT_GATE_REASON="$(sanitize_rate_limit_reason "$reason")" \
       bash "${SCRIPT_PATH}" "${ROLE_INPUT}"
+  fi
+  if [[ "$secondary_active" == "1" ]]; then
+    trace_event "rate_limit_secondary_exhausted source=${source} from=${current_model} reason=$(sanitize_rate_limit_reason "$reason")"
   fi
 
   local qwen_bin="${TMUX_ROLE_QWEN_BIN:-${LM_USED_QWEN_BIN:-qwen}}"
@@ -2087,6 +2100,8 @@ fallback_to_qwen_on_rate_limit() {
   exec env \
     TMUX_ROLE_AGENT_BIN="${qwen_bin}" \
     TMUX_ROLE_RATE_LIMIT_QWEN_FALLBACK=0 \
+    TMUX_ROLE_RATE_LIMIT_SECONDARY_ACTIVE=0 \
+    TMUX_ROLE_RATE_LIMIT_CACHE_FILE="" \
     TMUX_ROLE_RATE_LIMIT_GATE_REASON="$(sanitize_rate_limit_reason "$reason")" \
     bash "${SCRIPT_PATH}" "${ROLE_INPUT}"
 }
@@ -2364,7 +2379,7 @@ publish_planner_guardian_if_enabled() {
   tmp_payload="$(mktemp)"
   tmp_runtime="$(mktemp)"
   printf '%s\n' "$contract" > "$tmp_payload"
-  printf '%s\n' "$RUNTIME_CONTEXT" > "$tmp_runtime"
+  printf '%s\n' "${RUNTIME_CONTEXT:-}" > "$tmp_runtime"
   python3 "$PLANNER_GUARDIAN_SCRIPT" \
     "$ROLE" \
     "$source" \
@@ -2998,7 +3013,10 @@ for i,raw in enumerate(lines):
             kv['issue_severity']='medium'
     blocker=(kv.get('blocker_id') or '').strip().upper()
     task_update=(kv.get('task_update') or '').strip().lower()
-    if role == 'planner' and task_update in {'claim', 'complete', 'handoff'}:
+    # Reserve full planner closure proof for real planner completion. Claims and
+    # handoffs should stay lightweight, otherwise the runtime fabricates close
+    # fields and creates artificial planner quality churn.
+    if role == 'planner' and task_update == 'complete':
         issues=(kv.get('issues') or '').strip().lower()
         codes=[tok.strip() for tok in issues.split(',') if tok.strip() and tok.strip() != 'none']
         autofilled=False
@@ -3330,7 +3348,6 @@ reconcile_runtime_truth() {
     "$API_BASE_URL" \
     "$MONITOR_BASE_URL" <<'PY'
 import json
-import os
 import re
 import sys
 import time
@@ -3397,8 +3414,8 @@ scrum_reconcile_attempted = str(sys.argv[40] or "0").strip() if len(sys.argv) > 
 scrum_reconcile_rc = str(sys.argv[41] or "0").strip() if len(sys.argv) > 41 else "0"
 scrum_reconcile_queue_synced = str(sys.argv[42] or "0").strip() if len(sys.argv) > 42 else "0"
 scrum_reconcile_waiting_reclassified = str(sys.argv[43] or "0").strip() if len(sys.argv) > 43 else "0"
-api_base_url = str(sys.argv[44] or "http://127.0.0.1:8050").strip().rstrip("/") if len(sys.argv) > 44 else "http://127.0.0.1:8050"
-monitor_base_url = str(sys.argv[45] or "http://127.0.0.1:7779").strip().rstrip("/") if len(sys.argv) > 45 else "http://127.0.0.1:7779"
+api_base_url = str(sys.argv[44] or "http://3.98.20.77").strip().rstrip("/") if len(sys.argv) > 44 else "http://3.98.20.77"
+monitor_base_url = str(sys.argv[45] or "http://3.98.20.77:8080").strip().rstrip("/") if len(sys.argv) > 45 else "http://3.98.20.77:8080"
 no_delta_count_window = 0
 text = payload_path.read_text(encoding="utf-8", errors="ignore")
 
@@ -3796,7 +3813,7 @@ if role == "planner":
             evidence_pairs["planner_dispatch_ids_missing"] = "1"
             evidence_pairs["planner_action_required"] = "repair_dispatch_ids"
             append_issue("planner_dispatch_incomplete")
-    quality_task_updates = {"analysis_only", "claim", "complete", "handoff"}
+    quality_task_updates = {"complete"}
     if task_update_now in quality_task_updates:
         quality_required = ("root_cause", "fix_applied", "verify", "reuse_check")
         weak_tokens = {"", "none", "n/a", "na", "tbd", "?", "-", "null"}
@@ -4399,13 +4416,16 @@ load_planner_prompt_patches_context() {
     printf 'none\n'
     return 0
   fi
-  python3 - "$PLANNER_PROMPT_PATCHES_FILE" <<'PY'
+  python3 - "$PLANNER_PROMPT_PATCHES_FILE" "$QUEUE_FILE" "$WORKBOARD_FILE" <<'PY'
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 path = Path(sys.argv[1])
+queue_path = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("")
+workboard_path = Path(sys.argv[3]) if len(sys.argv) > 3 else Path("")
 try:
     data = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
 except Exception:
@@ -4413,6 +4433,16 @@ except Exception:
     raise SystemExit(0)
 
 if not isinstance(data, dict):
+    print("none")
+    raise SystemExit(0)
+
+patch_mtime = path.stat().st_mtime if path.exists() else 0.0
+source_mtimes = [
+    candidate.stat().st_mtime
+    for candidate in (queue_path, workboard_path)
+    if candidate and candidate.exists()
+]
+if source_mtimes and patch_mtime < max(source_mtimes):
     print("none")
     raise SystemExit(0)
 
@@ -4425,19 +4455,10 @@ lines = []
 for idx, item in enumerate(active[:3], start=1):
     if not isinstance(item, dict):
         continue
-    patch_id = str(item.get("id") or f"patch_{idx}").strip()
-    issue_codes = item.get("issue_codes")
-    if isinstance(issue_codes, list):
-        issues = ",".join(str(x).strip() for x in issue_codes if str(x).strip()) or "none"
-    else:
-        issues = "none"
     instruction = re.sub(r"\s+", " ", str(item.get("instruction") or "")).strip()
-    exit_condition = re.sub(r"\s+", " ", str(item.get("exit_condition") or "")).strip() or "none"
     if not instruction:
         continue
-    lines.append(
-        f"{idx}) id={patch_id} | issues={issues[:120]} | instruction={instruction[:320]} | exit={exit_condition[:160]}"
-    )
+    lines.append(f"{idx}) {instruction[:320]}")
 
 if not lines:
     print("none")
@@ -4573,39 +4594,33 @@ build_prompt() {
     planner)
       cat <<'PROMPT'
 ROLE=planner.
-Mission: owner autonome du backlog et orchestrateur central; produire une seule action utile par tick.
-Budget strict:
-- maximum 3 commandes shell par tick, maximum 20s chacune
-- outils canoniques planner uniquement:
-  - python3 platform/automation/compat/projections/parallel_workstream.py context --role planner --limit 5
-  - python3 platform/automation/runtime/planner/planner_runtime_actions.py {sync-priority,planner-autobatch,claim,complete}
-  - python3 platform/automation/planner_subagent_manager.py {plan,run,collect,cleanup}
-- interdit: scans globaux, boucles shell, cat massive logs, exécution exploratoire
+Mission: une transition canonique utile par tick via claim|collect|repair|create_or_claim_now; jamais passif sans preuve runtime fraiche. EC2 joignable => continuité delivery obligatoire.
+Produit: delta utilisateur d'abord sur copilot/portfolio/personal-finance; dashboard/monitor/docs = derives.
+Autorite: EC2 public = verite produit; VM runtime truth = verite execution; queue/workboard/guardian/monitor = projections advisory.
+Wrappers: `parallel_workstream.py context`; `planner_subagent_manager.py collect|run|cleanup(legacy)`; `planner_runtime_actions.py sync-priority|claim|complete|planner-autobatch`.
+Interdit: scans globaux, boucles shell, logs massifs, worker/explorer shell bruts.
 
-Décision tick (ordre strict):
-1) Si planner_subagent_active != none: collecter/merger le résultat prêt avant tout nouveau dispatch.
-2) Si workboard_role_has_in_progress=1: reprendre et fermer la tâche planner courante.
-   - PLAN / ANALYSIS / ARCH / GOV_REVIEW restent planner-owned: complete toi-même, jamais handoff.
-   - Si la tâche planner active a depends_on=none, les WAITING_DEP aval ne sont pas des blockers.
-3) Si queue_has_ready=1 et aucune tâche planner active: sync-priority une fois, puis réévaluer.
-4) Si une tâche planner READY exige delivery/runtime/flow: claim puis lancer un seul subagent approprié.
-   - dev = patch/test/verify
-   - admin = runtime/reconcile/takeover
-   - scrum_master = unblock/starvation/escalation
-5) Si une tâche planner READY est stratégique: la traiter toi-même puis complete.
-6) Si aucune tâche planner READY/IN_PROGRESS après sync-priority: créer un seul batch top-level BATCH-XX, relancer sync-priority, puis claim --role planner.
-7) Si claim échoue après création ou si la preuve runtime est incomplète: rester non passif, garder NEXT=create_or_claim_now.
-8) Si un bug de prompt/config/runtime/spec/bridge bloque la livraison, le traiter comme travail planner prioritaire et le corriger directement.
+Décision tick:
+1) Si planner_subagent_active != none: collect d'abord. Aucun nouveau dispatch avant merge/repair.
+2) Si une tâche canonique downstream est active: collect/repair/ack seulement et republier le vrai wait-state. Pas d'ANALYSIS ni de planner-autobatch tant qu'elle n'a pas transitionné.
+3) Si planner a une tâche IN_PROGRESS: reprendre cette tâche, pas de nouveau claim.
+4) Si planner a une tâche READY: sync-priority une fois si nécessaire, puis claim cette tâche READY exacte. PLAN/ANALYSIS/ARCH/GOV_REVIEW restent planner-owned, jamais claim si non-READY.
+5) Si la tâche planner demande delivery/runtime/flow: un seul subagent ciblé (dev=patch/test, admin=runtime/reconcile/cleanup, scrum_master=unblock/escalation). Sinon traiter puis complete.
+6) Autobatch top-level seulement s'il n'existe aucune tâche canonique exécutable ni lane downstream utile; après autobatch, sync-priority puis claim. Si runtime truth n'a aucun batch actif et EC2 est joignable: `create_or_claim_now` ou repair immediat, jamais attente durable.
+7) Si claim/collect/autobatch échoue: rester non passif avec repair/collect/create_or_claim_now. Résidu historique seul (`secondary_compat_only`, SQLite orpheline, batch clos, aucune tâche canonique ouverte) => un seul subagent admin cleanup/reconcile puis retry `create_or_claim_now`; jamais `BLOCKED` produit pour ce cas. `none_no_signal` seulement si runtime indisponible est prouvé ce tick.
+8) Lanes qui répètent `none_no_signal|retry|takeover` sans effet canonique => backoff + action d'unblock/fix; pas de relance infinie ni de redispatch décoratif.
+9) Preuve publique EC2 d'un delta utilisateur => `product_done`; `ops_clean=no` n'est pas un blocage produit par défaut et aucune projection/guardian/monitor ne rouvre ce batch.
+10) Si un bug prompt/config/runtime/spec/bridge bloque la livraison: corrige le chemin le plus court maintenant.
 
-Création batch:
-- BATCH-XX top-level uniquement, relié explicitement à une cible produit et à un done visible.
-- Inclure batch_created, architecture_plan_ref, implementation_tracks, integration_reuse, acceptance_gate.
-- Pas de sous-tâches récursives ni d'IDs à 4 segments.
-
-Preuve planner critique:
-- Pour toute clôture PLAN / ANALYSIS / ARCH / GOV_REVIEW, exiger root_cause, fix_applied, architecture_check, vision_alignment et verify=before=...; after=...; test=....
-- Si cette preuve manque, collecter/compléter d'abord; ne pas redispatcher ni tenter un complete partiel.
-- Si handoff_to est vide sur un handoff planner, forcer handoff_to=dev.
+Preuve planner:
+- Claim|handoff|complete: tracer batch_dependency_policy=single_batch + architecture_plan_ref canonique (`docs/architecture/ARCHITECTURE_MAP.md` ou racines impactées `apps/api|apps/web|platform/automation`) + architecture_audit(paths impactés) + vision_alignment(batch/target/impact).
+- `architecture_check` sert au détail compact anti-régression/path_target; il ne remplace pas `architecture_plan_ref`.
+- Docs de doctrine (`docs/product/PRODUCT_VISION.md`, `docs/ops/JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md`, `docs/ops/API_ENDPOINT_BEST_PRACTICES.md`) = contexte de décision, jamais valeur de `architecture_plan_ref`.
+- Claim: planner_artifact + stream_id/task_id + run_note + prochaine action. Pas de faux champs de clôture.
+- Handoff: planner_artifact + handoff_to. Handoff vide => dev.
+- Complete: planner_artifact + root_cause + fix_applied + verify(before/after/test).
+- Preuve planner/subagent partielle => backfill/collect puis complete; jamais de redispatch juste pour des champs manquants.
+- Autobatch = top-level + delta visible avec batch_created + implementation_tracks + integration_reuse + acceptance_gate.
 PROMPT
       ;;
     admin)
@@ -4613,32 +4628,24 @@ PROMPT
 ROLE=admin.
 Mission: admin des batches (pas création), debottleneck planner/dev, hygiene runtime/docs.
 Règle produit: seul planner crée les batches top-level; admin coordonne et débloque.
-Autonomie autorisée: tu peux adapter tes propres consignes admin si elles causent des blocages récurrents.
 Pré-analyse obligatoire avant décision:
-- bash scripts/fc_health_check.sh
 - python3 platform/automation/compat/projections/parallel_workstream.py context --role admin --limit 5
+- lire runtime truth SQLite/dispatch snapshots = vérité control-plane sur la VM UTM
+- bash scripts/fc_health_check.sh = preuve publique EC2 (`http://3.98.20.77`, `http://3.98.20.77:8080`), jamais preuve loopback VM
 - bash scripts/dev_parent_monitor.sh
-Lis d'abord runtime truth SQLite/dispatch snapshots, puis logs-codex-runs/orchestrator-state/priority-queue.json et parallel-workstreams.json comme projections compatibles, et logs-codex-runs/fc-ticks/*.tick.log.
-Budget strict:
-- maximum 3 commandes shell par tick, max 20s chacune
-- pas de scans globaux sur tout le repo
+- `dev_parent_monitor.sh`, queue/workboard, `logs-codex-runs/fc-ticks/*.tick.log` = advisory, pas vérité produit
+- absence sur l'EC2 app-only de `executors-monitoring-latest.json` ou `agent-iteration-issues*` = advisory/planner-gap, pas blocker produit
+- Ne jamais déduire une panne produit de l'absence de `127.0.0.1:8050|7779`, `localhost`, `tmux`, `crontab`, `planner` ou `openclaw` local sur l'EC2 app-only.
+Budget: maximum 3 commandes shell par tick, max 20s chacune, pas de scan global.
 
 Décision tick (ordre strict):
-1) blocker runtime réel -> fix immédiat + vérification.
+1) blocker runtime réel -> si blocker produit, le prouver sur l'EC2 publique; si blocker orchestration/control-plane, le prouver sur la VM UTM; puis fix immédiat + vérification.
 2) dérive orchestration (queue/workboard/prompt/cron/docs) -> correction ciblée + preuve.
 3) si une lane planner/dev est bloquée -> action de déblocage concrète ce tick (pas d'analyse passive).
 4) sinon task_update=none_no_signal avec preuve santé explicite.
 5) N'utilise task_update=blocked que pour panne runtime vérifiable ce tick (jamais pour drift documentaire).
-6) Ne déclare jamais `CRON_SCHEDULE_MISSING` sans double preuve:
-   - `crontab -l | rg "fc_agent_tick|cron_tmux_role_runner"` retourne 0 ligne
-   - et `logs-codex-runs/fc-ticks/admin.cron.log` n'a pas d'activité récente
-   - inclure `crontab_agent_jobs=<n>` et `cron_log_recent=<0|1>` dans EVIDENCE.
-7) Si le même blocker revient >=2 ticks et que la cause est prompt/contrat:
-   - tu peux modifier `platform/automation/cron_tmux_role_runner.sh` (section ROLE=admin)
-   - tu synchronises `scripts/cron_tmux_role_runner.sh` si nécessaire
-   - tu ajoutes une note d'audit dans `docs/ops/ADMIN_TEAM_CHAT.md` (TYPE:PROMPT_PATCH)
-   - tu ajoutes une note d'itération dans `docs/ops/ADMIN_TEAM_ITERATIONS.md`
-   - `admin_artifact` référence au moins un fichier prompt + un fichier d'audit.
+6) `CRON_SCHEDULE_MISSING` exige double preuve: `crontab -l | rg "fc_agent_tick|cron_tmux_role_runner"` = 0 et `logs-codex-runs/fc-ticks/admin.cron.log` inactive; ajouter `crontab_agent_jobs=<n>` + `cron_log_recent=<0|1>`.
+7) Si le même blocker revient >=2 ticks et que la cause est prompt/contrat: patch ROLE=admin, sync éventuel du wrapper, puis log audit + itération; `admin_artifact` = prompt + audit.
 8) Quand `ADMIN_TSHAPE_ACTIVE=1` (full takeover):
    - tu peux agir temporairement sur la lane cible `${ADMIN_TSHAPE_TARGET_ROLE}`.
    - commandes takeover autorisées:
@@ -4653,12 +4660,7 @@ Si task_update=analysis_only|none_no_ready|none_no_signal: ajouter channels_read
 Si task_update=claim|complete|handoff: ajouter stream_id=<stream> et task_id=<task>.
 Si task_update=complete: ajouter cmd=<commande_executee_ou_SKIP(raison)> et tests_run=<suite:PASS|FAIL|SKIP(raison)>.
 Si task_update=blocked avec motif permission/read-only: cmd_err_excerpt requis.
-Si `ADMIN_TSHAPE_ACTIVE=1`, EVIDENCE doit inclure:
-- takeover_mode=1
-- takeover_target_role=<planner|dev>
-- takeover_reason=<blocker_id>
-- takeover_actions=<sync|claim|complete|handoff>
-- takeover_exit_condition=resolved
+Si `ADMIN_TSHAPE_ACTIVE=1`, EVIDENCE doit inclure takeover_mode=1, takeover_target_role, takeover_reason, takeover_actions, takeover_exit_condition=resolved.
 Réponse texte brut, sans markdown, exactement 8 lignes: STATUS, DELTA, EVIDENCE, RISKS, NEXT, VERDICT, BLOCKER_ID, NEXT_ACTION_UNIQUE.
 PROMPT
       ;;
@@ -5132,6 +5134,21 @@ REGLES_RUNTIME:
 - Interdit: inventer des blockers historiques.
 - Interdit: probe artificielle sur *.lock/fichier metier; blocker permission valide seulement avec cmd_err_excerpt exact du tick.
 
+REGLES_APP_AWS:
+- EC2 publique = host app-only (http://3.98.20.77/, http://3.98.20.77/api/..., http://3.98.20.77:8080/...).
+- VM UTM = control-plane/orchestration uniquement; ne jamais supposer backend/frontend/monitor utiles pour le produit sur la VM.
+- Mac et la VM UTM partagent la même vue du workspace; c'est la couche de sync local du repo.
+- Publication vers AWS = seconde couche distincte: shared-workspace -> AWS.
+- Chemin opérateur canonique = wrapper côté Mac; si l'opérateur le lance explicitement depuis la VM UTM, il publie quand même le même snapshot du workspace partagé, jamais l'état d'orchestration local.
+- Portee sync AWS = code utile a l'app (apps/api, apps/web, apps/monitor, packages, platform, finance-copilot.sh, scripts support app-host), pas l'historique d'orchestration.
+- Exclusions majeures du sync = logs-codex-runs/, memory/, docs/operations/orchestrator/, DB/runtime artifacts locaux, apps/api/runtime/data/, apps/api/runtime/cache/, .venv, node_modules.
+- Ne jamais supposer qu’un edit local est live sur AWS sans vrai sync terminé.
+- Après sync/restart: attendre ~5s pour reflet public, ~20-30s pour stabilisation complète.
+- Absence sur EC2 de logs-codex-runs/orchestrator-state/*, tmux, crontab, planner local ou openclaw local = normal; ce n’est pas une preuve de sync/deploy cassé.
+- Pour la vérité planner/orchestration/control-plane: lire la VM UTM. Pour l’état produit public: viser l’EC2.
+- Le monitor public EC2 est app-first; ses signaux planner/orchestration sont advisory tant qu’ils ne sont pas relus depuis la VM UTM.
+- Si un vieux proof, rapport, team chat ou doc de migration montre encore localhost:* pour l’app, le traiter comme historique seulement. Les règles courantes sont AGENTS.md, docs/ops/EC2_APP_RUNTIME_QUICK_REFERENCE.md et docs/ops/ACTIVE_DOCS_INDEX.md.
+
 EVIDENCE (champs requis):
 - task_update=<claim|complete|handoff|blocked|analysis_only|none_no_ready|none_no_signal>
 - lock_check=ok
@@ -5171,11 +5188,8 @@ fi
 if [[ "$FC_PLANNER_ORCHESTRATOR_ENABLED" == "1" ]]; then
   SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_ORCHESTRATOR_STATE: enabled=1; cron_planner_only=${FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY}; managed_roles=${FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES}; subagent_backend=${FC_PLANNER_ORCHESTRATOR_BACKEND}; max_active=${FC_PLANNER_ORCHESTRATOR_MAX_ACTIVE}."
   if [[ "$ROLE" == "planner" ]]; then
-    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_IS_SOLE_SCHEDULER=1: ne pas attendre une future lane dev/admin/scrum_master. Si une action delivery/runtime/flow est necessaire, lancer un planner subagent tout de suite."
-    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_MULTI_AGENT_POLICY=capability_dispatch_only: ne jamais executer litteralement worker, explorer, monitor ou SYSTEM_PROMPT comme commandes shell; utiliser uniquement les wrappers planner-owned deja branches."
-    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_VISION_AUTONOMY=1: creer de facon autonome les batches et taches canoniques a partir de la vision produit et de la verite queue/workboard; ne pas attendre qu'un humain redige le decoupage si la cible produit est deja explicite."
-    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_NOVELTY_RULE=mandatory: avant tout nouveau downstream work, classer le batch (net_new|hardening|validation|reuse_only), expliciter un delta utilisateur visible, et refuser tout duplicate-scope loop sans nouveaute explicite."
-    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_STAGNATION_EXIT=novelty_target_first: si stagnation_requires_novelty_target ou si deux batches consecutifs restent validation/reuse_only sur le meme scope, utiliser planner_runtime_actions.py novelty-target pour ecrire novelty_target + user_visible_delta avant de creer/rouvrir des taches."
+    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_SCHEDULER_RULE=sole_scheduler: ne pas attendre une lane cron dev/admin/scrum_master; si une action delivery/runtime/flow est necessaire, lancer planner_subagent_manager.py tout de suite."
+    SYSTEM_PROMPT="${SYSTEM_PROMPT}"$'\n'"PLANNER_WRAPPER_RULE=canonical_only: ne jamais executer worker/explorer/monitor/SYSTEM_PROMPT comme commandes shell; pour nouvelle execution planner, utiliser uniquement les wrappers planner-owned et ne creer planner-autobatch/novelty-target qu'en absence de tache canonique executable avec delta utilisateur explicite."
   fi
 fi
 if [[ "$ROLE" == "admin" && "$ADMIN_TSHAPE_ACTIVE" == "1" ]]; then
@@ -5191,29 +5205,26 @@ fi
 
 ORCHESTRATION_SHARED_PROMPT="$(cat <<'PROMPT'
 PROTOCOLE_ORCHESTRATION_COMMUN:
-- Source taches: Plane via planning sync, puis projections runtime sous logs-codex-runs/orchestrator-state — IDs valides: BATCH-NN ou BATCH-NN-ROLE (max 3 segments).
-- Limite: 60 taches actives max (guard dans parallel_workstream.py).
-- Blocker permission valide UNIQUEMENT avec cmd_err_excerpt du tick courant (pas d'historique).
-- MODE DELIVERY: claim via python3 platform/automation/runtime/planner/planner_runtime_actions.py claim, root_cause concret, patch minimal, tests ciblés, git add -A && git commit -m "<message>", complete/handoff.
-- COMMIT OBLIGATOIRE: tout fichier modifié doit être commité AVANT d'appeler complete. Sans commit, la tâche n'est pas considérée livrée. Format: git add -A && git commit -m "feat(<scope>): <description> (BATCH-NN-ROLE)"
-- DELIVERY_VALUE_GATE: aucun complete sans root_cause, fix_applied, verify(before=/after=/test= ou proof=), artifact, tests_run, files_touched, architecture_check, vision_alignment, et commit_sha valide pour code/config/runtime.
-- PLANNER_ORCHESTRATOR: si planner_orchestrator_enabled=1, planner est la seule lane schedulée et doit lancer dev/admin/scrum_master via python3 platform/automation/planner_subagent_manager.py {plan,run,collect,cleanup}. Les subagents rendent des preuves; seul planner met a jour l'orchestration.
-- PLANNER_SUBAGENT_RULE: un subagent dev/admin/scrum_master ne claim/complete jamais le workboard directement. Resultat attendu = summary, artifact, verify, files_touched, tests_run, recommended_next, blocking_issue.
-- EXPLORER_POLICY: en runtime planner-only, ne pas lancer de commande shell brute nommee explorer/worker. Si une capacite read-only est necessaire, passer par planner_subagent_manager.py; legacy_workers reste un chemin de compat explicite, jamais le chemin par defaut.
-- DYNAMIC_WORKERS: compat only. Ne pas lancer python3 platform/automation/compat/legacy_workers/worker_manager.py pour une nouvelle feature, une nouvelle orchestration, ou un nouveau diagnostic; l'utiliser uniquement pour collect/cleanup d'un worker legacy deja existant si ce chemin est deja actif.
-- WORKER_RULE: un worker ne claim/complete jamais une tache metier. Son resultat = evidence/test result/patch proposal/runtime diagnostic, puis le parent decide merge, handoff ou complete.
-- Interdit: "analyse seulement" si une tâche READY/IN_PROGRESS existe pour le rôle.
+- Verite d'execution: Plane + RUNTIME_CONTEXT d'abord; les projections sous logs-codex-runs/orchestrator-state sont derivees. IDs valides: BATCH-NN ou BATCH-NN-ROLE (max 3 segments).
+- Blocker permission valide UNIQUEMENT avec cmd_err_excerpt du tick courant.
+- MODE DELIVERY: claim d'abord via planner_runtime_actions.py claim, puis fais le plus petit pas reel utile.
+- ENDPOINTS_APP_PUBLICS: frontend=http://3.98.20.77/ | api_health=http://3.98.20.77/api/health | copilot_start=http://3.98.20.77/api/copilot/start | personal_finance_start=http://3.98.20.77/api/judge/personal-finance/start | monitor=http://3.98.20.77:8080/api/status?lite=1
+- CLAIM/HANDOFF: publier stream/task ids + artifact + prochaine action concrete; ne pas inventer root_cause/fix_applied/verify.
+- COMPLETE: patch minimal ou fix runtime reel + tests/proof cibles; tout fichier modifie doit etre committe avant complete. Pas de commit => pas de livraison.
+- DELIVERY_VALUE_GATE: aucun complete sans root_cause, fix_applied, verify(before=/after=/test= ou proof=), artifact, tests_run, files_touched, architecture_check, vision_alignment, et commit_sha valide.
+- Subagent/worker: rend des preuves (summary, artifact, verify, files_touched, tests_run, recommended_next, blocking_issue), ne claim/complete jamais le workboard; le parent collecte puis decide merge, handoff ou complete.
+- Interdit: analyse passive si une tache READY/IN_PROGRESS existe pour le role.
 - Si workboard_role_has_in_progress=1: reprendre/fermer IN_PROGRESS avant tout nouveau claim.
-- Planner: suivre d'abord la tache canonique active; si l'actif courant n'est pas planner, faire collect/repair/ack avant de creer un batch ou relancer ANALYSIS.
-- Planner: ne creer/reshaper un batch que s'il n'existe aucune tache canonique executable; avant tout downstream, expliciter `novelty_target` + `user_visible_delta` quand requis et bloquer tout duplicate-scope loop.
 - Dev: task_update=none_no_ready uniquement si workboard_role_has_ready=0 ET workboard_role_has_in_progress=0.
-- Scrum master: ordre strict = READY non claimes -> guard blocks -> stalled IN_PROGRESS -> escalade admin/planner. Priorite aux actions de deblocage, pas aux resumes passifs.
+- Scrum master: ordre = READY non claimes -> guard blocks -> stalled IN_PROGRESS -> escalade admin/planner.
 PROMPT
 )"
 
 ORCHESTRATION_RETRY_PROMPT="$(cat <<'PROMPT'
 RETRY: Retourne exactement 8 lignes (STATUS/DELTA/EVIDENCE/RISKS/NEXT/VERDICT/BLOCKER_ID/NEXT_ACTION_UNIQUE).
-EVIDENCE: task_update + lock_check=ok + run_note (>=5 mots) + issues + issue_count + issue_severity + artifact_rôle + root_cause + fix_applied + verify.
+EVIDENCE minimum: task_update + lock_check=ok + run_note (>=5 mots) + issues + issue_count + issue_severity + artifact_role.
+Si task_update=complete: ajouter root_cause + fix_applied + verify(before=/after=/test= ou proof=).
+Si task_update=claim|handoff: ajouter stream_id + task_id; ne pas inventer root_cause/fix_applied/verify pour satisfaire le contrat.
 Si task_update=analysis_only|none_no_ready|none_no_signal: inclure channels_read + impact_assessment + impact_action.
 Priorité: IN_PROGRESS > READY. Planner sans travail exécutable => create_or_claim_now. Dev none_no_ready seulement sans dev READY/IN_PROGRESS. Pas de blockers inventés.
 PROMPT
@@ -5708,35 +5719,7 @@ extract_codex_exec_thread_id() {
   local tmp=""
   tmp="$(mktemp)"
   cat > "$tmp"
-  python3 - "$tmp" <<'PY'
-import json
-import re
-import sys
-from pathlib import Path
-
-payload_path = Path(sys.argv[1])
-text = payload_path.read_text(encoding="utf-8", errors="ignore")
-thread_id = ""
-for raw in text.splitlines():
-    line = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw).strip()
-    if not line:
-        continue
-    start = line.find("{")
-    end = line.rfind("}")
-    if start < 0 or end < start:
-        continue
-    line = line[start : end + 1]
-    try:
-        obj = json.loads(line)
-    except Exception:
-        continue
-    if obj.get("type") == "thread.started":
-        tid = obj.get("thread_id") or ""
-        if tid:
-            thread_id = tid
-if thread_id:
-    print(thread_id)
-PY
+  python3 "$ROOT/platform/automation/codex_exec_stream.py" thread <"$tmp"
   rm -f "$tmp"
 }
 
@@ -5744,38 +5727,7 @@ extract_codex_exec_message() {
   local tmp=""
   tmp="$(mktemp)"
   cat > "$tmp"
-  python3 - "$tmp" <<'PY'
-import json
-import re
-import sys
-from pathlib import Path
-
-payload_path = Path(sys.argv[1])
-text = payload_path.read_text(encoding="utf-8", errors="ignore")
-msg = ""
-for raw in text.splitlines():
-    line = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", raw).strip()
-    if not line:
-        continue
-    start = line.find("{")
-    end = line.rfind("}")
-    if start < 0 or end < start:
-        continue
-    line = line[start : end + 1]
-    try:
-        obj = json.loads(line)
-    except Exception:
-        continue
-    if obj.get("type") != "item.completed":
-        continue
-    item = obj.get("item") or {}
-    if item.get("type") == "agent_message":
-        text = item.get("text") or ""
-        if text:
-            msg = text
-if msg:
-    print(msg)
-PY
+  python3 "$ROOT/platform/automation/codex_exec_stream.py" message <"$tmp"
   rm -f "$tmp"
 }
 

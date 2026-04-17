@@ -231,7 +231,7 @@ def build_planner_dispatch_metrics(root: Path, *, recent_limit: int = 12) -> dic
     metrics.setdefault("registry_secondary_only", True)
     metrics["event_store_primary"] = bool(runtime_truth.get("event_store_primary", False))
     metrics["runtime_truth_source"] = str(runtime_truth.get("runtime_truth_source", "fallback"))
-    metrics["projection_secondary_only"] = bool(runtime_truth.get("event_store_primary", False))
+    metrics["projection_secondary_only"] = not bool(runtime_truth.get("event_store_primary", False))
     metrics["legacy_registry_secondary_only"] = True
     if bool(metrics.get("event_store_primary", False)):
         metrics["compat_registry_present"] = False

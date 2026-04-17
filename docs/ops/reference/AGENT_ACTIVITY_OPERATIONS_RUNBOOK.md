@@ -8,6 +8,11 @@ related_to:
 
 # Agent Activity Feed — Operations Runbook
 
+Scope boundary:
+- This feed is part of the VM-local orchestration/control-plane monitor.
+- It is not the public app-serving monitor on AWS EC2.
+- Public app checks stay on `http://3.98.20.77/` and `http://3.98.20.77:8080/`.
+
 Status note:
 - reference runbook for the optional activity feed
 - not a canonical entrypoint for overall runtime truth

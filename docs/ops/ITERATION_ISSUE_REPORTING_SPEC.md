@@ -92,6 +92,8 @@ UI requirements:
 - Show per-agent last issue report and missing-report badge.
 
 ## Troubleshooting Fast Path
+These troubleshooting endpoints are VM-local monitor/orchestration checks, not public EC2 app-serving checks.
+
 1. Check aggregate compliance:
 ```bash
 curl -s http://127.0.0.1:7779/api/status | jq '.issue_reporting'

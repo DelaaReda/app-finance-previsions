@@ -22,7 +22,7 @@ from orchestrator_paths import resolve_orchestrator_read_path
 
 
 DEFAULT_TIMEOUT_S = 0.6
-DEFAULT_PRODUCT_API_BASE_URL = "http://127.0.0.1:8050"
+DEFAULT_PRODUCT_API_BASE_URL = "http://3.98.20.77"
 FRESHNESS_THRESHOLDS_S = {
     "prices": 12 * 3600,
     # Keep monitor/doctor aligned with the backend ingestion health contract.

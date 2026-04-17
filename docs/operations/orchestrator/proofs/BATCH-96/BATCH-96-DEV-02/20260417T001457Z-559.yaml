@@ -1,0 +1,54 @@
+proof_id: "PRF-BATCH-96-BATCH-96-DEV-02-20260417T001457Z-559"
+stream_id: "BATCH-96"
+task_id: "BATCH-96-DEV-02"
+role: "dev"
+produced_at_utc: "2026-04-17T00:14:57Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope show what changed today and what matters now [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "layer=domain"
+    - "imports_ok=yes"
+    - "path_target=committed_proof_slice_in_`apps/web/src/domains/forecasts/pages/app.test.js`"
+    - "public_ec2_contract_check:_`get_http://3.98.20.77/api/personal-finance/start?tickers=nvda`_on_2026-04-17t00:14z_returned_non-empty_`brief_of_da"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-17T00:14:57Z"
+      ended_at_utc: "2026-04-17T00:14:57Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`node --test apps/web/src/domains/forecasts/pages/app.test.js --test-name-pattern 'loadAndRenderHeroBrief|renderHeroCopilotBrief accepts explicit what changed today and what matters now story lines'`"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Committed proof slice in `apps/web/src/domains/forecasts/pages/app.test.js`; public EC2 contract check: `GET http://3.98.20.77/api/personal-finance/start?tickers=NVDA` on 2026-04-17T00:14Z returned non-empty `brief_of_da"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-96-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-96-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=`renderHeroCopilotBrief` already prioritized the story-line fields, but the `loadAndRenderHeroBrief` harness did not preserve them, so DEV-02 had no focused proof that the shared starter state carried the new brief lines | fix_applied=Updated the `loadAndRenderHeroBrief` test harness to keep `whatChangedToday` and `whatMattersNow` from backend brief payloads and added a regression test that asserts both fields survive into the shared starter state han | verify=before=story-line fields were already supported in renderer logic and live on EC2, but `loadAndRenderHeroBrief` had no dedicated regression proving they survived the shared starter-state path; after=test harness preserve | architecture_check=layer=web test harness for the shared copilot starter -> hero renderer path; imports_ok=yes, existing app test patterns and shared starter helpers reused without new components; path_target=`apps/web/src/domains/forecast | vision_alignment=batch=BATCH-96; target=show what changed today and what matters now on the public starter path with reused shared UI wiring; impact=adds merge-ready proof that the landing hero keeps the new story-line fields while EC2 a"

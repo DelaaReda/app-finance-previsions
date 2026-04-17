@@ -1,5 +1,9 @@
 # Qwen Tmux Orchestrator - Guide d'Activation
 
+Historical note:
+- This document reflects an older migration/recovery phase.
+- Any `localhost:*` app example below is historical only, not current public app guidance.
+
 **Date:** 2026-02-28 05:30 EST  
 **Objectif:** Comprendre et activer l'équipe Qwen pour remplacer Codex Pro
 

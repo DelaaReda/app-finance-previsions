@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
+# MODE: PUBLIC_VALIDATION_BY_DEFAULT
 # ============================================================
 # agent_health.sh — Tableau de bord santé agents en temps réel
 # Usage: bash scripts/agent_health.sh [--watch]
 # ============================================================
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PUBLIC_APP_BASE_URL="${FC_PUBLIC_APP_BASE_URL:-http://3.98.20.77}"
+API_BASE_URL="${FC_API_BASE_URL:-$PUBLIC_APP_BASE_URL}"
+FRONTEND_BASE_URL="${FC_FRONTEND_BASE_URL:-$PUBLIC_APP_BASE_URL}"
 BOLD='\033[1m'; RED='\033[31m'; GREEN='\033[32m'; YELLOW='\033[33m'; BLUE='\033[34m'; CYAN='\033[36m'; NC='\033[0m'
+
+if [[ "${FC_ALLOW_LOCAL_URLS:-0}" != "1" && "$API_BASE_URL" =~ ^https?://(127\.0\.0\.1|localhost)(:|/|$) ]]; then
+  echo "Refusing local validation URL: $API_BASE_URL (set FC_ALLOW_LOCAL_URLS=1 to override)" >&2
+  exit 2
+fi
+if [[ "${FC_ALLOW_LOCAL_URLS:-0}" != "1" && "$FRONTEND_BASE_URL" =~ ^https?://(127\.0\.0\.1|localhost)(:|/|$) ]]; then
+  echo "Refusing local validation URL: $FRONTEND_BASE_URL (set FC_ALLOW_LOCAL_URLS=1 to override)" >&2
+  exit 2
+fi
 
 show_health() {
   clear
@@ -17,10 +30,10 @@ show_health() {
 
   # === SERVICES ===
   echo -e "${BOLD}SERVICES${NC}"
-  backend_status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8050/api/health" 2>/dev/null || echo "000")
-  frontend_status=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:5173/" 2>/dev/null || echo "000")
-  [[ "$backend_status" == "200" ]] && echo -e "  Backend  (8050): ${GREEN}● UP${NC}" || echo -e "  Backend  (8050): ${RED}● DOWN (HTTP $backend_status)${NC}"
-  [[ "$frontend_status" == "200" ]] && echo -e "  Frontend (5173): ${GREEN}● UP${NC}" || echo -e "  Frontend (5173): ${RED}● DOWN (HTTP $frontend_status)${NC}"
+  backend_status=$(curl -s -o /dev/null -w "%{http_code}" "${API_BASE_URL%/}/api/health" 2>/dev/null || echo "000")
+  frontend_status=$(curl -s -o /dev/null -w "%{http_code}" "${FRONTEND_BASE_URL%/}/" 2>/dev/null || echo "000")
+  [[ "$backend_status" == "200" ]] && echo -e "  Backend  (${API_BASE_URL}): ${GREEN}● UP${NC}" || echo -e "  Backend  (${API_BASE_URL}): ${RED}● DOWN (HTTP $backend_status)${NC}"
+  [[ "$frontend_status" == "200" ]] && echo -e "  Frontend (${FRONTEND_BASE_URL}): ${GREEN}● UP${NC}" || echo -e "  Frontend (${FRONTEND_BASE_URL}): ${RED}● DOWN (HTTP $frontend_status)${NC}"
   
   # Check browser  
   browser_running=$(openclaw browser status 2>/dev/null | grep "running: true" | wc -l)
@@ -81,8 +94,8 @@ PY
 
   # === API DATA FRESHNESS ===
   echo -e "${BOLD}DATA QUALITY${NC}"
-  news_total=$(curl -s "http://localhost:8050/api/news/feed?limit=1" 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['data']['total'])" 2>/dev/null || echo "?")
-  forecast_total=$(curl -s "http://localhost:8050/api/forecasts?limit=1" 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['data']['total'])" 2>/dev/null || echo "?")
+  news_total=$(curl -s "${API_BASE_URL%/}/api/news/feed?limit=1" 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['data']['total'])" 2>/dev/null || echo "?")
+  forecast_total=$(curl -s "${API_BASE_URL%/}/api/forecasts?limit=1" 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['data']['total'])" 2>/dev/null || echo "?")
   echo -e "  News: ${GREEN}$news_total articles${NC}  Forecasts: ${GREEN}$forecast_total${NC}"
 }
 

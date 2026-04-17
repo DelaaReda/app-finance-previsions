@@ -28,7 +28,7 @@ This proof path answers five questions:
 
 ## Preconditions
 - Run from the VM workspace only: `/home/venom/analyse-financiere`
-- Backend/monitor available if you want live API proof
+- Public app/monitor available on AWS EC2 if you want live product proof
 - Local env files stay in place; do not rewrite or remove `.env` files during this check
 
 ## Step 1 — Trigger the current refresh path
@@ -61,7 +61,7 @@ Expected:
 Check the live forecasts contract:
 
 ```bash
-curl -s 'http://127.0.0.1:8050/api/forecasts?limit=5' | jq
+curl -s 'http://3.98.20.77/api/forecasts?limit=5' | jq
 ```
 
 Nominal healthy contract expectations:
@@ -82,8 +82,8 @@ bash scripts/fc_doctor.sh --refresh
 Monitor:
 
 ```bash
-curl -s 'http://127.0.0.1:7779/api/status' | jq
-curl -s 'http://127.0.0.1:7779/api/doctor?refresh=1' | jq
+curl -s 'http://3.98.20.77:8080/api/status' | jq
+curl -s 'http://3.98.20.77:8080/api/doctor?refresh=1' | jq
 ```
 
 Expected healthy signals:

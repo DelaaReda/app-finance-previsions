@@ -1,0 +1,81 @@
+{
+  "proof_id": "BATCH-94-ADMIN-01-20260416T105031Z",
+  "captured_at_utc": "2026-04-16T10:50:31Z",
+  "task_id": "BATCH-94-ADMIN-01",
+  "stream_id": "BATCH-94",
+  "host_check": {
+    "runtime_host_kind": "vm_runtime",
+    "runtime_is_vm": true,
+    "workspace": "/home/venom/analyse-financiere"
+  },
+  "fixes_applied": [],
+  "verification": {
+    "public_api_health": {
+      "url": "http://3.98.20.77/api/health",
+      "status": "ok",
+      "backend_up": true,
+      "generated_at": "2026-04-16T10:49:35.933793Z"
+    },
+    "public_monitor_status": {
+      "url": "http://3.98.20.77:8080/api/status?lite=1",
+      "health": "OK",
+      "product_runtime_status": "ok",
+      "agentic_runtime_status": "ok",
+      "doctor_overall_status": "error",
+      "monitor_profile": "app_only",
+      "control_plane_location": "remote_vm",
+      "note": "On the EC2 app-only host, public health follows product_runtime and treats remote VM control-plane debt as advisory."
+    },
+    "public_personal_finance_start": {
+      "url": "http://3.98.20.77/api/personal-finance/start?tickers=NVDA",
+      "status": "ok",
+      "scope_tickers": [
+        "NVDA"
+      ],
+      "brief_title": "Brief quotidien",
+      "brief_generated_at": "2026-04-16T10:48:42.462248Z",
+      "ask_count": 4,
+      "ask_targets": [
+        "/personal-finance/ask"
+      ],
+      "open_count": 3,
+      "open_targets": [
+        "market",
+        "opportunities",
+        "/personal-finance"
+      ],
+      "ranked_action_target": "market"
+    },
+    "vm_doctor": {
+      "command": "bash scripts/fc_doctor.sh --json",
+      "exit_code": 1,
+      "status": "degraded",
+      "product_runtime_status": "ok",
+      "agentic_runtime_status": "ok",
+      "runtime_truth_status": "ok",
+      "scheduler_authority_status": "ok",
+      "sessions_status": "ok",
+      "latest_runtime_state": {
+        "task_id": "BATCH-94-ADMIN-01",
+        "status": "running",
+        "current_node": "wait_or_collect_result",
+        "next_action": "wait_or_collect_result",
+        "updated_at": "2026-04-16T10:47:38.484312Z"
+      },
+      "advisory_non_ok_checks": {
+        "product_value": "degraded",
+        "delivery_future_integrity": "degraded",
+        "browser_proof_pipeline": "degraded",
+        "qa_review_pipeline": "degraded"
+      }
+    }
+  },
+  "tests": [
+    "PASS bash scripts/runtime_host_check.sh",
+    "PASS scripts/aws_remote_app_control.sh status",
+    "PASS curl -fsS http://3.98.20.77/api/personal-finance/start?tickers=NVDA",
+    "PASS public endpoint extraction for /api/health and /api/status?lite=1",
+    "PASS bash scripts/fc_doctor.sh --json (runtime_truth/scheduler_authority/sessions ok; overall status degraded only on advisory checks)"
+  ],
+  "residual_blocker": null
+}

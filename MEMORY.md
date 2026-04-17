@@ -91,6 +91,21 @@
 - Keep operations scoped to this repository.
 - Runtime policy is codex-only for orchestration; legacy qwen scripts are archived/renamed `*_not_used`.
 
+## AWS app runtime migration (2026-04-16)
+- The public app-serving stack now runs on AWS EC2, not on the local UTM VM.
+- Canonical public endpoints:
+  - frontend: `http://3.98.20.77/`
+  - api: `http://3.98.20.77/api/...`
+  - monitor: `http://3.98.20.77:8080/`
+- The UTM VM remains the orchestration host only. Do not run backend/frontend/monitor locally there for normal team work.
+- VM-side app control must use `scripts/aws_remote_app_control.sh`.
+- Mac and the UTM VM share the same workspace view.
+- Mac <-> UTM VM share the same workspace view; AWS publication is a separate shared-workspace -> EC2 step.
+- Canonical operator path is Mac-side publication; an explicit UTM-triggered publication still ships the same shared workspace snapshot, not VM-local orchestration state.
+- VM agents must not assume that local repo edits are already reflected on AWS until a real sync has been triggered.
+- Public API changes usually appear in about 5 seconds after sync; full sync + restart + verification can take about 20 to 30 seconds.
+- The EC2 app host auto-stops after 10 minutes without HTTP traffic; SSH does not keep it alive.
+
 ## Orchestration runbook note (2026-02-28)
 - Stabilisation de la plomberie d’orchestration: création du lien `docs/orchestrator-ops` -> `docs/operations/orchestrator`, correction des checks pour utiliser un board de plomberie dédié (`parallel-workstreams-plumbing.json`) et passage des validations `dev_qa_tooling_check` / `validate_parallel_plumbing` en PASS.
 - Verrous legacy `.json.lock` obsolètes retirés pour réduire les faux blocages de rôles (archivés dans `archive/obsolete-locks`).

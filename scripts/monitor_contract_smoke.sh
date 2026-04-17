@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# MODE: PUBLIC_VALIDATION
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -13,10 +14,11 @@ source "$WORKSPACE_HELPER"
 ROOT="$(fc_prefer_writable_workspace "$(fc_resolve_workspace_root "$SCRIPT_DIR")")"
 cd "$ROOT"
 
-BASE_URL="${FC_MONITOR_BASE_URL:-http://127.0.0.1:7779}"
+BASE_URL="${FC_MONITOR_BASE_URL:-${FC_PUBLIC_MONITOR_BASE_URL:-http://3.98.20.77:8080}}"
 TIMEOUT_SECONDS="${FC_MONITOR_SMOKE_TIMEOUT_SECONDS:-16}"
 QUIET=0
 TMP_DIR="$(mktemp -d)"
+PROBE_SCRIPT="${FC_PUBLIC_RUNTIME_PROBE_SCRIPT:-${ROOT}/scripts/aws_public_runtime_probe.py}"
 
 cleanup() {
   rm -rf "$TMP_DIR"
@@ -50,6 +52,11 @@ if ! [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
+if [[ "${FC_ALLOW_LOCAL_URLS:-0}" != "1" && "$BASE_URL" =~ ^https?://(127\.0\.0\.1|localhost)(:|/|$) ]]; then
+  echo "Refusing local validation URL: $BASE_URL (set FC_ALLOW_LOCAL_URLS=1 to override)" >&2
+  exit 2
+fi
+
 STATUS_ENDPOINT="${FC_MONITOR_STATUS_ENDPOINT:-/api/status?lite=1}"
 DIAG_ENDPOINT="${FC_MONITOR_DIAG_ENDPOINT:-/api/runtime-diagnostics?lite=1}"
 STATUS_PATH="${TMP_DIR}/status.json"
@@ -57,7 +64,35 @@ DIAG_PATH="${TMP_DIR}/runtime_diagnostics.json"
 ISSUES_FEED_PATH="${TMP_DIR}/issues_feed.json"
 ISSUES_SUMMARY_PATH="${TMP_DIR}/issues_summary.json"
 
-curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}${STATUS_ENDPOINT}" -o "$STATUS_PATH"
+curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}${STATUS_ENDPOINT}" -o "$STATUS_PATH" || {
+  PROBE_JSON="$(python3 "$PROBE_SCRIPT" --url "${BASE_URL%/}${STATUS_ENDPOINT}" --timeout "$TIMEOUT_SECONDS" 2>/dev/null || true)"
+  if [[ -n "${PROBE_JSON}" ]]; then
+    MAINTENANCE_ACTIVE="$(python3 - "$PROBE_JSON" <<'PY'
+import json,sys
+try:
+    payload = json.loads(sys.argv[1])
+except Exception:
+    print("0")
+    raise SystemExit(0)
+print("1" if payload.get("maintenance_active") else "0")
+PY
+)"
+    if [[ "$MAINTENANCE_ACTIVE" == "1" ]]; then
+      python3 - "$PROBE_JSON" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+command = str(payload.get("maintenance_command") or "restart").strip() or "restart"
+age = payload.get("maintenance_age_s")
+suffix = f" age_s={age}" if isinstance(age, int) else ""
+print(f"DEFER reason=runtime_restart_in_progress command={command}{suffix}")
+PY
+      exit 0
+    fi
+  fi
+  exit 1
+}
 curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}${DIAG_ENDPOINT}" -o "$DIAG_PATH"
 curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/issues/feed?n=40&window_min=120" -o "$ISSUES_FEED_PATH"
 curl -fsS --max-time "$TIMEOUT_SECONDS" "${BASE_URL%/}/api/issues/summary?window_min=60" -o "$ISSUES_SUMMARY_PATH"

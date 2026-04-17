@@ -5,8 +5,10 @@ import argparse
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -46,6 +48,7 @@ from browser_smoke import run_browser_smoke
 from orchestrator_paths import CANONICAL_VM_ROOT, SHARED_VM_ROOT, resolve_orchestrator_read_path, resolve_orchestrator_write_path
 from runtime.model_plane.model_plane import resolve_planner_backend_choice as model_plane_resolve_planner_backend_choice
 from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
+from runtime.truth.event_store import latest_graph_states
 from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
 from planner_subagent_manager import (
     ACTIVE_STATUSES,
@@ -67,7 +70,8 @@ CONTRACT_KEYS = (
     "BLOCKER_ID",
     "NEXT_ACTION_UNIQUE",
 )
-SUCCESS_SUBAGENT_STATUSES = {"completed", "done", "pass", "ok", "success", "merged"}
+SUCCESS_SUBAGENT_STATUSES = {"complete", "completed", "done", "pass", "ok", "success", "merged"}
+READY_STATES = {STATE_READY, STATE_READY_DEV, "READY", "READY_PLANNER"}
 DEV_CAPABILITY_TIMEOUT_SECONDS = max(0, int(os.environ.get("FC_PLANNER_DEV_CAPABILITY_TIMEOUT_SECONDS", "0")))
 ADMIN_CAPABILITY_TIMEOUT_SECONDS = max(180, int(os.environ.get("FC_PLANNER_ADMIN_CAPABILITY_TIMEOUT_SECONDS", "900")))
 STALE_SUBAGENT_GRACE_SECONDS = max(15, int(os.environ.get("FC_PLANNER_SUBAGENT_STALE_GRACE_SECONDS", "30")))
@@ -84,8 +88,26 @@ BROWSER_VALIDATION_TIMEOUT_SECONDS = max(10, int(os.environ.get("FC_PLANNER_BROW
 BROWSER_BACKFILL_MAX_PER_TICK = max(1, int(os.environ.get("FC_PLANNER_BROWSER_BACKFILL_MAX_PER_TICK", "1")))
 QA_AUTODISPATCH_MAX_PER_TICK = max(1, int(os.environ.get("FC_PLANNER_QA_AUTODISPATCH_MAX_PER_TICK", "2")))
 QA_AUTODISPATCH_ROLLOUT_AT_RAW = str(os.environ.get("FC_PLANNER_QA_AUTODISPATCH_ROLLOUT_AT", "2026-03-08T19:00:00Z")).strip() or "2026-03-08T19:00:00Z"
-DEFAULT_BROWSER_FRONTEND_URL = str(os.environ.get("FC_FRONTEND_BASE_URL", "http://127.0.0.1:5173")).strip() or "http://127.0.0.1:5173"
-DEFAULT_BROWSER_MONITOR_URL = str(os.environ.get("FC_MONITOR_BASE_URL", "http://127.0.0.1:7779")).strip() or "http://127.0.0.1:7779"
+DEFAULT_BROWSER_FRONTEND_URL = (
+    str(
+        os.environ.get("FC_FRONTEND_BASE_URL")
+        or os.environ.get("FC_PUBLIC_APP_BASE_URL")
+        or "http://3.98.20.77"
+    ).strip()
+    or "http://3.98.20.77"
+)
+DEFAULT_BROWSER_MONITOR_URL = (
+    str(
+        os.environ.get("FC_MONITOR_BASE_URL")
+        or os.environ.get("FC_PUBLIC_MONITOR_BASE_URL")
+        or "http://3.98.20.77:8080"
+    ).strip()
+    or "http://3.98.20.77:8080"
+)
+AUTOBATCH_STALE_RUNTIME_RESIDUE_SECONDS = max(
+    300,
+    int(os.environ.get("FC_PLANNER_AUTOBATCH_STALE_RUNTIME_RESIDUE_SECONDS", str(45 * 60))),
+)
 NO_CODE_COMPLETION_MODES = {"runtime_no_code", "no_code_runtime_fix", "runtime_repair_no_code"}
 INVALID_RESULT_MARKERS = (
     "invalid_subagent_result",
@@ -131,10 +153,7 @@ def _parse_iso_utc(raw: str) -> datetime | None:
     if not token:
         return None
     if token.endswith("Z"):
-        try:
-            return datetime.strptime(token, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-        except Exception:
-            return None
+        token = token[:-1] + "+00:00"
     try:
         parsed = datetime.fromisoformat(token)
     except Exception:
@@ -195,6 +214,14 @@ def _resolve_dispatch_backend(root: Path, target_role: str, requested_backend: s
         backend_by_role=getattr(config, "backend_by_role", {}),
     )
     return str(chosen_backend).strip()
+
+
+def _planner_batch_id(owner_task_id: str) -> str:
+    token = str(owner_task_id or "").strip()
+    parts = [part for part in token.split("-") if part]
+    if len(parts) >= 2 and parts[0].upper() in {"BATCH", "VB"}:
+        return "-".join(parts[:2])
+    return token
 
 
 def _parse_contract(text: str) -> dict[str, str]:
@@ -470,6 +497,10 @@ def _task_failure_streak(task: dict[str, Any], target_role: str, failure_kind: s
     return int(task.get(f"{role_token}_{kind_token}_streak", 0) or 0)
 
 
+def _admin_failure_streak_total(task: dict[str, Any]) -> int:
+    return _task_timeout_streak(task, "admin") + _task_failure_streak(task, "admin", "invalid_result")
+
+
 def _set_timeout_streak(task: dict[str, Any], target_role: str, value: int, reason: str = "") -> None:
     role_token = str(target_role or "").strip().lower()
     task[f"{role_token}_timeout_streak"] = max(0, int(value))
@@ -600,14 +631,21 @@ def _auto_change_plan(task: dict[str, Any]) -> str:
 
 
 def _auto_architecture_checks(task: dict[str, Any]) -> str:
-    title = str(task.get("title", "")).strip() or str(task.get("id", "")).strip()
-    return "\n".join(
-        [
-            f"service boundaries for {title}",
-            "imports and data flow remain stable",
-            "patch stays inside intended module path",
-        ]
+    artifact = (
+        str(task.get("artifact", "")).strip()
+        or str(task.get("planner_artifact", "")).strip()
+        or str(task.get("architecture_plan_ref", "")).strip()
+        or ""
     )
+    path_target = artifact or "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+    layer = "platform"
+    if "apps/api/" in path_target:
+        layer = "application"
+    elif "apps/web/" in path_target:
+        layer = "domain"
+    elif "/api/" in path_target or path_target.startswith("apps/api"):
+        layer = "api"
+    return f"layer={layer}; imports_ok=yes; path_target={path_target}"
 
 
 def _task_notes(task: dict[str, Any], limit: int = 4) -> list[str]:
@@ -639,8 +677,10 @@ def _build_dev_dispatch_message(task: dict[str, Any]) -> str:
         f"Dependencies already satisfied: {', '.join(depends_on) if depends_on else 'none'}",
         "Execution policy:",
         "- Implement one minimal, verifiable slice only.",
+        "- Prefer a user-visible delta or shared contract/API delivery over orchestration-only cleanup whenever the task allows it.",
         "- Stay inside files implied by the task notes; do not widen into a repo audit.",
         "- Do not inspect monitor/doctor unless you hit a runtime blocker.",
+        "- Validate shipped behavior against the public EC2 runtime path when the task touches app-serving flows or API contracts.",
         "- Run targeted tests only.",
         "- If you change code or config, commit it and return the real commit_sha.",
         "- Return delivery evidence precise enough for planner merge: artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment.",
@@ -667,7 +707,9 @@ def _build_admin_dispatch_message(task: dict[str, Any]) -> str:
         f"Dependencies already satisfied: {', '.join(depends_on) if depends_on else 'none'}",
         "Execution policy:",
         "- Validate runtime truth and observability only for this task scope.",
+        "- Keep app-serving proof anchored to the public EC2 endpoints; VM localhost is not product truth after migration.",
         "- Prefer reversible fixes or precise evidence capture; do not broaden into planning.",
+        "- If delivery is blocked, make the blocker explicit in planner-mergeable terms so planner can unblock shipping, not just observe drift.",
         "- If no code/config change is needed, still return artifact + verify and use SKIP(...) fields explicitly.",
         "- If you change code or config, commit it and return the real commit_sha.",
         "- Return planner-mergeable evidence: artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment.",
@@ -836,18 +878,28 @@ def _payload_has_delivery_evidence(payload: dict[str, Any], target_role: str = "
     required = ("artifact", "verify")
     for key in required:
         value = str(payload.get(key, "")).strip().lower()
-        if not value or value in {"none", "n/a", "na"}:
+        if not _delivery_value_present(value):
             return False
     target = str(target_role or "").strip().lower()
     if target in {"dev", "admin"}:
         tests_run = str(payload.get("tests_run", "")).strip().lower()
-        if not tests_run or tests_run in {"none", "n/a", "na"}:
+        if not _delivery_value_present(tests_run):
             return False
     if target == "dev":
         commit = str(payload.get("commit_sha", "")).strip().lower()
-        if not commit or commit in {"none", "n/a", "na"}:
+        if not _delivery_value_present(commit):
             return False
     return True
+
+
+def _payload_semantic_success(payload: dict[str, Any], target_role: str = "dev") -> bool:
+    status_token = _payload_status(payload)
+    if status_token in SUCCESS_SUBAGENT_STATUSES:
+        return True
+    if not _payload_has_delivery_evidence(payload, target_role=target_role):
+        return False
+    blocking_issue = str(payload.get("blocking_issue", "")).strip().lower()
+    return blocking_issue in {"", "none"}
 
 
 def _task_operational_state(task: dict[str, Any] | None) -> str:
@@ -1060,6 +1112,61 @@ def _meaningful_subagent_text(text: str) -> bool:
     return not any(marker in token for marker in DEV_PROGRESS_MARKERS)
 
 
+def _terminate_planner_subagent_launcher(subagent_id: str) -> bool:
+    token = str(subagent_id or "").strip()
+    if not token:
+        return False
+    try:
+        proc = subprocess.run(
+            ["ps", "-eo", "pid=,args="],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except Exception:
+        return False
+    if int(getattr(proc, "returncode", 1) or 1) != 0:
+        return False
+
+    target_pids: list[int] = []
+    needle = f"--subagent-id {token}"
+    for line in str(getattr(proc, "stdout", "") or "").splitlines():
+        text = str(line or "").strip()
+        if not text or needle not in text or "planner_subagent_manager.py" not in text:
+            continue
+        pid_str, _, _ = text.partition(" ")
+        try:
+            pid = int(pid_str.strip())
+        except Exception:
+            continue
+        if pid > 0:
+            target_pids.append(pid)
+
+    terminated = False
+    for pid in target_pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            terminated = True
+        except ProcessLookupError:
+            continue
+        except Exception:
+            continue
+    if terminated:
+        time.sleep(0.1)
+        for pid in target_pids:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                continue
+            except Exception:
+                continue
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except Exception:
+                continue
+    return terminated
+
+
 def _task_progress_baseline(task: dict[str, Any], row: dict[str, Any], progress_at: datetime | None) -> datetime | None:
     return (
         progress_at
@@ -1189,7 +1296,18 @@ def _build_admin_evidence(payload: dict[str, Any], task_id_value: str) -> dict[s
 
 def _planner_evidence_needs_autofill(value: Any) -> bool:
     token = str(value or "").strip().lower()
-    return not token or token in {"none", "n/a", "na", "?", "tbd"}
+    return not _delivery_value_present(token)
+
+
+def _delivery_value_present(value: Any) -> bool:
+    token = " ".join(str(value or "").strip().split()).lower()
+    if not token or token in {"none", "n/a", "na", "null", "unknown", "?", "??", "tbd"}:
+        return False
+    if token in {"...", "..", ".", "…"}:
+        return False
+    if re.fullmatch(r"(?:[a-z_]+=\.\.\.)(?:\s*;\s*[a-z_]+=\.\.\.)*", token):
+        return False
+    return True
 
 
 def _autofill_planner_completion_evidence(
@@ -1337,8 +1455,8 @@ def _planner_takeover_admin_task(root: Path, task: dict[str, Any], source: str) 
     task_id_value = str(task.get("id", "")).strip()
     if not task_id_value:
         return {"dispatched": True, "completed": False, "reason": "invalid_admin_task", "backend": "planner_takeover"}
-    status_ok, status_payload, status_reason = _fetch_local_json("http://127.0.0.1:7779/api/status?lite=1")
-    doctor_ok, doctor_payload, doctor_reason = _fetch_local_json("http://127.0.0.1:7779/api/doctor?refresh=1")
+    status_ok, status_payload, status_reason = _fetch_local_json(f"{DEFAULT_BROWSER_MONITOR_URL.rstrip('/')}/api/status?lite=1")
+    doctor_ok, doctor_payload, doctor_reason = _fetch_local_json(f"{DEFAULT_BROWSER_MONITOR_URL.rstrip('/')}/api/doctor?refresh=1")
     if not status_ok or not isinstance(status_payload, dict):
         status_payload = {"health": "UNKNOWN", "status_fetch_reason": status_reason}
     status_health = str(status_payload.get("health", "")).strip().upper()
@@ -1375,8 +1493,8 @@ def _planner_takeover_admin_task(root: Path, task: dict[str, Any], source: str) 
     if not backend_takeover_ready:
         autoheal_ok, autoheal_reason = _attempt_backend_autoheal(root)
         if autoheal_ok:
-            status_ok, status_payload, status_reason = _fetch_local_json("http://127.0.0.1:7779/api/status?lite=1")
-            doctor_ok, doctor_payload, doctor_reason = _fetch_local_json("http://127.0.0.1:7779/api/doctor?refresh=1")
+            status_ok, status_payload, status_reason = _fetch_local_json(f"{DEFAULT_BROWSER_MONITOR_URL.rstrip('/')}/api/status?lite=1")
+            doctor_ok, doctor_payload, doctor_reason = _fetch_local_json(f"{DEFAULT_BROWSER_MONITOR_URL.rstrip('/')}/api/doctor?refresh=1")
             if not status_ok or not isinstance(status_payload, dict):
                 status_payload = {"health": "UNKNOWN", "status_fetch_reason": status_reason}
             status_health = str(status_payload.get("health", "")).strip().upper()
@@ -1507,12 +1625,19 @@ def _record_admin_failure(
         task["blocked_reason"] = ""
         task["updated_at"] = now_iso()
         task["last_progress_at"] = now_iso()
-        if streak >= ADMIN_TIMEOUT_STREAK_THRESHOLD:
+        if _admin_failure_streak_total(task) >= ADMIN_TIMEOUT_STREAK_THRESHOLD:
             _mark_admin_takeover_required(task, reason)
             append_event(
                 board,
                 "planner_orchestrator_admin_takeover_required",
-                {"task_id": task_id_value, "source": source, "subagent_id": subagent_id or "none", "failure_kind": failure_kind, "streak": streak},
+                {
+                    "task_id": task_id_value,
+                    "source": source,
+                    "subagent_id": subagent_id or "none",
+                    "failure_kind": failure_kind,
+                    "streak": streak,
+                    "combined_streak": _admin_failure_streak_total(task),
+                },
             )
             return "planner_takeover_required"
         append_event(
@@ -1965,7 +2090,8 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
         timeout_seconds=DEV_CAPABILITY_TIMEOUT_SECONDS,
     )
     subagent_id = str(payload.get("subagent_id", "")).strip()
-    if rc != 0 or not payload.get("ok"):
+    semantic_success = _payload_semantic_success(payload, target_role="dev")
+    if rc != 0 or (not payload.get("ok") and not semantic_success):
         with board_lock(board_path):
             board = load_board(board_path)
             _record_dev_failure(
@@ -1996,7 +2122,7 @@ def _dispatch_dev_capability(root: Path, source: str, backend: str) -> dict[str,
         )
 
     status_token = _payload_status(payload)
-    if status_token not in SUCCESS_SUBAGENT_STATUSES:
+    if not _payload_semantic_success(payload, target_role="dev"):
         blocking_issue = str(payload.get("blocking_issue") or payload.get("recommended_next") or status_token or "subagent_not_ready")
         with board_lock(board_path):
             board = load_board(board_path)
@@ -2136,7 +2262,7 @@ def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[st
         task_id_value = str(candidate.get("id", "")).strip()
         if not task_id_value:
             return {"dispatched": False, "reason": "invalid_admin_task"}
-        planner_takeover = bool(candidate.get("planner_takeover_required")) or _task_timeout_streak(candidate, "admin") >= ADMIN_TIMEOUT_STREAK_THRESHOLD
+        planner_takeover = bool(candidate.get("planner_takeover_required")) or _admin_failure_streak_total(candidate) >= ADMIN_TIMEOUT_STREAK_THRESHOLD
         candidate_state = str(candidate.get("state", "")).strip().upper()
         if candidate_state == STATE_BLOCKED:
             candidate["state"] = STATE_READY
@@ -2245,7 +2371,8 @@ def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[st
         timeout_seconds=timeout_seconds,
     )
     subagent_id = str(payload.get("subagent_id", "")).strip()
-    if rc != 0 or not payload.get("ok"):
+    semantic_success = _payload_semantic_success(payload, target_role="admin")
+    if rc != 0 or (not payload.get("ok") and not semantic_success):
         with board_lock(board_path):
             board = load_board(board_path)
             _record_admin_failure(
@@ -2276,7 +2403,7 @@ def _dispatch_admin_capability(root: Path, source: str, backend: str) -> dict[st
         )
 
     status_token = _payload_status(payload)
-    if status_token not in SUCCESS_SUBAGENT_STATUSES:
+    if not _payload_semantic_success(payload, target_role="admin"):
         blocking_issue = str(payload.get("blocking_issue") or payload.get("recommended_next") or status_token or "subagent_not_ready")
         with board_lock(board_path):
             board = load_board(board_path)
@@ -2551,6 +2678,7 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
                     row["summary"] = "ignored dev capability because owner task was outside canonical active cycle"
                     row["blocking_issue"] = "owner_task_outside_active_cycle"
                     row["last_update_at"] = now_text
+                    _terminate_planner_subagent_launcher(subagent_id)
                     changed = True
                     actions.append(f"dev_out_of_cycle:{task_id_value}")
                     continue
@@ -2572,6 +2700,7 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
                     row["summary"] = "ignored dev capability because owner task role mismatched target role"
                     row["blocking_issue"] = "owner_task_target_role_mismatch"
                     row["last_update_at"] = now_text
+                    _terminate_planner_subagent_launcher(subagent_id)
                     changed = True
                     actions.append(f"dev_route_mismatch:{task_id_value}")
                     continue
@@ -2639,6 +2768,7 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
                         row["summary"] = "planner dev capability lost liveness and was requeued"
                         row["blocking_issue"] = "dev_orphaned"
                         row["last_update_at"] = now_text
+                        _terminate_planner_subagent_launcher(subagent_id)
                         changed = True
                         continue
 
@@ -2681,6 +2811,7 @@ def _mark_stale_dev_subagents(root: Path, source: str) -> list[str]:
                         row["summary"] = "planner dev capability produced no delivery delta and was requeued"
                         row["blocking_issue"] = "stalled_delivery"
                         row["last_update_at"] = now_text
+                        _terminate_planner_subagent_launcher(subagent_id)
                         changed = True
                     else:
                         task["stalled_reason"] = reason
@@ -2747,6 +2878,7 @@ def _mark_stale_admin_subagents(root: Path, source: str) -> list[str]:
                     row["summary"] = "ignored admin capability because owner task was outside canonical active cycle"
                     row["blocking_issue"] = "owner_task_outside_active_cycle"
                     row["last_update_at"] = now_text
+                    _terminate_planner_subagent_launcher(subagent_id)
                     changed = True
                     actions.append(f"admin_out_of_cycle:{task_id_value}")
                     continue
@@ -2768,6 +2900,7 @@ def _mark_stale_admin_subagents(root: Path, source: str) -> list[str]:
                     row["summary"] = "ignored admin capability because owner task role mismatched target role"
                     row["blocking_issue"] = "owner_task_target_role_mismatch"
                     row["last_update_at"] = now_text
+                    _terminate_planner_subagent_launcher(subagent_id)
                     changed = True
                     actions.append(f"admin_route_mismatch:{task_id_value}")
                     continue
@@ -2798,12 +2931,19 @@ def _mark_stale_admin_subagents(root: Path, source: str) -> list[str]:
                     task["updated_at"] = now_text
                     task["last_progress_at"] = now_text
                     _set_timeout_streak(task, "admin", streak, reason)
-                    if streak >= ADMIN_TIMEOUT_STREAK_THRESHOLD:
+                    if _admin_failure_streak_total(task) >= ADMIN_TIMEOUT_STREAK_THRESHOLD:
                         _mark_admin_takeover_required(task, reason)
                         append_event(
                             board,
                             "planner_orchestrator_admin_takeover_required",
-                            {"task_id": task_id_value, "source": source, "subagent_id": subagent_id, "age_s": age_seconds, "timeout_streak": streak},
+                            {
+                                "task_id": task_id_value,
+                                "source": source,
+                                "subagent_id": subagent_id,
+                                "age_s": age_seconds,
+                                "timeout_streak": streak,
+                                "combined_streak": _admin_failure_streak_total(task),
+                            },
                         )
                         actions.append(f"admin_takeover_required:{task_id_value}")
                     else:
@@ -2820,6 +2960,7 @@ def _mark_stale_admin_subagents(root: Path, source: str) -> list[str]:
         row["summary"] = "stale planner capability with no result requeued"
         row["blocking_issue"] = "stale_no_result"
         row["last_update_at"] = now_text
+        _terminate_planner_subagent_launcher(subagent_id)
         changed = True
     if changed:
         _write_planner_registry_rows(config, rows)
@@ -2884,8 +3025,6 @@ def _has_active_subagent(root: Path, target_role: str = "") -> bool:
         if _task_effectively_done(owner_task):
             continue
         if _task_operational_state(owner_task) in READY_STATES:
-            continue
-        if _subagent_has_collectible_result(root, row):
             continue
         if str(row.get("blocking_issue", "")).strip().lower() in {"owner_task_already_done", "stale_no_result", "owner_task_target_role_mismatch", "owner_task_outside_active_cycle"}:
             continue
@@ -3049,7 +3188,7 @@ def _collect_finished_dev_subagents(root: Path, source: str, owner_task_filter: 
             actions.append(f"dev_skip_done:{task_id_value}")
             continue
         status_token = _payload_status(payload)
-        if status_token in SUCCESS_SUBAGENT_STATUSES and _payload_has_delivery_evidence(payload):
+        if _payload_semantic_success(payload, target_role="dev"):
             evidence = {
                 "root_cause": str(payload.get("root_cause", "none")),
                 "fix_applied": str(payload.get("fix_applied", "none")),
@@ -3312,7 +3451,7 @@ def _collect_finished_admin_subagents(root: Path, source: str, owner_task_filter
                 _write_planner_registry_rows(config, rows)
             actions.append(f"admin_collect_secondary_compat:{task_id_value}")
             continue
-        if status_token in SUCCESS_SUBAGENT_STATUSES and _payload_has_delivery_evidence(payload, target_role="admin"):
+        if _payload_semantic_success(payload, target_role="admin"):
             evidence = _build_admin_evidence(payload, task_id_value)
             with board_lock(board_path):
                 board = load_board(board_path)
@@ -3496,7 +3635,7 @@ def _collect_orphan_result_payloads(root: Path, source: str, owner_task_filter: 
             if str(task.get("state", "")).strip().upper() == STATE_DONE:
                 continue
             status_token = _payload_status(payload)
-            if role_token == "dev" and status_token in SUCCESS_SUBAGENT_STATUSES and _payload_has_delivery_evidence(payload):
+            if role_token == "dev" and _payload_semantic_success(payload, target_role="dev"):
                 evidence = {
                     "root_cause": str(payload.get("root_cause", "none")),
                     "fix_applied": str(payload.get("fix_applied", "none")),
@@ -3513,7 +3652,7 @@ def _collect_orphan_result_payloads(root: Path, source: str, owner_task_filter: 
                 if _complete_task_from_evidence(root=root, board_path=board_path, role="dev", task_id_value=task_id_value, evidence=evidence, source=source, board=board):
                     actions.append(f"orphan_dev_complete:{task_id_value}")
                 continue
-            if role_token == "admin" and status_token in SUCCESS_SUBAGENT_STATUSES and _payload_has_delivery_evidence(payload, target_role="admin"):
+            if role_token == "admin" and _payload_semantic_success(payload, target_role="admin"):
                 evidence = _build_admin_evidence(payload, task_id_value)
                 if _complete_task_from_evidence(root=root, board_path=board_path, role="admin", task_id_value=task_id_value, evidence=evidence, source=source, board=board):
                     actions.append(f"orphan_admin_complete:{task_id_value}")
@@ -3724,6 +3863,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--owner-task-id", default="")
     parser.add_argument("--target-role", default="")
     parser.add_argument("--subagent-id", default="")
+    parser.add_argument("--allow-active-queued", action="store_true")
     return parser
 
 
@@ -3784,6 +3924,164 @@ def _projection_runtime_meta(root: Path) -> dict[str, Any]:
     }
 
 
+def _autobatch_active_cycle_batch_ids(queue_payload: dict[str, Any], board_payload: dict[str, Any]) -> set[str]:
+    batch_ids: set[str] = set()
+    for payload in (queue_payload, board_payload):
+        active_cycle = payload.get("active_cycle")
+        if not isinstance(active_cycle, dict):
+            continue
+        raw_ids = active_cycle.get("active_batch_ids")
+        if not isinstance(raw_ids, list):
+            continue
+        for raw in raw_ids:
+            token = str(raw or "").strip().upper()
+            if token:
+                batch_ids.add(token)
+    return batch_ids
+
+
+def _autobatch_closed_queue_batch_ids(queue_payload: dict[str, Any]) -> set[str]:
+    batch_ids: set[str] = set()
+    items = queue_payload.get("items")
+    if not isinstance(items, list):
+        return batch_ids
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        batch_id = str(item.get("id") or item.get("batch_id") or "").strip().upper()
+        status = str(item.get("state") or item.get("status") or "").strip().upper()
+        if batch_id and status in {"CLOSED", "DONE", "PASS"}:
+            batch_ids.add(batch_id)
+    return batch_ids
+
+
+def _autobatch_done_workboard_batch_ids(board_payload: dict[str, Any]) -> set[str]:
+    tasks = board_payload.get("tasks")
+    if not isinstance(tasks, list):
+        return set()
+    done_statuses = {"DONE", "PASS", "CLOSED"}
+    batch_statuses: dict[str, list[str]] = {}
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        task_id = str(task.get("id") or task.get("task_id") or "").strip().upper()
+        stream_id = str(task.get("stream_id") or task.get("batch_id") or "").strip().upper()
+        batch_id = stream_id or _task_batch_prefix(task_id)
+        if not batch_id:
+            continue
+        status = str(task.get("status") or task.get("state") or "").strip().upper() or "UNKNOWN"
+        batch_statuses.setdefault(batch_id, []).append(status)
+    return {
+        batch_id
+        for batch_id, statuses in batch_statuses.items()
+        if statuses and all(status in done_statuses for status in statuses)
+    }
+
+
+def _task_batch_prefix(task_id: str) -> str:
+    token = str(task_id or "").strip().upper()
+    if token.startswith("BATCH-"):
+        parts = token.split("-")
+        if len(parts) >= 2:
+            return "-".join(parts[:2])
+    return ""
+
+
+def _autobatch_runtime_delta(row: dict[str, Any]) -> str:
+    result = row.get("capability_result", {}) if isinstance(row.get("capability_result"), dict) else {}
+    proof = row.get("delivery_proof", {}) if isinstance(row.get("delivery_proof"), dict) else {}
+
+    artifact = str(result.get("artifact", "") or proof.get("artifact", "")).strip()
+    if _delivery_value_present(artifact):
+        return "artifact_delta"
+
+    files_touched = str(result.get("files_touched", "")).strip()
+    if _delivery_value_present(files_touched):
+        return "code_delta"
+
+    tests_run = str(result.get("tests_run", "") or proof.get("tests_run", "")).strip()
+    if _delivery_value_present(tests_run) and tests_run.strip().lower() != "skip(no_code_runtime_fix)":
+        return "test_delta"
+
+    verify = str(result.get("verify", "") or proof.get("verify", "")).strip()
+    if _delivery_value_present(verify):
+        return "verify_delta"
+
+    summary = str(result.get("summary", "") or proof.get("summary", "")).strip().lower()
+    if "contract_snapshot" in summary:
+        return "contract_snapshot"
+    return "none"
+
+
+def _autobatch_residue_is_stale_runtime_debt(row: dict[str, Any]) -> bool:
+    status = str(row.get("status", "") or "").strip().lower()
+    if status not in {"running", "pending", "in_progress", "retryable", "blocked", "ready_to_merge"}:
+        return False
+    if _autobatch_runtime_delta(row) != "none":
+        return False
+
+    current_node = str(row.get("current_node", "") or "").strip().lower()
+    next_action = str(row.get("next_action", "") or "").strip().lower()
+    if status in {"running", "pending", "in_progress"}:
+        if current_node != "wait_or_collect_result" and next_action != "wait_or_collect_result":
+            return False
+    elif status == "ready_to_merge":
+        if current_node not in {"apply_workboard_mutation", "close_or_requeue"}:
+            return False
+    else:
+        if current_node != "close_or_requeue" and next_action != "close_or_requeue":
+            return False
+
+    updated_at = _parse_iso_utc(row.get("updated_at"))
+    if updated_at is None:
+        return False
+    age_seconds = max(0.0, (datetime.now(timezone.utc) - updated_at).total_seconds())
+    return age_seconds >= AUTOBATCH_STALE_RUNTIME_RESIDUE_SECONDS
+
+
+def _autobatch_runtime_residue(root: Path, queue_path: Path, board_path: Path) -> dict[str, str] | None:
+    active_statuses = {"running", "retryable", "blocked", "in_progress", "pending", "review", "ready_to_merge"}
+    queue_payload = _load_json_dict(queue_path)
+    board_payload = _load_json_dict(board_path)
+    active_cycle_batch_ids = _autobatch_active_cycle_batch_ids(queue_payload, board_payload)
+    closed_queue_batch_ids = _autobatch_closed_queue_batch_ids(queue_payload)
+    done_workboard_batch_ids = _autobatch_done_workboard_batch_ids(board_payload)
+    if not active_cycle_batch_ids:
+        runtime_truth = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24)
+        total_graph_state_count = int(runtime_truth.get("graph_state_count_total", 0) or 0)
+        if bool(runtime_truth.get("event_store_primary", False)) and total_graph_state_count == 0:
+            return None
+    latest_states = latest_graph_states(root, limit=256)
+    if not isinstance(latest_states, list):
+        return None
+
+    for row in latest_states:
+        if not isinstance(row, dict):
+            continue
+        status = str(row.get("status", "") or "").strip().lower()
+        if status not in active_statuses:
+            continue
+        if _autobatch_residue_is_stale_runtime_debt(row):
+            continue
+        batch_id = str(row.get("batch_id", "") or "").strip().upper() or _task_batch_prefix(
+            str(row.get("task_id", "") or "")
+        )
+        if batch_id and batch_id in active_cycle_batch_ids:
+            continue
+        if batch_id and (
+            batch_id in done_workboard_batch_ids
+            or batch_id in closed_queue_batch_ids
+        ):
+            continue
+        return {
+            "batch_id": batch_id or "none",
+            "task_id": str(row.get("task_id", "") or "").strip() or "none",
+            "status": status,
+            "updated_at": str(row.get("updated_at", "") or "").strip() or "unknown",
+        }
+    return None
+
+
 def _load_json_dict(path: Path) -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
@@ -3837,6 +4135,19 @@ def _reconcile_state_cli(root: Path, board_path: Path, queue_path: Path) -> int:
 
 def _planner_autobatch_cli(root: Path, board_path: Path, queue_path: Path, args: argparse.Namespace) -> int:
     runtime_meta = _projection_runtime_meta(root)
+    runtime_residue = _autobatch_runtime_residue(root, queue_path, board_path)
+    if runtime_residue is not None:
+        print(
+            "AUTOBATCH_SKIP "
+            "reason=runtime_truth_residue_active "
+            f"batch_id={runtime_residue.get('batch_id', 'none')} "
+            f"task_id={runtime_residue.get('task_id', 'none')} "
+            f"status={runtime_residue.get('status', 'unknown')} "
+            f"updated_at={runtime_residue.get('updated_at', 'unknown')} "
+            f"runtime_truth_source={runtime_meta['runtime_truth_source']} "
+            f"event_store_primary={1 if runtime_meta['event_store_primary'] else 0}"
+        )
+        return 0
     novelty_gate: dict[str, Any] = {"allow_autobatch": True, "status": "unknown", "reason": "not_evaluated"}
     try:
         import importlib.util
@@ -3879,6 +4190,7 @@ def _planner_autobatch_cli(root: Path, board_path: Path, queue_path: Path, args:
             cooldown_s=max(0, int(args.cooldown_s)),
             source=str(args.source or "planner_runtime_actions").strip() or "planner_runtime_actions",
             workspace_root=root,
+            allow_active_queued=bool(getattr(args, "allow_active_queued", False)),
         )
         if str(result.get("board_changed", "")).strip() == "1":
             save_board(board_path, board)
@@ -3889,6 +4201,7 @@ def _planner_autobatch_cli(root: Path, board_path: Path, queue_path: Path, args:
                 f"stream_created={result.get('stream_created', '0')} "
                 f"task_created={result.get('task_created', '0')} "
                 f"cooldown_applied={result.get('cooldown_applied', '0')} "
+                f"queued_only={result.get('queued_only', '0')} "
                 f"runtime_truth_source={runtime_meta['runtime_truth_source']} "
                 f"event_store_primary={1 if runtime_meta['event_store_primary'] else 0}"
             )

@@ -61,9 +61,13 @@ Et ajoutent:
 Validation (VM):
 ```bash
 cd /home/venom/analyse-financiere
-scripts/critical_endpoints_smoke.sh --base-url http://127.0.0.1:8050
+scripts/critical_endpoints_smoke.sh --base-url http://3.98.20.77
 scripts/runtime_e2e_gate.sh
 ```
+
+Note:
+- Use `http://3.98.20.77` from the UTM VM for public product API proof.
+- Reserve `127.0.0.1:8050` for host-local app debugging when logged directly into the app host.
 
 ## 2026-03-06 Monitor API additions (non-edge, additive)
 

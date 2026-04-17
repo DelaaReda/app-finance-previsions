@@ -1,0 +1,57 @@
+proof_id: "PRF-BATCH-96-BATCH-96-DEV-01-20260416T235023Z-933"
+stream_id: "BATCH-96"
+task_id: "BATCH-96-DEV-01"
+role: "dev"
+produced_at_utc: "2026-04-16T23:50:23Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope show what changed today and what matters now [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "layer=api"
+    - "imports_ok=yes"
+    - "path_target=public_ec2=`http://3.98.20.77/api/personal-finance/start?tickers=nvda`_->_`brief_of_day.what_changed_today=[\"leadership:_{'sector':_'unknown'"
+    - "'momentum':_-0.016"
+    - "'direction':_'down'"
+    - "'size':_8}\"]`"
+    - "`brief_of_day.what_ma"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T23:50:23Z"
+      ended_at_utc: "2026-04-16T23:50:23Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`PYTHONPATH=apps/api/src python3 -m pytest apps/api/src/domains/copilot/tests/test_personal_finance_copilot_start.py -k 'story_lines or finalize_copilot_start_contract' -q`"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "public_ec2=`http://3.98.20.77/api/personal-finance/start?tickers=NVDA` -> `brief_of_day.what_changed_today=[\"Leadership: {'sector': 'Unknown', 'momentum': -0.016, 'direction': 'down', 'size': 8}\"]`, `brief_of_day.what_ma"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-96-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-96-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=The new brief story-line enrichment existed only in the copilot service builder path; when the start route finalized fallback/context payloads, it did not re-apply that enrichment, so the public EC2 start response still  | fix_applied=Added `what_changed_today` and `what_matters_now` to `CopilotBriefDto`, derived those lists from brief signals/risks/sector rotation in `copilot_service`, and updated `_finalize_copilot_start_contract()` to preserve the  | verify=before=public `GET /api/personal-finance/start?tickers=NVDA` returned `what_changed_today=null` and `what_matters_now=null`; after=the same public EC2 endpoint returns non-empty arrays for both fields and `GET /api/healt | architecture_check=layer=shared_contract+copilot_application+copilot_api; imports_ok=yes; path_target=`packages/contracts/copilot_v1.py, apps/api/src/domains/copilot/application/copilot_service.py, apps/api/src/domains/copilot/api/copilot. | vision_alignment=batch=BATCH-96; target=show_what_changed_today_and_what_matters_now; impact=the public brief+ask entrypoint now surfaces explicit story lines about today's changes and current priorities without requiring a frontend rewr"

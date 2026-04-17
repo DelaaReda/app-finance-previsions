@@ -1,5 +1,9 @@
 # 🤖 Agent Guide: Using TEAM_CHAT
 
+Historical/team-chat note:
+- This guide is about collaboration messages, not current runtime routing.
+- Any `localhost:*` app example inside message examples is historical or illustrative only, not current public app guidance.
+
 **For**: All agent roles (planner, dev, tester, qa, backend_engineer, frontend_engineer, data_analyst, analyst, architect, integrator, infra_engineer)
 
 ---

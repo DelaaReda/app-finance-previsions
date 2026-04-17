@@ -17,6 +17,7 @@ from orchestrator_paths import (
     resolve_orchestrator_read_path,
     runtime_state_is_paused,
     runtime_state_root,
+    write_orchestrator_json,
 )
 
 
@@ -77,6 +78,16 @@ class OrchestratorPathsTests(unittest.TestCase):
             )
 
             self.assertTrue(runtime_state_is_paused(root))
+
+    def test_write_orchestrator_json_mirrors_runtime_and_docs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+
+            runtime_path = write_orchestrator_json(root, "parallel-workstreams.json", {"tasks": [{"id": "BATCH-01-DEV-01"}]})
+            docs_path = root / "docs" / "operations" / "orchestrator" / "parallel-workstreams.json"
+
+            self.assertEqual(json.loads(runtime_path.read_text(encoding="utf-8")), {"tasks": [{"id": "BATCH-01-DEV-01"}]})
+            self.assertEqual(json.loads(docs_path.read_text(encoding="utf-8")), {"tasks": [{"id": "BATCH-01-DEV-01"}]})
 
 
 if __name__ == "__main__":

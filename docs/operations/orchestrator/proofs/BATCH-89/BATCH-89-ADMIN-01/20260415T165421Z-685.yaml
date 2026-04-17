@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-89-BATCH-89-ADMIN-01-20260415T165421Z-685"
+stream_id: "BATCH-89"
+task_id: "BATCH-89-ADMIN-01"
+role: "admin"
+produced_at_utc: "2026-04-15T16:54:21Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [admin-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[admin-01]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T16:54:21Z"
+      ended_at_utc: "2026-04-15T16:54:21Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS `python3 -m pytest /home/venom/analyse-financiere/apps/monitor/tests/test_status_lite_health_semantics.py`; PASS `python3 -m pytest /home/venom/analyse-financiere/apps/monitor/tests/test_status_lite_health_semantics"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/admin.last_contract"
+  artifacts:
+    - "Live proof: `http://127.0.0.1:7779/api/status?lite=1` returned `health=OK`, `active_batch=BATCH-89`, `admin.status=IN_PROGRESS`, `admin.blocker=NONE`; snapshot proof: `docs/operations/orchestrator/executors-monitoring-la"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "admin"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-89-ADMIN-01"
+  review_ref: "planner_subagent_manager:BATCH-89-ADMIN-01"
+  note: "source=planner_subagent_manager | root_cause=`apps/monitor/server.py` trusted stale `latest_snapshot.summary.blocker_roles` and `stale_context_open` even in planner-only runtime, so old planner/admin context kept `/api/status?lite=1` and the monitor snapshot degrad | fix_applied=Patched `apps/monitor/server.py` to reconcile summary blocker/stale-context flags against current agent state only in planner-only/planner-capability mode, added a regression test in `apps/monitor/tests/test_status_lite_ | verify=PASS `python3 -m pytest /home/venom/analyse-financiere/apps/monitor/tests/test_status_lite_health_semantics.py -q` -> `2 passed in 0.97s`; PASS `bash /home/venom/analyse-financiere/scripts/monitor_stack_guard.sh`; PASS ` | architecture_check=Scope stayed inside monitor/control-plane observability. No queue/workboard/runtime-truth writers were changed; the patch only adjusts health aggregation to prefer current planner-capability truth over stale summary proj | vision_alignment=Restores trustworthy green runtime evidence for the active personal-finance brief+ask/open stream, removing an admin-side observability blocker without widening beyond the current BATCH-89 delivery path."

@@ -20,6 +20,7 @@ Single canonical entrypoint into the current architecture and migration state.
 ## Active supporting docs required by policy
 - [ARCHITECTURAL_BLACKLIST.md](./ARCHITECTURAL_BLACKLIST.md)
 - [JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md](./JUDGE_PARITY_ENDPOINT_ARCHITECTURE.md)
+- [EC2_APP_RUNTIME_QUICK_REFERENCE.md](./EC2_APP_RUNTIME_QUICK_REFERENCE.md)
 - [COMMIT_ONLY_WORKFLOW_POLICY.md](./COMMIT_ONLY_WORKFLOW_POLICY.md)
 - [ADR_LANGGRAPH_PYDANTIC_RUNTIME_MIGRATION_2026-03-13.md](./ADR_LANGGRAPH_PYDANTIC_RUNTIME_MIGRATION_2026-03-13.md)
 - [ORCHESTRATION_RELIABILITY_SPEC.md](./ORCHESTRATION_RELIABILITY_SPEC.md)
@@ -29,6 +30,7 @@ Single canonical entrypoint into the current architecture and migration state.
 ## Current reality
 - The doctrinal cutover is done in docs.
 - The technical cutover is partial.
+- The public app-serving stack now lives on EC2 public endpoints, not on the local VM.
 - `platform/automation/planning/plane/plane_runtime_sync.py` exists but is not yet the uncontested primary sync path.
 - `runtime_truth_reader.py` exists but legacy JSON and JSONL bridges still remain too central in monitor and runtime flows.
 - `planner_subagent_manager.py` and `parallel_workstream.py` still carry too much bridge logic.
@@ -41,8 +43,14 @@ Single canonical entrypoint into the current architecture and migration state.
 - LangGraph + SQLite are the execution truth. `planner` is the only scheduler.
 - OpenClaw + systemd are the operator plane.
 - `codex exec` is the primary agent executor. `qwen cli` is fallback for agents only. `g4f` is app-only.
+- The local VM is orchestration-only. Public product/API checks must use the EC2 public endpoints.
+- EC2 app control from the UTM VM must go through `scripts/aws_remote_app_control.sh`.
+- Mac and the UTM VM share the same workspace view; this is local workspace sharing only.
+- EC2 app publication is a separate shared-workspace -> AWS step.
+- Canonical operator path is Mac-side publication; if the operator explicitly launches the same wrapper from the UTM VM, it still publishes the same shared workspace snapshot, not VM-local orchestration state.
 - Queue, workboard, and repo docs are projections or references only.
 - Active scripts and prompts must never treat `docs/product/planning/tasks.md`, `stories.md`, `epics.md`, or `docs/planning/*` as backlog truth.
+- If a proof, migration report, team chat dump, or legacy ops note still shows `localhost:*` app endpoints, treat it as historical evidence only. Current operator guidance is `AGENTS.md` + `EC2_APP_RUNTIME_QUICK_REFERENCE.md` + this index.
 
 ## Remaining bridge removal priorities
 - make `Plane webhook -> platform/automation/planning/plane/plane_runtime_sync.py -> SQLite/event state -> projections` the live primary path
@@ -60,3 +68,4 @@ Single canonical entrypoint into the current architecture and migration state.
 - [archive/README.md](./archive/README.md)
 - [../product/planning/reference/README.md](../product/planning/reference/README.md)
 - [../product/planning/archive/README.md](../product/planning/archive/README.md)
+- Historical BATCH proofs, runtime validations, migration reports, and team-chat dumps may still contain pre-EC2 `localhost:*` examples. They are not current runtime instructions.

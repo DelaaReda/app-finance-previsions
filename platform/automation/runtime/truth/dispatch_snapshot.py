@@ -13,7 +13,7 @@ from .runtime_truth_reader import build_runtime_truth_snapshot
 
 
 ACTIVE_GRAPH_STATUSES = {"running", "pending"}
-SUCCESS_STATUSES = {"completed", "merged", "done", "pass", "ok", "success"}
+SUCCESS_STATUSES = {"complete", "completed", "merged", "done", "pass", "ok", "success"}
 BLOCKED_STATUSES = {"blocked"}
 INVALID_RESULT_MARKERS = (
     "invalid_subagent_result",
@@ -163,6 +163,32 @@ def _active_cycle_batch_ids(queue_payload: dict[str, Any], workboard_payload: di
             token = str(raw or "").strip().upper()
             if token and token not in ordered:
                 ordered.append(token)
+    if ordered:
+        return tuple(ordered)
+
+    queue_items = queue_payload.get("items", []) if isinstance(queue_payload, dict) else []
+    if isinstance(queue_items, list):
+        for row in queue_items:
+            if not isinstance(row, dict):
+                continue
+            state = str(row.get("state", "") or row.get("status", "")).strip().upper()
+            if state in {"DONE", "CLOSED", "CANCELLED"}:
+                continue
+            token = _task_batch_id(row)
+            if token and token not in ordered:
+                ordered.append(token)
+
+    workboard_tasks = workboard_payload.get("tasks", []) if isinstance(workboard_payload, dict) else []
+    if isinstance(workboard_tasks, list):
+        for row in workboard_tasks:
+            if not isinstance(row, dict):
+                continue
+            state = str(row.get("state", "") or row.get("status", "")).strip().upper()
+            if state in {"DONE", "CLOSED", "CANCELLED"}:
+                continue
+            token = _task_batch_id(row)
+            if token and token not in ordered:
+                ordered.append(token)
     return tuple(ordered)
 
 
@@ -211,7 +237,7 @@ def _row_matches_active_cycle(
     task_index: dict[str, dict[str, Any]],
 ) -> bool:
     if not active_cycle_batch_ids:
-        return True
+        return False
     batch_id = _row_batch_id(row, task_index)
     return bool(batch_id) and batch_id in active_cycle_batch_ids
 
@@ -223,7 +249,7 @@ def _event_matches_active_cycle(
     task_index: dict[str, dict[str, Any]],
 ) -> bool:
     if not active_cycle_batch_ids:
-        return True
+        return False
     batch_id = str(event.get("batch_id", "") or payload.get("batch_id", "")).strip().upper()
     if not batch_id:
         task_id = str(event.get("task_id", "") or payload.get("task_id", "")).strip()
@@ -277,7 +303,14 @@ def _quarantine_retryable_residue(
         return None
 
     status = str(row.get("status", "")).strip().lower()
-    if status not in {"retryable", "failed", "blocked"}:
+    done_owner_state = task_state in {"done", "closed"}
+    if status == "ready_to_merge":
+        if not done_owner_state or _proof_count(row) <= 0:
+            return None
+    elif status in SUCCESS_STATUSES:
+        if not done_owner_state:
+            return None
+    elif status not in {"retryable", "failed", "blocked"}:
         return None
 
     failure_mode = _failure_mode(row)
@@ -287,7 +320,7 @@ def _quarantine_retryable_residue(
             str(row.get("summary", "")),
         ]
     ).strip().lower()
-    if failure_mode != "invalid_result" and "start_banner_only" not in issue_bits:
+    if status not in ({"ready_to_merge"} | SUCCESS_STATUSES) and not done_owner_state and failure_mode != "invalid_result" and "start_banner_only" not in issue_bits:
         return None
 
     quarantined = dict(row)
@@ -464,6 +497,7 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
     for row in normalized:
         in_active_cycle = _row_matches_active_cycle(row, active_cycle_batch_ids, workboard_task_index)
         status = str(row.get("status", "")).strip().lower()
+        quarantined_residue = _quarantine_retryable_residue(row, workboard_task_index) if event_store_primary else None
         if status in ACTIVE_GRAPH_STATUSES:
             quarantined = _quarantine_runtime_inconsistent_active(row, workboard_task_index) if event_store_primary else None
             if quarantined is None:
@@ -480,9 +514,8 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
             else:
                 ignored_historical_rows.append(row)
         else:
-            quarantined = _quarantine_retryable_residue(row, workboard_task_index) if event_store_primary else None
-            if quarantined is not None:
-                quarantined_retryable_residue.append(quarantined)
+            if quarantined_residue is not None:
+                quarantined_retryable_residue.append(quarantined_residue)
             elif in_active_cycle:
                 non_active.append(row)
             else:
@@ -538,12 +571,21 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
     recent_timeout_like_count = sum(1 for row in recent if _failure_mode(row) == "timeout")
     recovering = bool(active) and (recent_failed_count > 0 or recent_blocked_count > 0)
 
+    unresolved_historical_rows = [
+        row
+        for row in ignored_historical_rows
+        if str(row.get("status", "")).strip().lower() not in SUCCESS_STATUSES
+    ]
+    historical_runtime_residue = bool(event_store_primary and not active_cycle_batch_ids and unresolved_historical_rows)
+
     if workboard["waiting_dep"] > 0:
         current_bottleneck = "waiting_dependencies"
     elif effective_ready_total > 0 and not active:
         current_bottleneck = "dispatch_idle"
     elif recent_failed_count > 0 or recent_blocked_count > 0:
         current_bottleneck = "capability_failures"
+    elif historical_runtime_residue:
+        current_bottleneck = "historical_runtime_residue"
     else:
         current_bottleneck = "none"
 
@@ -569,6 +611,9 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
     tasks_progressed_last_1h = len(progressed_task_ids)
     needs_dispatch = ready_total > 0 and not active
     stalled_ready_dev = ready_dev_count > 0 and not active and tasks_progressed_last_1h == 0
+    recommended_next_action = "dispatch" if needs_dispatch else "monitor"
+    if historical_runtime_residue and not needs_dispatch:
+        recommended_next_action = "quarantine_runtime_residue"
     compat_registry_path = resolve_orchestrator_read_path(root, "planner-subagents-registry.json")
     registry_path = "secondary_compat_only" if event_store_primary else str(compat_registry_path)
 
@@ -650,7 +695,7 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
             and str(row.get("artifact", "")).strip().lower() not in {"", "none", "n/a", "na"}
         ),
         "current_bottleneck": current_bottleneck,
-        "recommended_next_action": "dispatch" if needs_dispatch else "monitor",
+        "recommended_next_action": recommended_next_action,
         "needs_dispatch": needs_dispatch,
         "stalled_ready_dev": stalled_ready_dev,
         "active_subagents": len(active),
@@ -658,7 +703,7 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
         "planner_graph_engine": str((graph_states[0].get("engine") if graph_states else "none") or "none"),
         "planner_graph_state_count": len(graph_states),
         "legacy_registry_secondary_only": True,
-        "projection_secondary_only": bool(event_store_primary),
+        "projection_secondary_only": not bool(event_store_primary),
         "registry_compat_only": True,
         "planner_graph_ready_to_merge_count": sum(1 for row in graph_states if str(row.get("status", "")).strip().lower() == "ready_to_merge"),
         "planner_graph_retryable_count": sum(1 for row in graph_states if str(row.get("status", "")).strip().lower() == "retryable"),
@@ -668,5 +713,6 @@ def build_stable_planner_dispatch_snapshot(root: Path, *, recent_limit: int = 12
             for row in graph_states
             if _row_matches_active_cycle(_normalize_graph_state(row), active_cycle_batch_ids, workboard_task_index)
         ][:8],
+        "historical_runtime_residue_detected": historical_runtime_residue,
         "historical_rows_ignored_count": len(ignored_historical_rows),
     }

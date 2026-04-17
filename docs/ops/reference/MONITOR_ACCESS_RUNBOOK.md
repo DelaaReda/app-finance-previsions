@@ -3,6 +3,11 @@
 ## Purpose
 Define the canonical access paths for FC Monitor.
 
+Scope boundary:
+- This runbook is for the VM-local orchestration/control-plane monitor surfaces (`127.0.0.1:7779`, `192.168.64.9:7780`).
+- It does not define the public app-serving monitor on AWS EC2.
+- Public app-serving monitor reference: `http://3.98.20.77:8080/` and `docs/ops/EC2_APP_RUNTIME_QUICK_REFERENCE.md`.
+
 The monitor is now operated in `LAN-only` mode by default.
 Public tunnels are disabled to avoid ambiguous URLs and stale health signals.
 

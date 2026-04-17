@@ -11,6 +11,8 @@ superseded_by:
 Historical note:
 - This onboarding guide reflects a migration-era state.
 - Use current canonical entrypoints and agent-ready docs instead.
+- Current public app runtime is AWS EC2 (`http://3.98.20.77`, `http://3.98.20.77/api/...`, `http://3.98.20.77:8080/...`).
+- Any `localhost:8050`, `localhost:5173`, `localhost:7779` examples below are legacy/historical and not current team operator guidance.
 
 **Date:** 2026-02-28  
 **Version:** 1.0  

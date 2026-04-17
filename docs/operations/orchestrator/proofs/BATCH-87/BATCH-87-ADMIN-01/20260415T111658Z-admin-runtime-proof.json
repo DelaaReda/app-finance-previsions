@@ -1,0 +1,33 @@
+{
+  "task_id": "BATCH-87-ADMIN-01",
+  "stream": "BATCH-87",
+  "role": "admin",
+  "generated_at_utc": "2026-04-15T11:16:58Z",
+  "status": "blocked",
+  "summary": "Runtime monitor/cron truth and endpoint probes were revalidated after DEV-03 completion. Infrastructure is healthy and coherent across queue/workboard/runtime snapshots, but `/api/personal-finance/ask` remains erroring with LLM timeout so admin closure cannot proceed.",
+  "root_cause": "`planner_runtime_actions.py --collect-only` blocks `BATCH-87-ADMIN-01` with `backend_regression_gate` / proof constraints, while live checks show API start flow is healthy and ask responses are in `model:\"error\"` / `quality_status:\"error\"` (`copilot ask llm timed out after 8.00s`).",
+  "fix_applied": "No runtime control-plane patch required for this pass. Performed a fresh evidence capture run and emitted consolidated blocker proof for handoff.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-87/BATCH-87-ADMIN-01/20260415T111658Z-admin-runtime-proof.json",
+  "verify": [
+    "PASS runtime_host_check: runtime_is_vm=1",
+    "PASS fc_status_brief: in_progress=0 waiting_dep=1 batches ready=0 closed=86 with queue/workboard mismatch=0",
+    "PASS fc_health_check: backend/frontend/monitor contracts OK; stale locks=0; cron schedule detected (1 tick +14 crontab entries)",
+    "PASS fc_reactivate_guard --audit-only: stale locks cleaned (shared=0 role_state=0 fc=0)",
+    "PASS dependency_recompute: delivery_chain_unblock=source=none; queue waiting_dep=0; workboard in_progress=0 waiting_dep=1",
+    "PASS planner_runtime_actions collect-only: BATCH-87-ADMIN-01 collected",
+    "PASS curl /api/personal-finance/start?tickers=MSFT&tickers=AAPL returns healthy brief/open payload",
+    "FAIL curl /api/personal-finance/ask (payload returns `model:\"error\"`, `quality_status:\"error\"`, `error:\"copilot ask llm timed out after 8.00s\"`)"
+  ],
+  "verify_blocker": [
+    "BLOCKER `planner_runtime_actions` reports `admin_block` with backend regression gate-related failures and unrelated contract expectations for ADMIN-01 closure"
+  ],
+  "files_touched": [
+    "docs/operations/orchestrator/proofs/BATCH-87/BATCH-87-ADMIN-01/20260415T111658Z-admin-runtime-proof.json"
+  ],
+  "tests_run": "runtime smoke + control-plane probes only: runtime_host_check, fc_status_brief, fc_health_check, fc_reactivate_guard audit-only, dependency_recompute, planner_runtime_actions --collect-only, start/ask endpoint probes",
+  "commit_sha": "SKIP(no code/config change)",
+  "architecture_check": "PASS(admin scope only): queue/workboard, monitor contract, cron and lock state are aligned; no product schema/endpoint logic changes performed",
+  "vision_alignment": "PARTIAL: brief/open startup flow is live and shippable; ask fidelity is not, so user-visible ask promise is not yet complete",
+  "recommended_next": "planner_route_to_dev_or_scrum",
+  "blocking_issue": "`/api/personal-finance/ask` returns timeout error (`model: error`, `quality_status: error`, error text `copilot ask llm timed out after 8.00s`) and ADMIN-01 still blocked by backend regression/proof gating"
+}

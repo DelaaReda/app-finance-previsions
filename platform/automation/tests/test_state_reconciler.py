@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULE_PATH = ROOT / "platform" / "automation" / "state_reconciler.py"
@@ -204,6 +205,182 @@ class StateReconcilerTests(unittest.TestCase):
         self.assertEqual(task["dev_invalid_result_streak"], 0)
         self.assertFalse(task["dev_recovery_required"])
         self.assertEqual(task["last_capability_failure_mode"], "")
+
+    def test_runtime_placeholder_proof_is_not_projected_as_progress(self) -> None:
+        item = {
+            "task_id": "BATCH-85-DEV-03",
+            "batch_id": "BATCH-85",
+            "status": "retryable",
+            "blocking_issue": "invalid_subagent_result:start_banner_only",
+            "delivery_proof": {
+                "artifact": "...",
+                "verify": "before=...; after=...; test=...",
+                "tests_run": "...",
+                "commit_sha": "...",
+                "summary": "I need to inspect the implementation first",
+            },
+        }
+
+        self.assertEqual(MODULE._runtime_item_proof_fields(item), {})
+        self.assertEqual(MODULE._runtime_item_proof_count(item), 0)
+
+    def test_placeholder_task_proof_fields_are_cleared_from_projection(self) -> None:
+        self.board_path.write_text(json.dumps({
+            "active_cycle": {"active_batch_ids": ["BATCH-85"]},
+            "tasks": [{
+                "id": "BATCH-85-DEV-03",
+                "stream_id": "BATCH-85",
+                "role": "dev",
+                "state": "IN_PROGRESS",
+                "status": "IN_PROGRESS",
+                "artifact": "...",
+                "verify": "before=...; after=...; test=...",
+                "commit_sha": "...",
+                "tests_run": "...",
+                "files_touched": "...",
+                "proof_count": 3,
+                "updated_at": "2026-04-15T06:40:16Z",
+            }],
+            "streams": [{"id": "BATCH-85", "state": "IN_PROGRESS", "updated_at": "2026-04-15T06:40:16Z"}],
+            "events": [],
+        }), encoding="utf-8")
+        self.queue_path.write_text(json.dumps({
+            "active_cycle": {"active_batch_ids": ["BATCH-85"]},
+            "items": [{"id": "BATCH-85", "state": "IN_PROGRESS", "updated_at": "2026-04-15T06:40:16Z"}],
+        }), encoding="utf-8")
+
+        run_reconciler(self._config(), probe_runtime_ok=lambda: False, now_epoch=1776239000)
+        board = json.loads(self.board_path.read_text())
+        task = board["tasks"][0]
+
+        self.assertEqual(task["proof_count"], 0)
+        self.assertEqual(task["artifact"], "")
+        self.assertEqual(task["verify"], "")
+        self.assertEqual(task["commit_sha"], "")
+        self.assertEqual(task["tests_run"], "")
+        self.assertEqual(task["files_touched"], "")
+
+    def test_runtime_retryable_banner_downgrades_in_progress_task_back_to_ready_dev(self) -> None:
+        self.board_path.write_text(json.dumps({
+            "active_cycle": {"active_batch_ids": ["BATCH-88"]},
+            "tasks": [{
+                "id": "BATCH-88-DEV-01",
+                "stream_id": "BATCH-88",
+                "role": "dev",
+                "state": "IN_PROGRESS",
+                "status": "IN_PROGRESS",
+                "next_action": "retry_capability",
+                "dev_execution_state": "running",
+                "dev_invalid_result_streak": 2,
+                "updated_at": "2026-04-15T12:59:20Z",
+            }],
+            "streams": [{"id": "BATCH-88", "state": "IN_PROGRESS", "updated_at": "2026-04-15T12:59:20Z"}],
+            "events": [],
+        }), encoding="utf-8")
+        self.queue_path.write_text(json.dumps({
+            "active_cycle": {"active_batch_ids": ["BATCH-88"]},
+            "items": [{"id": "BATCH-88", "state": "IN_PROGRESS", "updated_at": "2026-04-15T12:59:20Z"}],
+        }), encoding="utf-8")
+
+        runtime_truth = {
+            "event_store_primary": True,
+            "latest_states": [
+                {
+                    "task_id": "BATCH-88-DEV-01",
+                    "batch_id": "BATCH-88",
+                    "status": "retryable",
+                    "blocking_issue": "invalid_subagent_result:start_banner_only",
+                    "next_action": "retry_capability",
+                }
+            ],
+            "quarantined_retryable_residue": [],
+        }
+
+        with patch.object(MODULE, "build_runtime_truth_snapshot", return_value=runtime_truth):
+            report = run_reconciler(self._config(), probe_runtime_ok=lambda: False, now_epoch=1776240000)
+
+        board = json.loads(self.board_path.read_text())
+        task = board["tasks"][0]
+        self.assertEqual(report["runtime_retryable_quarantined"], 1)
+        self.assertEqual(task["state"], "READY_DEV")
+        self.assertEqual(task["status"], "READY_DEV")
+        self.assertEqual(task["next_action"], "claim_now")
+        self.assertEqual(task["dev_execution_state"], "")
+        self.assertEqual(task["dev_invalid_result_streak"], 0)
+        self.assertTrue(task["runtime_truth_quarantined"])
+
+    def test_delivery_runtime_gate_clears_when_backend_health_fallback_is_ok(self) -> None:
+        self.board_path.write_text(json.dumps({
+            "active_cycle": {"active_batch_ids": ["BATCH-88"]},
+            "tasks": [{
+                "id": "BATCH-88-DEV-01",
+                "stream_id": "BATCH-88",
+                "role": "dev",
+                "state": "READY_DEV",
+                "status": "READY_DEV",
+                "policy_blocker": "backend_runtime_required_before_takeover",
+                "delivery_runtime_gate": {
+                    "active": True,
+                    "reason": "backend_runtime_required_before_takeover",
+                    "delivery_backend_reason": "status_lite_unavailable",
+                },
+                "updated_at": "2026-04-15T13:15:07Z",
+            }],
+            "streams": [{
+                "id": "BATCH-88",
+                "state": "READY_DEV",
+                "policy_blocker": "backend_runtime_required_before_takeover",
+                "delivery_runtime_gate": {
+                    "active": True,
+                    "reason": "backend_runtime_required_before_takeover",
+                    "delivery_backend_reason": "status_lite_unavailable",
+                },
+                "updated_at": "2026-04-15T13:15:07Z",
+            }],
+            "events": [],
+        }), encoding="utf-8")
+        self.queue_path.write_text(json.dumps({
+            "active_cycle": {"active_batch_ids": ["BATCH-88"]},
+            "items": [{
+                "id": "BATCH-88",
+                "state": "READY_DEV",
+                "policy_blocker": "backend_runtime_required_before_takeover",
+                "delivery_runtime_gate": {
+                    "active": True,
+                    "reason": "backend_runtime_required_before_takeover",
+                    "delivery_backend_reason": "status_lite_unavailable",
+                },
+                "updated_at": "2026-04-15T13:15:07Z",
+            }],
+        }), encoding="utf-8")
+
+        with patch.object(MODULE, "_fetch_local_json", return_value=None), patch.object(MODULE, "_http_status_ok", return_value=True):
+            report = run_reconciler(self._config(), probe_runtime_ok=lambda: False, now_epoch=1776240300)
+
+        board = json.loads(self.board_path.read_text())
+        queue = json.loads(self.queue_path.read_text())
+        self.assertEqual(report["delivery_runtime_gate_cleared"], 3)
+        self.assertEqual(report["delivery_runtime_blocked"], 0)
+        self.assertNotIn("delivery_runtime_gate", board["tasks"][0])
+        self.assertNotIn("policy_blocker", board["tasks"][0])
+        self.assertNotIn("delivery_runtime_gate", board["streams"][0])
+        self.assertNotIn("policy_blocker", board["streams"][0])
+        self.assertNotIn("delivery_runtime_gate", queue["items"][0])
+        self.assertNotIn("policy_blocker", queue["items"][0])
+
+    def test_delivery_backend_ready_uses_public_api_fallback_by_default(self) -> None:
+        seen: list[str] = []
+
+        def _capture(url: str, timeout: float = 1.5) -> bool:
+            seen.append(url)
+            return True
+
+        with patch.object(MODULE, "_fetch_local_json", return_value=None), patch.object(MODULE, "_http_status_ok", side_effect=_capture):
+            ready, reason = MODULE._delivery_backend_ready()
+
+        self.assertTrue(ready)
+        self.assertEqual(reason, "backend_health_fallback")
+        self.assertEqual(seen, ["http://3.98.20.77/api/health"])
 
 
 if __name__ == "__main__":

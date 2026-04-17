@@ -179,3 +179,4 @@ case "$cmd" in
   -h|--help|help|"") usage ;;
   *) echo "Unknown command: $cmd"; usage; exit 2 ;;
 esac
+{"ts_utc": "2026-04-15T19:44:46Z", "kind": "policy", "source": "planner_guardian", "targets": ["planner"], "ttl_min": 180, "message": "planner_guardian escalation: score=40; issues=projection_not_decision_capable,dependency_policy_not_enforced,missing_architecture_plan_ref,missing_vision_alignment,missing_architecture_audit; ready_idle_streak=0; low_score_streak=1; runway_no_batch_streak=9. Action attendue: claim READY ou creation batch top-level aligne vision+architecture.", "meta": {"score": 40, "issues": ["projection_not_decision_capable", "dependency_policy_not_enforced", "missing_architecture_plan_ref", "missing_vision_alignment", "missing_architecture_audit"], "source_contract": "admin_unblock_refresh"}}

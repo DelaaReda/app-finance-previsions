@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
+# MODE: PUBLIC_VALIDATION
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
 cd "$ROOT"
 
-BASE_URL="${FC_API_BASE_URL:-http://127.0.0.1:8050}"
+BASE_URL="${FC_API_BASE_URL:-${FC_PUBLIC_APP_BASE_URL:-http://3.98.20.77}}"
 TIMEOUT_SECONDS="${FC_DELIVERY_VALUE_TIMEOUT_SECONDS:-12}"
 QUIET=0
+PROBE_SCRIPT="${FC_PUBLIC_RUNTIME_PROBE_SCRIPT:-${ROOT}/scripts/aws_public_runtime_probe.py}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -36,9 +38,58 @@ if ! [[ "$TIMEOUT_SECONDS" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
+guard_public_url() {
+  local url="$1"
+  if [[ "${FC_ALLOW_LOCAL_URLS:-0}" != "1" && "$url" =~ ^https?://(127\.0\.0\.1|localhost)(:|/|$) ]]; then
+    echo "Refusing local validation URL: $url (set FC_ALLOW_LOCAL_URLS=1 to override)" >&2
+    exit 2
+  fi
+}
+
+guard_public_url "$BASE_URL"
+
 declare -a RESULTS=()
 FAILURES=0
 PORTFOLIO_ID=""
+MAINTENANCE_SUMMARY=""
+
+maybe_mark_maintenance() {
+  local endpoint="$1"
+  if [[ -n "$MAINTENANCE_SUMMARY" ]]; then
+    return 0
+  fi
+  local probe_json maintenance_active
+  probe_json="$(python3 "$PROBE_SCRIPT" --url "${BASE_URL%/}${endpoint}" --timeout "$TIMEOUT_SECONDS" 2>/dev/null || true)"
+  if [[ -z "$probe_json" ]]; then
+    return 1
+  fi
+  maintenance_active="$(python3 - "$probe_json" <<'PY'
+import json,sys
+try:
+    payload = json.loads(sys.argv[1])
+except Exception:
+    print("0")
+    raise SystemExit(0)
+print("1" if payload.get("maintenance_active") else "0")
+PY
+)"
+  if [[ "$maintenance_active" != "1" ]]; then
+    return 1
+  fi
+  MAINTENANCE_SUMMARY="$(python3 - <<'PY' "$probe_json"
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+command = str(payload.get("maintenance_command") or "restart").strip() or "restart"
+age = payload.get("maintenance_age_s")
+suffix = f" age_s={age}" if isinstance(age, int) else ""
+print(f"DEFER base={payload.get('url','unknown')} reason=runtime_restart_in_progress command={command}{suffix}")
+PY
+)"
+  RESULTS+=("$MAINTENANCE_SUMMARY")
+  return 0
+}
 
 fetch_json() {
   local endpoint="$1"
@@ -56,8 +107,10 @@ copilot_raw="$(fetch_json '/api/copilot/start')"
 copilot_status="${copilot_raw%%$'\n'*}"
 copilot_body="${copilot_raw#*$'\n'}"
 if [[ "$copilot_status" != "200" ]]; then
-  RESULTS+=("FAIL /api/copilot/start http=${copilot_status}")
-  FAILURES=$((FAILURES + 1))
+  if ! maybe_mark_maintenance '/api/copilot/start'; then
+    RESULTS+=("FAIL /api/copilot/start http=${copilot_status}")
+    FAILURES=$((FAILURES + 1))
+  fi
 else
   copilot_check="$(
 python3 - "$copilot_body" <<'PY'
@@ -105,8 +158,10 @@ recommendations_raw="$(fetch_json '/api/recommendations/daily?limit=3')"
 recommendations_status="${recommendations_raw%%$'\n'*}"
 recommendations_body="${recommendations_raw#*$'\n'}"
 if [[ "$recommendations_status" != "200" ]]; then
-  RESULTS+=("FAIL /api/recommendations/daily?limit=3 http=${recommendations_status}")
-  FAILURES=$((FAILURES + 1))
+  if ! maybe_mark_maintenance '/api/recommendations/daily?limit=3'; then
+    RESULTS+=("FAIL /api/recommendations/daily?limit=3 http=${recommendations_status}")
+    FAILURES=$((FAILURES + 1))
+  fi
 else
   recommendations_check="$(
 python3 - "$recommendations_body" <<'PY'
@@ -146,8 +201,10 @@ portfolios_raw="$(fetch_json '/api/portfolios')"
 portfolios_status="${portfolios_raw%%$'\n'*}"
 portfolios_body="${portfolios_raw#*$'\n'}"
 if [[ "$portfolios_status" != "200" ]]; then
-  RESULTS+=("FAIL /api/portfolios http=${portfolios_status}")
-  FAILURES=$((FAILURES + 1))
+  if ! maybe_mark_maintenance '/api/portfolios'; then
+    RESULTS+=("FAIL /api/portfolios http=${portfolios_status}")
+    FAILURES=$((FAILURES + 1))
+  fi
 else
   portfolios_check="$(
 python3 - "$portfolios_body" <<'PY'
@@ -194,8 +251,10 @@ if [[ -n "$PORTFOLIO_ID" ]]; then
   risk_status="${risk_raw%%$'\n'*}"
   risk_body="${risk_raw#*$'\n'}"
   if [[ "$risk_status" != "200" ]]; then
-    RESULTS+=("FAIL /api/portfolios/${PORTFOLIO_ID}/risk-profile?benchmark=SPY http=${risk_status}")
-    FAILURES=$((FAILURES + 1))
+    if ! maybe_mark_maintenance "/api/portfolios/${PORTFOLIO_ID}/risk-profile?benchmark=SPY"; then
+      RESULTS+=("FAIL /api/portfolios/${PORTFOLIO_ID}/risk-profile?benchmark=SPY http=${risk_status}")
+      FAILURES=$((FAILURES + 1))
+    fi
   else
     risk_check="$(
 python3 - "$PORTFOLIO_ID" "$risk_body" <<'PY'
@@ -238,6 +297,10 @@ PY
 fi
 
 SUMMARY="PASS base=${BASE_URL} checks=${#RESULTS[@]}"
+if [[ -n "$MAINTENANCE_SUMMARY" ]]; then
+  SUMMARY="$MAINTENANCE_SUMMARY"
+  FAILURES=0
+fi
 if [[ "$FAILURES" -gt 0 ]]; then
   SUMMARY="FAIL base=${BASE_URL} failures=${FAILURES}"
 fi

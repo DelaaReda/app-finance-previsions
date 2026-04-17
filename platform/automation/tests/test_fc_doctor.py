@@ -21,6 +21,12 @@ _SPEC.loader.exec_module(fc_doctor)
 
 
 class FCDoctorTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        fc_doctor._load_product_priority_guard.cache_clear()
+        fc_doctor._load_planner_dispatch_metrics.cache_clear()
+        fc_doctor._build_delivery_control_metrics.cache_clear()
+        fc_doctor._build_planner_dispatch_metrics.cache_clear()
+
     def test_capability_stall_recovery_treats_single_transient_timeout_as_ok(self) -> None:
         metrics = {
             "capability_stall_summary": {
@@ -183,6 +189,63 @@ class FCDoctorTests(unittest.TestCase):
         self.assertIn("mismatch_count", queue_workboard)
         self.assertIn("oldest_mismatch_age_s", queue_workboard)
 
+    def test_default_public_base_urls_follow_ec2_runtime(self) -> None:
+        with patch.dict(fc_doctor.os.environ, {}, clear=True):
+            self.assertEqual(fc_doctor._default_api_base_url(), "http://3.98.20.77")
+            self.assertEqual(fc_doctor._default_monitor_base_url(), "http://3.98.20.77:8080")
+
+        with patch.dict(
+            fc_doctor.os.environ,
+            {
+                "FC_PUBLIC_APP_BASE_URL": "http://public-app.example",
+                "FC_PUBLIC_MONITOR_BASE_URL": "http://public-monitor.example",
+            },
+            clear=True,
+        ):
+            self.assertEqual(fc_doctor._default_api_base_url(), "http://public-app.example")
+            self.assertEqual(fc_doctor._default_monitor_base_url(), "http://public-monitor.example")
+
+        with patch.dict(
+            fc_doctor.os.environ,
+            {
+                "FC_PUBLIC_APP_BASE_URL": "http://public-app.example",
+                "FC_PUBLIC_MONITOR_BASE_URL": "http://public-monitor.example",
+                "FC_API_BASE_URL": "http://explicit-api.example",
+                "FC_MONITOR_BASE_URL": "http://explicit-monitor.example",
+            },
+            clear=True,
+        ):
+            self.assertEqual(fc_doctor._default_api_base_url(), "http://explicit-api.example")
+            self.assertEqual(fc_doctor._default_monitor_base_url(), "http://explicit-monitor.example")
+
+    def test_remote_control_plane_checks_become_advisory_on_noncanonical_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            runtime_state_dir = root / "logs-codex-runs" / "orchestrator-state"
+            runtime_state_dir.mkdir(parents=True, exist_ok=True)
+            (runtime_state_dir / "runtime-state.json").write_text(
+                json.dumps({"lifecycle": "running", "execution_mode": "planner_experimental"}),
+                encoding="utf-8",
+            )
+            scheduler = fc_doctor.check_scheduler_authority(root)
+            sessions = fc_doctor.check_sessions(root)
+            runtime_truth = fc_doctor.check_runtime_truth(root)
+            openclaw = fc_doctor.check_openclaw_gateway(root)
+
+        self.assertEqual(scheduler.status, "ok")
+        self.assertEqual(scheduler.detail.get("control_plane_location"), "remote_vm")
+        self.assertTrue(scheduler.detail.get("advisory_only"))
+        self.assertEqual(sessions.status, "ok")
+        self.assertEqual(sessions.detail.get("control_plane_location"), "remote_vm")
+        self.assertTrue(sessions.detail.get("advisory_only"))
+        self.assertEqual(runtime_truth.status, "ok")
+        self.assertEqual(runtime_truth.detail.get("runtime_truth_source"), "remote_vm")
+        self.assertEqual(runtime_truth.detail.get("control_plane_location"), "remote_vm")
+        self.assertTrue(runtime_truth.detail.get("advisory_only"))
+        self.assertEqual(openclaw.status, "ok")
+        self.assertEqual(openclaw.detail.get("control_plane_location"), "remote_vm")
+        self.assertTrue(openclaw.detail.get("advisory_only"))
+
     def test_build_payload_treats_planner_dispatch_as_advisory(self) -> None:
         ok = fc_doctor.CheckResult(status="ok", detail={})
         degraded = fc_doctor.CheckResult(status="ok", detail={"status": "ok", "advisory_state": "degraded"})
@@ -195,9 +258,9 @@ class FCDoctorTests(unittest.TestCase):
             stack.enter_context(patch.object(fc_doctor, "check_scheduler_authority", return_value=ok))
             stack.enter_context(patch.object(fc_doctor, "check_sessions", return_value=ok))
             stack.enter_context(patch.object(fc_doctor, "check_locks", return_value=ok))
-            stack.enter_context(patch.object(fc_doctor, "check_queue_workboard", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_queue_workboard", side_effect=AssertionError("should not run")))
             stack.enter_context(patch.object(fc_doctor, "check_providers", return_value=ok))
-            stack.enter_context(patch.object(fc_doctor, "check_product_value", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_product_value", side_effect=AssertionError("should not run")))
             stack.enter_context(patch.object(fc_doctor, "check_delivery_integrity", return_value=ok))
             stack.enter_context(patch.object(fc_doctor, "check_delivery_future_integrity", return_value=ok))
             stack.enter_context(patch.object(fc_doctor, "check_browser_proof_pipeline", return_value=ok))
@@ -220,6 +283,208 @@ class FCDoctorTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertEqual(payload["checks"]["planner_dispatch"]["status"], "ok")
         self.assertEqual(payload["checks"]["planner_dispatch"]["advisory_state"], "degraded")
+
+    def test_build_payload_treats_browser_proof_pipeline_as_advisory(self) -> None:
+        ok = fc_doctor.CheckResult(status="ok", detail={})
+        degraded = fc_doctor.CheckResult(status="degraded", detail={"status": "degraded", "missing_task_ids": ["BATCH-89-ADMIN-01"]})
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(fc_doctor, "_runtime_state_detail", return_value={"lifecycle": "running"}))
+            stack.enter_context(patch.object(fc_doctor, "check_workspace_root", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_plane_planning", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_runtime_truth", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_openclaw_gateway", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_scheduler_authority", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_sessions", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_locks", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_queue_workboard", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_providers", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_product_value", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_delivery_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_delivery_future_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_browser_proof_pipeline", return_value=degraded))
+            stack.enter_context(patch.object(fc_doctor, "check_suspicious_completions", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_qa_review_pipeline", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_execution_model", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_progress_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_orphan_recovery", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_capability_stall_recovery", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_capability_result_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_planner_takeover_recovery", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_historical_delivery_debt", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_planner_dispatch", return_value=ok))
+            payload, code = fc_doctor.build_payload(
+                root=ROOT,
+                api_base="http://127.0.0.1:8050",
+                monitor_base="http://127.0.0.1:7779",
+            )
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["checks"]["browser_proof_pipeline"]["status"], "degraded")
+
+    def test_delivery_control_metrics_is_computed_once_per_doctor_run(self) -> None:
+        calls = {"count": 0}
+
+        class FakeGuard:
+            @staticmethod
+            def build_delivery_control_metrics(root: Path, window_hours: int = 24) -> dict:
+                calls["count"] += 1
+                return {
+                    "future_status": "ok",
+                    "future_delivery_integrity": {"status": "ok"},
+                    "browser_proof_pipeline": {"status": "ok"},
+                    "suspicious_completions": {"count": 0},
+                    "qa_review_pipeline": {"status": "ok"},
+                    "capability_stall_summary": {"count": 0, "items": []},
+                    "historical_debt": {"count": 0},
+                }
+
+        ok = fc_doctor.CheckResult(status="ok", detail={})
+        runtime_truth_ok = fc_doctor.CheckResult(
+            status="ok",
+            detail={"event_store_primary": True, "runtime_truth_source": "sqlite", "agentic_runtime": {"status": "ok"}},
+        )
+        planner_ok = fc_doctor.CheckResult(status="ok", detail={"status": "ok", "event_store_primary": True})
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(fc_doctor, "_runtime_state_detail", return_value={"lifecycle": "running"}))
+            stack.enter_context(patch.object(fc_doctor, "_worker_runtime_snapshot", return_value={}))
+            stack.enter_context(patch.object(fc_doctor, "_load_product_priority_guard", return_value=FakeGuard))
+            stack.enter_context(patch.object(fc_doctor, "check_workspace_root", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_plane_planning", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_runtime_truth", return_value=runtime_truth_ok))
+            stack.enter_context(patch.object(fc_doctor, "check_openclaw_gateway", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_scheduler_authority", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_sessions", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_locks", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_queue_workboard", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_providers", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_product_value", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_delivery_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_execution_model", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_progress_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_orphan_recovery", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_capability_result_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_planner_dispatch", return_value=planner_ok))
+            payload, code = fc_doctor.build_payload(
+                root=ROOT,
+                api_base="http://127.0.0.1:8050",
+                monitor_base="http://127.0.0.1:7779",
+            )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(calls["count"], 1)
+
+    def test_planner_dispatch_metrics_is_computed_once_per_doctor_run(self) -> None:
+        calls = {"count": 0}
+
+        class FakeDispatch:
+            @staticmethod
+            def build_planner_dispatch_metrics(root: Path, recent_limit: int = 12) -> dict:
+                calls["count"] += 1
+                return {
+                    "status": "ok",
+                    "event_store_primary": True,
+                    "runtime_truth_source": "sqlite",
+                    "recent_invalid_result_count": 0,
+                    "recent_timeout_like_count": 0,
+                    "dev_no_progress_count": 0,
+                    "dev_orphaned_count": 0,
+                    "recovering": False,
+                    "latest_failure_mode": "none",
+                    "long_running_dev_count": 0,
+                    "dev_invalid_result_count": 0,
+                    "dev_timeout_like_count": 0,
+                    "dev_tasks_needing_recovery": [],
+                    "recovery_mode": "none",
+                }
+
+        ok = fc_doctor.CheckResult(status="ok", detail={})
+        runtime_truth_ok = fc_doctor.CheckResult(
+            status="ok",
+            detail={"event_store_primary": True, "runtime_truth_source": "sqlite", "agentic_runtime": {"status": "ok"}},
+        )
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(fc_doctor, "_runtime_state_detail", return_value={"lifecycle": "running"}))
+            stack.enter_context(patch.object(fc_doctor, "_worker_runtime_snapshot", return_value={}))
+            stack.enter_context(patch.object(fc_doctor, "_load_planner_dispatch_metrics", return_value=FakeDispatch))
+            stack.enter_context(patch.object(fc_doctor, "check_workspace_root", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_plane_planning", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_runtime_truth", return_value=runtime_truth_ok))
+            stack.enter_context(patch.object(fc_doctor, "check_openclaw_gateway", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_scheduler_authority", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_sessions", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_locks", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_queue_workboard", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_providers", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_product_value", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_delivery_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_delivery_future_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_browser_proof_pipeline", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_suspicious_completions", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_qa_review_pipeline", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_capability_stall_recovery", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_planner_takeover_recovery", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_historical_delivery_debt", return_value=ok))
+            payload, code = fc_doctor.build_payload(
+                root=ROOT,
+                api_base="http://127.0.0.1:8050",
+                monitor_base="http://127.0.0.1:7779",
+            )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(calls["count"], 1)
+
+    def test_build_payload_skips_heavy_delivery_checks_when_runtime_is_idle(self) -> None:
+        ok = fc_doctor.CheckResult(status="ok", detail={})
+        runtime_truth_idle = fc_doctor.CheckResult(
+            status="ok",
+            detail={
+                "event_store_primary": True,
+                "runtime_truth_source": "sqlite",
+                "graph_state_count": 0,
+                "recent_event_count": 0,
+                "agentic_runtime": {"status": "ok"},
+            },
+        )
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(fc_doctor, "_runtime_state_detail", return_value={"lifecycle": "running"}))
+            stack.enter_context(patch.object(fc_doctor, "_worker_runtime_snapshot", return_value={}))
+            stack.enter_context(patch.object(fc_doctor, "check_workspace_root", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_plane_planning", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_runtime_truth", return_value=runtime_truth_idle))
+            stack.enter_context(patch.object(fc_doctor, "check_openclaw_gateway", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_scheduler_authority", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_sessions", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_locks", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_queue_workboard", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_providers", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_product_value", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_delivery_integrity", return_value=ok))
+            stack.enter_context(patch.object(fc_doctor, "check_delivery_future_integrity", side_effect=AssertionError("should not run")))
+            stack.enter_context(patch.object(fc_doctor, "check_browser_proof_pipeline", side_effect=AssertionError("should not run")))
+            stack.enter_context(patch.object(fc_doctor, "check_suspicious_completions", side_effect=AssertionError("should not run")))
+            stack.enter_context(patch.object(fc_doctor, "check_qa_review_pipeline", side_effect=AssertionError("should not run")))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_execution_model", side_effect=AssertionError("should not run")))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_progress_integrity", side_effect=AssertionError("should not run")))
+            stack.enter_context(patch.object(fc_doctor, "check_dev_orphan_recovery", side_effect=AssertionError("should not run")))
+            stack.enter_context(patch.object(fc_doctor, "check_capability_stall_recovery", side_effect=AssertionError("should not run")))
+            stack.enter_context(patch.object(fc_doctor, "check_capability_result_integrity", side_effect=AssertionError("should not run")))
+            stack.enter_context(patch.object(fc_doctor, "check_planner_takeover_recovery", side_effect=AssertionError("should not run")))
+            stack.enter_context(patch.object(fc_doctor, "check_historical_delivery_debt", side_effect=AssertionError("should not run")))
+            stack.enter_context(patch.object(fc_doctor, "check_planner_dispatch", side_effect=AssertionError("should not run")))
+            payload, code = fc_doctor.build_payload(
+                root=ROOT,
+                api_base="http://127.0.0.1:8050",
+                monitor_base="http://127.0.0.1:7779",
+            )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["status"], "ok")
+        self.assertTrue(payload["checks"]["queue_workboard"]["idle_runtime_fast_path"])
+        self.assertTrue(payload["checks"]["product_value"]["idle_runtime_fast_path"])
+        self.assertTrue(payload["checks"]["delivery_future_integrity"]["idle_runtime_fast_path"])
+        self.assertTrue(payload["checks"]["planner_dispatch"]["idle_runtime_fast_path"])
 
     def test_check_plane_planning_requires_active_sync_signal(self) -> None:
         with patch.object(
@@ -285,9 +550,10 @@ class FCDoctorTests(unittest.TestCase):
         with patch.object(fc_doctor, "_allow_live_openclaw_checks", return_value=True), \
              patch.object(fc_doctor.subprocess, "run") as mock_run, \
              patch.object(fc_doctor, "_systemd_unit_probe", side_effect=[
-                 {"ok": False, "output": "inactive"},
+                {"ok": False, "output": "inactive"},
                  {"ok": False, "output": "not-found"},
              ]), \
+             patch.object(fc_doctor, "_openclaw_process_probe", return_value={"gateway_running": False, "cli_running": False, "doctor_running": False, "detail": {}}), \
              patch.object(fc_doctor, "_run_openclaw_probe", side_effect=[
                  {"ok": False, "cmd": ["openclaw", "doctor"]},
                  {"ok": False, "cmd": ["openclaw", "status"]},
@@ -297,6 +563,36 @@ class FCDoctorTests(unittest.TestCase):
             mock_run.return_value = SimpleNamespace(returncode=0, stdout="/usr/bin/openclaw\n", stderr="")
             result = fc_doctor.check_openclaw_gateway(ROOT)
         self.assertEqual(result.status, "ok")
+        self.assertEqual(result.detail.get("advisory_state"), "degraded")
+        self.assertEqual(result.detail.get("service_unit"), "openclaw-gateway.service")
+
+    def test_check_openclaw_gateway_uses_process_fallback_when_cli_times_out(self) -> None:
+        with patch.object(fc_doctor, "_allow_live_openclaw_checks", return_value=True), \
+             patch.object(fc_doctor.subprocess, "run") as mock_run, \
+             patch.object(fc_doctor, "_systemd_unit_probe", side_effect=[
+                 {"ok": False, "output": "Failed to connect to bus: No medium found"},
+                 {"ok": False, "output": "Failed to connect to bus: No medium found"},
+             ]), \
+             patch.object(
+                 fc_doctor,
+                 "_openclaw_process_probe",
+                 return_value={
+                     "gateway_running": True,
+                     "cli_running": True,
+                     "doctor_running": False,
+                     "detail": {"gateway": {"ok": True}, "cli": {"ok": True}},
+                 },
+             ), \
+             patch.object(fc_doctor, "_run_openclaw_probe", side_effect=[
+                 {"ok": False, "cmd": ["openclaw", "doctor"], "stderr": "Command timed out after 0.5 seconds"},
+                 {"ok": False, "cmd": ["openclaw", "status"], "stderr": "Command timed out after 0.5 seconds"},
+                 {"ok": False, "cmd": ["openclaw", "health"], "stderr": "Command timed out after 0.5 seconds"},
+                 {"ok": False, "cmd": ["openclaw", "models", "status", "--check"], "stderr": "Command timed out after 0.5 seconds"},
+             ]):
+            mock_run.return_value = SimpleNamespace(returncode=0, stdout="/usr/bin/openclaw\n", stderr="")
+            result = fc_doctor.check_openclaw_gateway(ROOT)
+        self.assertEqual(result.status, "ok")
+        self.assertTrue(result.detail.get("process_fallback_used"))
         self.assertEqual(result.detail.get("advisory_state"), "degraded")
 
     def test_scheduler_authority_dual_detected(self) -> None:
@@ -336,6 +632,44 @@ class FCDoctorTests(unittest.TestCase):
             result = fc_doctor.check_scheduler_authority(Path("."))
         self.assertEqual(result.status, "ok")
         self.assertEqual(result.detail.get("scheduler_policy"), "cron_only")
+
+    def test_scheduler_authority_openclaw_cron_only_ok(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = Path(tmpdir)
+            jobs_dir = home / ".openclaw" / "cron"
+            jobs_dir.mkdir(parents=True, exist_ok=True)
+            (jobs_dir / "jobs.json").write_text(
+                json.dumps(
+                    {
+                        "jobs": [
+                            {"name": "planner-tmux-loop", "enabled": True},
+                            {"name": "admin-agents-supervisor-15m", "enabled": True},
+                            {"name": "vm-resume-guard-2m", "enabled": False},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def _fake_run(cmd, **kwargs):
+                if cmd[:2] == ["crontab", "-l"]:
+                    return SimpleNamespace(returncode=0, stdout="", stderr="")
+                if cmd == ["which", "systemctl"]:
+                    return SimpleNamespace(returncode=0, stdout="/usr/bin/systemctl\n", stderr="")
+                if cmd[:3] == ["systemctl", "--user", "show-environment"]:
+                    return SimpleNamespace(returncode=0, stdout="PATH=/usr/bin\n", stderr="")
+                if cmd[:4] == ["systemctl", "--user", "is-enabled", "vm-resume-guard.timer"]:
+                    return SimpleNamespace(returncode=1, stdout="disabled\n", stderr="")
+                if cmd[:4] == ["systemctl", "--user", "is-active", "vm-resume-guard.timer"]:
+                    return SimpleNamespace(returncode=3, stdout="inactive\n", stderr="")
+                return SimpleNamespace(returncode=1, stdout="", stderr="")
+
+            with patch.object(fc_doctor.subprocess, "run", side_effect=_fake_run):
+                with patch.object(fc_doctor.Path, "home", return_value=home):
+                    result = fc_doctor.check_scheduler_authority(Path("."))
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.detail.get("scheduler_policy"), "openclaw_cron_only")
+        self.assertEqual(result.detail.get("openclaw_cron_enabled_count"), 2)
 
     def test_scheduler_authority_permission_denied_uses_runtime_state_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

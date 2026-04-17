@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-86-BATCH-86-GOV_REVIEW-20260415T095730Z-944"
+stream_id: "BATCH-86"
+task_id: "BATCH-86-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-04-15T09:57:30Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "git commit --only docs/operations/orchestrator/proofs/BATCH-86/BATCH-86-GOV_REVIEW.md -m feat(planner):close_gov_review_proof_(BATCH-86-GOV_REVIEW)"
+      rc: "0"
+      started_at_utc: "2026-04-15T09:57:30Z"
+      ended_at_utc: "2026-04-15T09:57:30Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "SKIP"
+      evidence: "SKIP(planner_doc_only)"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-86/BATCH-86-GOV_REVIEW.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "planner_complete_batch86_gov_review_P1776246798_9760"
+  review_ref: "primary_structured:BATCH-86-GOV_REVIEW"
+  note: "source=primary_structured | root_cause=BATCH-86-GOV_REVIEW_stayed_IN_PROGRESS_after_all_delivery_dependencies_reached_DONE_in_the_canonical_workboard,fix_required_on_planner_lane_only | fix_applied=Committed_a_planner_owned_gov_review_artifact_with_architecture_plan_ref_architecture_audit_and_final_scope_alignment | verify=before=BATCH-86-GOV_REVIEW_IN_PROGRESS_deps_done,after=BATCH-86-GOV_REVIEW_DONE_closure_requested,test=parallel_workstream_context_planner_limit5_2026-04-15T09:53Z | architecture_check=layer=apps/api+apps/web,imports_ok=yes,path_target=apps/api/src/domains/copilot/api/copilot.py,apps/api/src/domains/copilot/application/copilot_service.py,apps/web/src/domains/forecasts/components/widgets/copilot-panel.html,runtime_ref=apps/api/runtime/,legacy_paths=none,dependency_policy=enforced | vision_alignment=batch=BATCH-86,target=personal_finance_brief_ask_open_memo_without_theme_break,impact=close_final_governance_review_without_new_dispatch"

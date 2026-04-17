@@ -3,6 +3,10 @@
 ## Purpose
 Cut over to planner-only scheduling while keeping `planner` as the canonical runtime role.
 
+Boundary:
+- This runbook is VM-local orchestration only.
+- The `127.0.0.1:7779` monitor checks below are control-plane checks, not public app-serving checks.
+
 Compatibility notes:
 - `planner_architect_orchestrator` is an accepted alias.
 - `FC_EXPERIMENTAL_PLANNER_ONLY=1` enables the mono-lane guard.

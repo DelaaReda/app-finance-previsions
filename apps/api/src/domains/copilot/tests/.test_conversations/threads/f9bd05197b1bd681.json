@@ -1,0 +1,49 @@
+{
+  "conversation_id": "f9bd05197b1bd681",
+  "schema_version": "copilot_conversation_v1",
+  "created_at": "2026-04-16T10:39:43.808046Z",
+  "updated_at": "2026-04-16T10:39:45.986216Z",
+  "title": "Should I buy NVDA today?",
+  "context": {
+    "tickers": [
+      "NVDA"
+    ],
+    "scope": {},
+    "portfolio_id": null
+  },
+  "messages": [
+    {
+      "message_id": "msg_001",
+      "role": "user",
+      "content": "Should I buy NVDA today?",
+      "timestamp": "2026-04-16T10:39:43.808046Z",
+      "metadata": {
+        "tickers": [
+          "NVDA"
+        ],
+        "scope": {}
+      }
+    },
+    {
+      "message_id": "msg_002",
+      "role": "assistant",
+      "content": "REDUIRE NVDA aujourd'hui. Malgr\u00e9 les perspectives positives \u00e0 long terme et l'innovation produit annonc\u00e9e [1][4], le sentiment actuel est clairement baissier avec un momentum fort \u00e0 la baisse et des pr\u00e9visions de d\u00e9clin \u00e0 65% [contextes march\u00e9 et forecasts]. La volatilit\u00e9 est faible mais le risque \u00e9lev\u00e9 sugg\u00e8re de r\u00e9duire l'exposition avant une potentielle reprise plus tard.",
+      "timestamp": "2026-04-16T10:39:45.986216Z",
+      "metadata": {
+        "verdict": "hold",
+        "confidence": 0.8,
+        "horizon": "1w",
+        "tickers": [
+          "NVDA"
+        ]
+      }
+    }
+  ],
+  "message_count": 2,
+  "metadata": {
+    "entrypoint": "copilot_ask"
+  },
+  "source": [
+    "copilot_conversation_service"
+  ]
+}

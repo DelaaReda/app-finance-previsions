@@ -19,7 +19,7 @@ python3 scripts/validate_batch_state.py --file "$QUEUE_FILE"
 
 # 2) health check (soft)
 if command -v curl >/dev/null 2>&1; then
-  if curl -fsS --max-time 3 http://localhost:8050/api/health >/dev/null 2>&1; then
+  if curl -fsS --max-time 3 "${FC_API_BASE_URL:-${FC_PUBLIC_APP_BASE_URL:-http://3.98.20.77}}/api/health" >/dev/null 2>&1; then
     echo "health=UP"
   else
     echo "health=DOWN (soft warning)"

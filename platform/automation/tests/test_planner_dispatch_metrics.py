@@ -29,6 +29,116 @@ build_planner_dispatch_metrics = MODULE.build_planner_dispatch_metrics
 
 
 class PlannerDispatchMetricsTests(unittest.TestCase):
+    def test_event_store_primary_ignores_historical_residue_without_open_cycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "items": [{"id": "BATCH-89", "state": "CLOSED"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {"id": "BATCH-89-DEV-03", "stream_id": "BATCH-89", "role": "dev", "state": "DONE"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-89",
+                    task_id="BATCH-89-DEV-03",
+                    task_kind="delivery",
+                    owner_role="planner",
+                    target_role="dev",
+                    status="ready_to_merge",
+                    current_node="close_or_requeue",
+                    updated_at="2026-04-15T16:43:55Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-89-DEV-03", "target_role": "dev"},
+                    capability_result={"status": "pass", "backend": "codex_exec", "summary": "historical merge residue"},
+                )
+            )
+
+            metrics = build_planner_dispatch_metrics(root, recent_limit=12)
+
+            self.assertTrue(metrics["event_store_primary"])
+            self.assertEqual(metrics["active_count"], 0)
+            self.assertEqual(len(metrics.get("recent", [])), 0)
+            self.assertEqual(metrics["status"], "ok")
+            self.assertEqual(metrics["planner_state"], "idle")
+            self.assertEqual(metrics["current_bottleneck"], "none")
+            self.assertEqual(metrics["recommended_next_action"], "monitor")
+            self.assertFalse(metrics["historical_runtime_residue_detected"])
+
+    def test_done_owner_task_quarantines_historical_ready_to_merge_residue_with_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "items": [{"id": "BATCH-90", "state": "CLOSED"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "tasks": [
+                            {"id": "BATCH-90-ADMIN-01", "stream_id": "BATCH-90", "role": "admin", "state": "DONE"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-90",
+                    task_id="BATCH-90-ADMIN-01",
+                    task_kind="runtime",
+                    owner_role="planner",
+                    target_role="admin",
+                    status="ready_to_merge",
+                    current_node="apply_workboard_mutation",
+                    updated_at="2026-04-15T19:08:09Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-90-ADMIN-01", "target_role": "admin"},
+                    capability_result={
+                        "status": "completed",
+                        "backend": "codex_exec",
+                        "summary": "Runtime unblock verified.",
+                        "artifact": "commit=d87d334f",
+                        "verify": "pytest -q target",
+                        "tests_run": "pytest -q target",
+                        "commit_sha": "d87d334f",
+                    },
+                )
+            )
+
+            metrics = build_planner_dispatch_metrics(root, recent_limit=12)
+
+            self.assertTrue(metrics["event_store_primary"])
+            self.assertEqual(metrics["active_count"], 0)
+            self.assertEqual(metrics["quarantined_retryable_residue_count"], 1)
+            self.assertFalse(metrics["historical_runtime_residue_detected"])
+            self.assertEqual(metrics["current_bottleneck"], "none")
+            self.assertEqual(metrics["recommended_next_action"], "monitor")
+
     def test_claim_cli_reconciles_queue_state_with_planner_in_progress(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -166,6 +276,7 @@ class PlannerDispatchMetricsTests(unittest.TestCase):
             metrics = build_planner_dispatch_metrics(root, recent_limit=12)
 
             self.assertTrue(metrics["event_store_primary"])
+            self.assertFalse(metrics["projection_secondary_only"])
             self.assertEqual(metrics["active_count"], 0)
             self.assertEqual(metrics["runtime_inconsistent_active_count"], 1)
             self.assertEqual(metrics["ready_dev_count"], 1)
@@ -286,6 +397,72 @@ class PlannerDispatchMetricsTests(unittest.TestCase):
             self.assertEqual(metrics["tasks_progressed_last_1h"], 0)
             self.assertEqual(metrics["ready_planner_count"], 1)
             self.assertEqual(metrics["status"], "dispatch_needed")
+
+    def test_done_owner_task_quarantines_retryable_residue_without_invalid_result_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {"active_batch_ids": ["BATCH-87"]},
+                        "items": [{"id": "BATCH-87", "state": "IN_PROGRESS"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {"active_batch_ids": ["BATCH-87"]},
+                        "tasks": [
+                            {"id": "BATCH-87-ADMIN-01", "stream_id": "BATCH-87", "role": "admin", "state": "DONE"},
+                            {
+                                "id": "BATCH-87-GOV_REVIEW",
+                                "stream_id": "BATCH-87",
+                                "role": "planner",
+                                "state": "IN_PROGRESS",
+                                "depends_on": ["BATCH-87-ADMIN-01"],
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-87",
+                    task_id="BATCH-87-ADMIN-01",
+                    task_kind="runtime",
+                    owner_role="planner",
+                    target_role="admin",
+                    status="retryable",
+                    current_node="close_or_requeue",
+                    updated_at="2026-04-15T11:18:36Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-87-ADMIN-01", "target_role": "admin"},
+                    capability_result={
+                        "status": "failed",
+                        "backend": "codex_exec",
+                        "summary": "Cannot continue with precise SQLite-based runtime audit yet because query command failed; retrying with corrected quoting.",
+                        "blocking_issue": "SQL quoting error.",
+                        "artifact": "None.",
+                        "verify": "None.",
+                        "tests_run": "None.",
+                        "commit_sha": "none",
+                    },
+                )
+            )
+
+            metrics = build_planner_dispatch_metrics(root, recent_limit=12)
+
+            self.assertTrue(metrics["event_store_primary"])
+            self.assertEqual(metrics["quarantined_retryable_residue_count"], 1)
+            self.assertEqual(metrics["active_count"], 0)
+            self.assertEqual(metrics["status"], "ok")
 
     def test_build_planner_dispatch_metrics_counts_success_and_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

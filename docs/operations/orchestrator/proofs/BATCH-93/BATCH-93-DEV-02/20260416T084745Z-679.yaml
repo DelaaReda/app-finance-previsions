@@ -1,0 +1,55 @@
+proof_id: "PRF-BATCH-93-BATCH-93-DEV-02-20260416T084745Z-679"
+stream_id: "BATCH-93"
+task_id: "BATCH-93-DEV-02"
+role: "dev"
+produced_at_utc: "2026-04-16T08:47:45Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope build a personal finance copilot that starts with a brief of the day"
+    - "lets the user ask or open [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "service_boundaries_for_build_a_personal_finance_copilot_that_starts_with_a_brief_of_the_day"
+    - "lets_the_user_ask_or_open_[dev-02]"
+    - "imports_and_data_flow_remain_stable"
+    - "patch_stays_inside_intended_module_path"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-16T08:47:45Z"
+      ended_at_utc: "2026-04-16T08:47:45Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "node --test apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js; node --test apps/web/src/domains/forecasts/components/widgets/test_dev02_copilot_integration.js; curl -sS -m 20 http://3.98.20.77/api/c"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "commit e4b07b926fb9d8628f4b32b64c5b105e672d9f63; widget ask/open CTA HTML now emits safely quoted `executeCopilotAction(...)` calls; public baseline checked at `http://3.98.20.77/api/copilot/start` and `http://3.98.20.77"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-93-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-93-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=`renderCopilotActions()` built inline `executeCopilotAction(...)` handlers with single-quoted string arguments, so brief prompts such as `What's moving NVDA today?` could terminate the JS literal and break the CTA click  | fix_applied=Added local inline-argument serialization in `copilot-panel.html` and updated widget tests to assert the new quoted handler format plus an apostrophe regression case. | verify=before=inline ask/open handlers used single-quoted JS args and could break on apostrophes in brief-driven prompts; after=handlers now use JSON+HTML-safe quoted args and a regression test covers `What's moving NVDA today? | architecture_check=layer=web widget rendering/tests; imports_ok=yes; path_target=apps/web/src/domains/forecasts/components/widgets | vision_alignment=batch=BATCH-93; target=brief-of-day ask/open entry path; impact=brief CTA prompts no longer fail when labels or prefill questions contain apostrophes/quotes"

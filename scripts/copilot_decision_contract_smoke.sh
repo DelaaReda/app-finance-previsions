@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
+# MODE: PUBLIC_VALIDATION
 set -euo pipefail
 
-BASE_URL="${1:-${BASE_URL:-http://127.0.0.1:8050}}"
+BASE_URL="${1:-${BASE_URL:-${FC_API_BASE_URL:-${FC_PUBLIC_APP_BASE_URL:-http://3.98.20.77}}}}"
 QUESTION="${QUESTION:-Donne une recommandation courte sur NVDA avec risques principaux.}"
 TICKERS_JSON='["NVDA"]'
+
+if [[ "${FC_ALLOW_LOCAL_URLS:-0}" != "1" && "$BASE_URL" =~ ^https?://(127\.0\.0\.1|localhost)(:|/|$) ]]; then
+  echo "Refusing local validation URL: $BASE_URL (set FC_ALLOW_LOCAL_URLS=1 to override)" >&2
+  exit 2
+fi
 
 payload=$(cat <<JSON
 {"question":"${QUESTION}","tickers":${TICKERS_JSON},"max_sources":5}

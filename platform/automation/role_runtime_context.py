@@ -290,7 +290,9 @@ def product_priority_context(root: Path, max_chars: int = 240) -> str:
         "--root",
         str(root),
         "--api-base-url",
-        os.environ.get("FC_API_BASE_URL", "http://127.0.0.1:8050"),
+        os.environ.get("FC_API_BASE_URL")
+        or os.environ.get("FC_PUBLIC_APP_BASE_URL")
+        or "http://3.98.20.77",
         "prompt-context",
     ]
     try:
@@ -391,11 +393,12 @@ def queue_summary(queue_path: Path) -> dict[str, str]:
     result["top_level_total"] = str(top_level_total)
     result["top_level_non_closed"] = str(top_level_non_closed)
     result["top_level_ready"] = str(top_level_ready)
-    # runway_short: only flag when pipeline is truly empty.
-    # WAITING_DEP batches count as queued work — planner should NOT create new batches
-    # just because non_closed < 20 (most of those are blocked behind sequencing).
-    # Threshold: flag only when non_closed < 3 (near-empty pipeline) AND ready == 0.
-    result["planner_batch_runway_short"] = "1" if (top_level_non_closed < 3 and top_level_ready == 0) else "0"
+    # runway_short should only fire when there is still open canonical work but the
+    # planner runway is nearly exhausted. A fully closed pipeline must stay idle and
+    # must not be nudged into creating a fresh batch from a false "short runway" signal.
+    result["planner_batch_runway_short"] = (
+        "1" if (0 < top_level_non_closed < 3 and top_level_ready == 0) else "0"
+    )
     return result
 
 

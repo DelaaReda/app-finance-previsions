@@ -13,8 +13,34 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "role_runtime_context.py"
 RUNNER_SCRIPT = ROOT / "automation" / "cron_tmux_role_runner.sh"
 
+if str(ROOT / "automation") not in sys.path:
+    sys.path.insert(0, str(ROOT / "automation"))
+
+from role_runtime_context import queue_summary
+
 
 class RoleRuntimeContextTests(unittest.TestCase):
+    def test_queue_summary_keeps_closed_pipeline_out_of_short_runway_mode(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            state_dir = Path(td)
+            payload = {
+                "streams": [
+                    {"id": "BATCH-88", "state": "DONE"},
+                    {"id": "BATCH-89", "state": "CLOSED"},
+                ]
+            }
+            queue_path = state_dir / "priority-queue.json"
+            (state_dir / "parallel-workstreams.json").write_text(
+                json.dumps(payload), encoding="utf-8"
+            )
+            queue_path.write_text(json.dumps({"items": []}), encoding="utf-8")
+
+            summary = queue_summary(queue_path)
+
+            self.assertEqual(summary["top_level_total"], "2")
+            self.assertEqual(summary["top_level_non_closed"], "0")
+            self.assertEqual(summary["planner_batch_runway_short"], "0")
+
     def test_builds_context_with_queue_and_directives(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             workspace = Path(td)
@@ -264,7 +290,7 @@ class RoleRuntimeContextTests(unittest.TestCase):
             text,
         )
         self.assertIn(
-            'python3 platform/automation/runtime/planner/planner_runtime_actions.py planner-autobatch --queue ${CANONICAL_QUEUE_FILE} --reason idle_no_ready --cooldown-s ${TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S}',
+            'python3 platform/automation/runtime/planner/planner_runtime_actions.py planner-autobatch --queue ${CANONICAL_QUEUE_FILE} --reason idle_no_ready --cooldown-s ${TMUX_ROLE_PLANNER_IDLE_AUTOBATCH_COOLDOWN_S} --allow-active-queued',
             text,
         )
         self.assertIn(

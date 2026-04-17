@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
+# MODE: VM_ORCHESTRATION_PUBLIC_APP
+# Scope: planner watchdog runs on the VM orchestration host, but app/doctor probes
+# should target the canonical public EC2 surfaces unless explicitly overridden.
 set -euo pipefail
 
 ROOT="/home/venom/analyse-financiere"
+PUBLIC_APP_BASE_URL="${FC_API_BASE_URL:-${FC_PUBLIC_APP_BASE_URL:-http://3.98.20.77}}"
+PUBLIC_MONITOR_BASE_URL="${FC_MONITOR_BASE_URL:-${FC_PUBLIC_MONITOR_BASE_URL:-http://3.98.20.77:8080}}"
 LOG_DIR="$ROOT/logs-codex-runs/ops"
 LOG_FILE="$LOG_DIR/planner-delivery-watchdog.log"
 PID_FILE="/tmp/planner-delivery-watchdog.pid"
+LOCK_DIR="${HOME}/.openclaw/cron/role-state"
+LOCK_FILE="${LOCK_DIR}/planner-delivery-watchdog.lock"
 INTERVAL_SECONDS=120
 DURATION_SECONDS=3600
 
@@ -25,14 +32,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_DIR" "$LOCK_DIR"
 
-if [ -f "$PID_FILE" ]; then
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
   old_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
-  if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
-    echo "$(date -Is) watchdog_already_running pid=$old_pid" >>"$LOG_FILE"
-    exit 0
-  fi
+  echo "$(date -Is) watchdog_already_running pid=${old_pid:-unknown} lock=$LOCK_FILE" >>"$LOG_FILE"
+  exit 0
 fi
 
 cd "$ROOT"
@@ -110,7 +116,7 @@ PY
 
 refresh_forecasts_if_needed() {
   local tmp_doctor="/tmp/planner-watchdog-doctor.json"
-  curl -fsS "http://127.0.0.1:7779/api/doctor?refresh=1" >"$tmp_doctor" || return 0
+  curl -fsS "${PUBLIC_MONITOR_BASE_URL%/}/api/doctor?refresh=1" >"$tmp_doctor" || return 0
   local needs_refresh
   needs_refresh="$(python3 - <<'PY' "$tmp_doctor"
 import json, pathlib, sys
@@ -124,13 +130,13 @@ PY
   fi
   log "forecast_refresh_start"
   python3 apps/api/src/platform/legacy/jobs/stocks_prices_refresh.py --force --timeframe 1y >>"$LOG_FILE" 2>&1 || true
-  curl -fsS "http://127.0.0.1:8050/api/forecasts?limit=5" >/dev/null || true
+  curl -fsS "${PUBLIC_APP_BASE_URL%/}/api/forecasts?limit=5" >/dev/null || true
   log "forecast_refresh_done"
 }
 
 refresh_news_if_needed() {
   local tmp_doctor="/tmp/planner-watchdog-doctor-news.json"
-  curl -fsS "http://127.0.0.1:7779/api/doctor?refresh=1" >"$tmp_doctor" || return 0
+  curl -fsS "${PUBLIC_MONITOR_BASE_URL%/}/api/doctor?refresh=1" >"$tmp_doctor" || return 0
   local needs_refresh
   needs_refresh="$(python3 - <<'PY' "$tmp_doctor"
 import json, pathlib, sys
@@ -148,15 +154,15 @@ PY
   fi
   log "news_refresh_start"
   PYTHONPATH="$ROOT/apps/api/src" python3 "$ROOT/apps/api/src/platform/legacy/jobs/news_ingest.py" >>"$LOG_FILE" 2>&1 || true
-  curl -fsS "http://127.0.0.1:8050/api/news/feed?limit=5" >/dev/null || true
+  curl -fsS "${PUBLIC_APP_BASE_URL%/}/api/news/feed?limit=5" >/dev/null || true
   log "news_refresh_done"
 }
 
 trigger_planner_if_needed() {
   local tmp_status="/tmp/planner-watchdog-status.json"
   local tmp_doctor="/tmp/planner-watchdog-doctor.json"
-  curl -fsS "http://127.0.0.1:7779/api/status" >"$tmp_status" || return 0
-  curl -fsS "http://127.0.0.1:7779/api/doctor?refresh=1" >"$tmp_doctor" || return 0
+  curl -fsS "${PUBLIC_MONITOR_BASE_URL%/}/api/status" >"$tmp_status" || return 0
+  curl -fsS "${PUBLIC_MONITOR_BASE_URL%/}/api/doctor?refresh=1" >"$tmp_doctor" || return 0
   python3 - <<'PY' "$tmp_status" "$tmp_doctor"
 import json, pathlib, sys
 status = json.loads(pathlib.Path(sys.argv[1]).read_text())

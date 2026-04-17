@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 MODULE_PATH = ROOT / "platform" / "automation" / "delivery_value_gate.py"
@@ -32,14 +33,15 @@ class DeliveryValueGateTests(unittest.TestCase):
         payload = "\n".join([
             "STATUS: IN_PROGRESS",
             "DELTA: DONE",
-            "EVIDENCE: task_update=complete; lock_check=ok; run_note=complete with proof; dev_artifact=apps/api/src/app.py; root_cause=bug_fix; fix_applied=patched handler; verify=before=500; after=200; test=pytest; tests_run=pytest:PASS; commit_sha=abcdef1; files_touched=apps/api/src/app.py; architecture_check=layer=api; imports_ok=yes; path_target=apps/api/src/app.py; vision_alignment=batch=BATCH-11; target=freshness; impact=restored; issues=none; issue_count=0; issue_severity=none",
+            "EVIDENCE: task_update=complete; lock_check=ok; run_note=complete with proof; dev_artifact=apps/api/src/app.py; root_cause=bug_fix; fix_applied=patched handler; verify=before=500; after=200; test=pytest; tests_run=pytest:PASS; qa_proof=test=pytest tests/test_app.py; result=PASS; commit_sha=abcdef1; files_touched=apps/api/src/app.py; architecture_check=layer=api; imports_ok=yes; path_target=apps/api/src/app.py; vision_alignment=batch=BATCH-11; target=freshness; impact=restored; issues=none; issue_count=0; issue_severity=none",
             "RISKS: none",
             "NEXT: owner=dev; action=done",
             "VERDICT: GO_WITH_CAUTION",
             "BLOCKER_ID: NONE",
             "NEXT_ACTION_UNIQUE: DEV_DONE_1",
         ])
-        result = evaluate_contract(payload, self._config(), now_epoch=1772800000)
+        with patch.object(MODULE, "_runtime_probes_ok", return_value=True):
+            result = evaluate_contract(payload, self._config(), now_epoch=1772800000)
         self.assertTrue(result.passed)
         self.assertIn("delivery_gate=pass", result.values["EVIDENCE"])
 
@@ -47,14 +49,15 @@ class DeliveryValueGateTests(unittest.TestCase):
         payload = "\n".join([
             "STATUS: IN_PROGRESS",
             "DELTA: DONE",
-            "EVIDENCE: task_update=complete; lock_check=ok; run_note=complete without commit; dev_artifact=apps/api/src/app.py; root_cause=bug_fix; fix_applied=patched handler; verify=before=500; after=200; test=pytest; tests_run=pytest:PASS; files_touched=apps/api/src/app.py; architecture_check=layer=api; imports_ok=yes; path_target=apps/api/src/app.py; vision_alignment=batch=BATCH-11; target=freshness; impact=restored; issues=none; issue_count=0; issue_severity=none",
+            "EVIDENCE: task_update=complete; lock_check=ok; run_note=complete without commit; dev_artifact=apps/api/src/app.py; root_cause=bug_fix; fix_applied=patched handler; verify=before=500; after=200; test=pytest; tests_run=pytest:PASS; qa_proof=test=pytest tests/test_app.py; result=PASS; files_touched=apps/api/src/app.py; architecture_check=layer=api; imports_ok=yes; path_target=apps/api/src/app.py; vision_alignment=batch=BATCH-11; target=freshness; impact=restored; issues=none; issue_count=0; issue_severity=none",
             "RISKS: none",
             "NEXT: owner=dev; action=done",
             "VERDICT: GO_WITH_CAUTION",
             "BLOCKER_ID: NONE",
             "NEXT_ACTION_UNIQUE: DEV_DONE_2",
         ])
-        result = evaluate_contract(payload, self._config(), now_epoch=1772800000)
+        with patch.object(MODULE, "_runtime_probes_ok", return_value=True):
+            result = evaluate_contract(payload, self._config(), now_epoch=1772800000)
         self.assertFalse(result.passed)
         self.assertIn("commit_sha", result.missing)
         self.assertEqual(result.values["BLOCKER_ID"], "DELIVERY_VALUE_INSUFFICIENT")
@@ -70,7 +73,8 @@ class DeliveryValueGateTests(unittest.TestCase):
             "BLOCKER_ID: NONE",
             "NEXT_ACTION_UNIQUE: DEV_DONE_3",
         ])
-        result = evaluate_contract(payload, self._config(), now_epoch=1772800000)
+        with patch.object(MODULE, "_runtime_probes_ok", return_value=True):
+            result = evaluate_contract(payload, self._config(), now_epoch=1772800000)
         self.assertFalse(result.passed)
         self.assertIn("artifact", result.missing)
         self.assertIn("verify", result.missing)
@@ -79,19 +83,54 @@ class DeliveryValueGateTests(unittest.TestCase):
         payload = "\n".join([
             "STATUS: IN_PROGRESS",
             "DELTA: DONE",
-            "EVIDENCE: task_update=complete; lock_check=ok; run_note=bad completion; dev_artifact=apps/api/src/app.py; root_cause=bug_fix; fix_applied=patched handler; verify=before=500; after=200; test=pytest; tests_run=pytest:PASS; files_touched=apps/api/src/app.py; architecture_check=layer=api; imports_ok=yes; path_target=apps/api/src/app.py; vision_alignment=batch=BATCH-11; target=freshness; impact=restored; issues=none; issue_count=0; issue_severity=none",
+            "EVIDENCE: task_update=complete; lock_check=ok; run_note=bad completion; dev_artifact=apps/api/src/app.py; root_cause=bug_fix; fix_applied=patched handler; verify=before=500; after=200; test=pytest; tests_run=pytest:PASS; qa_proof=test=pytest tests/test_app.py; result=PASS; files_touched=apps/api/src/app.py; architecture_check=layer=api; imports_ok=yes; path_target=apps/api/src/app.py; vision_alignment=batch=BATCH-11; target=freshness; impact=restored; stream_id=BATCH-11; task_id=BATCH-11-DEV-01; issues=none; issue_count=0; issue_severity=none",
             "RISKS: none",
             "NEXT: owner=dev; action=done",
             "VERDICT: GO_WITH_CAUTION",
             "BLOCKER_ID: NONE",
             "NEXT_ACTION_UNIQUE: DEV_DONE_BURST",
         ])
-        for idx in range(2):
-            evaluate_contract(payload.replace("DEV_DONE_BURST", f"DEV_BURST_{idx}"), self._config(), now_epoch=1772800000 + idx)
-        result = evaluate_contract(payload.replace("DEV_DONE_BURST", "DEV_BURST_3"), self._config(), now_epoch=1772800002)
+        with patch.object(MODULE, "_runtime_probes_ok", return_value=True):
+            for idx in range(2):
+                evaluate_contract(payload.replace("DEV_DONE_BURST", f"DEV_BURST_{idx}"), self._config(), now_epoch=1772800000 + idx)
+            result = evaluate_contract(payload.replace("DEV_DONE_BURST", "DEV_BURST_3"), self._config(), now_epoch=1772800002)
         self.assertFalse(result.passed)
         self.assertTrue(result.inflation_detected)
         self.assertIn("delivery_signal_inflation_detected", result.values["EVIDENCE"])
+
+    def test_complete_without_qa_proof_is_blocked(self) -> None:
+        payload = "\n".join([
+            "STATUS: IN_PROGRESS",
+            "DELTA: DONE",
+            "EVIDENCE: task_update=complete; lock_check=ok; run_note=complete without qa proof; dev_artifact=apps/api/src/app.py; root_cause=bug_fix; fix_applied=patched handler; verify=before=500; after=200; test=pytest; tests_run=pytest:PASS; commit_sha=abcdef1; files_touched=apps/api/src/app.py; architecture_check=layer=api; imports_ok=yes; path_target=apps/api/src/app.py; vision_alignment=batch=BATCH-11; target=scope_first_start; impact=new_scope_entry_visible; issues=none; issue_count=0; issue_severity=none",
+            "RISKS: none",
+            "NEXT: owner=dev; action=done",
+            "VERDICT: GO_WITH_CAUTION",
+            "BLOCKER_ID: NONE",
+            "NEXT_ACTION_UNIQUE: DEV_DONE_NO_QA",
+        ])
+        with patch.object(MODULE, "_runtime_probes_ok", return_value=True):
+            result = evaluate_contract(payload, self._config(), now_epoch=1772800000)
+        self.assertFalse(result.passed)
+        self.assertIn("qa_proof", result.missing)
+        self.assertEqual(result.values["BLOCKER_ID"], "DELIVERY_VALUE_INSUFFICIENT")
+
+    def test_complete_with_non_passing_tests_is_blocked(self) -> None:
+        payload = "\n".join([
+            "STATUS: IN_PROGRESS",
+            "DELTA: DONE",
+            "EVIDENCE: task_update=complete; lock_check=ok; run_note=complete with skipped tests; dev_artifact=apps/api/src/app.py; root_cause=bug_fix; fix_applied=patched handler; verify=before=500; after=200; test=pytest; tests_run=SKIP(reason); qa_proof=test=pytest tests/test_app.py; result=PASS; commit_sha=abcdef1; files_touched=apps/api/src/app.py; architecture_check=layer=api; imports_ok=yes; path_target=apps/api/src/app.py; vision_alignment=batch=BATCH-11; target=scope_first_start; impact=new_scope_entry_visible; issues=none; issue_count=0; issue_severity=none",
+            "RISKS: none",
+            "NEXT: owner=dev; action=done",
+            "VERDICT: GO_WITH_CAUTION",
+            "BLOCKER_ID: NONE",
+            "NEXT_ACTION_UNIQUE: DEV_DONE_SKIP_TESTS",
+        ])
+        with patch.object(MODULE, "_runtime_probes_ok", return_value=True):
+            result = evaluate_contract(payload, self._config(), now_epoch=1772800000)
+        self.assertFalse(result.passed)
+        self.assertIn("tests_run_pass", result.missing)
+        self.assertEqual(result.values["BLOCKER_ID"], "DELIVERY_VALUE_INSUFFICIENT")
 
     def test_planner_doc_only_autofills_files_and_architecture(self) -> None:
         payload = "\n".join([
@@ -143,6 +182,33 @@ class DeliveryValueGateTests(unittest.TestCase):
         result = evaluate_contract(payload, cfg, now_epoch=1772800000)
         self.assertTrue(result.passed)
         self.assertIn("delivery_gate=pass", result.values["EVIDENCE"])
+
+    def test_runtime_gate_uses_public_urls_by_default(self) -> None:
+        seen: list[str] = []
+
+        class _Response:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        def _fake_urlopen(req, timeout=1.5):
+            seen.append(req.full_url)
+            return _Response()
+
+        with patch.dict(MODULE.os.environ, {}, clear=True), patch.object(MODULE, "urlopen", side_effect=_fake_urlopen):
+            self.assertTrue(MODULE._runtime_probes_ok())
+
+        self.assertEqual(
+            seen,
+            [
+                "http://3.98.20.77/api/health",
+                "http://3.98.20.77:8080/api/status",
+            ],
+        )
 
 
 if __name__ == "__main__":

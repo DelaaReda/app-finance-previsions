@@ -1,0 +1,33 @@
+{
+  "task_id": "BATCH-87-ADMIN-01",
+  "stream": "BATCH-87",
+  "role": "admin",
+  "generated_at_utc": "2026-04-15T11:12:20Z",
+  "status": "blocked",
+  "summary": "Runtime truth and observability validated for BATCH-87 ADMIN-01. Core stack is healthy and dispatch/collect signals are coherent, but personal-finance ask path is returning provider errors while brief/start/open surfaces are present.",
+  "root_cause": "LLM-backed ask execution is erroring (`copilot ask llm timed out ...`) and returns `model:\"error\"` / `quality_status:\"error\"`, while start/open actions are healthy and monitor/runtime states are consistent.",
+  "fix_applied": "No code/config changes applied; collected evidence and control-plane snapshots for precise handoff.",
+  "artifact": "docs/operations/orchestrator/proofs/BATCH-87/BATCH-87-ADMIN-01/20260415T111220Z-admin-runtime-proof.json",
+  "verify": [
+    "PASS `bash scripts/runtime_host_check.sh` -> runtime_is_vm=1 in /home/venom/analyse-financiere",
+    "PASS `bash scripts/fc_status_brief.sh` -> santé runtime OK, no readiness/dispatch mismatch, active batch BATCH-87",
+    "PASS `bash scripts/fc_health_check.sh` -> monitor/backend/frontend OK, stale locks 0, cron schedule present, monitor contract OK",
+    "PASS `bash scripts/fc_reactivate_guard.sh --audit-only` -> stale locks cleaned audit-only",
+    "PASS `bash scripts/dependency_recompute.sh` -> workboard/queue reconcile OK (waiting_dep=0)",
+    "PASS `python3 platform/automation/runtime/planner/planner_runtime_actions.py --collect-only --owner-task-id BATCH-87-ADMIN-01 --target-role admin` completed with action trace",
+    "PASS `curl -fsS 'http://127.0.0.1:8050/api/personal-finance/start?tickers=MSFT&tickers=AAPL'` -> 200 with brief_of_day + ask/open action payload",
+    "PASS `curl -fsS 'http://127.0.0.1:7779/api/status?lite=1'` -> monitor health OK, no stale lock warnings"
+  ],
+  "verify_blocker": [
+    "BLOCKER `curl -fsS -X POST http://127.0.0.1:8050/api/personal-finance/ask ...` -> 200 but `model:\"error\"`, `quality_status:\"error\"`, `error:\"copilot ask llm timed out after 8.00s\"`"
+  ],
+  "files_touched": [
+    "docs/operations/orchestrator/proofs/BATCH-87/BATCH-87-ADMIN-01/20260415T111220Z-admin-runtime-proof.json"
+  ],
+  "tests_run": "SKIP(no unit/integration test command requested; runtime smoke + endpoint probes only)",
+  "commit_sha": "SKIP(no code/config change)",
+  "architecture_check": "PASS(admin scope only): no queue/workboard mutation, no route/schema changes, no application code touched for this pass.",
+  "vision_alignment": "Blocked on ask fidelity only; brief/start and open paths are live for BATCH-87 target, but user-visible ask outcome is not usable yet. Remaining gap is functional, not control-plane.",
+  "recommended_next": "Route BLOCKER to dev with explicit proof of ask timeout in `apps/api/src/domains/copilot` and/or copilot provider stack; rerun ADMIN-01 runtime probes after provider path is stabilized.",
+  "blocking_issue": "Runtime path shows active open flow but `/api/personal-finance/ask` returns error model/quality status despite healthy infrastructure"
+}

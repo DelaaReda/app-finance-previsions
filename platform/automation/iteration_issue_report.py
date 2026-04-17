@@ -12,6 +12,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+
 
 CONTRACT_KEYS = (
     "STATUS",
@@ -27,6 +29,7 @@ CONTRACT_KEYS = (
 SEVERITY_ORDER = {"INFO": 0, "WARN": 1, "ERROR": 2, "CRITICAL": 3}
 SEVERITY_NAMES = ["INFO", "WARN", "ERROR", "CRITICAL"]
 TERMINAL_TASK_STATES = {"DONE", "PASS", "CLOSED"}
+NON_ESCALATING_REPEAT_CODES = {"RATE_LIMIT_PROBE_ERROR"}
 
 
 def read_text(path: Path) -> str:
@@ -186,6 +189,8 @@ def build_canonical_supervision_records(latest_path: Path, now_ts: str) -> dict[
     state_dir = root / "logs-codex-runs" / "orchestrator-state"
     queue_payload = load_json_dict(state_dir / "priority-queue.json")
     board_payload = load_json_dict(state_dir / "parallel-workstreams.json")
+    runtime_truth = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24)
+    projection_secondary_only = bool(runtime_truth.get("projection_secondary_only", True))
     active_cycle = queue_payload.get("active_cycle")
     if not isinstance(active_cycle, dict):
         active_cycle = board_payload.get("active_cycle")
@@ -215,17 +220,6 @@ def build_canonical_supervision_records(latest_path: Path, now_ts: str) -> dict[
             issue_status = "has_issues" if state == "BLOCKED" or bool(blocked_reason) else "none"
             max_severity = "WARN" if issue_status == "has_issues" else "INFO"
             issues = [blocked_reason] if blocked_reason else []
-            projection_capable = bool(
-                task_id
-                and state
-                and (
-                    task.get("owner")
-                    or task.get("role")
-                    or task.get("assignee")
-                    or task.get("next_action")
-                    or task.get("blocked_reason")
-                )
-            )
             records[role] = {
                 "ts_utc": now_ts,
                 "role": role,
@@ -240,7 +234,7 @@ def build_canonical_supervision_records(latest_path: Path, now_ts: str) -> dict[
                 "canonical_task_id": task_id,
                 "canonical_task_state": state,
                 "canonical_task_role": one_line(task.get("role", ""), 60),
-                "projection_secondary_only": not projection_capable,
+                "projection_secondary_only": projection_secondary_only,
             }
             continue
 
@@ -262,7 +256,7 @@ def build_canonical_supervision_records(latest_path: Path, now_ts: str) -> dict[
             "canonical_task_id": "none",
             "canonical_task_state": "none",
             "canonical_task_role": role,
-            "projection_secondary_only": True,
+            "projection_secondary_only": projection_secondary_only,
         }
     return records
 
@@ -658,6 +652,8 @@ def escalate_critical_if_needed(
     for item in issues:
         code = str(item.get("code", "")).strip()
         if not code:
+            continue
+        if code in NON_ESCALATING_REPEAT_CODES:
             continue
         if code_counts[code] >= 2:
             item["severity"] = "CRITICAL"

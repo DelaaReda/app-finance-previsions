@@ -445,9 +445,9 @@ def _worker_runtime_model(worker_type: str) -> str:
     env_override = str(os.environ.get("FC_DYNAMIC_WORKERS_MODEL", "")).strip()
     if env_override:
         return env_override
-    base_model = str(os.environ.get("LM_USED_ROLE_MODEL", "gpt-5.3-codex-spark")).strip() or "gpt-5.3-codex-spark"
+    base_model = str(os.environ.get("LM_USED_ROLE_MODEL", "gpt-5.4")).strip() or "gpt-5.4"
     if str(worker_type or "").strip() == "qa_review_worker":
-        return _apply_model_family("codex-full/gpt-5.3-codex-spark", base_model)
+        return _apply_model_family("codex-full/gpt-5.4", base_model)
     return base_model
 
 

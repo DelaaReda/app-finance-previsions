@@ -1,0 +1,40 @@
+proof_id: "PRF-BATCH-89-BATCH-89-GOV_REVIEW-20260415T170121Z-787"
+stream_id: "BATCH-89"
+task_id: "BATCH-89-GOV_REVIEW"
+role: "planner"
+produced_at_utc: "2026-04-15T17:01:21Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+preconditions:
+  change_plan: []
+  architecture_checks: []
+  reflection_dimensions: []
+  gate_version: "1"
+execution:
+  commands:
+    - cmd: "SKIP(planner_doc_only)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-15T17:01:21Z"
+      ended_at_utc: "2026-04-15T17:01:21Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "PASS python3 -m pytest apps/api/src/domains/copilot/tests/test_dev03_brief_of_day_delivery.py::TestDEV03BriefOfDayContract::test_copilot_start_injects_ask_and_open_fallbacks_when_missing -q; PASS python3 -m pytest apps/monitor/tests/test_status_lite_health_semantics.py -q"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/planner.last_contract"
+  artifacts:
+    - "docs/operations/orchestrator/proofs/BATCH-89/BATCH-89-GOV_REVIEW.md"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "planner"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_COMPLETE_BATCH-89-GOV_REVIEW_P1776272181_32732"
+  review_ref: "primary_structured:BATCH-89-GOV_REVIEW"
+  note: "source=primary_structured | root_cause=BATCH-89-GOV_REVIEW remained the only planner task in progress after DEV-01 DEV-02 DEV-03 and ADMIN-01 reached DONE | fix_applied=planner published a final governance artifact and executed the canonical closure for the active batch | verify=before=planner_context_ready0_inprogress1_task_B89_GOV_REVIEW,after=complete_requested_and_batch_should_close,test=pytest_dev03_targeted+pytest_monitor_semantics+parallel_workstream_context | architecture_check=layer=application+frontend+monitor+runtime,imports_ok=yes,path_target=apps/api/src/domains/copilot/api/copilot.py,apps/api/src/domains/copilot/application/copilot_service.py,apps/web/src/domains/forecasts/pages/personal-finance-start.html,apps/web/src/domains/forecasts/components/widgets/copilot-panel.html,apps/monitor/server.py | vision_alignment=batch=BATCH-89,target=portfolio_first_brief_with_ranked_actions,impact=close_final_personal_finance_governance_review_without_new_dispatch"
