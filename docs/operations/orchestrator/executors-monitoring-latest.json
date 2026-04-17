@@ -1,13 +1,13 @@
 {
-  "updated_at_utc": "2026-04-16T22:58:57Z",
+  "updated_at_utc": "2026-04-17T03:08:01Z",
   "roles": {
     "dev": {
-      "ts_utc": "2026-04-16T22:58:57Z",
+      "ts_utc": "2026-04-17T03:08:01Z",
       "role": "dev",
       "source": "health_snapshot",
-      "status": "WAIT",
-      "delta": "NO_ACTIVE_CAPABILITY",
-      "verdict": "PASS",
+      "status": "IN_PROGRESS",
+      "delta": "CAPABILITY_ACTIVE",
+      "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
       "next_action_unique": "none",
       "next": "owner=none; action=none",
@@ -28,8 +28,8 @@
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "queue_1776380149_c9c802099284",
-      "workboard_version": "workboard_1776380288_7676f00826e7",
+      "queue_version": "queue_1776395232_5bbeaa435ded",
+      "workboard_version": "workboard_1776395234_c00943575b44",
       "action_summary": "none",
       "run_note": "none",
       "root_cause": "none",
@@ -37,12 +37,12 @@
       "verify": "none"
     },
     "planner": {
-      "ts_utc": "2026-04-16T22:58:57Z",
+      "ts_utc": "2026-04-17T03:08:01Z",
       "role": "planner",
       "source": "health_snapshot",
-      "status": "IN_PROGRESS",
-      "delta": "NO_DELTA",
-      "verdict": "GO_WITH_CAUTION",
+      "status": "IDLE",
+      "delta": "NO_ACTIVE_CANONICAL_WORK",
+      "verdict": "IDLE",
       "blocker_id": "NONE",
       "next_action_unique": "none",
       "next": "owner=none; action=none",
@@ -68,16 +68,16 @@
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "queue_1776380149_c9c802099284",
-      "workboard_version": "workboard_1776380288_7676f00826e7"
+      "queue_version": "queue_1776395232_5bbeaa435ded",
+      "workboard_version": "workboard_1776395234_c00943575b44"
     },
     "admin": {
-      "ts_utc": "2026-04-16T22:58:57Z",
+      "ts_utc": "2026-04-17T03:08:01Z",
       "role": "admin",
       "source": "health_snapshot",
-      "status": "WAIT",
-      "delta": "NO_ACTIVE_CAPABILITY",
-      "verdict": "PASS",
+      "status": "PASS",
+      "delta": "WAITING_DEP_BATCH-97-ADMIN-01_DEV_IN_PROGRESS_NEWS_STALE",
+      "verdict": "GO_WITH_CAUTION",
       "blocker_id": "NONE",
       "next_action_unique": "none",
       "next": "owner=none; action=none",
@@ -98,8 +98,8 @@
       "channels_read": "",
       "impact_assessment": "",
       "impact_action": "",
-      "queue_version": "queue_1776380149_c9c802099284",
-      "workboard_version": "workboard_1776380288_7676f00826e7",
+      "queue_version": "queue_1776395232_5bbeaa435ded",
+      "workboard_version": "workboard_1776395234_c00943575b44",
       "action_summary": "none",
       "run_note": "none",
       "root_cause": "none",
@@ -164,74 +164,72 @@
       "scrum_master"
     ],
     "context_versions": {
-      "queue_version": "queue_1776380149_c9c802099284",
-      "workboard_version": "workboard_1776380288_7676f00826e7"
+      "queue_version": "queue_1776395232_5bbeaa435ded",
+      "workboard_version": "workboard_1776395234_c00943575b44"
     }
   },
-  "updated_at": "2026-04-16T22:58:57Z",
+  "updated_at": "2026-04-17T03:08:01Z",
   "health_snapshot": {
-    "ts_utc": "2026-04-16T22:58:57Z",
-    "health": "STALE",
-    "health_reason": "stale_ticks",
+    "ts_utc": "2026-04-17T03:08:01Z",
+    "health": "OK",
+    "health_reason": "normal",
     "execution_mode": "planner_experimental",
     "scheduled_roles": [
       "planner"
     ],
     "capability_roles": [],
-    "delivery_runway_present": false,
+    "delivery_runway_present": true,
     "rate_limit_backoff_non_blocking": false,
     "workboard": {
-      "total": 624,
-      "done": 624,
-      "ready": 0,
+      "total": 638,
+      "done": 636,
+      "ready": 1,
       "in_progress": 0,
-      "waiting_dep": 0
+      "waiting_dep": 1
     },
     "velocity": {
-      "done_24h": 596,
-      "done_7d": 624,
-      "proofs": 118
+      "done_24h": 608,
+      "done_7d": 636,
+      "proofs": 120
     },
     "queue": {
-      "total": 93,
-      "ready": 0,
-      "closed": 93,
+      "total": 95,
+      "ready": 1,
+      "closed": 94,
       "waiting_dep": 0,
       "in_progress": 0
     },
     "agents": {
       "planner": {
+        "verdict": "IDLE",
+        "status": "IDLE",
+        "blocker": "NONE",
+        "delta": "NO_ACTIVE_CANONICAL_WORK"
+      },
+      "dev": {
         "verdict": "GO_WITH_CAUTION",
         "status": "IN_PROGRESS",
         "blocker": "NONE",
-        "delta": "NO_DELTA"
-      },
-      "dev": {
-        "verdict": "PASS",
-        "status": "WAIT",
-        "blocker": "NONE",
-        "delta": "NO_ACTIVE_CAPABILITY"
+        "delta": "CAPABILITY_ACTIVE"
       },
       "admin": {
-        "verdict": "PASS",
-        "status": "WAIT",
+        "verdict": "GO_WITH_CAUTION",
+        "status": "PASS",
         "blocker": "NONE",
-        "delta": "NO_ACTIVE_CAPABILITY"
+        "delta": "WAITING_DEP_BATCH-97-ADMIN-01_DEV_IN_PROGRESS_NEWS_STALE"
       }
     },
     "blocked_agents": [],
     "rate_limited_agents": [],
-    "stale_agents": [
-      "planner"
-    ],
+    "stale_agents": [],
     "rate_limits": [],
     "tick_age_min": {
-      "planner": 1030,
-      "dev": 59272,
-      "admin": 59258
+      "planner": 6,
+      "dev": 59521,
+      "admin": 59507
     },
     "critical_widget_health": {
-      "ts_utc": "2026-04-16T22:58:57Z",
+      "ts_utc": "2026-04-17T03:08:01Z",
       "state": "ok",
       "monitor_base_url": "http://3.98.20.77:8080",
       "api_base_url": "http://3.98.20.77",
@@ -244,7 +242,7 @@
         "news": {
           "state": "ok",
           "freshness": "fresh",
-          "updated_at": "2026-04-16T22:47:52.516670"
+          "updated_at": "2026-04-17T03:06:55.023638"
         },
         "forecasts": {
           "state": "ok",
@@ -266,16 +264,16 @@
       }
     }
   },
-  "health": "STALE",
+  "health": "OK",
   "velocity": {
-    "done_24h": 596,
-    "done_7d": 624,
-    "proofs": 118
+    "done_24h": 608,
+    "done_7d": 636,
+    "proofs": 120
   },
   "_cleanup_ts": "2026-03-04T11:59:09.835863+00:00",
   "_cleanup_note": "Removed 12 phantom roles (not in active topology): ['frontend_engineer', 'infra_engineer', 'backend_engineer', 'integrator', 'analyst', 'architect', 'data_analyst', 'tester', 'qa', 'scrum_master', 'clawsentinel', 'po']",
   "critical_widget_health": {
-    "ts_utc": "2026-04-16T22:58:57Z",
+    "ts_utc": "2026-04-17T03:08:01Z",
     "state": "ok",
     "monitor_base_url": "http://3.98.20.77:8080",
     "api_base_url": "http://3.98.20.77",
@@ -288,7 +286,7 @@
       "news": {
         "state": "ok",
         "freshness": "fresh",
-        "updated_at": "2026-04-16T22:47:52.516670"
+        "updated_at": "2026-04-17T03:06:55.023638"
       },
       "forecasts": {
         "state": "ok",
@@ -309,5 +307,5 @@
       }
     }
   },
-  "generated_at": "2026-04-16T22:58:57Z"
+  "generated_at": "2026-04-17T03:08:01Z"
 }

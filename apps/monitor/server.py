@@ -41,7 +41,7 @@ from orchestrator_paths import (
 )
 from planning.plane.plane_runtime_sync import ingest_plane_payload
 from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
-from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot, load_product_delivery_state
 
 from collectors import (  # type: ignore
     collect_activity_events as monitor_collect_activity_events,
@@ -315,6 +315,9 @@ def _control_plane_location(root: Path, host_context: dict[str, str] | None = No
     host_payload = host_context if isinstance(host_context, dict) else monitor_detect_runtime_host_kind(root)
     runtime_is_vm = str(host_payload.get("runtime_is_vm", "0") or "0").strip()
     if runtime_is_vm == "1":
+        return "local_vm"
+    runner_dir = root / "platform" / "config" / "runner"
+    if (runner_dir / "runner.v1.yaml").exists() or (runner_dir / "runner_config.v1.yaml").exists():
         return "local_vm"
     return "remote_vm"
 
@@ -1395,6 +1398,18 @@ def _delivery_control_snapshot() -> dict:
         }
 
 
+def _canonical_delivery_control_snapshot() -> dict:
+    payload = load_product_delivery_state(ROOT)
+    if isinstance(payload, dict) and payload:
+        return dict(payload)
+    try:
+        runtime_truth = build_runtime_truth_snapshot(ROOT, state_limit=12, event_limit=24)
+    except Exception:
+        return {}
+    delivery_state = runtime_truth.get("product_delivery_state")
+    return dict(delivery_state) if isinstance(delivery_state, dict) else {}
+
+
 def _active_planner_subagent_roles() -> tuple[str, ...]:
     snapshot = _planner_subagents_snapshot()
     roles: list[str] = []
@@ -1634,7 +1649,7 @@ def _ordered_roles(roles: list[str] | set[str] | tuple[str, ...]) -> tuple[str, 
             continue
         seen.add(r)
         cleaned.append(r)
-    priority = list(CORE_ROLES)
+    priority = ["planner", "dev", "admin", "scrum_master"]
     ordered = [r for r in priority if r in cleaned]
     ordered += sorted(r for r in cleaned if r not in priority)
     return tuple(ordered)
@@ -1728,7 +1743,6 @@ def _role_has_monitor_artifacts(role: str) -> bool:
         ROOT / f"logs-codex-runs/fc-ticks/{candidate}.cron.log",
         ROOT / f"logs-codex-runs/role-runner/{candidate}.live.log",
         ROOT / f"logs-codex-runs/role-runner/{candidate}.events.log",
-        STATE / f"{candidate}.last_contract",
     )
     for path in probes:
         if not path.exists():
@@ -1744,12 +1758,16 @@ def _role_has_monitor_artifacts(role: str) -> bool:
 def monitor_roles() -> tuple[str, ...]:
     roles = list(active_roles())
     if _execution_mode(ROOT) == "planner_experimental":
-        for capability_role in ("dev", "admin", "scrum_master"):
-            if capability_role not in roles:
-                roles.append(capability_role)
-        for role in _active_planner_subagent_roles():
-            if role not in roles:
-                roles.append(role)
+        capability_visible = any(
+            _role_has_monitor_artifacts(role) for role in ("dev", "admin", "scrum_master")
+        ) or bool(_active_planner_subagent_roles())
+        if capability_visible:
+            for capability_role in ("dev", "admin", "scrum_master"):
+                if capability_role not in roles:
+                    roles.append(capability_role)
+            for role in _active_planner_subagent_roles():
+                if role not in roles:
+                    roles.append(role)
         ordered = _ordered_roles(roles)
         return ordered if ordered else CORE_ROLES
     for core_role in CORE_ROLES:
@@ -4363,7 +4381,7 @@ def status(lite: int = 0):
             "scheduler_roles": list(CORE_ROLES),
             "capability_roles": [role for role in agent_roles if role not in CORE_ROLES],
             "core_roles": list(CORE_ROLES),
-            "roles": list(agent_roles),
+            "roles": list(roles),
             "done": workboard_done,
             "ready": workboard_ready,
             "batches": {
@@ -4591,7 +4609,10 @@ def status(lite: int = 0):
         delivery_integrity = _delivery_integrity_snapshot()
     delivery_control = latest_snapshot.get("delivery_control", {}) if isinstance(latest_snapshot, dict) else {}
     if not isinstance(delivery_control, dict) or not delivery_control:
-        delivery_control = _delivery_control_snapshot()
+        delivery_control = _canonical_delivery_control_snapshot()
+    delivery_control_advisory = latest_snapshot.get("delivery_control_advisory", {}) if isinstance(latest_snapshot, dict) else {}
+    if not isinstance(delivery_control_advisory, dict) or not delivery_control_advisory:
+        delivery_control_advisory = _delivery_control_snapshot()
     product_value_metrics = latest_snapshot.get("product_value_metrics", {}) if isinstance(latest_snapshot, dict) else {}
     if not isinstance(product_value_metrics, dict) or not product_value_metrics:
         product_value_metrics = _product_value_metrics_snapshot()
@@ -4611,7 +4632,7 @@ def status(lite: int = 0):
             "scheduler_roles": list(CORE_ROLES),
             "capability_roles": [role for role in agent_roles if role not in CORE_ROLES],
             "core_roles": list(CORE_ROLES),
-            "roles":list(agent_roles),
+            "roles":list(roles),
             "done": workboard_done,
             "ready": workboard_ready,
             "batches": batches_payload,
@@ -4653,6 +4674,7 @@ def status(lite: int = 0):
             "planner_dispatch": planner_dispatch,
             "delivery_integrity": delivery_integrity,
             "delivery_control": delivery_control,
+            "delivery_control_advisory": delivery_control_advisory,
             "product_value_metrics": product_value_metrics,
             "alerts_overview": alerts_overview,
             "po_scrum_master": po_scrum_master,
@@ -7165,23 +7187,27 @@ function deliveryControlRows(items, emptyLabel){
 }
 function deliveryControlHtml(){
   const dc=(D&&D.delivery_control)||{};
-  const status=String(dc.status||'unknown');
-  const integrityStatus=String(dc.integrity_status||'unknown');
-  const futureStatus=String(dc.future_status||status||'unknown');
+  const ad=(D&&D.delivery_control_advisory)||{};
+  const phase=String(dc.phase||'unknown');
+  const activeBatch=String(dc.active_batch_id||'none');
+  const status=String(ad.status||'unknown');
+  const integrityStatus=String(ad.integrity_status||'unknown');
+  const futureStatus=String(ad.future_status||status||'unknown');
   const cls=plannerDispatchStatusClass(status);
-  const coverage=dc.coverage||{};
-  const futureCoverage=dc.future_coverage||{};
-  const counts=dc.pipeline_counts||{};
-  const browserPipeline=dc.browser_proof_pipeline||{};
-  const qaPipeline=dc.qa_review_pipeline||{};
-  const healthy=dc.healthy_deliveries||{};
-  const backfill=dc.needs_proof_backfill||{};
-  const browserBackfill=dc.browser_proof_backfill_queue||{};
-  const suspicious=dc.suspicious_completions||{};
-  const historicalDebt=dc.historical_debt||{};
-  const stallSummary=dc.capability_stall_summary||{};
+  const coverage=ad.coverage||{};
+  const futureCoverage=ad.future_coverage||{};
+  const counts=ad.pipeline_counts||{};
+  const browserPipeline=ad.browser_proof_pipeline||{};
+  const qaPipeline=ad.qa_review_pipeline||{};
+  const healthy=ad.healthy_deliveries||{};
+  const backfill=ad.needs_proof_backfill||{};
+  const browserBackfill=ad.browser_proof_backfill_queue||{};
+  const suspicious=ad.suspicious_completions||{};
+  const historicalDebt=ad.historical_debt||{};
+  const stallSummary=ad.capability_stall_summary||{};
   return `
-    <div class="queue-sync ${cls}"><strong>Delivery control</strong> · status=${esc(status)} · future=${esc(futureStatus)} · integrity=${esc(integrityStatus)}</div>
+    <div class="queue-sync ${cls}"><strong>Delivery control</strong> · phase=${esc(phase)} · active=${esc(activeBatch)} · product_done=${esc(String(Boolean(dc.product_done)))} · next_batch_eligible=${esc(String(Boolean(dc.next_batch_eligible)))}</div>
+    <div class="queue-sync ${cls}" style="margin-top:8px"><strong>Advisory delivery metrics</strong> · status=${esc(status)} · future=${esc(futureStatus)} · integrity=${esc(integrityStatus)}</div>
     <div class="work-summary-grid" style="margin-top:8px">
       ${workSummaryStatHtml(`${Math.round(Number(coverage.proof_manifest||0)*100)}%`,'proof coverage',Number(coverage.proof_manifest||0)>=1?'ok':'warn')}
       ${workSummaryStatHtml(`${Math.round(Number(coverage.tests_evidence||0)*100)}%`,'tests coverage',Number(coverage.tests_evidence||0)>=1?'ok':'warn')}
@@ -7205,7 +7231,7 @@ function deliveryControlHtml(){
       <a class="ext-link" href="/api/status" target="_blank">⬡ Status JSON</a>
       <a class="ext-link" href="/api/doctor?refresh=1" target="_blank">⬡ Doctor refresh</a>
     </div>
-    <div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>future rollout:</strong> ${esc(String(dc.future_rollout_at||'unknown'))}<br><strong>future coverage</strong> · proof=${esc(String(Math.round(Number(futureCoverage.proof_manifest||0)*100)))}% · tests=${esc(String(Math.round(Number(futureCoverage.tests_evidence||0)*100)))}% · commit=${esc(String(Math.round(Number(futureCoverage.commit_evidence||0)*100)))}% · browser=${esc(String(Math.round(Number(futureCoverage.browser_proof||0)*100)))}%</div>
+    <div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>future rollout:</strong> ${esc(String(ad.future_rollout_at||'unknown'))}<br><strong>future coverage</strong> · proof=${esc(String(Math.round(Number(futureCoverage.proof_manifest||0)*100)))}% · tests=${esc(String(Math.round(Number(futureCoverage.tests_evidence||0)*100)))}% · commit=${esc(String(Math.round(Number(futureCoverage.commit_evidence||0)*100)))}% · browser=${esc(String(Math.round(Number(futureCoverage.browser_proof||0)*100)))}%</div>
   `;
 }
 function errorFeedHtml(){
@@ -7491,7 +7517,7 @@ function render(){
     <div class="panel fade"><div class="panel-head"><span class="panel-label">Agents</span><span style="font-size:10px;color:var(--ghost)">cliquer → contrat ${paBadge} ${tsBadge}</span></div><div class="panel-body"><div class="agents-row">${agentTiles}</div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Planner Dispatch</span><span style="font-size:10px;color:var(--ghost)">mode=${esc((D&&D.execution_mode)||'unknown')} · subagents=${((D&&D.planner_dispatch&&D.planner_dispatch.active_subagents) ?? (D&&D.planner_subagents&&D.planner_subagents.active_count) ?? 0)}</span></div><div class="panel-body">${plannerDispatchHtml()}</div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Activite Agents</span><span style="font-size:10px;color:var(--ghost)">helpers=${esc(String((((D&&D.agent_activity)||{}).active_helper_count)||0))}</span></div><div class="panel-body">${agentActivityHtml()}<div class="link-row"><a class="ext-link" href="/api/agents/activity" target="_blank">⬡ Agents activity JSON</a><a class="ext-link" href="/api/agent-insights" target="_blank">⬡ Agent insights JSON</a></div></div></div>
-	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Delivery Control</span><span style="font-size:10px;color:var(--ghost)">future=${esc(String(((D&&D.delivery_control)||{}).future_status||'unknown'))} · integrity=${esc(String(((D&&D.delivery_control)||{}).integrity_status||'unknown'))}</span></div><div class="panel-body">${deliveryControlHtml()}</div></div>
+	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Delivery Control</span><span style="font-size:10px;color:var(--ghost)">future=${esc(String(((D&&D.delivery_control_advisory)||{}).future_status||'unknown'))} · integrity=${esc(String(((D&&D.delivery_control_advisory)||{}).integrity_status||'unknown'))}</span></div><div class="panel-body">${deliveryControlHtml()}</div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Workboard actif</span><span style="font-size:10px;color:var(--ghost)">${workboard.total ?? '—'} tâches · ${workboard.done ?? '—'} done</span></div><div class="panel-body"><div class="task-grid">${wbHtml}</div><div class="queue-sync ${freshnessClass}" style="margin-top:10px"><strong>Runtime freshness</strong> · ${freshnessText}</div><div class="queue-sync warn" style="margin-top:8px"><strong>Planner autonomy</strong> · idle=${pa.ready_idle_streak??0} · low_score=${pa.low_score_streak??0} · runway_no_batch=${pa.runway_no_batch_streak??0} · autofix24h=${pa.autofix_count_24h??0}</div><div class="queue-sync warn" style="margin-top:8px"><strong>T-shape admin</strong> · active=${ts.active?'1':'0'} · target=${esc(ts.target_role||'none')} · blocker=${esc(ts.reason_blocker||'NONE')}</div><div class="queue-sync ${doctorStatus==='OK'?'ok':'warn'}" style="margin-top:8px"><strong>Agentic doctor</strong> · status=${doctorStatus} · runtime=${doctorDuration}</div><div class="queue-sync ${doctorFailures==='none'?'ok':'warn'}" style="margin-top:8px"><strong>Agentic checks</strong> · ${esc(doctorFailures)}</div><div class="queue-sync ${Number(activitySummary.events_last_1h||0)>0?'ok':'warn'}" style="margin-top:8px"><strong>Activity summary</strong> · 1h=${activitySummary.events_last_1h||0} · 6h=${activitySummary.events_last_6h||0} · progressed_1h=${activitySummary.tasks_progressed_last_1h||0} · bottleneck=${esc(activitySummary.current_bottleneck||'none')}</div><div class="queue-sync" style="margin-top:8px"><strong>System summary</strong> · next=${esc(systemSummary.recommended_next_action||'monitor')} · changed15m=${(systemSummary.what_changed_last_15m||[]).length||0}</div><div style="margin-top:8px;font-size:10px;color:var(--ghost);line-height:1.5"><strong>sources:</strong><br>queue=${esc(shortPath(src.queue||''))}<br>workboard=${esc(shortPath(src.workboard||''))}</div></div></div>
 	      <div class="panel fade"><div class="panel-head"><span class="panel-label">Agent Activity Feed</span><span style="font-size:10px;color:var(--ghost)">window=${esc(String((A&&A.window_hours)||6))}h · timeline=${(A&&A.timeline&&A.timeline.length)||0}</span></div><div class="panel-body"><div class="queue-sync ok"><strong>Throughput</strong> · completed_1h=${(A&&A.throughput&&A.throughput.tasks_completed_last_hour)||0} · artifacts_1h=${(A&&A.throughput&&A.throughput.artifacts_generated_last_hour)||0} · rate=${(A&&A.throughput&&A.throughput.delivery_rate)||0}</div><div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px"><div class="log-box"><div class="log-head">Timeline</div><div class="log-scroll">${activityFeedHtml()}</div></div><div class="log-box"><div class="log-head">Task Inspector</div><div class="log-scroll">${taskInspectorHtml()}</div></div><div class="log-box"><div class="log-head">Dependency Map</div><div class="log-scroll">${dependencyMapHtml()}</div></div></div><div class="link-row"><a class="ext-link" href="/api/agent-activity?window=6&limit=300" target="_blank">⬡ Agent activity JSON</a><a class="ext-link" href="/api/tasks/active?window=6&limit=120" target="_blank">⬡ Tasks active JSON</a><a class="ext-link" href="/api/dependencies/map?limit=300" target="_blank">⬡ Dependencies JSON</a></div></div></div>
 	      ${poPanel}

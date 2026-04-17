@@ -545,6 +545,26 @@ class PlannerGuardianTests(unittest.TestCase):
             ["Aucun batch canonique actif: ouvrir le prochain batch eligible maintenant via sync-priority + planner-autobatch + claim."],
         )
 
+    def test_product_done_ops_dirty_opens_next_batch_recommendation(self) -> None:
+        recos = recommendations(
+            ["residue_detected"],
+            {
+                "active_batch_ids": [],
+                "active_task_id": "",
+                "active_task_role": "",
+                "active_task_state": "",
+                "product_delivery_state": {
+                    "phase": "product_done_ops_dirty",
+                    "next_batch_eligible": True,
+                },
+            },
+        )
+
+        self.assertEqual(
+            recos,
+            ["Aucun batch canonique actif: ouvrir le prochain batch eligible maintenant via sync-priority + planner-autobatch + claim."],
+        )
+
     def test_idle_canonical_runtime_marks_projection_noise_as_residue(self) -> None:
         outcome = compute_score(
             {
@@ -625,11 +645,15 @@ class PlannerGuardianTests(unittest.TestCase):
                     "event_store_primary": True,
                     "graph_state_count": 0,
                     "recent_event_count": 0,
+                    "product_delivery_state": {
+                        "active_batch_id": None,
+                        "phase": "idle_ready_for_next_batch",
+                    },
                 },
             ):
                 canonical = canonical_active_snapshot(latest)
 
-            self.assertEqual(canonical["active_batch_ids"], ["BATCH-91"])
+            self.assertEqual(canonical["active_batch_ids"], [])
             self.assertEqual(canonical["active_task_id"], "")
             self.assertEqual(canonical["active_task_role"], "")
             self.assertFalse(canonical["projection_secondary_only"])
@@ -678,6 +702,66 @@ class PlannerGuardianTests(unittest.TestCase):
             self.assertEqual(canonical["active_task_role"], "")
             self.assertEqual(canonical["projection_decision_reason"], "runtime_idle_no_active_cycle")
             self.assertFalse(canonical["projection_secondary_only"])
+
+    def test_canonical_active_snapshot_ignores_stale_projection_after_product_close(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            state_dir = root / "logs-codex-runs" / "orchestrator-state"
+            state_dir.mkdir(parents=True, exist_ok=True)
+            latest = state_dir / "planner-guardian-latest.json"
+            latest.write_text("{}", encoding="utf-8")
+            (state_dir / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {"active_batch_ids": ["BATCH-97"]},
+                        "meta": {
+                            "workboard_decision_capable": False,
+                            "workboard_decision_capability_reason": "projection_missing_operational_fields",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (state_dir / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "meta": {
+                            "decision_capable": False,
+                            "decision_capability_reason": "projection_missing_operational_fields",
+                        },
+                        "tasks": [
+                            {
+                                "id": "BATCH-97-ANALYSIS",
+                                "stream_id": "BATCH-97",
+                                "role": "planner",
+                                "state": "READY_PLANNER",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.object(
+                MODULE,
+                "build_runtime_truth_snapshot",
+                return_value={
+                    "event_store_primary": True,
+                    "graph_state_count": 1,
+                    "recent_event_count": 1,
+                    "product_delivery_state": {
+                        "active_batch_id": None,
+                        "phase": "product_done_ops_dirty",
+                        "next_batch_eligible": True,
+                    },
+                },
+            ):
+                canonical = canonical_active_snapshot(latest)
+
+            self.assertEqual(canonical["active_batch_ids"], [])
+            self.assertEqual(canonical["active_task_id"], "")
+            self.assertEqual(canonical["active_task_role"], "")
+            self.assertEqual(canonical["projection_decision_reason"], "runtime_idle_no_active_cycle")
 
 
 if __name__ == "__main__":

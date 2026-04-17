@@ -1,9 +1,9 @@
 {
-  "conversation_id": "1a26206d8f04752d",
+  "conversation_id": "8534e62e9927e41a",
   "schema_version": "copilot_conversation_v1",
-  "created_at": "2026-04-16T10:40:15.147466Z",
-  "updated_at": "2026-04-16T10:40:15.156655Z",
-  "title": "What about TSLA?",
+  "created_at": "2026-04-17T03:03:17.757684Z",
+  "updated_at": "2026-04-17T03:03:17.771700Z",
+  "title": "Test?",
   "context": {
     "tickers": [],
     "scope": {},
@@ -13,8 +13,8 @@
     {
       "message_id": "msg_001",
       "role": "user",
-      "content": "What about TSLA?",
-      "timestamp": "2026-04-16T10:40:15.147466Z",
+      "content": "Test?",
+      "timestamp": "2026-04-17T03:03:17.757684Z",
       "metadata": {
         "tickers": [],
         "scope": {}
@@ -23,8 +23,8 @@
     {
       "message_id": "msg_002",
       "role": "assistant",
-      "content": "Wait for better entry.",
-      "timestamp": "2026-04-16T10:40:15.156655Z",
+      "content": "Test.",
+      "timestamp": "2026-04-17T03:03:17.771700Z",
       "metadata": {
         "verdict": "hold",
         "confidence": null,

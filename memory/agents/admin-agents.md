@@ -801,3 +801,91 @@ VM instruction
 - [2026-04-16 20:57:05 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T005654Z_sessions_missing next_action_unique=admin-agents-tick-20260417T005654Z directive=none/none message=none/none exec_report=tick=20260417T005654Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
 - [2026-04-16 21:43:59 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T014349Z_sessions_missing next_action_unique=admin-agents-tick-20260417T014349Z directive=none/none message=none/none exec_report=tick=20260417T014349Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
 - [2026-04-16 22:01:29 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T020118Z_sessions_missing next_action_unique=admin-agents-tick-20260417T020118Z directive=none/none message=none/none exec_report=tick=20260417T020118Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
+- [2026-04-16 22:17:30 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T021655Z_role_contract_blockers next_action_unique=admin-agents-tick-20260417T021655Z directive=none/none message=none/none exec_report=tick=20260417T021655Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=role_contract_blockers next_action=force_run_blocked_roles_then_recheck exec_report=role_ issues=role_contract_blockers suggestions=force_run_blocked_roles_then_recheck
+
+## 2026-04-17T02:20:52Z orchestration-architect
+
+Verdict
+- ec2_reachable: yes
+- app_progress: no
+- product_done: yes
+- ops_clean: no
+- next_batch_eligible: yes
+- continuity_gap: no
+- token_burn: yes
+- orchestration_efficiency: mixed
+- delivered_value_now: moderate
+
+Authority state
+- public_proof_status: Public EC2 remains usable. `GET /api/copilot/start?tickers=NVDA` and `GET /api/personal-finance/start?tickers=NVDA` return `200`, `ranked_action=open_nvda`, and non-empty `brief_of_day.what_changed_today` / `what_matters_now`; default `GET /api/copilot/start` is now `portfolio_aware` with `ranked_action=open_aapl`. But `GET /api/judge/personal-finance/start?tickers=NVDA` still returns `what_changed_today=null` and `what_matters_now=null`, so the new `BATCH-97` target is not publicly delivered end-to-end yet.
+- runtime_truth_status: VM runtime truth has moved past `BATCH-96` cleanly at the canonical layer. `runtime_host_check` confirms `runtime_is_vm=1`; `fc_doctor --json` reports `event_store_primary=true`, `active_batch_id=null`, `phase=idle_ready_for_next_batch`, `product_done=true`, `ops_clean=false`, `next_batch_eligible=true`, `current_public_proof.batch_id=BATCH-96`, and `current_value_target.batch_id=BATCH-97`. `planner_board_runtime.py snapshot` shows `active_batch_ids=[]`, `runtime_actionable=true`, and runnable `BATCH-97-ARCH`, so the next batch is really opening even though it is not yet canonically active.
+- active_batch_source: none
+- advisory_mismatch: yes
+
+What changed since previous run
+- `BATCH-96` is no longer kept as an active canonical batch: runtime truth now exposes `active_batch_id=null` while preserving `product_done=true` and the last public proof on `BATCH-96`.
+- Runtime truth already selected the next lot: `current_value_target.batch_id=BATCH-97` with novelty target `portfolio_first_brief_with_ranked_actions`, and the planner snapshot now says `next_action=advance batch-97-arch`.
+- `BATCH-97-ANALYSIS` closed at `2026-04-17T02:12:40Z`, and `BATCH-97-ARCH` moved to `IN_PROGRESS` at `2026-04-17T02:15:07Z`, but there is still no `ARCH` proof artifact and no public EC2 delta tied to `BATCH-97`.
+- Live lane contracts lag the canonical handoff: planner still blocks on `BATCH-96-ADMIN-01`, dev is waiting on `materialiser BATCH-97-ARCH`, and admin is blocked by `REFLECTION_PASSES_INVALID`.
+- Advisory surfaces still disagree with canonical truth: `planner-guardian-latest.json` talks about `COLLECT_RUNTIME_BATCH96...`, while queue/workboard already publish `BATCH-97` and `executors-monitoring-latest.json` still reports stale planner/admin issues.
+
+Top priorities
+1. Rebind the live planner lane to runtime truth now: materialize `BATCH-97-ARCH` or back it off within one tick, and stop letting `planner.last_contract` block on stale `BATCH-96-ADMIN-01`.
+2. Ship the smallest public `BATCH-97-DEV-01` slice through `judge -> copilot -> personal-finance`: default starter must answer “what should I do with my portfolio today?” with real portfolio/watchlist-backed prioritization, not `portfolio_aware` or `market_wide` labels with `portfolio_used/watchlist_used=null`.
+3. Put token-burn lanes into hard backoff until they republish from sqlite truth: stale `BATCH-96` planner/admin repair loop, `REFLECTION_PASSES_INVALID` admin contract churn, and guardian/executors-monitoring advice that still follows `BATCH-96`.
+
+Main blocker
+- The blocker is not EC2 and not the shipped `BATCH-96` delta. The blocker is an incomplete opener handoff: runtime truth says `BATCH-96` is done and `BATCH-97` is eligible, but the live planner/admin contracts are still pinned to stale `BATCH-96` repair or invalid admin contract state, so `BATCH-97` has started architecturally without converging toward a public delivery.
+
+False progress detected
+- `planner.last_contract` still orders repair on `BATCH-96-ADMIN-01` with `VERDICT: BLOCKED`, even though runtime truth has `active_batch_id=null` and `current_value_target.batch_id=BATCH-97`.
+- `planner-guardian-latest.json` still summarizes `COLLECT_RUNTIME_BATCH96_EFFECTUE_ET_REPAIR_ADMIN_REQUISE`; that is control-plane residue, not current canonical work.
+- `parallel-workstreams.json` marks `BATCH-97-ARCH` `IN_PROGRESS`, but proof count remains `0`, `next_action=wait_for_dependencies`, and no `BATCH-97-ARCH` proof artifact exists yet.
+- `executors-monitoring-latest.json` keeps `stale_context_open=1`, `delivery_gaps_open=1`, and admin blocker residue without changing any canonical field.
+- Public judge parity claims are overstated: `judge/personal-finance/start` still emits null `what_changed_today` / `what_matters_now` while copilot/personal-finance routes show non-null brief fields.
+
+Next useful delivery
+- The smallest useful delivery is `BATCH-97-DEV-01`: make the default public starter answer the portfolio/watchlist question end-to-end on EC2 with one visible top action and a non-null brief across `judge`, `copilot`, and `personal-finance`, then close it with public API proof before any further control-plane cleanup.
+
+VM instruction
+- Ignore stale `BATCH-96` repair residue as non-blocking for product closure, rematerialize `BATCH-97-ARCH` from runtime truth within one planner tick, dispatch `BATCH-97-DEV-01` or back off `ARCH` immediately if no proof artifact is produced, and keep admin/guardian in backoff until their contracts match `active_batch_id=null` plus `current_value_target.batch_id=BATCH-97`.
+
+## 2026-04-17T02:26:35Z admin-unblock
+
+Continuity
+- previous_verdict: slice 1 delivery kernel published and `BATCH-96` closure became canonical.
+- changed_since_last_run: yes; runtime truth proof metadata is now batch-scoped for the current proof surface, and a regression guard was added against historical-proof false closure.
+
+Verdict
+- blocker: current proof surface could still report the broad runtime status instead of the scoped proof status, which risked false `ok/degraded` interpretation during active delivery.
+- blocker_class: false authority / monotonic closeout missing
+- ec2_reachable: yes
+- product_delivery_blocked: no
+- delivery_continuity_restored: yes
+- public_delivery_after_fix: yes
+- runtime_can_resume: yes
+
+Authority check
+- public_proof_status: public EC2 remains reachable; no new public outage was introduced by this change.
+- runtime_truth_status: canonical runtime truth now distinguishes active-batch proof state from historical completed-batch proof state.
+- next_batch_eligible: yes
+- projections_status: advisory only; no projection change applied in this run.
+- guardian_status: unchanged in this run.
+- false_authority_detected: yes
+- token_burn_detected: no
+
+Actions taken
+- corrected `current_public_proof.status` in [`/Users/venom/Documents/analyse-financiere/platform/automation/runtime/truth/runtime_truth_reader.py`](/Users/venom/Documents/analyse-financiere/platform/automation/runtime/truth/runtime_truth_reader.py) to emit scoped proof status (`ok/error/pending/none`)
+- added non-regression coverage in [`/Users/venom/Documents/analyse-financiere/platform/automation/tests/test_runtime_truth_reader.py`](/Users/venom/Documents/analyse-financiere/platform/automation/tests/test_runtime_truth_reader.py) so an older batch proof cannot close a newer active batch
+
+Validation
+- command_or_check: `PYTHONPATH=platform/automation python3 platform/automation/tests/test_runtime_truth_reader.py`
+- observed_result: `Ran 9 tests ... OK`
+- canonical_signal_after_fix: active batch keeps `phase=active_delivery` and `product_done=false` when only historical proof exists; `last_completed_batch_id` still tracks the completed older batch
+
+Decision
+- next_owner: planner
+- next_action: continue Slice 2 by making the public proof runner the only path into `verifying_public_proof` / `product_done`
+- [2026-04-16 22:32:56 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T023245Z_sessions_missing next_action_unique=admin-agents-tick-20260417T023245Z directive=none/none message=none/none exec_report=tick=20260417T023245Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
+- [2026-04-16 22:47:50 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T024739Z_sessions_missing next_action_unique=admin-agents-tick-20260417T024739Z directive=none/none message=none/none exec_report=tick=20260417T024739Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)
+- [2026-04-16 23:03:21 EDT] role=admin-agents source=admin-agents-tick status=WARN verdict=GO_WITH_CAUTION delta=tick_not_observed_but_proof_changed blocker=NONE stream_id=adminapp-codex task_id=AA_20260417T030310Z_sessions_missing next_action_unique=admin-agents-tick-20260417T030310Z directive=none/none message=none/none exec_report=tick=20260417T030310Z sessions=0/0 role_enabled=0/0 role_error=0 stale_running=0 top_issue=sessions_missing next_action=recreate_missing_sessions_then_validate_one_role(backend_eng issues=sessions_missing suggestions=recreate_missing_sessions_then_validate_one_role(backend_engineer)

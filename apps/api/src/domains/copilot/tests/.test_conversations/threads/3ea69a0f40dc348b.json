@@ -1,8 +1,8 @@
 {
-  "conversation_id": "eb5da3d4ad157c6a",
+  "conversation_id": "3ea69a0f40dc348b",
   "schema_version": "copilot_conversation_v1",
-  "created_at": "2026-04-16T10:40:15.461495Z",
-  "updated_at": "2026-04-16T10:40:15.475125Z",
+  "created_at": "2026-04-17T03:03:17.852434Z",
+  "updated_at": "2026-04-17T03:03:17.868798Z",
   "title": "Test?",
   "context": {
     "tickers": [],
@@ -14,7 +14,7 @@
       "message_id": "msg_001",
       "role": "user",
       "content": "Test?",
-      "timestamp": "2026-04-16T10:40:15.461495Z",
+      "timestamp": "2026-04-17T03:03:17.852434Z",
       "metadata": {
         "tickers": [],
         "scope": {}
@@ -24,7 +24,7 @@
       "message_id": "msg_002",
       "role": "assistant",
       "content": "Test.",
-      "timestamp": "2026-04-16T10:40:15.475125Z",
+      "timestamp": "2026-04-17T03:03:17.868798Z",
       "metadata": {
         "verdict": "hold",
         "confidence": null,

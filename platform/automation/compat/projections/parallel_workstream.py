@@ -2000,6 +2000,56 @@ def _next_batch_id(queue_obj: dict, board: dict) -> str:
     return f"BATCH-{max_seen + 1:02d}"
 
 
+def _build_delivery_contract(
+    *,
+    batch_id: str,
+    title: str,
+    novelty_target: str = "",
+    user_visible_delta: str = "",
+) -> dict:
+    value_target = str(novelty_target or title or batch_id).strip() or batch_id
+    visible_delta = str(user_visible_delta or novelty_target or title or batch_id).strip() or batch_id
+    return {
+        "value_target": value_target,
+        "user_visible_delta": visible_delta,
+        "api_proof": {
+            "kind": "public_api_smoke",
+            "base_url": "http://3.98.20.77",
+            "expected_endpoints": ["/api/health"],
+            "smoke_ref": "scripts/critical_endpoints_smoke.sh",
+        },
+        "ui_proof": {
+            "kind": "public_ui_smoke",
+            "url": "http://3.98.20.77/",
+            "label": f"{str(batch_id or 'batch').strip().lower()}-public-ui",
+            "smoke_ref": "platform/automation/browser_smoke.py",
+        },
+        "done_when": "public_proof_status=ok && user_visible_delta_confirmed=true",
+    }
+
+
+def _apply_delivery_contract(
+    target: dict,
+    *,
+    batch_id: str,
+    title: str,
+    novelty_target: str = "",
+    user_visible_delta: str = "",
+) -> None:
+    contract = _build_delivery_contract(
+        batch_id=batch_id,
+        title=title,
+        novelty_target=novelty_target,
+        user_visible_delta=user_visible_delta,
+    )
+    target["delivery_contract"] = contract
+    target["value_target"] = contract["value_target"]
+    target["user_visible_delta"] = contract["user_visible_delta"]
+    target["api_proof"] = contract["api_proof"]
+    target["ui_proof"] = contract["ui_proof"]
+    target["done_when"] = contract["done_when"]
+
+
 def _ensure_autobatch_stream_and_task(
     board: dict,
     *,
@@ -2049,6 +2099,15 @@ def _ensure_autobatch_stream_and_task(
             existing_stream["novelty_target"] = novelty_target
             if user_visible_delta:
                 existing_stream["user_visible_delta"] = user_visible_delta
+    existing_stream = stream_index(board).get(batch_id) or existing_stream
+    if isinstance(existing_stream, dict):
+        _apply_delivery_contract(
+            existing_stream,
+            batch_id=batch_id,
+            title=title,
+            novelty_target=novelty_target,
+            user_visible_delta=user_visible_delta,
+        )
 
     task_created = 0
     task_id_value = f"{batch_id}-ANALYSIS"
@@ -2100,6 +2159,15 @@ def _ensure_autobatch_stream_and_task(
         if user_visible_delta:
             existing_task["user_visible_delta"] = user_visible_delta
         existing_task["updated_at"] = now
+    existing_task = task_index(board).get(task_id_value) or existing_task
+    if isinstance(existing_task, dict):
+        _apply_delivery_contract(
+            existing_task,
+            batch_id=batch_id,
+            title=title,
+            novelty_target=novelty_target,
+            user_visible_delta=user_visible_delta,
+        )
     return stream_created, task_created
 
 
@@ -2850,6 +2918,13 @@ def planner_autobatch(
         duplicate_item["updated_at"] = now
         duplicate_item["dispatch_authorized"] = True
         duplicate_item.setdefault("ready_at", now)
+        _apply_delivery_contract(
+            duplicate_item,
+            batch_id=existing_batch_id,
+            title=title,
+            novelty_target=novelty_target,
+            user_visible_delta=user_visible_delta,
+        )
         stream_created, task_created = _ensure_autobatch_stream_and_task(
             board,
             batch_id=existing_batch_id,
@@ -2921,6 +2996,13 @@ def planner_autobatch(
         queue_obj["items"][-1]["novelty_target"] = novelty_target
     if user_visible_delta:
         queue_obj["items"][-1]["user_visible_delta"] = user_visible_delta
+    _apply_delivery_contract(
+        queue_obj["items"][-1],
+        batch_id=batch_id,
+        title=title,
+        novelty_target=novelty_target,
+        user_visible_delta=user_visible_delta,
+    )
     queue_policy_changed, _ = _apply_queue_novelty_policy(queue_obj)
     queue_obj["updated_at"] = now
     queue_path.parent.mkdir(parents=True, exist_ok=True)

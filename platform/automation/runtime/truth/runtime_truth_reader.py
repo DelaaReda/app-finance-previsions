@@ -9,7 +9,14 @@ from typing import Any, Callable
 import urllib.error
 import urllib.request
 
-from orchestrator_paths import resolve_orchestrator_read_path
+from orchestrator_paths import (
+    CANONICAL_VM_ROOT,
+    SHARED_VM_ROOT,
+    read_json_file,
+    resolve_orchestrator_read_path,
+    resolve_orchestrator_write_path,
+    write_orchestrator_json,
+)
 
 from .event_store import event_store_path, latest_graph_states, recent_events
 
@@ -27,6 +34,7 @@ MERGE_RESIDUE_STATUSES = {"ready_to_merge"}
 INVALID_RESULT_MARKERS = ("invalid_subagent_result", "start_banner_only")
 DELIVERY_ACTIVE_STATUSES = {"running", "pending", "review", "in_progress", "blocked", "ready_to_merge", "retryable"}
 DELIVERY_ACTIVE_OWNER_STATES = {"in_progress", "ready", "ready_planner", "ready_dev", "review", "blocked", "waiting_dep"}
+DELIVERY_TERMINAL_STATUSES = {"merged", "done", "closed", "completed", "pass", "success", "ok", "cancelled", "canceled", "quarantined"}
 PUBLIC_PROOF_OK_MARKERS = (
     "http://3.98.20.77",
     "ec2-3-98-20-77",
@@ -48,6 +56,7 @@ PUBLIC_PROOF_ERROR_MARKERS = (
     "timed out",
     "timeout",
 )
+PRODUCT_DELIVERY_STATE_FILE = "product_delivery_state.json"
 
 
 def _parse_iso(raw: Any) -> datetime | None:
@@ -129,6 +138,7 @@ def _normalize_state(item: dict[str, Any]) -> dict[str, Any]:
         "subagent_id": str(metadata.get("subagent_id", "")).strip(),
         "checkpoint_id": str(item.get("checkpoint_id", "")).strip(),
         "tests_run": _proof_field(result.get("tests_run", ""), proof.get("tests_run", "")),
+        "proof_manifest": _proof_field(result.get("proof_manifest", ""), proof.get("proof_manifest", "")),
         "engine": str(item.get("engine", "")).strip(),
         "summary": _proof_field(result.get("summary", ""), proof.get("summary", "")),
     }
@@ -179,6 +189,45 @@ def _probe_http_ok(url: str, timeout_s: float = 1.5) -> bool:
         return False
     except Exception:
         return False
+
+
+def _is_vm_runtime_root(root: Path) -> bool:
+    candidate = Path(root).expanduser()
+    try:
+        candidate = candidate.resolve()
+    except Exception:
+        pass
+    candidate_token = str(candidate)
+    for base in (CANONICAL_VM_ROOT, SHARED_VM_ROOT):
+        base_token = str(base)
+        if candidate_token == base_token or candidate_token.startswith(f"{base_token}/"):
+            return True
+    return False
+
+
+def _persist_delivery_state_enabled(root: Path, override: bool | None) -> bool:
+    if override is not None:
+        return bool(override)
+    token = str(os.environ.get("FC_PERSIST_PRODUCT_DELIVERY_STATE", "") or "").strip().lower()
+    if token:
+        return token not in {"0", "false", "no", "off"}
+    return _is_vm_runtime_root(root)
+
+
+def product_delivery_state_path(root: Path) -> Path:
+    return resolve_orchestrator_write_path(root, PRODUCT_DELIVERY_STATE_FILE, create_parent=False)
+
+
+def load_product_delivery_state(root: Path) -> dict[str, Any]:
+    path = resolve_orchestrator_read_path(root, PRODUCT_DELIVERY_STATE_FILE)
+    payload = read_json_file(path)
+    return payload if isinstance(payload, dict) else {}
+
+
+def persist_product_delivery_state(root: Path, payload: dict[str, Any]) -> Path:
+    delivery_state = dict(payload) if isinstance(payload, dict) else {}
+    delivery_state.setdefault("schema_version", "product_delivery_state.v1")
+    return write_orchestrator_json(root, PRODUCT_DELIVERY_STATE_FILE, delivery_state, mirror_docs=False)
 
 
 def _active_cycle_batch_ids(queue_payload: dict[str, Any], workboard_payload: dict[str, Any]) -> set[str]:
@@ -326,6 +375,32 @@ def _state_has_public_proof_error(item: dict[str, Any]) -> bool:
     return any(marker in blob for marker in PUBLIC_PROOF_ERROR_MARKERS)
 
 
+def _state_timestamp_text(item: dict[str, Any]) -> str | None:
+    for key in ("updated_at", "ts", "finished_at", "created_at"):
+        token = str(item.get(key, "") or "").strip()
+        if token:
+            return token
+    return None
+
+
+def _state_is_completion_candidate(item: dict[str, Any]) -> bool:
+    batch_id = str(item.get("batch_id", "") or "").strip().upper()
+    if not batch_id:
+        return False
+    status = str(item.get("status", "")).strip().lower()
+    return _state_has_public_proof_ok(item) or status in DELIVERY_TERMINAL_STATUSES
+
+
+def _state_proof_ref(item: dict[str, Any]) -> str | None:
+    token = _proof_field(
+        item.get("proof_manifest", ""),
+        item.get("artifact", ""),
+        item.get("verify", ""),
+        item.get("tests_run", ""),
+    )
+    return None if token == "none" else token
+
+
 def _latest_matching_state(
     states: list[dict[str, Any]],
     predicate: Callable[[dict[str, Any]], bool],
@@ -339,6 +414,39 @@ def _latest_matching_state(
 def _truthy_flag(value: Any) -> bool:
     token = str(value or "").strip().lower()
     return token in {"1", "true", "yes", "on", "ok"}
+
+
+def _contract_value_present(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(_contract_value_present(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_contract_value_present(item) for item in value)
+    return _truth_value_present(value)
+
+
+def _batch_delivery_contract(
+    batch_meta: dict[str, Any],
+    active_cycle_meta: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    contract = {
+        "value_target": (
+            batch_meta.get("value_target")
+            or batch_meta.get("novelty_target")
+            or active_cycle_meta.get("value_target")
+            or active_cycle_meta.get("novelty_target")
+        ),
+        "user_visible_delta": (
+            batch_meta.get("user_visible_delta")
+            or batch_meta.get("user_value_delta")
+            or active_cycle_meta.get("user_visible_delta")
+            or active_cycle_meta.get("user_value_delta")
+        ),
+        "api_proof": batch_meta.get("api_proof") or active_cycle_meta.get("api_proof"),
+        "ui_proof": batch_meta.get("ui_proof") or active_cycle_meta.get("ui_proof"),
+        "done_when": batch_meta.get("done_when") or active_cycle_meta.get("done_when"),
+    }
+    missing = [field for field, value in contract.items() if not _contract_value_present(value)]
+    return contract, missing
 
 
 def _batch_projection_index(queue_payload: dict[str, Any], workboard_payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -359,6 +467,30 @@ def _batch_projection_index(queue_payload: dict[str, Any], workboard_payload: di
                     continue
                 current[field] = value
     return index
+
+
+def _load_public_proof_artifact(root: Path, batch_id: str) -> dict[str, Any]:
+    token = str(batch_id or "").strip().upper()
+    if not token:
+        return {}
+    path = resolve_orchestrator_read_path(root, f"public-proof/{token}.json")
+    payload = read_json_file(path)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _proof_artifact_to_state(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        "batch_id": str(payload.get("batch_id", "") or "").strip().upper(),
+        "updated_at": str(payload.get("timestamp", "") or payload.get("generated_at", "")).strip(),
+        "artifact": str(payload.get("proof_ref", "") or "").strip(),
+        "proof_manifest": str(payload.get("proof_ref", "") or "").strip(),
+        "verify": "public_proof_runner",
+        "tests_run": str(payload.get("api_smoke_status", "") or "").strip(),
+        "summary": f"public proof runner status={str(payload.get('status', '')).strip().lower() or 'unknown'}",
+        "status": str(payload.get("status", "")).strip().lower() or "unknown",
+    }
 
 
 def _quarantine_retryable_residue(
@@ -430,9 +562,15 @@ def _latest_meaningful_delta_at(
     states: list[dict[str, Any]],
     queue_payload: dict[str, Any],
     workboard_payload: dict[str, Any],
+    *,
+    batch_id: str | None = None,
 ) -> str | None:
+    scoped_batch_id = str(batch_id or "").strip().upper()
     candidates: list[datetime] = []
     for item in states:
+        item_batch_id = str(item.get("batch_id", "") or "").strip().upper()
+        if scoped_batch_id and item_batch_id != scoped_batch_id:
+            continue
         status = str(item.get("status", "")).strip().lower()
         if status in {"ready_to_merge", "done", "closed"} or _task_has_delivery_evidence(item):
             dt = _parse_iso(item.get("updated_at"))
@@ -445,6 +583,8 @@ def _latest_meaningful_delta_at(
             continue
         for row in rows:
             if not isinstance(row, dict):
+                continue
+            if scoped_batch_id and _task_batch_id(row) != scoped_batch_id:
                 continue
             state = _task_operational_state(row)
             if state not in {"done", "closed"}:
@@ -465,6 +605,7 @@ def _latest_meaningful_delta_at(
 
 def _build_product_delivery_state(
     *,
+    root: Path,
     all_states: list[dict[str, Any]],
     normalized_states: list[dict[str, Any]],
     queue_payload: dict[str, Any],
@@ -476,10 +617,22 @@ def _build_product_delivery_state(
     public_probe_status: str,
     maintenance_active: bool,
     maintenance_details: dict[str, Any] | None,
+    event_store_primary: bool,
+    prior_state: dict[str, Any] | None,
     now: datetime,
 ) -> dict[str, Any]:
+    previous_state = dict(prior_state) if isinstance(prior_state, dict) else {}
     batch_index = _batch_projection_index(queue_payload, workboard_payload)
     active_batch_ids_ordered = _active_cycle_batch_id_list(queue_payload, workboard_payload)
+    active_cycle_meta = {}
+    for payload in (queue_payload, workboard_payload):
+        candidate = payload.get("active_cycle")
+        if isinstance(candidate, dict):
+            active_cycle_meta = candidate
+            break
+    projection_active_batch_id = active_batch_ids_ordered[0] if active_batch_ids_ordered else (
+        sorted(active_cycle_batch_ids)[0] if active_cycle_batch_ids else ""
+    )
 
     active_batch_id = ""
     for item in normalized_states:
@@ -488,10 +641,8 @@ def _build_product_delivery_state(
         if batch_id and status in DELIVERY_ACTIVE_STATUSES:
             active_batch_id = batch_id
             break
-    if not active_batch_id and active_batch_ids_ordered:
-        active_batch_id = active_batch_ids_ordered[0]
-    if not active_batch_id and active_cycle_batch_ids:
-        active_batch_id = sorted(active_cycle_batch_ids)[0]
+    if not active_batch_id and not event_store_primary:
+        active_batch_id = projection_active_batch_id
 
     if maintenance_active:
         effective_public_status = "degraded"
@@ -515,63 +666,154 @@ def _build_product_delivery_state(
             if token and token not in recent_completed_batch_ids:
                 recent_completed_batch_ids.append(token)
 
-    latest_meaningful_delta_at = _latest_meaningful_delta_at(all_states, queue_payload, workboard_payload)
+    overall_meaningful_delta_at = _latest_meaningful_delta_at(all_states, queue_payload, workboard_payload)
+    latest_meaningful_delta_at = (
+        _latest_meaningful_delta_at(
+            all_states,
+            queue_payload,
+            workboard_payload,
+            batch_id=active_batch_id,
+        )
+        if active_batch_id
+        else overall_meaningful_delta_at
+    )
+
     public_proof_ok_state = _latest_matching_state(all_states, _state_has_public_proof_ok)
     public_proof_error_state = _latest_matching_state(all_states, _state_has_public_proof_error)
-    scoped_public_proof_ok_state = None
-    candidate_batches = [active_batch_id] if active_batch_id else []
-    candidate_batches.extend(batch_id for batch_id in recent_completed_batch_ids if batch_id not in candidate_batches)
-    for batch_id in candidate_batches:
-        scoped_public_proof_ok_state = _latest_matching_state(
+    active_public_proof_ok_state = None
+    active_public_proof_error_state = None
+    if active_batch_id:
+        active_public_proof_ok_state = _latest_matching_state(
             all_states,
-            lambda item, batch_id=batch_id: str(item.get("batch_id", "") or "").strip().upper() == batch_id
+            lambda item, batch_id=active_batch_id: str(item.get("batch_id", "") or "").strip().upper() == batch_id
             and _state_has_public_proof_ok(item),
         )
-        if scoped_public_proof_ok_state is not None:
-            break
-    if scoped_public_proof_ok_state is None:
-        scoped_public_proof_ok_state = public_proof_ok_state
+        active_public_proof_error_state = _latest_matching_state(
+            all_states,
+            lambda item, batch_id=active_batch_id: str(item.get("batch_id", "") or "").strip().upper() == batch_id
+            and _state_has_public_proof_error(item),
+        )
+        active_proof_artifact = _load_public_proof_artifact(root, active_batch_id)
+        active_proof_artifact_state = _proof_artifact_to_state(active_proof_artifact)
+        if str(active_proof_artifact.get("status", "")).strip().lower() == "ok" and active_proof_artifact_state:
+            active_public_proof_ok_state = active_proof_artifact_state
+        elif str(active_proof_artifact.get("status", "")).strip().lower() == "error" and active_proof_artifact_state:
+            active_public_proof_error_state = active_proof_artifact_state
 
-    if scoped_public_proof_ok_state is not None:
+    last_completed_state = _latest_matching_state(all_states, _state_is_completion_candidate)
+    prior_last_completed_batch_id = str(previous_state.get("last_completed_batch_id") or "").strip().upper() or None
+    prior_last_closed_at = str(previous_state.get("last_closed_at") or "").strip() or None
+    prior_last_completion_proof_ref = str(previous_state.get("last_completion_proof_ref") or "").strip() or None
+    prior_close_reason = str(previous_state.get("close_reason") or "").strip() or "none"
+    last_completed_batch_id = str(
+        (last_completed_state or {}).get("batch_id")
+        or (recent_completed_batch_ids[0] if recent_completed_batch_ids else "")
+        or (prior_last_completed_batch_id or "")
+    ).strip().upper() or None
+    last_completed_public_proof_state = None
+    if last_completed_batch_id:
+        last_completed_public_proof_state = _latest_matching_state(
+            all_states,
+            lambda item, batch_id=last_completed_batch_id: str(item.get("batch_id", "") or "").strip().upper() == batch_id
+            and _state_has_public_proof_ok(item),
+        )
+        last_completed_proof_artifact = _load_public_proof_artifact(root, last_completed_batch_id)
+        last_completed_proof_artifact_state = _proof_artifact_to_state(last_completed_proof_artifact)
+        if str(last_completed_proof_artifact.get("status", "")).strip().lower() == "ok" and last_completed_proof_artifact_state:
+            last_completed_public_proof_state = last_completed_proof_artifact_state
+
+    current_public_proof_ok_state = (
+        active_public_proof_ok_state
+        if active_batch_id
+        else (last_completed_public_proof_state or public_proof_ok_state)
+    )
+    current_public_proof_error_state = (
+        active_public_proof_error_state if active_batch_id else public_proof_error_state
+    )
+
+    if effective_public_status == "unknown" and current_public_proof_ok_state is not None:
         effective_public_status = "ok"
-    elif effective_public_status == "unknown" and public_proof_error_state is not None:
+    elif effective_public_status == "unknown" and current_public_proof_error_state is not None:
         effective_public_status = "error"
     elif effective_public_status == "unknown" and active_batch_id and latest_meaningful_delta_at:
         effective_public_status = "degraded"
 
     proof_batch_id = str(
-        (scoped_public_proof_ok_state or {}).get("batch_id")
+        (current_public_proof_ok_state or {}).get("batch_id")
         or active_batch_id
-        or (recent_completed_batch_ids[0] if recent_completed_batch_ids else "")
+        or (last_completed_batch_id or "")
     ).strip().upper()
     batch_meta = batch_index.get(proof_batch_id, {}) if proof_batch_id else {}
     visible_delta_hint = batch_meta.get("user_value_delta_visible")
-    user_visible_delta_confirmed = bool(scoped_public_proof_ok_state) and (
+    user_visible_delta_confirmed = bool(current_public_proof_ok_state) and (
         visible_delta_hint is None or _truthy_flag(visible_delta_hint) or bool(visible_delta_hint)
     )
 
-    product_done = bool(
-        scoped_public_proof_ok_state is not None
+    raw_product_done = bool(
+        current_public_proof_ok_state is not None
         and effective_public_status == "ok"
         and user_visible_delta_confirmed
     )
+    active_batch_contract, active_batch_contract_missing = _batch_delivery_contract(
+        batch_index.get(active_batch_id, {}) if active_batch_id else {},
+        active_cycle_meta,
+    )
+    active_batch_contract_complete = not active_batch_contract_missing
+    runtime_active_batches = {
+        str(item.get("batch_id", "") or "").strip().upper()
+        for item in normalized_states
+        if str(item.get("status", "")).strip().lower() in DELIVERY_ACTIVE_STATUSES
+        and str(item.get("batch_id", "") or "").strip()
+    }
+    runtime_terminal_residue_only = bool(normalized_states) and not runtime_active_batches and all(
+        str(item.get("status", "")).strip().lower() in DELIVERY_TERMINAL_STATUSES
+        for item in normalized_states
+    )
+    preclose_active_batch_id = active_batch_id
+    if event_store_primary and raw_product_done:
+        active_batch_id = ""
+    if event_store_primary and not runtime_active_batches and (
+        runtime_terminal_residue_only
+        or raw_product_done
+        or (
+            projection_active_batch_id
+            and not normalized_states
+        )
+    ):
+        active_batch_id = ""
+
+    completion_batch_id = ""
+    completion_from_active_batch = False
+    if raw_product_done:
+        completion_batch_id = preclose_active_batch_id or proof_batch_id or last_completed_batch_id or ""
+        completion_from_active_batch = bool(preclose_active_batch_id)
+    elif not active_batch_id and last_completed_batch_id and current_public_proof_ok_state is not None:
+        completion_batch_id = last_completed_batch_id
+
+    canonical_active_batch_id = ""
+    if active_batch_id and not completion_batch_id:
+        canonical_active_batch_id = active_batch_id
+
     ops_clean = (
         len(quarantined_retryable_residue) == 0
         and len(ignored_historical_states) == 0
         and len(normalized_states) == 0
-        and not active_batch_id
+        and not canonical_active_batch_id
     )
 
     if effective_public_status == "error" and not maintenance_active:
         phase = "external_outage"
         freeze_reason = "external_outage"
         next_batch_eligible = False
-    elif active_batch_id:
-        if scoped_public_proof_ok_state is not None and user_visible_delta_confirmed:
-            product_done = True
-            phase = "product_done_ops_dirty"
-            freeze_reason = "none"
-            next_batch_eligible = True
+    elif completion_batch_id:
+        phase = "product_done_ops_dirty" if completion_from_active_batch and not ops_clean else "idle_ready_for_next_batch"
+        freeze_reason = "none"
+        next_batch_eligible = True
+    elif canonical_active_batch_id:
+        if latest_meaningful_delta_at and not active_batch_contract_complete:
+            phase = "active_delivery"
+            freeze_reason = "missing_batch_contract"
+            next_batch_eligible = False
         elif latest_meaningful_delta_at:
             phase = "verifying_public_proof"
             freeze_reason = "waiting_public_proof"
@@ -585,7 +827,73 @@ def _build_product_delivery_state(
         freeze_reason = "none"
         next_batch_eligible = bool(effective_public_status != "error")
 
+    current_value_batch_id = canonical_active_batch_id or projection_active_batch_id or last_completed_batch_id or proof_batch_id
+    current_value_meta = batch_index.get(current_value_batch_id, {}) if current_value_batch_id else {}
+    current_novelty_target = str(
+        current_value_meta.get("novelty_target")
+        or active_cycle_meta.get("novelty_target")
+        or ""
+    ).strip() or None
+    current_user_visible_delta = str(
+        current_value_meta.get("user_visible_delta")
+        or current_value_meta.get("user_value_delta")
+        or active_cycle_meta.get("user_visible_delta")
+        or active_cycle_meta.get("user_value_delta")
+        or ""
+    ).strip() or None
+    current_public_proof_state = (
+        active_public_proof_ok_state
+        or active_public_proof_error_state
+        or (last_completed_public_proof_state if not canonical_active_batch_id else None)
+        or (last_completed_state if not canonical_active_batch_id else None)
+        or {}
+    )
+    if current_public_proof_ok_state is not None:
+        current_public_proof_state = current_public_proof_ok_state
+    elif current_public_proof_error_state is not None:
+        current_public_proof_state = current_public_proof_error_state
+
+    current_public_proof_status = "none"
+    if current_public_proof_ok_state is not None:
+        current_public_proof_status = "ok"
+    elif current_public_proof_error_state is not None:
+        current_public_proof_status = "error"
+    elif canonical_active_batch_id and latest_meaningful_delta_at:
+        current_public_proof_status = "pending"
+
+    last_public_proof_ok_at = _state_timestamp_text(current_public_proof_ok_state or {})
+    last_completion_proof_ref = prior_last_completion_proof_ref
+    last_closed_at = prior_last_closed_at
+    close_reason = prior_close_reason
+    if completion_batch_id:
+        last_completed_batch_id = completion_batch_id
+        last_completion_proof_ref = (
+            _state_proof_ref(current_public_proof_state)
+            or _state_proof_ref(last_completed_state or {})
+            or prior_last_completion_proof_ref
+        )
+        last_closed_at = (
+            _state_timestamp_text(current_public_proof_state)
+            or _state_timestamp_text(last_completed_state or {})
+            or overall_meaningful_delta_at
+            or now.isoformat().replace("+00:00", "Z")
+        )
+        close_reason = "public_proof_ok"
+    elif last_completed_batch_id and last_completed_state is not None:
+        last_completion_proof_ref = _state_proof_ref(last_completed_state) or prior_last_completion_proof_ref
+        last_closed_at = _state_timestamp_text(last_completed_state) or overall_meaningful_delta_at or prior_last_closed_at
+        if _state_has_public_proof_ok(last_completed_state):
+            close_reason = "public_proof_ok"
+        else:
+            status = str(last_completed_state.get("status", "") or "").strip().lower() or "unknown"
+            close_reason = f"terminal_state:{status}"
+    elif last_completed_batch_id and close_reason == "none":
+        close_reason = "recent_completed_projection"
+
+    product_done = bool(completion_batch_id or (not canonical_active_batch_id and last_completed_batch_id))
     advisory_mismatch: list[str] = []
+    if event_store_primary and projection_active_batch_id and not canonical_active_batch_id:
+        advisory_mismatch.append("active_cycle_projection_without_canonical_active_batch")
     projection_open = any(
         _task_operational_state(row) in DELIVERY_ACTIVE_OWNER_STATES
         for payload in (queue_payload, workboard_payload)
@@ -593,15 +901,16 @@ def _build_product_delivery_state(
         for row in payload.get(key[0], [])
         if isinstance(row, dict)
     )
-    if not active_batch_id and projection_open:
+    if not canonical_active_batch_id and projection_open:
         advisory_mismatch.append("projection_non_terminal_without_canonical_active_batch")
     if quarantined_retryable_residue:
         advisory_mismatch.append("historical_runtime_residue_quarantined")
-    if active_batch_id and not normalized_states:
+    if canonical_active_batch_id and not normalized_states:
         advisory_mismatch.append("active_cycle_projection_without_runtime_state")
 
     return {
-        "active_batch_id": active_batch_id or None,
+        "schema_version": "product_delivery_state.v1",
+        "active_batch_id": canonical_active_batch_id or None,
         "phase": phase,
         "product_done": bool(product_done),
         "ops_clean": bool(ops_clean),
@@ -612,13 +921,35 @@ def _build_product_delivery_state(
         if ec2_reachable is not None or maintenance_active
         else bool(effective_public_status == "ok"),
         "freeze_reason": freeze_reason,
+        "current_public_proof": {
+            "batch_id": str(current_public_proof_state.get("batch_id", "") or "").strip().upper() or None,
+            "status": current_public_proof_status,
+            "updated_at": str(current_public_proof_state.get("updated_at", "") or "").strip() or None,
+            "artifact": str(current_public_proof_state.get("artifact", "") or "").strip() or None,
+            "verify": str(current_public_proof_state.get("verify", "") or "").strip() or None,
+            "proof_ref": (
+                str(current_public_proof_state.get("proof_manifest", "") or "").strip()
+                or str(current_public_proof_state.get("artifact", "") or "").strip()
+                or str(current_public_proof_state.get("verify", "") or "").strip()
+                or None
+            ),
+        },
+        "current_value_target": {
+            "batch_id": current_value_batch_id or None,
+            "novelty_target": current_novelty_target,
+            "user_visible_delta": current_user_visible_delta,
+        },
         "maintenance_active": bool(maintenance_active),
         "maintenance_reason": str((maintenance_details or {}).get("maintenance_reason") or "none").strip() or "none",
         "maintenance_command": str((maintenance_details or {}).get("maintenance_command") or "").strip(),
         "maintenance_age_s": (maintenance_details or {}).get("maintenance_age_s"),
         "maintenance_source": str((maintenance_details or {}).get("maintenance_source") or "none").strip() or "none",
         "last_meaningful_delta_at": latest_meaningful_delta_at,
-        "last_public_proof_ok_at": str((scoped_public_proof_ok_state or {}).get("updated_at") or "").strip() or None,
+        "last_public_proof_ok_at": last_public_proof_ok_at,
+        "last_completed_batch_id": last_completed_batch_id,
+        "last_closed_at": last_closed_at,
+        "last_completion_proof_ref": last_completion_proof_ref,
+        "close_reason": close_reason,
         "advisory_mismatch": advisory_mismatch,
         "generated_at": now.isoformat().replace("+00:00", "Z"),
     }
@@ -634,8 +965,10 @@ def build_runtime_truth_snapshot(
     maintenance_active: bool = False,
     maintenance_details: dict[str, Any] | None = None,
     public_probe_fn: Callable[[str], bool] | None = None,
+    persist_delivery_state: bool | None = None,
 ) -> dict[str, Any]:
     root = Path(root)
+    prior_delivery_state = load_product_delivery_state(root)
     sqlite_path = event_store_path(root)
     queue_payload = _load_projection_payload(root, "priority-queue.json")
     workboard_payload = _load_projection_payload(root, "parallel-workstreams.json")
@@ -688,6 +1021,7 @@ def build_runtime_truth_snapshot(
         probe = public_probe_fn or _probe_http_ok
         probe_status = "ok" if probe(f"{public_base_url}/api/health") else "error"
     delivery_state = _build_product_delivery_state(
+        root=root,
         all_states=all_states,
         normalized_states=normalized_states,
         queue_payload=queue_payload,
@@ -699,8 +1033,13 @@ def build_runtime_truth_snapshot(
         public_probe_status=probe_status,
         maintenance_active=bool(maintenance_active),
         maintenance_details=maintenance_details if isinstance(maintenance_details, dict) else {},
+        event_store_primary=bool(event_store_primary),
+        prior_state=prior_delivery_state,
         now=datetime.now(timezone.utc),
     )
+    delivery_state_file = product_delivery_state_path(root)
+    if _persist_delivery_state_enabled(root, persist_delivery_state):
+        persist_product_delivery_state(root, delivery_state)
 
     return {
         "event_store_primary": bool(event_store_primary),
@@ -727,6 +1066,7 @@ def build_runtime_truth_snapshot(
         },
         "legacy_bridges": legacy_bridges,
         "product_delivery_state": delivery_state,
+        "product_delivery_state_path": str(delivery_state_file),
         "projection_paths": {
             "queue": str(queue_projection),
             "workboard": str(workboard_projection),

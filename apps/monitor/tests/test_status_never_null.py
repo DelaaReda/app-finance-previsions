@@ -112,10 +112,14 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
             self.assertIn(field, payload["monitor_access"])
         self.assertIn("delivery_control", payload)
         self.assertIsInstance(payload["delivery_control"], dict)
+        for field in ("active_batch_id", "phase", "product_done", "ops_clean", "next_batch_eligible", "ec2_reachable", "freeze_reason", "last_completed_batch_id", "last_closed_at", "last_completion_proof_ref", "close_reason", "current_public_proof", "current_value_target", "advisory_mismatch"):
+            self.assertIn(field, payload["delivery_control"])
         for field in ("status", "integrity_status", "future_status", "needs_proof_backfill", "suspicious_completions", "pipeline_counts"):
-            self.assertIn(field, payload["delivery_control"])
-        for field in ("product_delivery_state", "phase", "product_done", "ops_clean", "next_batch_eligible", "ec2_reachable", "freeze_reason"):
-            self.assertIn(field, payload["delivery_control"])
+            self.assertNotIn(field, payload["delivery_control"])
+        self.assertIn("delivery_control_advisory", payload)
+        self.assertIsInstance(payload["delivery_control_advisory"], dict)
+        for field in ("status", "integrity_status", "future_status", "needs_proof_backfill", "suspicious_completions", "pipeline_counts"):
+            self.assertIn(field, payload["delivery_control_advisory"])
         self.assertIn("alerts_overview", payload)
         self.assertIsInstance(payload["alerts_overview"], dict)
         for field in ("status", "snapshot_path", "active_count", "suppressed_count", "top_alert", "priority_bands", "suppression_reasons", "pipeline"):
@@ -227,7 +231,7 @@ class MonitorStatusNeverNullTests(unittest.TestCase):
             encoding="utf-8",
         )
         lite_payload = self.module.status(lite=1)
-        self.assertEqual(lite_payload["active_batch"], "BATCH-84")
+        self.assertIsNone(lite_payload["active_batch"])
         self.assertEqual(lite_payload["queue"]["counts"]["WAITING_DEP"], 1)
         self.assertEqual(lite_payload["queue"]["counts"]["READY_PLANNER"], 1)
         self.assertEqual(lite_payload["queue"]["active_cycle"]["active_batch_ids"], ["BATCH-84"])

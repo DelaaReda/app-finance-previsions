@@ -10,7 +10,7 @@ from typing import Any, Callable
 from apps.monitor.collectors.runtime_collectors import collect_queue_workboard
 from planning.plane.plane_planning import build_plane_planning_snapshot
 from runtime.truth.public_runtime_probe import probe_public_surface
-from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot, load_product_delivery_state
 
 
 def _normalize_status(value: object, default: str = "unknown") -> str:
@@ -191,74 +191,10 @@ def _collector_queue_summary(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _merge_product_delivery_state_with_live_runtime(
-    product_delivery_state: dict[str, Any],
-    *,
-    backend_status: str,
-) -> dict[str, Any]:
-    if not isinstance(product_delivery_state, dict):
-        product_delivery_state = {}
-    merged = dict(product_delivery_state)
-    active_batch_id = str(merged.get("active_batch_id") or "").strip() or None
-    live_ec2_reachable = _normalize_status(backend_status) == "ok"
-    public_proof_status = _normalize_status(merged.get("public_proof_status"), "unknown")
-    product_done = bool(merged.get("product_done", False))
-    user_visible_delta_confirmed = bool(merged.get("user_visible_delta_confirmed", False))
-    last_meaningful_delta_at = str(merged.get("last_meaningful_delta_at") or "").strip()
-    maintenance_active = bool(merged.get("maintenance_active", False))
-
-    merged["ec2_reachable"] = bool(live_ec2_reachable or maintenance_active)
-    if not live_ec2_reachable and maintenance_active:
-        if public_proof_status == "error":
-            merged["public_proof_status"] = "degraded"
-        if active_batch_id:
-            if product_done or (public_proof_status == "ok" and user_visible_delta_confirmed):
-                merged["product_done"] = True
-                merged["phase"] = "product_done_ops_dirty"
-                merged["freeze_reason"] = "none"
-                merged["next_batch_eligible"] = True
-            elif last_meaningful_delta_at:
-                merged["phase"] = "verifying_public_proof"
-                merged["freeze_reason"] = "waiting_public_proof"
-                merged["next_batch_eligible"] = False
-            else:
-                merged["phase"] = "active_delivery"
-                merged["freeze_reason"] = "none"
-                merged["next_batch_eligible"] = False
-        else:
-            merged["phase"] = "idle_ready_for_next_batch"
-            merged["freeze_reason"] = "none"
-            merged["next_batch_eligible"] = True
-        return merged
-    if not live_ec2_reachable and (active_batch_id or last_meaningful_delta_at or product_done):
-        merged["phase"] = "external_outage"
-        merged["freeze_reason"] = "external_outage"
-        merged["next_batch_eligible"] = False
-        if public_proof_status != "ok":
-            merged["public_proof_status"] = "error"
-        return merged
-
-    if active_batch_id:
-        if product_done or (public_proof_status == "ok" and user_visible_delta_confirmed):
-            merged["product_done"] = True
-            merged["phase"] = "product_done_ops_dirty"
-            merged["freeze_reason"] = "none"
-            merged["next_batch_eligible"] = True
-        elif last_meaningful_delta_at:
-            if public_proof_status == "error":
-                merged["public_proof_status"] = "degraded"
-            merged["phase"] = "verifying_public_proof"
-            merged["freeze_reason"] = "waiting_public_proof"
-            merged["next_batch_eligible"] = False
-        else:
-            merged["phase"] = "active_delivery"
-            merged["freeze_reason"] = "none"
-            merged["next_batch_eligible"] = False
-    else:
-        merged["phase"] = "idle_ready_for_next_batch"
-        merged["freeze_reason"] = "none" if live_ec2_reachable or product_done or public_proof_status == "ok" else "no_active_batch"
-        merged["next_batch_eligible"] = bool(live_ec2_reachable or product_done or public_proof_status == "ok")
-    return merged
+def _literal_delivery_control(delivery_state: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(delivery_state, dict):
+        return {}
+    return dict(delivery_state)
 
 
 def build_status_snapshot(
@@ -319,7 +255,9 @@ def build_status_snapshot(
         maintenance_details=backend_probe,
     )
     event_store_primary = bool(runtime_truth_snapshot.get("event_store_primary", False))
-    delivery_state = runtime_truth_snapshot.get("product_delivery_state")
+    delivery_state = load_product_delivery_state(root)
+    if not isinstance(delivery_state, dict) or not delivery_state:
+        delivery_state = runtime_truth_snapshot.get("product_delivery_state")
     if not isinstance(delivery_state, dict):
         delivery_state = {}
     doctor_app_runtime = _doctor_surface(doctor_payload, "app_runtime")
@@ -453,26 +391,16 @@ def build_status_snapshot(
     if isinstance(worker_orphans, list):
         payload["worker_orphans"] = worker_orphans[:20]
 
+    advisory_delivery_control = payload.get("delivery_control_advisory")
+    if not isinstance(advisory_delivery_control, dict):
+        advisory_delivery_control = payload.get("delivery_control")
+    if not isinstance(advisory_delivery_control, dict):
+        advisory_delivery_control = {}
+
     payload.setdefault("layers", {})
     payload["layers"]["service"] = "status_service.v3"
-    delivery_control = payload.get("delivery_control")
-    if not isinstance(delivery_control, dict):
-        delivery_control = {}
-        payload["delivery_control"] = delivery_control
-    delivery_control["product_delivery_state"] = delivery_state
-    for field in (
-        "phase",
-        "product_done",
-        "ops_clean",
-        "next_batch_eligible",
-        "ec2_reachable",
-        "freeze_reason",
-        "maintenance_active",
-        "maintenance_reason",
-        "maintenance_command",
-        "maintenance_age_s",
-    ):
-        delivery_control[field] = delivery_state.get(field)
+    payload["delivery_control_advisory"] = dict(advisory_delivery_control)
+    payload["delivery_control"] = _literal_delivery_control(delivery_state)
     payload["status_semantics"] = {
         "overall_status": {
             "field": "doctor_overall_status",
@@ -504,7 +432,11 @@ def build_status_snapshot(
             "product_runtime.status remains the app-first user-facing runtime signal."
         ),
     }
-    if app_only_monitor_host:
+    runtime_state = payload.get("runtime_state")
+    runtime_lifecycle = str((runtime_state.get("lifecycle") if isinstance(runtime_state, dict) else "") or "").strip().lower()
+    if runtime_lifecycle == "paused":
+        payload["health"] = "PAUSED"
+    elif app_only_monitor_host:
         payload["health"] = str(payload["product_runtime"]["status"] or "unknown").upper()
         payload["status_semantics"]["agentic_runtime"]["advisory_only"] = True
         payload["status_semantics"]["note"] = (
@@ -524,32 +456,7 @@ def build_status_snapshot(
         payload["queue"] = queue_payload
     queue_payload.setdefault("counts", queue_summary["counts"])
     queue_payload.setdefault("active_cycle", queue_summary["active_cycle"])
-    if payload.get("active_batch") in {None, ""}:
-        payload["active_batch"] = queue_summary["active_batch"]
-    product_delivery_state = _merge_product_delivery_state_with_live_runtime(
-        runtime_truth_snapshot.get("product_delivery_state", {}) if isinstance(runtime_truth_snapshot, dict) else {},
-        backend_status=effective_backend_status,
-    )
-    if payload.get("active_batch") in {None, ""}:
-        payload["active_batch"] = product_delivery_state.get("active_batch_id")
-    delivery_control = payload.get("delivery_control")
-    if not isinstance(delivery_control, dict):
-        delivery_control = {}
-        payload["delivery_control"] = delivery_control
-    delivery_control["product_delivery_state"] = product_delivery_state
-    for field in (
-        "phase",
-        "product_done",
-        "ops_clean",
-        "next_batch_eligible",
-        "ec2_reachable",
-        "freeze_reason",
-        "maintenance_active",
-        "maintenance_reason",
-        "maintenance_command",
-        "maintenance_age_s",
-    ):
-        delivery_control[field] = product_delivery_state.get(field)
+    payload["active_batch"] = delivery_state.get("active_batch_id") if event_store_primary else None
     agents_payload = payload.get("agents")
     if not isinstance(agents_payload, dict):
         agents_payload = {}

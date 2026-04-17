@@ -10,7 +10,11 @@ from typing import Any
 
 from orchestrator_paths import resolve_orchestrator_read_path
 from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
-from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+from runtime.truth.runtime_truth_reader import (
+    build_runtime_truth_snapshot,
+    load_product_delivery_state,
+    product_delivery_state_path,
+)
 
 
 DONE_STATES = {"DONE", "CLOSED", "PASS", "MERGED", "COMPLETED", "SUCCESS", "OK", "CANCELLED", "CANCELED"}
@@ -305,14 +309,19 @@ def _build_contract(board: dict[str, Any], task: dict[str, Any]) -> dict[str, st
     }
 
 
-def snapshot(root: Path) -> dict[str, Any]:
+def snapshot(root: Path, *, persist_delivery_state: bool = False) -> dict[str, Any]:
     queue_path = resolve_orchestrator_read_path(root, "priority-queue.json")
     board_path = resolve_orchestrator_read_path(root, "parallel-workstreams.json")
     queue = _read_json(queue_path)
     board = _read_json(board_path)
     queue_meta = queue.get("meta", {}) if isinstance(queue.get("meta"), dict) else {}
     board_meta = board.get("meta", {}) if isinstance(board.get("meta"), dict) else {}
-    runtime_truth = build_runtime_truth_snapshot(root, state_limit=64, event_limit=64)
+    runtime_truth = build_runtime_truth_snapshot(
+        root,
+        state_limit=64,
+        event_limit=64,
+        persist_delivery_state=persist_delivery_state,
+    )
     dispatch_snapshot = build_stable_planner_dispatch_snapshot(root, recent_limit=8)
     event_store_primary = bool(runtime_truth.get("event_store_primary", False))
     runtime_truth_source = str(runtime_truth.get("runtime_truth_source", "sqlite" if event_store_primary else "fallback"))
@@ -328,6 +337,30 @@ def snapshot(root: Path) -> dict[str, Any]:
         board_active_cycle,
         queue_active_cycle,
     )
+    delivery_state = load_product_delivery_state(root)
+    if not isinstance(delivery_state, dict) or not delivery_state:
+        delivery_state = (
+            runtime_truth.get("product_delivery_state", {})
+            if isinstance(runtime_truth.get("product_delivery_state"), dict)
+            else {}
+        )
+    delivery_active_batch_id = str(delivery_state.get("active_batch_id") or "").strip().upper()
+    delivery_phase = str(delivery_state.get("phase") or "").strip()
+    normalized_active_cycle = dict(active_cycle) if isinstance(active_cycle, dict) else {}
+    if delivery_active_batch_id:
+        normalized_active_cycle["active_batch_ids"] = [delivery_active_batch_id]
+        active_cycle = normalized_active_cycle
+        if planning_alignment_status == "aligned":
+            planning_alignment_reason = f"runtime_truth_active_batch={delivery_active_batch_id}"
+    elif delivery_phase in {"product_done_ops_dirty", "idle_ready_for_next_batch"}:
+        normalized_active_cycle["active_batch_ids"] = []
+        active_cycle = normalized_active_cycle
+        planning_alignment_status = "runtime_truth_idle"
+        planning_alignment_reason = (
+            "delivery_state_product_done_ops_dirty"
+            if delivery_phase == "product_done_ops_dirty"
+            else "delivery_state_idle_ready_for_next_batch"
+        )
     active_cycle_ids = {str(batch_id).strip().upper() for batch_id in active_cycle.get("active_batch_ids", []) if str(batch_id).strip()}
     planner_hard_guard = queue_meta.get("planner_hard_guard", {}) if isinstance(queue_meta.get("planner_hard_guard"), dict) else {}
     novelty_target_workflow = queue_meta.get("novelty_target_workflow", {}) if isinstance(queue_meta.get("novelty_target_workflow"), dict) else {}
@@ -485,6 +518,7 @@ def snapshot(root: Path) -> dict[str, Any]:
         "registry_file": "secondary_compat_only",
         "events_file": "secondary_compat_only",
         "worker_registry_file": "secondary_compat_only",
+        "delivery_state_file": str(product_delivery_state_path(root)),
         "runtime_truth_source": runtime_truth_source,
         "primary_source": str(runtime_truth.get("source", "event_store" if event_store_primary else "projection_fallback")),
         "event_store_primary": event_store_primary,
@@ -533,7 +567,7 @@ def main() -> int:
     args = parser.parse_args()
     root = Path(str(args.root)).expanduser().resolve()
     if args.command == "snapshot":
-        print(json.dumps(snapshot(root), ensure_ascii=True))
+        print(json.dumps(snapshot(root, persist_delivery_state=True), ensure_ascii=True))
         return 0
     return 2
 

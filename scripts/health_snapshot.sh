@@ -263,6 +263,12 @@ def active_cycle_batch_ids(payload: dict) -> list[str]:
     return [str(item).strip().upper() for item in raw_ids if str(item).strip()]
 
 def canonical_runtime_idle(queue_payload: dict, workboard_payload: dict, runtime_truth: dict) -> bool:
+    product_delivery_state = runtime_truth.get('product_delivery_state')
+    if isinstance(product_delivery_state, dict):
+        active_batch_id = str(product_delivery_state.get('active_batch_id') or '').strip().upper()
+        delivery_phase = str(product_delivery_state.get('phase') or '').strip()
+        if not active_batch_id and delivery_phase in {'product_done_ops_dirty', 'idle_ready_for_next_batch'}:
+            return True
     queue_active = active_cycle_batch_ids(queue_payload)
     workboard_active = active_cycle_batch_ids(workboard_payload)
     if queue_active or workboard_active:

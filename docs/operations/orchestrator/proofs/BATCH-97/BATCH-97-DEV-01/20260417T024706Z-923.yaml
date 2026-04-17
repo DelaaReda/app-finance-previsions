@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-97-BATCH-97-DEV-01-20260417T024706Z-923"
+stream_id: "BATCH-97"
+task_id: "BATCH-97-DEV-01"
+role: "dev"
+produced_at_utc: "2026-04-17T02:47:06Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope answer \"what should i do with my portfolio today?\" [dev-01] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "layer=application"
+    - "imports_ok=yes"
+    - "path_target=apps/api/src/domains/copilot/application/copilot_service.py::_dedupe_context_chunks_+_apps/api/src/domains/copilot/tests/test_copilot_service.py::test_ask_payload_dedupes_duplicate_context_chunks_before_llm"
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-17T02:47:06Z"
+      ended_at_utc: "2026-04-17T02:47:06Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`pytest -q apps/api/src/domains/copilot/tests/test_copilot_service.py -k 'dedupes_duplicate_context_chunks_before_llm or injects_market_context_and_structured_response or preserves_structured_memo_fields'` PASS (3 passed"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "apps/api/src/domains/copilot/application/copilot_service.py::_dedupe_context_chunks + apps/api/src/domains/copilot/tests/test_copilot_service.py::test_ask_payload_dedupes_duplicate_context_chunks_before_llm"
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-97-DEV-01"
+  review_ref: "planner_subagent_manager:BATCH-97-DEV-01"
+  note: "source=planner_subagent_manager | root_cause=`build_ask_payload()` passed raw RAG search results straight into the LLM prompt and source builder, so duplicate chunks produced repeated memo sources/citations for `POST /api/personal-finance/ask` answers such as \"What | fix_applied=Added `_context_chunk_dedupe_key()` and `_dedupe_context_chunks()` in `apps/api/src/domains/copilot/application/copilot_service.py`, applied deduplication immediately after RAG lookup/fallback injection, and added a regr | verify=before=public EC2 `POST http://3.98.20.77/api/personal-finance/ask` with `{\"question\":\"What should I do with my portfolio today?\",\"tickers\":[\"NVDA\"]}` returned the same NVDA source id twice (`7b044087f30c5df4`) in `sourc | architecture_check=layer=application ask-flow dedupe in existing copilot/judge stack before LLM prompt and source shaping; imports_ok=yes; path_target=apps/api/src/domains/copilot/application/copilot_service.py | vision_alignment=batch=BATCH-97; target=cleaner answer quality for \"what should I do with my portfolio today?\" via more trustworthy explainable memo evidence; impact=removes duplicate source noise without changing frontend theme or widen"

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-04-17T02:00:35Z",
+  "updated_at": "2026-04-17T03:15:03Z",
   "active_cycle": {
     "cycle_id": "2026-03-13-batch-24-alerting-intelligence-v2",
     "doc_ref": "docs/product/planning/CURRENT_EXECUTION_FOCUS_2026-03-13.md",
@@ -2603,15 +2603,17 @@
       "novelty_class": "net_new",
       "delivery_kind": "net_new",
       "user_value_delta_visible": 1,
-      "next_action": "compl\u00e9ter BATCH-97-ANALYSIS (READY_PLANNER pour planner)",
+      "next_action": "compl\u00e9ter BATCH-97-ADMIN-01 (READY_PLANNER pour admin)",
       "depends_on": [],
       "dependency_policy": "single_batch",
       "created_at": "2026-04-17T01:44:18Z",
-      "updated_at": "2026-04-17T01:46:02Z",
+      "updated_at": "2026-04-17T03:15:03Z",
       "queued_only": true,
       "novelty_target": "portfolio_first_brief_with_ranked_actions",
       "user_visible_delta": "daily brief surfaces the top portfolio or watchlist action and opens an investment memo in one click",
-      "stagnation_alert": false
+      "stagnation_alert": false,
+      "dispatch_authorized": true,
+      "ready_at": "2026-04-17T02:12:40Z"
     }
   ],
   "meta": {
@@ -2638,17 +2640,17 @@
     "planner_hard_guard": {
       "active": false,
       "reason": "none",
-      "updated_at": "2026-04-17T02:00:01Z"
+      "updated_at": "2026-04-17T03:00:02Z"
     },
     "workboard_decision_capable": false,
     "workboard_decision_capability_reason": "projection_missing_operational_fields",
-    "workboard_decision_capability_checked_at": "2026-04-17T02:00:01Z",
+    "workboard_decision_capability_checked_at": "2026-04-17T03:00:02Z",
     "novelty_target_required": false,
     "novelty_target_missing_fields": [],
     "novelty_target_audit": {
       "status": "clear",
       "reason": "novelty_target_present",
-      "updated_at": "2026-04-17T02:00:01Z"
+      "updated_at": "2026-04-17T03:00:02Z"
     },
     "novelty_target": "portfolio_first_brief_with_ranked_actions",
     "user_visible_delta": "daily brief surfaces the top portfolio or watchlist action and opens an investment memo in one click",
@@ -2657,12 +2659,12 @@
       "reason": "backend_runtime_recovered",
       "affected_stream_ids": [],
       "affected_task_ids": [],
-      "updated_at": "2026-04-17T02:00:01Z"
+      "updated_at": "2026-04-17T03:00:02Z"
     },
     "novelty_target_workflow": {
       "status": "clear",
       "reason": "novelty_target_present",
-      "updated_at": "2026-04-17T02:00:01Z"
+      "updated_at": "2026-04-17T03:00:02Z"
     }
   }
 }

@@ -1,8 +1,8 @@
 {
-  "conversation_id": "0512716807349748",
+  "conversation_id": "3f0eec137df44fde",
   "schema_version": "copilot_conversation_v1",
-  "created_at": "2026-04-16T10:39:46.288573Z",
-  "updated_at": "2026-04-16T10:39:54.330244Z",
+  "created_at": "2026-04-17T03:03:08.582395Z",
+  "updated_at": "2026-04-17T03:03:16.648612Z",
   "title": "What should I do with my tech stocks today?",
   "context": {
     "tickers": [
@@ -17,7 +17,7 @@
       "message_id": "msg_001",
       "role": "user",
       "content": "What should I do with my tech stocks today?",
-      "timestamp": "2026-04-16T10:39:46.288573Z",
+      "timestamp": "2026-04-17T03:03:08.582395Z",
       "metadata": {
         "tickers": [
           "NVDA",
@@ -30,7 +30,7 @@
       "message_id": "msg_002",
       "role": "assistant",
       "content": "D\u00e9sol\u00e9, une erreur s'est produite lors du traitement: copilot ask llm timed out after 8.00s",
-      "timestamp": "2026-04-16T10:39:54.330244Z",
+      "timestamp": "2026-04-17T03:03:16.648612Z",
       "metadata": {
         "verdict": "hold",
         "confidence": 0.0,

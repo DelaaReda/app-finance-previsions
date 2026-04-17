@@ -16,10 +16,286 @@ if str(AUTOMATION_DIR) not in sys.path:
     sys.path.insert(0, str(AUTOMATION_DIR))
 
 MODULE_PATH = AUTOMATION_DIR / "runtime" / "truth" / "runtime_truth_reader.py"
-from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot, load_product_delivery_state, product_delivery_state_path
 
 
 class RuntimeTruthReaderTests(unittest.TestCase):
+    def test_product_done_clears_active_batch_monotonically(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {
+                            "active_batch_ids": ["BATCH-91"],
+                            "novelty_target": "portfolio_first_brief_with_ranked_actions",
+                            "user_visible_delta": "daily brief surfaces the top action",
+                        },
+                        "items": [
+                            {
+                                "id": "BATCH-91",
+                                "state": "IN_PROGRESS",
+                                "user_value_delta_visible": 1,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {"active_batch_ids": ["BATCH-91"]},
+                        "tasks": [{"id": "BATCH-91-DEV-01", "stream_id": "BATCH-91", "role": "dev", "state": "IN_PROGRESS"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-91",
+                    task_id="BATCH-91-DEV-01",
+                    task_kind="delivery",
+                    owner_role="planner",
+                    target_role="dev",
+                    status="running",
+                    current_node="wait_or_collect_result",
+                    updated_at="2026-04-17T00:35:00Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-91-DEV-01", "target_role": "dev"},
+                    capability_result={
+                        "status": "completed",
+                        "backend": "codex_exec",
+                        "summary": "public ec2 healthy for batch close",
+                        "artifact": "GET http://3.98.20.77/api/health => ok",
+                        "proof_manifest": "proof-manifest://batch-91-close",
+                        "verify": "monitor reports health=OK on public EC2",
+                    },
+                )
+            )
+
+            snapshot = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24, ec2_reachable=True)
+            delivery_state = snapshot["product_delivery_state"]
+
+            self.assertIsNone(delivery_state["active_batch_id"])
+            self.assertTrue(delivery_state["product_done"])
+            self.assertEqual(delivery_state["phase"], "product_done_ops_dirty")
+            self.assertEqual(delivery_state["last_completed_batch_id"], "BATCH-91")
+            self.assertEqual(delivery_state["close_reason"], "public_proof_ok")
+
+    def test_active_batch_without_contract_stays_active_delivery(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {
+                            "active_batch_ids": ["BATCH-92"],
+                            "novelty_target": "portfolio_first_brief_with_ranked_actions",
+                            "user_visible_delta": "daily brief surfaces the top action",
+                        },
+                        "items": [
+                            {
+                                "id": "BATCH-92",
+                                "state": "IN_PROGRESS",
+                                "novelty_target": "portfolio_first_brief_with_ranked_actions",
+                                "user_visible_delta": "daily brief surfaces the top action",
+                                "user_value_delta_visible": 1,
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {"active_batch_ids": ["BATCH-92"]},
+                        "tasks": [{"id": "BATCH-92-DEV-01", "stream_id": "BATCH-92", "role": "dev", "state": "IN_PROGRESS"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-92",
+                    task_id="BATCH-92-DEV-01",
+                    task_kind="delivery",
+                    owner_role="planner",
+                    target_role="dev",
+                    status="ready_to_merge",
+                    current_node="close_or_requeue",
+                    updated_at="2026-04-17T00:40:00Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-92-DEV-01", "target_role": "dev"},
+                    capability_result={
+                        "status": "completed",
+                        "backend": "codex_exec",
+                        "summary": "implementation finished awaiting public proof",
+                        "artifact": "proof://batch-92",
+                    },
+                )
+            )
+
+            snapshot = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24, ec2_reachable=True)
+            delivery_state = snapshot["product_delivery_state"]
+
+            self.assertEqual(delivery_state["active_batch_id"], "BATCH-92")
+            self.assertEqual(delivery_state["phase"], "active_delivery")
+            self.assertEqual(delivery_state["freeze_reason"], "missing_batch_contract")
+
+    def test_active_batch_with_complete_contract_enters_verifying_public_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {
+                            "active_batch_ids": ["BATCH-93"],
+                            "novelty_target": "portfolio_first_brief_with_ranked_actions",
+                            "user_visible_delta": "daily brief surfaces the top action",
+                            "api_proof": {"url": "http://3.98.20.77/api/copilot/start", "expect": "200"},
+                            "ui_proof": {"url": "http://3.98.20.77/", "expect": "top portfolio action"},
+                            "done_when": "public api and ui smoke green",
+                        },
+                        "items": [
+                            {
+                                "id": "BATCH-93",
+                                "state": "IN_PROGRESS",
+                                "novelty_target": "portfolio_first_brief_with_ranked_actions",
+                                "user_visible_delta": "daily brief surfaces the top action",
+                                "user_value_delta_visible": 1,
+                                "api_proof": {"url": "http://3.98.20.77/api/copilot/start", "expect": "200"},
+                                "ui_proof": {"url": "http://3.98.20.77/", "expect": "top portfolio action"},
+                                "done_when": "public api and ui smoke green",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {"active_batch_ids": ["BATCH-93"]},
+                        "tasks": [{"id": "BATCH-93-DEV-01", "stream_id": "BATCH-93", "role": "dev", "state": "IN_PROGRESS"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-93",
+                    task_id="BATCH-93-DEV-01",
+                    task_kind="delivery",
+                    owner_role="planner",
+                    target_role="dev",
+                    status="ready_to_merge",
+                    current_node="close_or_requeue",
+                    updated_at="2026-04-17T00:45:00Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-93-DEV-01", "target_role": "dev"},
+                    capability_result={
+                        "status": "completed",
+                        "backend": "codex_exec",
+                        "summary": "implementation finished awaiting public proof",
+                        "artifact": "proof://batch-93",
+                    },
+                )
+            )
+
+            snapshot = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24, ec2_reachable=True)
+            delivery_state = snapshot["product_delivery_state"]
+
+            self.assertEqual(delivery_state["active_batch_id"], "BATCH-93")
+            self.assertEqual(delivery_state["phase"], "verifying_public_proof")
+            self.assertEqual(delivery_state["freeze_reason"], "waiting_public_proof")
+
+    def test_persist_delivery_state_writes_canonical_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {
+                            "active_batch_ids": ["BATCH-91"],
+                            "recent_completed_batch_ids": ["BATCH-90"],
+                            "novelty_target": "portfolio_first_brief_with_ranked_actions",
+                            "user_visible_delta": "daily brief surfaces the top action",
+                        },
+                        "items": [{"id": "BATCH-91", "state": "IN_PROGRESS"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {"active_batch_ids": ["BATCH-91"]},
+                        "tasks": [{"id": "BATCH-91-DEV-01", "stream_id": "BATCH-91", "role": "dev", "state": "IN_PROGRESS"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-91",
+                    task_id="BATCH-91-DEV-01",
+                    task_kind="delivery",
+                    owner_role="planner",
+                    target_role="dev",
+                    status="ready_to_merge",
+                    current_node="close_or_requeue",
+                    updated_at="2026-04-17T00:35:00Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-91-DEV-01", "target_role": "dev"},
+                    capability_result={
+                        "status": "completed",
+                        "backend": "codex_exec",
+                        "summary": "public api healthy on http://3.98.20.77 for batch verification",
+                        "artifact": "proof://batch-91",
+                        "proof_manifest": "proof-manifest://batch-91",
+                        "verify": "curl http://3.98.20.77/api/health",
+                        "tests_run": "smoke_ec2_public",
+                        "commit_sha": "abc12345",
+                    },
+                )
+            )
+
+            snapshot = build_runtime_truth_snapshot(
+                root,
+                state_limit=12,
+                event_limit=24,
+                ec2_reachable=True,
+                persist_delivery_state=True,
+            )
+
+            state_path = product_delivery_state_path(root)
+            self.assertEqual(snapshot["product_delivery_state_path"], str(state_path))
+            self.assertTrue(state_path.exists())
+            persisted = load_product_delivery_state(root)
+            self.assertEqual(persisted["phase"], "product_done_ops_dirty")
+            self.assertEqual(persisted["last_completed_batch_id"], "BATCH-91")
+            self.assertEqual(persisted["last_completion_proof_ref"], "proof-manifest://batch-91")
+            self.assertEqual(persisted["close_reason"], "public_proof_ok")
+            self.assertEqual(persisted["schema_version"], "product_delivery_state.v1")
+
     def test_event_store_primary_ignores_historical_states_when_no_open_cycle_exists(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -394,11 +670,204 @@ class RuntimeTruthReaderTests(unittest.TestCase):
             snapshot = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24, ec2_reachable=True)
 
             delivery_state = snapshot["product_delivery_state"]
-            self.assertEqual(delivery_state["active_batch_id"], "BATCH-91")
+            self.assertIsNone(delivery_state["active_batch_id"])
             self.assertEqual(delivery_state["phase"], "product_done_ops_dirty")
             self.assertTrue(delivery_state["product_done"])
             self.assertFalse(delivery_state["ops_clean"])
             self.assertTrue(delivery_state["next_batch_eligible"])
+            self.assertEqual(delivery_state["last_completed_batch_id"], "BATCH-91")
+
+    def test_historical_public_proof_does_not_close_newer_active_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {
+                            "active_batch_ids": ["BATCH-101"],
+                            "recent_completed_batch_ids": ["BATCH-100"],
+                        },
+                        "items": [{"id": "BATCH-101", "state": "IN_PROGRESS"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {"active_batch_ids": ["BATCH-101"]},
+                        "tasks": [
+                            {"id": "BATCH-101-DEV-01", "stream_id": "BATCH-101", "role": "dev", "state": "IN_PROGRESS"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-100",
+                    task_id="BATCH-100-DEV-01",
+                    task_kind="delivery",
+                    owner_role="planner",
+                    target_role="dev",
+                    status="merged",
+                    current_node="close_or_requeue",
+                    updated_at="2026-04-15T09:00:00Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-100-DEV-01", "target_role": "dev"},
+                    capability_result={
+                        "status": "completed",
+                        "backend": "codex_exec",
+                        "summary": "public api healthy on http://3.98.20.77",
+                        "artifact": "proof://batch-100",
+                        "proof_manifest": "proof-manifest://batch-100",
+                        "verify": "curl http://3.98.20.77/api/health",
+                        "tests_run": "smoke_ec2_public",
+                    },
+                )
+            )
+            store.upsert_graph_state(
+                PlannerGraphState(
+                    batch_id="BATCH-101",
+                    task_id="BATCH-101-DEV-01",
+                    task_kind="delivery",
+                    owner_role="planner",
+                    target_role="dev",
+                    status="running",
+                    current_node="wait_or_collect_result",
+                    updated_at="2026-04-15T09:05:00Z",
+                    engine="langgraph",
+                    capability_request={"backend": "codex_exec", "task_id": "BATCH-101-DEV-01", "target_role": "dev"},
+                    capability_result={
+                        "status": "running",
+                        "backend": "codex_exec",
+                        "summary": "implementing current batch delta",
+                    },
+                )
+            )
+
+            snapshot = build_runtime_truth_snapshot(
+                root,
+                state_limit=12,
+                event_limit=24,
+                ec2_reachable=True,
+            )
+
+            delivery_state = snapshot["product_delivery_state"]
+            self.assertEqual(delivery_state["active_batch_id"], "BATCH-101")
+            self.assertFalse(delivery_state["product_done"])
+            self.assertEqual(delivery_state["phase"], "active_delivery")
+            self.assertEqual(delivery_state["current_public_proof"]["status"], "none")
+            self.assertEqual(delivery_state["last_completed_batch_id"], "BATCH-100")
+            self.assertEqual(delivery_state["close_reason"], "public_proof_ok")
+
+    def test_merged_active_cycle_residue_becomes_idle_ready_for_next_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {
+                            "active_batch_ids": ["BATCH-96"],
+                            "novelty_target": "portfolio_first_brief_with_ranked_actions",
+                            "user_visible_delta": "daily brief surfaces the top portfolio or watchlist action and opens an investment memo in one click",
+                        },
+                        "items": [{"id": "BATCH-96", "state": "IN_PROGRESS"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (orch / "parallel-workstreams.json").write_text(
+                json.dumps(
+                    {
+                        "active_cycle": {"active_batch_ids": ["BATCH-96"]},
+                        "tasks": [
+                            {"id": "BATCH-96-DEV-01", "stream_id": "BATCH-96", "role": "dev", "state": "DONE"},
+                            {"id": "BATCH-96-DEV-02", "stream_id": "BATCH-96", "role": "dev", "state": "DONE"},
+                            {"id": "BATCH-96-DEV-03", "stream_id": "BATCH-96", "role": "dev", "state": "DONE"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            store = EventStore(root)
+            for task_id, updated_at in (
+                ("BATCH-96-DEV-01", "2026-04-16T23:50:23Z"),
+                ("BATCH-96-DEV-02", "2026-04-17T00:14:57Z"),
+                ("BATCH-96-DEV-03", "2026-04-17T00:29:06Z"),
+            ):
+                store.upsert_graph_state(
+                    PlannerGraphState(
+                        batch_id="BATCH-96",
+                        task_id=task_id,
+                        task_kind="delivery",
+                        owner_role="planner",
+                        target_role="dev",
+                        status="merged",
+                        current_node="close_or_requeue",
+                        updated_at=updated_at,
+                        engine="langgraph",
+                        capability_request={"backend": "codex_exec", "task_id": task_id, "target_role": "dev"},
+                        capability_result={
+                            "status": "completed",
+                            "backend": "codex_exec",
+                            "summary": "public api healthy on http://3.98.20.77",
+                            "artifact": f"proof://{task_id.lower()}",
+                            "verify": "curl http://3.98.20.77/api/health",
+                            "tests_run": "smoke_ec2_public",
+                            "commit_sha": "abc12345",
+                        },
+                    )
+                )
+
+            snapshot = build_runtime_truth_snapshot(root, state_limit=12, event_limit=24, ec2_reachable=True)
+
+            delivery_state = snapshot["product_delivery_state"]
+            self.assertIsNone(delivery_state["active_batch_id"])
+            self.assertEqual(delivery_state["phase"], "idle_ready_for_next_batch")
+            self.assertTrue(delivery_state["product_done"])
+            self.assertFalse(delivery_state["ops_clean"])
+            self.assertTrue(delivery_state["next_batch_eligible"])
+            self.assertEqual(delivery_state["last_completed_batch_id"], "BATCH-96")
+            self.assertEqual(delivery_state["close_reason"], "public_proof_ok")
+            self.assertIsNotNone(delivery_state["last_closed_at"])
+            self.assertIsNotNone(delivery_state["last_completion_proof_ref"])
+            self.assertIn("active_cycle_projection_without_canonical_active_batch", delivery_state["advisory_mismatch"])
+            self.assertEqual(
+                delivery_state["current_value_target"]["novelty_target"],
+                "portfolio_first_brief_with_ranked_actions",
+            )
+
+    def test_persist_delivery_state_writes_canonical_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            orch = root / "logs-codex-runs" / "orchestrator-state"
+            orch.mkdir(parents=True, exist_ok=True)
+            (orch / "priority-queue.json").write_text(json.dumps({"items": []}), encoding="utf-8")
+            (orch / "parallel-workstreams.json").write_text(json.dumps({"tasks": []}), encoding="utf-8")
+
+            snapshot = build_runtime_truth_snapshot(
+                root,
+                state_limit=12,
+                event_limit=24,
+                ec2_reachable=True,
+                public_probe_status="ok",
+                persist_delivery_state=True,
+            )
+
+            state_path = Path(snapshot["product_delivery_state_path"])
+            self.assertTrue(state_path.exists())
+            persisted = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(persisted["phase"], snapshot["product_delivery_state"]["phase"])
+            self.assertEqual(persisted["active_batch_id"], snapshot["product_delivery_state"]["active_batch_id"])
+            self.assertEqual(persisted["close_reason"], snapshot["product_delivery_state"]["close_reason"])
 
 
 if __name__ == "__main__":

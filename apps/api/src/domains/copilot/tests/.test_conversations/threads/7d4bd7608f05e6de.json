@@ -1,9 +1,9 @@
 {
-  "conversation_id": "461b051e9df581e4",
+  "conversation_id": "7d4bd7608f05e6de",
   "schema_version": "copilot_conversation_v1",
-  "created_at": "2026-04-16T10:40:19.405853Z",
-  "updated_at": "2026-04-16T10:40:19.416668Z",
-  "title": "What should I do today?",
+  "created_at": "2026-04-17T03:03:17.316623Z",
+  "updated_at": "2026-04-17T03:03:17.326951Z",
+  "title": "Should I buy AAPL?",
   "context": {
     "tickers": [
       "AAPL"
@@ -15,8 +15,8 @@
     {
       "message_id": "msg_001",
       "role": "user",
-      "content": "What should I do today?",
-      "timestamp": "2026-04-16T10:40:19.405853Z",
+      "content": "Should I buy AAPL?",
+      "timestamp": "2026-04-17T03:03:17.316623Z",
       "metadata": {
         "tickers": [
           "AAPL"
@@ -27,15 +27,10 @@
     {
       "message_id": "msg_002",
       "role": "assistant",
-      "content": "Hold AAPL and wait for the event window to clear.",
-      "timestamp": "2026-04-16T10:40:19.416668Z",
+      "content": "Error: upstream unavailable",
+      "timestamp": "2026-04-17T03:03:17.326951Z",
       "metadata": {
-        "verdict": "hold",
-        "confidence": 0.58,
-        "horizon": "1w",
-        "tickers": [
-          "AAPL"
-        ]
+        "error": true
       }
     }
   ],

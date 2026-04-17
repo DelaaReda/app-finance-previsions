@@ -1,0 +1,53 @@
+proof_id: "PRF-BATCH-97-BATCH-97-DEV-02-20260417T025038Z-681"
+stream_id: "BATCH-97"
+task_id: "BATCH-97-DEV-02"
+role: "dev"
+produced_at_utc: "2026-04-17T02:50:38Z"
+inputs:
+  queue_snapshot_ref: "logs-codex-runs/orchestrator-state/priority-queue.json"
+  workboard_snapshot_ref: "logs-codex-runs/orchestrator-state/parallel-workstreams.json"
+  prior_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+preconditions:
+  change_plan:
+    - "scope answer \"what should i do with my portfolio today?\" [dev-02] minimal patch"
+    - "dependency impact on downstream tasks"
+    - "risk containment before code changes"
+    - "verification via targeted tests"
+    - "rollback path if regression appears"
+  architecture_checks:
+    - "layer=domain"
+    - "imports_ok=yes"
+    - "path_target=shared_widget_delivery_in_`apps/web/src/domains/forecasts/components/widgets/copilot-panel.html`_with_regression_proof_in_`apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js`."
+  reflection_dimensions:
+    - "scope"
+    - "dependency_impact"
+    - "risk"
+    - "verification"
+    - "rollback"
+  gate_version: "2"
+execution:
+  commands:
+    - cmd: "SKIP(subagent_exec_internal)"
+      rc: "SKIP(reasoned)"
+      started_at_utc: "2026-04-17T02:50:38Z"
+      ended_at_utc: "2026-04-17T02:50:38Z"
+validations:
+  tests:
+    - name: "targeted"
+      result: "PASS"
+      evidence: "`node --test apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js`"
+outputs:
+  role_contract_ref: "/home/venom/.openclaw/cron/role-state/dev.last_contract"
+  artifacts:
+    - "Shared widget delivery in `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html` with regression proof in `apps/web/src/domains/forecasts/components/widgets/copilot-panel.test.js`."
+handoff:
+  to_role: "none"
+  handoff_id: "none"
+signoff:
+  producer_agent: "dev"
+  reviewer_agent: "planner"
+  qa_verdict: "PASS"
+meta:
+  idempotency_key: "PLANNER_MERGE_BATCH-97-DEV-02"
+  review_ref: "planner_subagent_manager:BATCH-97-DEV-02"
+  note: "source=planner_subagent_manager | root_cause=`executeCopilotAction()` in the shared copilot widget stopped at `setCopilotQuestion(...); focusCopilotInput();`, so the ranked/default ask action never entered the explainable memo flow unless the user manually clicked  | fix_applied=Updated `apps/web/src/domains/forecasts/components/widgets/copilot-panel.html` so ask actions call `sendCopilotQuestion()` when the widget ask handler is available, with the existing focus fallback preserved; added a reg | verify=before=public EC2 widget code at `http://3.98.20.77/components/widgets/copilot-panel.html` still shows the ask action path as prefill-only (`setCopilotQuestion(...); focusCopilotInput();`), while `POST http://3.98.20.77/ | architecture_check=layer=web_widget; imports_ok=yes_inline_existing_widget; path_target=apps/web/src/domains/forecasts/components/widgets/copilot-panel.html | vision_alignment=batch=BATCH-97; target=answer \"what should I do with my portfolio today?\" through the existing brief+ask+memo path; impact=the top ask action now reaches the explainable memo output in one click instead of stopping at in"

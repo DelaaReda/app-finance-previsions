@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 
-from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
+from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot, load_product_delivery_state
 
 CONTRACT_KEYS = (
     "STATUS",
@@ -209,11 +209,15 @@ def canonical_active_snapshot(latest_file: Path) -> Dict[str, object]:
     ]
 
     runtime_truth = build_runtime_truth_snapshot(root, state_limit=24, event_limit=24)
-    product_delivery_state = (
-        runtime_truth.get("product_delivery_state", {})
-        if isinstance(runtime_truth.get("product_delivery_state"), dict)
-        else {}
-    )
+    product_delivery_state = load_product_delivery_state(root)
+    if not isinstance(product_delivery_state, dict) or not product_delivery_state:
+        product_delivery_state = (
+            runtime_truth.get("product_delivery_state", {})
+            if isinstance(runtime_truth.get("product_delivery_state"), dict)
+            else {}
+        )
+    delivery_active_batch_id = str(product_delivery_state.get("active_batch_id") or "").strip().upper()
+    delivery_phase = str(product_delivery_state.get("phase") or "").strip()
     event_store_primary = bool(runtime_truth.get("event_store_primary", False))
     graph_state_count = int(runtime_truth.get("graph_state_count", 0) or 0)
     recent_event_count = int(runtime_truth.get("recent_event_count", 0) or 0)
@@ -224,7 +228,17 @@ def canonical_active_snapshot(latest_file: Path) -> Dict[str, object]:
     if projection_decision_capable is None:
         projection_decision_capable = queue_meta.get("workboard_decision_capable")
 
-    if event_store_primary and not active_batch_ids and graph_state_count == 0 and recent_event_count == 0:
+    if (
+        (
+            not delivery_active_batch_id
+            and delivery_phase in {"product_done_ops_dirty", "idle_ready_for_next_batch"}
+        )
+        or (
+            event_store_primary
+            and graph_state_count == 0
+            and recent_event_count == 0
+        )
+    ):
         return {
             "active_batch_ids": [],
             "active_task_id": "",
@@ -243,6 +257,9 @@ def canonical_active_snapshot(latest_file: Path) -> Dict[str, object]:
             "novelty_target_audit": queue_meta.get("novelty_target_audit") if isinstance(queue_meta.get("novelty_target_audit"), dict) else {},
             "projection_secondary_only": False,
         }
+
+    if delivery_active_batch_id:
+        active_batch_ids = [delivery_active_batch_id]
 
     state_rank = {
         "BLOCKED": 0,
@@ -685,7 +702,7 @@ def recommendations(issues: List[str], canonical: Dict[str, object] | None = Non
     next_batch_eligible = bool(product_delivery_state.get("next_batch_eligible", False))
     out: List[str] = []
     if not active_batch_ids and not active_task_id:
-        if delivery_phase == "idle_ready_for_next_batch" and next_batch_eligible:
+        if delivery_phase in {"product_done_ops_dirty", "idle_ready_for_next_batch"} and next_batch_eligible:
             out.append("Aucun batch canonique actif: ouvrir le prochain batch eligible maintenant via sync-priority + planner-autobatch + claim.")
         elif "residue_detected" in issues and projection_decision_reason == "runtime_idle_no_active_cycle":
             out.append("Résidu de projection detecte sans batch canonique reel: publier advisory_mismatch seulement et ne pas reclamer de tache.")
@@ -796,7 +813,7 @@ def _no_canonical_work(runtime: Dict[str, object] | None, canonical: Dict[str, o
     if (
         not canonical_active_batch_ids
         and not canonical_active_task_id
-        and delivery_phase == "idle_ready_for_next_batch"
+        and delivery_phase in {"product_done_ops_dirty", "idle_ready_for_next_batch"}
     ):
         return True
     return (
@@ -1071,13 +1088,17 @@ def build_prompt_patches(
 
     if (
         no_canonical_work
-        and delivery_phase == "idle_ready_for_next_batch"
+        and delivery_phase in {"product_done_ops_dirty", "idle_ready_for_next_batch"}
         and next_batch_eligible
     ):
         add_patch(
             "open_next_batch_now",
             priority=75,
-            issue_codes=["delivery_phase_idle_ready_for_next_batch"],
+            issue_codes=[
+                "delivery_phase_product_done_ops_dirty"
+                if delivery_phase == "product_done_ops_dirty"
+                else "delivery_phase_idle_ready_for_next_batch"
+            ],
             instruction=(
                 "Runtime canonique idle mais batch suivant eligible: execute sync-priority, "
                 "planner-autobatch, puis claim immediatement le prochain batch dans ce meme cycle. "

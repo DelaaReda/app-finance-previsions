@@ -573,6 +573,7 @@ snapshot = build_runtime_truth_snapshot(
     public_probe_status=public_probe_status,
     maintenance_active=maintenance_active,
     maintenance_details=maintenance_details,
+    persist_delivery_state=True,
 )
 state = snapshot.get("product_delivery_state", {}) if isinstance(snapshot, dict) else {}
 phase = str(state.get("phase") or "idle_ready_for_next_batch").strip() or "idle_ready_for_next_batch"
@@ -615,6 +616,13 @@ dispatch_capability_capture() {
   printf '%s' "$payload"
 }
 
+public_proof_capture() {
+  local batch_id="$1"
+  local payload
+  payload="$(run_safe_capture "public_proof" "python3 platform/automation/runtime/planner/planner_runtime_actions.py public-proof --root \"$ROOT\" --batch-id \"$batch_id\"")"
+  printf '%s' "$payload"
+}
+
 with_lock
 
 delivery_snapshot="$(delivery_state_snapshot)"
@@ -635,6 +643,55 @@ if [[ "$delivery_phase" == "external_outage" ]]; then
   write_state 0 "delivery_governor" "deferred" "external_outage" "${delivery_active_batch:-none}" "external_outage" "phase=${delivery_phase};freeze_reason=${delivery_freeze_reason};ec2_reachable=${delivery_ec2_reachable}"
   echo "PLANNER_AUTONOMY status=warn action=delivery_governor outcome=deferred issue=external_outage phase=${delivery_phase} freeze_reason=${delivery_freeze_reason} ec2_reachable=${delivery_ec2_reachable}"
   exit 0
+fi
+
+if [[ "$delivery_phase" == "verifying_public_proof" && -n "$delivery_active_batch" && "$delivery_active_batch" != "none" ]]; then
+  public_proof_payload="$(public_proof_capture "$delivery_active_batch")"
+  public_proof_rc="$(capture_rc "$public_proof_payload")"
+  public_proof_out="$(capture_body "$public_proof_payload")"
+  public_proof_status="$(parse_kv_field "$public_proof_out" "status")"
+  public_proof_batch_id="$(parse_kv_field "$public_proof_out" "batch_id")"
+  public_proof_api_status="$(parse_kv_field "$public_proof_out" "api_smoke_status")"
+  public_proof_ui_status="$(parse_kv_field "$public_proof_out" "ui_smoke_status")"
+  public_proof_ref="$(parse_kv_field "$public_proof_out" "proof_ref")"
+
+  if [[ "$public_proof_rc" != "0" ]]; then
+    write_state 1 "public_proof" "failed" "public_proof_runner_failed" "${delivery_active_batch}" "public_proof_runner_failed" "batch_id=${delivery_active_batch};proof_rc=${public_proof_rc}"
+    echo "PLANNER_AUTONOMY status=error action=public_proof outcome=failed issue=public_proof_runner_failed batch_id=${delivery_active_batch} proof_rc=${public_proof_rc}"
+    exit 0
+  fi
+
+  delivery_snapshot="$(delivery_state_snapshot)"
+  delivery_phase="${delivery_snapshot%%|*}"
+  delivery_rest="${delivery_snapshot#*|}"
+  delivery_active_batch="${delivery_rest%%|*}"
+  delivery_rest="${delivery_rest#*|}"
+  delivery_next_batch_eligible="${delivery_rest%%|*}"
+  delivery_rest="${delivery_rest#*|}"
+  delivery_freeze_reason="${delivery_rest%%|*}"
+  delivery_rest="${delivery_rest#*|}"
+  delivery_product_done="${delivery_rest%%|*}"
+  delivery_rest="${delivery_rest#*|}"
+  delivery_ops_clean="${delivery_rest%%|*}"
+  delivery_ec2_reachable="${delivery_rest##*|}"
+
+  if [[ "$delivery_phase" == "external_outage" ]]; then
+    write_state 0 "public_proof" "deferred" "external_outage" "${public_proof_batch_id:-none}" "external_outage" "status=${public_proof_status:-unknown};proof_ref=${public_proof_ref:-none};ec2_reachable=${delivery_ec2_reachable}"
+    echo "PLANNER_AUTONOMY status=warn action=public_proof outcome=deferred issue=external_outage batch_id=${public_proof_batch_id:-none} proof_status=${public_proof_status:-unknown} ec2_reachable=${delivery_ec2_reachable}"
+    exit 0
+  fi
+
+  if [[ "$public_proof_status" == "maintenance" ]]; then
+    write_state 1 "public_proof" "deferred" "runtime_restart_in_progress" "${public_proof_batch_id:-none}" "runtime_restart_in_progress" "status=${public_proof_status};proof_ref=${public_proof_ref:-none}"
+    echo "PLANNER_AUTONOMY status=warn action=public_proof outcome=deferred issue=runtime_restart_in_progress batch_id=${public_proof_batch_id:-none} proof_status=${public_proof_status} proof_ref=${public_proof_ref:-none}"
+    exit 0
+  fi
+
+  if [[ "$delivery_phase" == "verifying_public_proof" && -n "$delivery_active_batch" && "$delivery_active_batch" != "none" ]]; then
+    write_state 1 "public_proof" "deferred" "waiting_public_proof" "${delivery_active_batch}" "waiting_public_proof" "status=${public_proof_status:-unknown};api=${public_proof_api_status:-unknown};ui=${public_proof_ui_status:-unknown};proof_ref=${public_proof_ref:-none}"
+    echo "PLANNER_AUTONOMY status=warn action=public_proof outcome=deferred issue=waiting_public_proof batch_id=${delivery_active_batch} proof_status=${public_proof_status:-unknown} api_status=${public_proof_api_status:-unknown} ui_status=${public_proof_ui_status:-unknown}"
+    exit 0
+  fi
 fi
 
 snapshot="$(planner_runway_snapshot)"

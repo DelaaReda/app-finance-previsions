@@ -1,9 +1,9 @@
 {
-  "conversation_id": "1f1aae8cc303f446",
+  "conversation_id": "cf8d35363896d9e1",
   "schema_version": "copilot_conversation_v1",
-  "created_at": "2026-04-16T10:40:15.297493Z",
-  "updated_at": "2026-04-16T10:40:15.305290Z",
-  "title": "Test?",
+  "created_at": "2026-04-17T03:03:23.824847Z",
+  "updated_at": "2026-04-17T03:03:23.834893Z",
+  "title": "General question?",
   "context": {
     "tickers": [],
     "scope": {},
@@ -13,8 +13,8 @@
     {
       "message_id": "msg_001",
       "role": "user",
-      "content": "Test?",
-      "timestamp": "2026-04-16T10:40:15.297493Z",
+      "content": "General question?",
+      "timestamp": "2026-04-17T03:03:23.824847Z",
       "metadata": {
         "tickers": [],
         "scope": {}
@@ -23,8 +23,8 @@
     {
       "message_id": "msg_002",
       "role": "assistant",
-      "content": "Test answer.",
-      "timestamp": "2026-04-16T10:40:15.305290Z",
+      "content": "General answer.",
+      "timestamp": "2026-04-17T03:03:23.834893Z",
       "metadata": {
         "verdict": "hold",
         "confidence": null,

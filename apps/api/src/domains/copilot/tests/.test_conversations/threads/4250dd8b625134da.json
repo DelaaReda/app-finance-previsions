@@ -1,8 +1,8 @@
 {
-  "conversation_id": "2c261f638ced9547",
+  "conversation_id": "4250dd8b625134da",
   "schema_version": "copilot_conversation_v1",
-  "created_at": "2026-04-16T10:40:15.273471Z",
-  "updated_at": "2026-04-16T10:40:15.281335Z",
+  "created_at": "2026-04-17T03:03:17.470602Z",
+  "updated_at": "2026-04-17T03:03:17.485498Z",
   "title": "Test?",
   "context": {
     "tickers": [],
@@ -14,7 +14,7 @@
       "message_id": "msg_001",
       "role": "user",
       "content": "Test?",
-      "timestamp": "2026-04-16T10:40:15.273471Z",
+      "timestamp": "2026-04-17T03:03:17.470602Z",
       "metadata": {
         "tickers": [],
         "scope": {}
@@ -24,9 +24,9 @@
       "message_id": "msg_002",
       "role": "assistant",
       "content": "Test answer.",
-      "timestamp": "2026-04-16T10:40:15.281335Z",
+      "timestamp": "2026-04-17T03:03:17.485498Z",
       "metadata": {
-        "verdict": "sell",
+        "verdict": "vendre",
         "confidence": null,
         "horizon": "1w",
         "tickers": null

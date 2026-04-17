@@ -1,12 +1,12 @@
 {
-  "conversation_id": "9c9aea4156691105",
+  "conversation_id": "e6778460722c4822",
   "schema_version": "copilot_conversation_v1",
-  "created_at": "2026-04-16T10:40:15.199510Z",
-  "updated_at": "2026-04-16T10:40:15.207378Z",
-  "title": "Should I sell MSFT?",
+  "created_at": "2026-04-17T03:03:17.155279Z",
+  "updated_at": "2026-04-17T03:03:17.175761Z",
+  "title": "Should I buy AAPL?",
   "context": {
     "tickers": [
-      "MSFT"
+      "AAPL"
     ],
     "scope": {},
     "portfolio_id": null
@@ -15,11 +15,11 @@
     {
       "message_id": "msg_001",
       "role": "user",
-      "content": "Should I sell MSFT?",
-      "timestamp": "2026-04-16T10:40:15.199510Z",
+      "content": "Should I buy AAPL?",
+      "timestamp": "2026-04-17T03:03:17.155279Z",
       "metadata": {
         "tickers": [
-          "MSFT"
+          "AAPL"
         ],
         "scope": {}
       }
@@ -27,14 +27,14 @@
     {
       "message_id": "msg_002",
       "role": "assistant",
-      "content": "Hold for now.",
-      "timestamp": "2026-04-16T10:40:15.207378Z",
+      "content": "Yes, AAPL looks strong with earnings coming up.",
+      "timestamp": "2026-04-17T03:03:17.175761Z",
       "metadata": {
-        "verdict": "hold",
-        "confidence": 0.6,
-        "horizon": "1m",
+        "verdict": "buy",
+        "confidence": 0.75,
+        "horizon": "1w",
         "tickers": [
-          "MSFT"
+          "AAPL"
         ]
       }
     }

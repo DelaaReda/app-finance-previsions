@@ -49,6 +49,7 @@ from orchestrator_paths import CANONICAL_VM_ROOT, SHARED_VM_ROOT, resolve_orches
 from runtime.model_plane.model_plane import resolve_planner_backend_choice as model_plane_resolve_planner_backend_choice
 from runtime.truth.dispatch_snapshot import build_stable_planner_dispatch_snapshot
 from runtime.truth.event_store import latest_graph_states
+from runtime.truth.public_proof_runner import run_public_proof
 from runtime.truth.runtime_truth_reader import build_runtime_truth_snapshot
 from planner_subagent_manager import (
     ACTIVE_STATUSES,
@@ -3817,6 +3818,7 @@ def build_parser() -> argparse.ArgumentParser:
             "reconcile-state",
             "planner-autobatch",
             "novelty-target",
+            "public-proof",
             "dispatch-capability",
             "claim",
             "complete",
@@ -3864,6 +3866,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target-role", default="")
     parser.add_argument("--subagent-id", default="")
     parser.add_argument("--allow-active-queued", action="store_true")
+    parser.add_argument("--timeout-seconds", type=float, default=12.0)
     return parser
 
 
@@ -4319,6 +4322,27 @@ def _planner_novelty_target_cli(root: Path, board_path: Path, queue_path: Path, 
     return 0
 
 
+def _public_proof_cli(root: Path, args: argparse.Namespace) -> int:
+    runtime_meta = _projection_runtime_meta(root)
+    artifact = run_public_proof(
+        root,
+        batch_id=str(args.batch_id or "").strip() or None,
+        timeout_seconds=float(args.timeout_seconds),
+    )
+    print(
+        "PUBLIC_PROOF "
+        f"status={artifact.get('status', 'unknown')} "
+        f"batch_id={artifact.get('batch_id') or 'none'} "
+        f"api_smoke_status={artifact.get('api_smoke_status', 'unknown')} "
+        f"ui_smoke_status={artifact.get('ui_smoke_status', 'unknown')} "
+        f"user_visible_delta_confirmed={1 if artifact.get('user_visible_delta_confirmed') else 0} "
+        f"proof_ref={artifact.get('proof_ref') or 'none'} "
+        f"runtime_truth_source={runtime_meta['runtime_truth_source']} "
+        f"event_store_primary={1 if runtime_meta['event_store_primary'] else 0}"
+    )
+    return 0
+
+
 def _dispatch_capability_cli(root: Path, args: argparse.Namespace) -> int:
     runtime_meta = _projection_runtime_meta(root)
     target_role = str(args.target_role or "").strip().lower()
@@ -4396,6 +4420,8 @@ def main() -> int:
             return _planner_autobatch_cli(root, board_path, queue_path, args)
         if args.cmd == "novelty-target":
             return _planner_novelty_target_cli(root, board_path, queue_path, args)
+        if args.cmd == "public-proof":
+            return _public_proof_cli(root, args)
         if args.cmd == "dispatch-capability":
             return _dispatch_capability_cli(root, args)
         with board_lock(board_path):

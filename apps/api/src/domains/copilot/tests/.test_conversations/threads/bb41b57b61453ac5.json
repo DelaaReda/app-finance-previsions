@@ -1,43 +1,43 @@
 {
-  "conversation_id": "20c2e52a0f9dfd75",
+  "conversation_id": "bb41b57b61453ac5",
   "schema_version": "copilot_conversation_v1",
-  "created_at": "2026-04-16T10:40:18.825666Z",
-  "updated_at": "2026-04-16T10:40:18.833643Z",
-  "title": "Tech portfolio rebalance?",
+  "created_at": "2026-04-17T03:03:18.084239Z",
+  "updated_at": "2026-04-17T03:03:18.097265Z",
+  "title": "Should I rebalance my tech portfolio?",
   "context": {
     "tickers": [
       "AAPL",
       "MSFT"
     ],
     "scope": {
-      "portfolio_id": "port_tech_rebalance"
+      "portfolio_id": "port_tech_001"
     },
-    "portfolio_id": "port_tech_rebalance"
+    "portfolio_id": "port_tech_001"
   },
   "messages": [
     {
       "message_id": "msg_001",
       "role": "user",
-      "content": "Tech portfolio rebalance?",
-      "timestamp": "2026-04-16T10:40:18.825666Z",
+      "content": "Should I rebalance my tech portfolio?",
+      "timestamp": "2026-04-17T03:03:18.084239Z",
       "metadata": {
         "tickers": [
           "AAPL",
           "MSFT"
         ],
         "scope": {
-          "portfolio_id": "port_tech_rebalance"
+          "portfolio_id": "port_tech_001"
         }
       }
     },
     {
       "message_id": "msg_002",
       "role": "assistant",
-      "content": "Reduce AAPL, add to MSFT.",
-      "timestamp": "2026-04-16T10:40:18.833643Z",
+      "content": "Reduce tech exposure.",
+      "timestamp": "2026-04-17T03:03:18.097265Z",
       "metadata": {
         "verdict": "sell",
-        "confidence": 0.75,
+        "confidence": 0.7,
         "horizon": "1w",
         "tickers": [
           "AAPL",
