@@ -239,6 +239,56 @@ def _pick_ranked_action(
     return None
 
 
+def _align_scope_focus_asks(
+    ask_items: List[Dict[str, Any]],
+    *,
+    scope_tickers: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    normalized_scope_tickers = normalize_tickers(scope_tickers or [])
+    if not normalized_scope_tickers:
+        return ask_items
+
+    scope_set = {ticker.upper() for ticker in normalized_scope_tickers}
+    focus_index = 0
+    aligned_items: List[Dict[str, Any]] = []
+    for item in ask_items:
+        if not isinstance(item, dict):
+            continue
+        normalized_item = dict(item)
+        item_id = str(normalized_item.get("id") or "").strip().lower()
+        if item_id.startswith(("brief_risk_", "brief_signal_")):
+            scope_ticker = normalized_scope_tickers[min(focus_index, len(normalized_scope_tickers) - 1)]
+            focus_index += 1
+            existing_prompt = str(
+                normalized_item.get("prompt")
+                or (
+                    normalized_item.get("prefill", {}).get("question")
+                    if isinstance(normalized_item.get("prefill"), dict)
+                    else ""
+                )
+                or ""
+            ).strip()
+            existing_tokens = {
+                token.upper()
+                for token in existing_prompt.replace(":", " ").replace("/", " ").split()
+                if token.isalpha() and token.upper() == token and 1 <= len(token) <= 5
+            }
+            if not existing_tokens.intersection(scope_set):
+                rewritten_prompt = f"What matters most about {scope_ticker} today?"
+                normalized_item["label"] = scope_ticker
+                normalized_item["prompt"] = rewritten_prompt
+                prefill = (
+                    dict(normalized_item.get("prefill"))
+                    if isinstance(normalized_item.get("prefill"), dict)
+                    else {}
+                )
+                prefill["question"] = rewritten_prompt
+                prefill["tickers"] = list(normalized_scope_tickers)
+                normalized_item["prefill"] = prefill
+        aligned_items.append(normalized_item)
+    return aligned_items
+
+
 def _default_personal_finance_start_payload(
     *,
     now_iso: str,
@@ -3456,6 +3506,11 @@ async def get_judge_personal_finance_start_payload(
             if isinstance(resolved_start.get("brief_of_day"), dict)
             else {}
         )
+        ensure_story_lines = getattr(copilot_service, "_ensure_brief_story_lines", None)
+        if callable(ensure_story_lines):
+            ensured_brief = ensure_story_lines(brief)
+            if isinstance(ensured_brief, dict):
+                brief = ensured_brief
         ask_items = [dict(item) for item in resolved_start.get("ask") if isinstance(item, dict)]
         open_items = [dict(item) for item in resolved_start.get("open") if isinstance(item, dict)]
         enrich_scope_actions = getattr(copilot_service, "_enrich_scope_start_actions", None)
@@ -3465,6 +3520,10 @@ async def get_judge_personal_finance_start_payload(
                 open_items,
                 scope_tickers=effective_tickers,
             )
+        ask_items = _align_scope_focus_asks(
+            ask_items,
+            scope_tickers=effective_tickers,
+        )
 
         # Ensure the start screen always exposes at least one actionable ask/open entry.
         # This protects the UX contract when upstream copilot payloads are sparse.

@@ -1534,6 +1534,121 @@ def test_judge_personal_finance_start_service_promotes_scope_ticker_open(monkeyp
     assert data["ask"][0]["target"] == "/personal-finance/ask"
 
 
+def test_judge_personal_finance_start_service_rewrites_scope_focus_asks(monkeypatch):
+    async def fake_build_context_payload(**_kwargs):
+        return {
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "A generic brief leaked the wrong ticker into the starter ask.",
+                    "generated_at": "2026-03-30T11:00:00Z",
+                    "freshness": "2026-03-30T11:00:00Z",
+                    "source": ["copilot_context_test"],
+                },
+                "ask": [
+                    {
+                        "id": "brief_risk_1",
+                        "kind": "ask",
+                        "label": "AAPL",
+                        "prompt": "What matters most about AAPL today?",
+                        "target": "/copilot/ask",
+                        "prefill": {
+                            "question": "What matters most about AAPL today?",
+                            "tickers": ["NVDA"],
+                        },
+                    }
+                ],
+                "open": [
+                    {
+                        "id": "market",
+                        "kind": "open",
+                        "label": "Open market view",
+                        "target": "market",
+                    }
+                ],
+            },
+            "source": ["judge_personal_finance_start_service", "copilot_route"],
+            "sources": ["judge_personal_finance_start_service", "copilot_route"],
+        }
+
+    class CopilotService:
+        build_context_payload = fake_build_context_payload
+        _enrich_scope_start_actions = staticmethod(copilot_service._enrich_scope_start_actions)
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_resolve_copilot_services",
+        lambda: (CopilotService, None),
+    )
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_personal_finance_start_payload(tickers=["nvda"])
+    )
+
+    assert payload["ok"] is True
+    data = payload["data"]
+    assert data["ask"][0]["label"] == "NVDA"
+    assert data["ask"][0]["prompt"] == "What matters most about NVDA today?"
+    assert data["ask"][0]["prefill"]["question"] == "What matters most about NVDA today?"
+    assert data["ask"][0]["prefill"]["tickers"] == ["NVDA"]
+
+
+def test_judge_personal_finance_start_service_backfills_story_lines(monkeypatch):
+    async def fake_build_context_payload(**_kwargs):
+        return {
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "NVDA leads while CPI risk stays close.",
+                    "top_signals": [{"name": "NVDA", "value": "+5%"}],
+                    "top_risks": [{"name": "CPI release", "value": "tomorrow"}],
+                    "sector_rotation": {"top": ["Semiconductors", "Tech"], "bottom": []},
+                    "generated_at": "2026-03-30T11:00:00Z",
+                    "freshness": "2026-03-30T11:00:00Z",
+                    "source": ["copilot_context_test"],
+                },
+                "ask": [
+                    {
+                        "id": "ask_ranked",
+                        "kind": "ask",
+                        "label": "Top ranked ask",
+                        "target": "/copilot/ask",
+                    }
+                ],
+                "open": [
+                    {
+                        "id": "open_ranked",
+                        "kind": "open",
+                        "label": "Open ranked",
+                        "target": "/copilot/overview",
+                    },
+                ],
+            },
+            "source": ["judge_personal_finance_start_service", "copilot_route"],
+            "sources": ["judge_personal_finance_start_service", "copilot_route"],
+        }
+
+    class CopilotService:
+        build_context_payload = fake_build_context_payload
+        _ensure_brief_story_lines = staticmethod(copilot_service._ensure_brief_story_lines)
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_resolve_copilot_services",
+        lambda: (CopilotService, None),
+    )
+
+    payload = asyncio.run(
+        judge_endpoint_service.get_judge_personal_finance_start_payload(tickers=["nvda"])
+    )
+
+    assert payload["ok"] is True
+    brief = payload["data"]["brief_of_day"]
+    assert brief["what_changed_today"] == [
+        "NVDA: +5%",
+        "Leadership: Semiconductors, Tech",
+    ]
+    assert brief["what_matters_now"] == ["CPI release: tomorrow"]
+
+
 def test_judge_personal_finance_start_service_uses_effective_scope_from_payload(monkeypatch):
     async def fake_build_context_payload(**_kwargs):
         return {
@@ -1623,6 +1738,61 @@ def test_judge_personal_finance_start_service_critical_fallback_keeps_actions(mo
     assert contract_data.ranked_action.target == "/personal-finance/ask"
     assert data["stats"] == {"ask_count": 1, "open_count": 1}
     assert data["filters_applied"] == {"tickers": ["NVDA"]}
+
+
+def test_judge_personal_finance_start_route_returns_scope_first_focus_ask(monkeypatch):
+    async def fake_build_context_payload(**_kwargs):
+        return {
+            "copilot_start": {
+                "brief_of_day": {
+                    "summary": "A generic brief leaked the wrong ticker into the starter ask.",
+                    "generated_at": "2026-03-30T11:00:00Z",
+                    "freshness": "2026-03-30T11:00:00Z",
+                    "source": ["copilot_context_test"],
+                },
+                "ask": [
+                    {
+                        "id": "brief_risk_1",
+                        "kind": "ask",
+                        "label": "AAPL",
+                        "prompt": "What matters most about AAPL today?",
+                        "target": "/copilot/ask",
+                        "prefill": {
+                            "question": "What matters most about AAPL today?",
+                            "tickers": ["NVDA"],
+                        },
+                    }
+                ],
+                "open": [
+                    {
+                        "id": "market",
+                        "kind": "open",
+                        "label": "Open market view",
+                        "target": "market",
+                    }
+                ],
+            },
+            "source": ["judge_personal_finance_start_service", "copilot_route"],
+            "sources": ["judge_personal_finance_start_service", "copilot_route"],
+        }
+
+    class CopilotService:
+        build_context_payload = fake_build_context_payload
+        _enrich_scope_start_actions = staticmethod(copilot_service._enrich_scope_start_actions)
+
+    monkeypatch.setattr(
+        judge_endpoint_service,
+        "_resolve_copilot_services",
+        lambda: (CopilotService, None),
+    )
+
+    client = _client()
+    resp = client.get("/api/judge/personal-finance/start?tickers=nvda&debug=true")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["ranked_action"]["target"] == "ticker:NVDA"
+    assert data["ask"][0]["label"] == "NVDA"
+    assert data["ask"][0]["prompt"] == "What matters most about NVDA today?"
 
 
 def test_judge_personal_finance_context_route_delegates_to_service(monkeypatch):
