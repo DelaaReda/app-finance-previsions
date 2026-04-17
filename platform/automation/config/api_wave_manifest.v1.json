@@ -1,6 +1,6 @@
 {
   "schema_version": "api_wave_manifest.v1",
-  "mode": "api_autonomy",
+  "mode": "api_autonomy_mode",
   "enabled": true,
   "stream_id": "API-WAVE",
   "domains": [
@@ -19,119 +19,236 @@
     {
       "endpoint_id": "copilot_search",
       "domain": "copilot",
-      "route_path": "/api/copilot/search",
+      "route_path": "/api/search/tickers",
       "route_module": "apps/api/src/domains/copilot/api/search.py",
       "priority": "P1",
       "product_surface": "copilot",
-      "shared_contract": "copilot_search_v1",
-      "endpoint_service": "copilot_search_endpoint_service.py",
-      "parity_status": "route_heavy",
+      "shared_contract": "",
+      "endpoint_service": "",
+      "parity_status": "route_local_mixed_contract",
       "last_public_proof": "none",
-      "deferred_reason": "none"
+      "deferred_reason": "none",
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": [
+          "/api/search/tickers?q=NVDA&limit=3"
+        ],
+        "success_condition": "returns search payload with ok=true and data.matches or data.total"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "copilot-search"
+      }
     },
     {
       "endpoint_id": "copilot_universal_search",
       "domain": "copilot",
-      "route_path": "/api/copilot/universal-search",
+      "route_path": "/api/search/universal",
       "route_module": "apps/api/src/domains/copilot/api/universal_search.py",
       "priority": "P1",
       "product_surface": "copilot",
-      "shared_contract": "copilot_universal_search_v1",
-      "endpoint_service": "copilot_universal_search_endpoint_service.py",
-      "parity_status": "route_heavy",
+      "shared_contract": "",
+      "endpoint_service": "apps/api/src/domains/copilot/application/universal_search.py",
+      "parity_status": "legacy_route_no_shared_service_contract",
       "last_public_proof": "none",
-      "deferred_reason": "none"
+      "deferred_reason": "none",
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": [
+          "/api/search/universal?q=NVDA&limit=5"
+        ],
+        "success_condition": "returns search payload with ok=true and data.results"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "copilot-universal-search"
+      }
     },
     {
       "endpoint_id": "forecasts_brief",
       "domain": "forecasts",
-      "route_path": "/api/forecasts/brief",
+      "route_path": "/api/brief/daily",
       "route_module": "apps/api/src/domains/forecasts/api/brief.py",
       "priority": "P1",
-      "product_surface": "brief",
-      "shared_contract": "forecasts_brief_v1",
-      "endpoint_service": "forecasts_brief_endpoint_service.py",
-      "parity_status": "route_heavy",
+      "product_surface": "forecasts",
+      "shared_contract": "",
+      "endpoint_service": "",
+      "parity_status": "route_local_contract_needs_judge_metadata",
       "last_public_proof": "none",
-      "deferred_reason": "none"
+      "deferred_reason": "none",
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": [
+          "/api/brief/daily"
+        ],
+        "success_condition": "returns brief payload with ok=true and generated_at/source/freshness"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "forecasts-brief"
+      }
     },
     {
       "endpoint_id": "market_data_news_feed",
       "domain": "market_data",
-      "route_path": "/api/market-data/news",
+      "route_path": "/api/news/feed",
       "route_module": "apps/api/src/domains/market_data/api/news.py",
       "priority": "P2",
-      "product_surface": "brief",
-      "shared_contract": "market_data_news_feed_v1",
-      "endpoint_service": "market_data_news_endpoint_service.py",
-      "parity_status": "route_heavy",
+      "product_surface": "market_data",
+      "shared_contract": "",
+      "endpoint_service": "apps/api/src/domains/market_data/application/news_service.py",
+      "parity_status": "mixed_route_service_contract",
       "last_public_proof": "none",
-      "deferred_reason": "none"
+      "deferred_reason": "none",
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": [
+          "/api/news/feed?limit=5"
+        ],
+        "success_condition": "returns news payload with ok=true and data.articles"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market-data-news-feed"
+      }
     },
     {
       "endpoint_id": "market_data_stocks",
       "domain": "market_data",
-      "route_path": "/api/market-data/stocks",
+      "route_path": "/api/stocks/prices",
       "route_module": "apps/api/src/domains/market_data/api/stocks.py",
       "priority": "P2",
-      "product_surface": "portfolio",
-      "shared_contract": "market_data_stocks_v1",
-      "endpoint_service": "market_data_stocks_endpoint_service.py",
-      "parity_status": "route_heavy",
+      "product_surface": "market_data",
+      "shared_contract": "",
+      "endpoint_service": "apps/api/src/domains/market_data/application/stocks_service.py",
+      "parity_status": "legacy_route_needs_endpoint_service_parity",
       "last_public_proof": "none",
-      "deferred_reason": "none"
+      "deferred_reason": "none",
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": [
+          "/api/stocks/prices?ticker=NVDA&interval=1d"
+        ],
+        "success_condition": "returns prices payload with ok=true and data.points"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market-data-stocks"
+      }
     },
     {
       "endpoint_id": "market_data_news_impact",
       "domain": "market_data",
-      "route_path": "/api/market-data/news-impact",
+      "route_path": "/api/news/analysis",
       "route_module": "apps/api/src/domains/market_data/api/news_impact.py",
       "priority": "P2",
-      "product_surface": "memo",
-      "shared_contract": "market_data_news_impact_v1",
-      "endpoint_service": "market_data_news_impact_endpoint_service.py",
-      "parity_status": "route_heavy",
+      "product_surface": "market_data",
+      "shared_contract": "",
+      "endpoint_service": "",
+      "parity_status": "route_local_contract_needs_metadata",
       "last_public_proof": "none",
-      "deferred_reason": "none"
+      "deferred_reason": "none",
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": [
+          "/api/news/analysis?tickers=NVDA&limit=5"
+        ],
+        "success_condition": "returns impact payload with ok=true and data.impact_analysis"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market-data-news-impact"
+      }
     },
     {
       "endpoint_id": "market_data_news_extra",
       "domain": "market_data",
-      "route_path": "/api/market-data/news-extra",
+      "route_path": "/api/news/feed",
       "route_module": "apps/api/src/domains/market_data/api/news_extra.py",
       "priority": "P3",
-      "product_surface": "memo",
-      "shared_contract": "market_data_news_extra_v1",
-      "endpoint_service": "market_data_news_extra_endpoint_service.py",
-      "parity_status": "route_heavy",
+      "product_surface": "market_data",
+      "shared_contract": "",
+      "endpoint_service": "",
+      "parity_status": "duplicate_route_surface_needs_single_service_contract",
       "last_public_proof": "none",
-      "deferred_reason": "none"
+      "deferred_reason": "none",
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": [
+          "/api/news/feed?tickers=NVDA&limit=5&q=AI"
+        ],
+        "success_condition": "returns filtered news payload with ok=true and data.articles"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market-data-news-extra"
+      }
     },
     {
       "endpoint_id": "market_data_analytics",
       "domain": "market_data",
-      "route_path": "/api/market-data/analytics",
+      "route_path": "/api/analytics/predictions",
       "route_module": "apps/api/src/domains/market_data/api/analytics.py",
       "priority": "P3",
-      "product_surface": "portfolio",
-      "shared_contract": "market_data_analytics_v1",
-      "endpoint_service": "market_data_analytics_endpoint_service.py",
-      "parity_status": "route_heavy",
+      "product_surface": "market_data",
+      "shared_contract": "",
+      "endpoint_service": "",
+      "parity_status": "route_local_contract_needs_service_boundary",
       "last_public_proof": "none",
-      "deferred_reason": "none"
+      "deferred_reason": "none",
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": [
+          "/api/analytics/predictions?ticker=NVDA&limit=5"
+        ],
+        "success_condition": "returns analytics payload with ok=true and data.accuracy_metrics"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market-data-analytics"
+      }
     },
     {
       "endpoint_id": "market_data_stocks_client",
       "domain": "market_data",
-      "route_path": "/api/market-data/stocks-client",
+      "route_path": "/api/stocks/search",
       "route_module": "apps/api/src/domains/market_data/api/stocks_client.py",
       "priority": "P3",
-      "product_surface": "portfolio",
-      "shared_contract": "market_data_stocks_client_v1",
-      "endpoint_service": "market_data_stocks_client_endpoint_service.py",
-      "parity_status": "route_heavy",
+      "product_surface": "market_data",
+      "shared_contract": "",
+      "endpoint_service": "",
+      "parity_status": "client_route_needs_shared_contract_metadata",
       "last_public_proof": "none",
-      "deferred_reason": "none"
+      "deferred_reason": "none",
+      "api_proof": {
+        "kind": "public_api_smoke",
+        "base_url": "http://3.98.20.77",
+        "expected_endpoints": [
+          "/api/stocks/search?q=NVDA&limit=5"
+        ],
+        "success_condition": "returns stocks search payload with ok=true and data.results"
+      },
+      "ui_proof": {
+        "kind": "public_ui_smoke",
+        "url": "http://3.98.20.77/",
+        "label": "market-data-stocks-client"
+      }
     }
   ]
 }
