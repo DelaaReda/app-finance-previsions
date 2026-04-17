@@ -245,11 +245,11 @@ def _flatten(cfg: dict[str, Any], role: str) -> tuple[dict[str, str], list[str]]
     )
     out["FC_API_WAVE_STATE_PATH"] = _as_text(
         api_autonomy_mode.get("state_path"),
-        "logs-codex-runs/orchestrator-state/api_wave_state.json",
+        "logs-codex-runs/orchestrator-state/api-wave-state.json",
     )
     out["FC_API_WAVE_BATCH_ID"] = _as_text(
         api_autonomy_mode.get("wave_batch_id"),
-        "API-WAVE",
+        "BATCH-900",
     )
     raw_api_domains = api_autonomy_mode.get("allowed_domains", ["copilot", "forecasts", "market_data"])
     if not isinstance(raw_api_domains, list):

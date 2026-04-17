@@ -12,15 +12,15 @@ from orchestrator_paths import load_runtime_state, read_json_file, resolve_orche
 
 API_WAVE_EXECUTION_MODE = "api_autonomy_mode"
 API_WAVE_MODE_ALIASES = {API_WAVE_EXECUTION_MODE, "api_autonomy"}
-API_WAVE_BATCH_ID = "BATCH-API"
+API_WAVE_BATCH_ID = "BATCH-900"
 API_WAVE_STREAM_ID = API_WAVE_BATCH_ID
 API_WAVE_SCHEMA_VERSION = "api_wave_state.v1"
 API_WAVE_MANIFEST_SCHEMA_VERSION = "api_wave_manifest.v1"
 API_WAVE_CANONICAL_MANIFEST_FILE = "platform/automation/config/api_wave_manifest.json"
 API_WAVE_LEGACY_MANIFEST_FILE = "platform/automation/config/api_wave_manifest.v1.json"
 API_WAVE_ADDITIONAL_MANIFEST_FILE = "platform/automation/config/api_wave_manifest.v1.json"
-API_WAVE_CANONICAL_STATE_FILE = "api_wave_state.json"
-API_WAVE_LEGACY_STATE_FILE = "api-wave-state.json"
+API_WAVE_CANONICAL_STATE_FILE = "api-wave-state.json"
+API_WAVE_LEGACY_STATE_FILE = "api_wave_state.json"
 # Backward-compat aliases still imported by runtime truth compatibility paths.
 API_WAVE_MANIFEST_FILE = API_WAVE_CANONICAL_MANIFEST_FILE
 API_WAVE_STATE_FILE = API_WAVE_CANONICAL_STATE_FILE
@@ -321,9 +321,17 @@ def _canonical_endpoint_id(value: Any) -> str:
     token = str(value or "").strip().lower()
     if not token:
         return ""
-    token = token.replace(" ", "-").replace("_", "-").replace(".", "-")
-    token = re.sub(r"-+", "-", token)
-    return token.strip("-")
+    token = token.replace(" ", "_").replace("-", "_")
+    token = re.sub(r"_+", "_", token)
+    if "." in token:
+        domain, rest = token.split(".", 1)
+        return f"{domain.strip('_')}.{rest.strip('_')}".strip(".")
+    for prefix in ("market_data_", "copilot_", "forecasts_"):
+        if token.startswith(prefix):
+            domain = prefix[:-1]
+            rest = token[len(prefix) :].strip("_")
+            return f"{domain}.{rest}".strip(".")
+    return token.strip("_")
 
 
 def _canonical_priority(value: Any) -> str:
@@ -448,7 +456,7 @@ def _normalize_manifest_item(raw: dict[str, Any], order: int) -> dict[str, Any]:
         normalized_route_paths.insert(0, route_path)
     api_proof = raw.get("api_proof") if isinstance(raw.get("api_proof"), dict) else {}
     ui_proof = raw.get("ui_proof") if isinstance(raw.get("ui_proof"), dict) else {}
-    endpoint_id = _canonical_endpoint_id(raw.get("endpoint_id"))
+    endpoint_id = str(raw.get("endpoint_id") or "").strip()
     public_paths = [
         str(item).strip()
         for item in (raw.get("public_paths") if isinstance(raw.get("public_paths"), list) else normalized_route_paths)
@@ -524,6 +532,7 @@ def default_api_wave_manifest() -> dict[str, Any]:
         "mode": API_WAVE_EXECUTION_MODE,
         "enabled": False,
         "wave_id": API_WAVE_BATCH_ID,
+        "wave_batch_id": API_WAVE_BATCH_ID,
         "batch_id": API_WAVE_BATCH_ID,
         "stream_id": API_WAVE_STREAM_ID,
         "domains": ["copilot", "forecasts", "market_data"],
@@ -583,11 +592,20 @@ def _normalize_manifest_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if isinstance(payload, dict):
         normalized.update(payload)
     items = _manifest_items(normalized)
+    wave_batch_id = str(
+        normalized.get("wave_batch_id")
+        or normalized.get("batch_id")
+        or normalized.get("stream_id")
+        or API_WAVE_BATCH_ID
+    ).strip() or API_WAVE_BATCH_ID
+    stream_id = str(normalized.get("stream_id") or wave_batch_id).strip() or wave_batch_id
+    wave_id = str(normalized.get("wave_id") or wave_batch_id).strip() or wave_batch_id
     normalized["schema_version"] = API_WAVE_MANIFEST_SCHEMA_VERSION
     normalized["mode"] = API_WAVE_EXECUTION_MODE
-    normalized["wave_id"] = API_WAVE_BATCH_ID
-    normalized["batch_id"] = API_WAVE_BATCH_ID
-    normalized["stream_id"] = API_WAVE_STREAM_ID
+    normalized["wave_id"] = wave_id
+    normalized["wave_batch_id"] = wave_batch_id
+    normalized["batch_id"] = wave_batch_id
+    normalized["stream_id"] = stream_id
     normalized["enabled"] = bool(normalized.get("enabled", True))
     normalized["endpoints"] = items
     normalized["items"] = copy.deepcopy(items)
@@ -598,12 +616,20 @@ def _normalize_state_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = default_api_wave_state()
     if isinstance(payload, dict):
         normalized.update(payload)
+    wave_batch_id = str(
+        normalized.get("wave_batch_id")
+        or normalized.get("batch_id")
+        or normalized.get("stream_id")
+        or API_WAVE_BATCH_ID
+    ).strip() or API_WAVE_BATCH_ID
+    stream_id = str(normalized.get("stream_id") or wave_batch_id).strip() or wave_batch_id
+    wave_id = str(normalized.get("wave_id") or wave_batch_id).strip() or wave_batch_id
     normalized["schema_version"] = API_WAVE_SCHEMA_VERSION
     normalized["mode"] = API_WAVE_EXECUTION_MODE
-    normalized["wave_id"] = API_WAVE_BATCH_ID
-    normalized["wave_batch_id"] = API_WAVE_BATCH_ID
-    normalized["batch_id"] = API_WAVE_BATCH_ID
-    normalized["stream_id"] = API_WAVE_STREAM_ID
+    normalized["wave_id"] = wave_id
+    normalized["wave_batch_id"] = wave_batch_id
+    normalized["batch_id"] = wave_batch_id
+    normalized["stream_id"] = stream_id
     normalized["current_endpoint_id"] = _canonical_endpoint_id(normalized.get("current_endpoint_id"))
     normalized["current_task_id"] = str(normalized.get("current_task_id") or normalized.get("current_owner_task_id") or "").strip()
     normalized["current_owner_task_id"] = str(normalized.get("current_owner_task_id") or normalized.get("current_task_id") or "").strip()
