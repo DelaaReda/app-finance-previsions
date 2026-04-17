@@ -136,6 +136,37 @@ def test_ask_payload_uses_market_context_when_rag_empty():
     assert len(response.get("reasoning", [])) >= 1
 
 
+@pytest.mark.parametrize(
+    ("freeform_answer", "expected_action"),
+    [
+        ("Je recommande de REDUIRE AAPL pour limiter le risque.", "sell"),
+        ("Je recommande d'AUGMENTER AAPL tant que le momentum tient.", "buy"),
+    ],
+)
+def test_ask_payload_coerces_french_freeform_verdict_aliases(freeform_answer: str, expected_action: str):
+    class _EmptyRAGStore(_FakeRAGStore):
+        def search(self, scope: Optional[Dict[str, Any]] = None, top_k: int = 10):
+            return []
+
+    def fake_ask_llm(*, question: str, context_chunks: List[Dict[str, Any]], max_tokens: int = 1000):
+        return {"model": "test-llm", "answer": freeform_answer, "citations": []}
+
+    response = asyncio.run(
+        copilot_service.build_ask_payload(
+            question="What should I do with my portfolio today?",
+            tickers=["AAPL"],
+            max_sources=2,
+            rag_store_cls=_EmptyRAGStore,
+            ask_llm_fn=fake_ask_llm,
+            context_service_cls=_FakeContextService,
+        )
+    )
+
+    assert response.get("action") == expected_action
+    assert response.get("verdict") == expected_action
+    assert response["memo"]["verdict"] == expected_action
+
+
 def test_ask_payload_fallback_when_market_context_service_fails():
     class _FailingContextService:
         async def get_current_market_context(self) -> Dict[str, Any]:

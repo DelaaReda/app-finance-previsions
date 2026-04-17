@@ -124,9 +124,9 @@ def _safe_text(value: Any, fallback: str = "") -> str:
 
 def _coerce_verdict(raw_verdict: Optional[str]) -> str:
     text = _safe_text(raw_verdict).lower()
-    if any(token in text for token in ["buy", "achat", "long", "accumuler", "acheter"]):
+    if any(token in text for token in ["buy", "achat", "long", "accumuler", "acheter", "augmenter"]):
         return "buy"
-    if any(token in text for token in ["sell", "vendre", "short", "alléger", "sortir"]):
+    if any(token in text for token in ["sell", "vendre", "short", "alléger", "sortir", "reduire", "réduire"]):
         return "sell"
     if any(token in text for token in ["hold", "maintenir", "conserver", "wait"]):
         return "hold"
@@ -2419,7 +2419,8 @@ async def build_ask_payload(
         if parsed_reasoning_source is None:
             parsed_reasoning_source = parsed_payload.get("reasoning", "")
         parsed_reasoning = _extract_reasoning(parsed_reasoning_source) if parsed_payload else []
-        parsed_action = _coerce_verdict(_safe_text(parsed_payload.get("action") or parsed_payload.get("verdict")))
+        parsed_action_raw = _safe_text(parsed_payload.get("action") or parsed_payload.get("verdict"))
+        parsed_action = _coerce_verdict(parsed_action_raw) if parsed_action_raw else ""
         parsed_horizon = parsed_payload.get("horizon") or parsed_payload.get("time_horizon")
         parsed_risks = parsed_payload.get("risks")
         parsed_next_steps = parsed_payload.get("next_steps")
