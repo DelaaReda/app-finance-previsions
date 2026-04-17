@@ -445,6 +445,52 @@ test('executeCopilotAction stores ask tickers on the input before focusing the c
   assert.deepEqual(calls, [{ type: 'focus' }, { type: 'toast', message: "ask What's moving NVDA today?", level: 'info' }]);
 });
 
+test('executeCopilotAction auto-submits ask actions when the widget ask handler is available', () => {
+  const calls = [];
+  const input = {
+    value: '',
+    dataset: {},
+    focus() {
+      calls.push({ type: 'focus' });
+    },
+  };
+  const sandbox = {
+    document: {
+      getElementById(id) {
+        return id === 'copilotQuestionInput' ? input : null;
+      },
+    },
+    sendCopilotQuestion() {
+      calls.push({ type: 'send' });
+    },
+    showToast(message, level) {
+      calls.push({ type: 'toast', message, level });
+    },
+  };
+
+  vm.createContext(sandbox);
+  vm.runInContext(
+    [
+      extractFunction('normalizeCopilotTickers', 'resolveCopilotScopeTickers'),
+      extractFunction('executeCopilotAction', 'setCopilotQuestion'),
+      extractFunction('setCopilotQuestion', 'focusCopilotInput'),
+      extractFunction('focusCopilotInput', 'handleCopilotQuestionKeydown'),
+      'this.executeCopilotAction = executeCopilotAction;',
+    ].join('\n\n'),
+    sandbox,
+    { filename: 'copilot-panel.html' },
+  );
+
+  sandbox.executeCopilotAction('ask', '', 'What should I do with my portfolio today?', ['nvda']);
+
+  assert.equal(input.value, 'What should I do with my portfolio today?');
+  assert.equal(input.dataset.copilotTickers, '["NVDA"]');
+  assert.deepEqual(calls, [
+    { type: 'send' },
+    { type: 'toast', message: 'ask What should I do with my portfolio today?', level: 'info' },
+  ]);
+});
+
 test('sendCopilotQuestion includes scoped tickers from the selected starter action', async () => {
   const fetchCalls = [];
   const loadingStates = [];

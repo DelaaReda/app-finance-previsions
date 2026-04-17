@@ -806,7 +806,11 @@ function renderCopilotAnswer(data) {
 function executeCopilotAction(kind, target, prefillQuestion, prefillTickers) {
     if (kind === 'ask' && prefillQuestion) {
         setCopilotQuestion(prefillQuestion, prefillTickers);
-        focusCopilotInput();
+        if (typeof sendCopilotQuestion === 'function') {
+            sendCopilotQuestion();
+        } else {
+            focusCopilotInput();
+        }
     } else if (kind === 'open' && target) {
         const namespace = (typeof getCopilotNamespace === 'function'
             ? getCopilotNamespace()
