@@ -198,6 +198,7 @@ def run_public_proof(
     root = Path(root)
     delivery_state = load_product_delivery_state(root)
     effective_batch_id = str(batch_id or delivery_state.get("active_batch_id") or delivery_state.get("last_completed_batch_id") or "").strip().upper()
+    api_wave_state: dict[str, Any] = {}
     if not effective_batch_id and api_wave_mode_enabled(root):
         api_wave_state = load_api_wave_state(root, persist_defaults=True)
         effective_batch_id = str(
