@@ -1586,7 +1586,7 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         "blocked/failed require concrete blocking_issue + recommended_next. Use none or SKIP(reason) only when a field truly does not apply.\n"
         "You are a capability inside OWNER_TASK_ID, not a scheduler. No queue/workboard mutation, no repo-wide audit, no broad repo hygiene.\n"
         "Target one mergeable product slice for the Finance Copilot brief+ask with explainable memo output path or its next delivery blocker.\n"
-        "If OWNER_TASK_ID starts with BATCH-API- (or legacy API-WAVE-/APIWAVE-/BATCH-API-), that slice is one full API wave endpoint migration to Judge-parity, not a micro-orchestration tweak.\n"
+        "If OWNER_TASK_ID starts with BATCH-900- (or legacy BATCH-API-/API-WAVE-/APIWAVE-), that slice is one full API wave endpoint migration to Judge-parity, not a micro-orchestration tweak.\n"
         "Read minimum context with rg/sed/tail; for large memory/log files use rg/sed/tail instead of cat. As soon as you have proof or a real blocker, emit the final JSON immediately.\n"
         "Prefer a bounded fix or artifact now; do not stop at analysis-only.\n"
         "Work on the narrowest file/test set that can unblock OWNER_TASK_ID.\n"

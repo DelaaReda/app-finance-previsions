@@ -64,7 +64,7 @@ DEFAULT_API_WAVE_ITEMS: tuple[dict[str, Any], ...] = (
         "ui_proof": {
             "kind": "public_ui_smoke",
             "url": "http://3.98.20.77/",
-        "label": "copilot-search",
+            "label": "copilot-search",
             "required": False,
         },
     },
@@ -431,8 +431,8 @@ def api_wave_state_path(root: Path) -> Path:
 
 
 def api_wave_owner_task_id(endpoint_id: str) -> str:
-    token = _canonical_endpoint_id(endpoint_id).replace(".", "_").upper() or "ENDPOINT"
-    return f"APIWAVE-{token}-DEV-01"
+    token = _canonical_endpoint_id(endpoint_id).upper() or "ENDPOINT"
+    return f"{API_WAVE_BATCH_ID}-DEV-{token}"
 
 
 def _manifest_rows(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -812,7 +812,7 @@ def _next_selectable_after(manifest: dict[str, Any], state: dict[str, Any], curr
 
 
 def api_wave_proof_path(root: Path, endpoint_id: str) -> Path:
-    token = _canonical_endpoint_id(endpoint_id).replace(".", "__")
+    token = str(endpoint_id or "").strip().lower().replace(".", "__").replace("-", "_")
     token = re.sub(r"[^a-z0-9_]+", "_", token)
     token = re.sub(r"_+", "_", token).strip("_") or "unknown"
     return resolve_orchestrator_write_path(root, f"{API_WAVE_PROOF_DIR}/{token}.json", create_parent=True)
