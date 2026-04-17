@@ -5,11 +5,14 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import urllib.error
+import urllib.request
 
 from browser_smoke import run_browser_smoke
 from orchestrator_paths import resolve_orchestrator_read_path, write_orchestrator_json
 
 from runtime.planner.api_wave import (
+    API_WAVE_BATCH_ID,
     api_wave_delivery_contract,
     api_wave_mode_enabled,
     apply_public_proof_result,
@@ -91,7 +94,7 @@ def _find_batch_contract(root: Path, batch_id: str) -> tuple[dict[str, Any], str
         contract = task.get("delivery_contract")
         if isinstance(contract, dict):
             return dict(contract), "parallel_workstreams.task"
-    api_wave_entry, _, _ = entry_for_batch_id(root, batch_token)
+    api_wave_entry = entry_for_batch_id(root, batch_token)
     if api_wave_entry is not None:
         return api_wave_delivery_contract(api_wave_entry), "api_wave_manifest"
     return _default_delivery_contract(batch_token), "default"
@@ -131,11 +134,55 @@ def _api_urls(contract: dict[str, Any]) -> list[str]:
     return urls or [f"{DEFAULT_PUBLIC_APP_BASE_URL}/api/health"]
 
 
+def _fetch_json_payload(url: str, timeout_seconds: float) -> dict[str, Any]:
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
+        body = response.read().decode("utf-8", errors="ignore")
+    payload = json.loads(body)
+    return payload if isinstance(payload, dict) else {}
+
+
+def _evaluate_api_payload(payload: dict[str, Any]) -> tuple[str, str, str]:
+    ok_flag = payload.get("ok")
+    data = payload.get("data")
+    contract_status = "ok" if ok_flag is True and data is not None else "error"
+    metadata_status = (
+        "ok"
+        if any(key in payload for key in ("source", "freshness", "warnings", "stats"))
+        or isinstance(payload.get("metadata"), dict)
+        else "degraded"
+    )
+    fallback_status = "ok"
+    if isinstance(data, dict):
+        if not data:
+            fallback_status = "error"
+    elif isinstance(data, list):
+        if not data:
+            fallback_status = "error"
+    elif data in (None, "", False):
+        fallback_status = "error"
+    return contract_status, metadata_status, fallback_status
+
+
 def _run_api_proof(contract: dict[str, Any], timeout_seconds: float) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     maintenance_seen = False
+    contract_status = "ok"
+    metadata_status = "ok"
+    fallback_status = "ok"
     for url in _api_urls(contract):
         probe = probe_public_surface(url, timeout_s=timeout_seconds, maintenance_check=True)
+        if probe.get("http_ok"):
+            try:
+                payload = _fetch_json_payload(url, timeout_seconds)
+                c_status, m_status, f_status = _evaluate_api_payload(payload)
+            except (urllib.error.URLError, TimeoutError, ValueError, OSError, json.JSONDecodeError):
+                c_status, m_status, f_status = ("error", "error", "error")
+            except Exception:
+                c_status, m_status, f_status = ("error", "error", "error")
+            contract_status = "error" if c_status == "error" else contract_status
+            metadata_status = "error" if m_status == "error" else ("degraded" if m_status == "degraded" and metadata_status == "ok" else metadata_status)
+            fallback_status = "error" if f_status == "error" else fallback_status
         checks.append(probe)
         if probe.get("maintenance_active"):
             maintenance_seen = True
@@ -148,6 +195,9 @@ def _run_api_proof(contract: dict[str, Any], timeout_seconds: float) -> dict[str
     return {
         "status": status,
         "checks": checks,
+        "contract_status": contract_status if status != "maintenance" else "maintenance",
+        "metadata_status": metadata_status if status != "maintenance" else "maintenance",
+        "fallback_status": fallback_status if status != "maintenance" else "maintenance",
         "public_urls_checked": [str(check.get("url", "")).strip() for check in checks if str(check.get("url", "")).strip()],
     }
 
@@ -155,6 +205,13 @@ def _run_api_proof(contract: dict[str, Any], timeout_seconds: float) -> dict[str
 def _run_ui_proof(root: Path, batch_id: str, contract: dict[str, Any], timeout_seconds: int) -> dict[str, Any]:
     ui_proof = contract.get("ui_proof")
     ui_proof = ui_proof if isinstance(ui_proof, dict) else {}
+    if not bool(ui_proof.get("required", True)):
+        return {
+            "status": "skipped",
+            "url": str(ui_proof.get("url") or DEFAULT_PUBLIC_UI_URL).strip() or DEFAULT_PUBLIC_UI_URL,
+            "label": str(ui_proof.get("label") or f"{batch_id.lower()}-public-ui").strip() or f"{batch_id.lower()}-public-ui",
+            "reason": "ui_proof_optional",
+        }
     url = str(ui_proof.get("url") or DEFAULT_PUBLIC_UI_URL).strip() or DEFAULT_PUBLIC_UI_URL
     label = str(ui_proof.get("label") or f"{batch_id.lower()}-public-ui").strip() or f"{batch_id.lower()}-public-ui"
     wait_text = str(ui_proof.get("wait_text") or "").strip()
@@ -184,7 +241,25 @@ def _run_ui_proof(root: Path, batch_id: str, contract: dict[str, Any], timeout_s
         }
 
 
-def _proof_artifact_relative_path(batch_id: str) -> str:
+def _resolve_wave_target(root: Path, batch_id: str) -> tuple[str, str]:
+    token = str(batch_id or "").strip().upper()
+    if token not in {API_WAVE_BATCH_ID, "BATCH-API", "API-WAVE"}:
+        return token, ""
+    state = load_api_wave_state(root, persist_defaults=True)
+    endpoint_id = str(
+        state.get("current_endpoint_id")
+        or state.get("next_endpoint_id")
+        or state.get("last_completed_endpoint_id")
+        or ""
+    ).strip()
+    owner_task_id = str(state.get("current_owner_task_id") or state.get("current_task_id") or "").strip()
+    return (owner_task_id or API_WAVE_BATCH_ID), endpoint_id
+
+
+def _proof_artifact_relative_path(batch_id: str, *, endpoint_id: str = "") -> str:
+    endpoint_token = str(endpoint_id or "").strip().replace(".", "__").replace("-", "_").lower()
+    if endpoint_token:
+        return f"api-wave-proofs/{endpoint_token}.json"
     token = str(batch_id or "").strip().upper() or "BATCH-UNKNOWN"
     return f"public-proof/{token}.json"
 
@@ -198,17 +273,16 @@ def run_public_proof(
     root = Path(root)
     delivery_state = load_product_delivery_state(root)
     effective_batch_id = str(batch_id or delivery_state.get("active_batch_id") or delivery_state.get("last_completed_batch_id") or "").strip().upper()
+    endpoint_id = ""
     api_wave_state: dict[str, Any] = {}
-    if not effective_batch_id and api_wave_mode_enabled(root):
+    api_wave_entry: dict[str, Any] | None = None
+    if (not effective_batch_id or effective_batch_id in {API_WAVE_BATCH_ID, "BATCH-API", "API-WAVE"}) and api_wave_mode_enabled(root):
         api_wave_state = load_api_wave_state(root, persist_defaults=True)
-        effective_batch_id = str(
-            api_wave_state.get("current_owner_task_id")
-            or api_wave_state.get("current_endpoint_id")
-            or ""
-        ).strip().upper()
+        effective_batch_id, endpoint_id = _resolve_wave_target(root, effective_batch_id or API_WAVE_BATCH_ID)
     if not effective_batch_id:
         return {
             "batch_id": None,
+            "endpoint_id": None,
             "status": "skip",
             "reason": "no_canonical_batch",
             "timestamp": _utc_now(),
@@ -217,30 +291,41 @@ def run_public_proof(
 
     raw_contract, contract_source = _find_batch_contract(root, effective_batch_id)
     contract = _normalize_contract(effective_batch_id, raw_contract)
+    if api_wave_mode_enabled(root):
+        api_wave_entry = entry_for_batch_id(root, batch_id or effective_batch_id or API_WAVE_BATCH_ID)
+    route_path = str((api_wave_entry or {}).get("route_path") or "").strip() or None
     api_result = _run_api_proof(contract, float(timeout_seconds))
     ui_result = _run_ui_proof(root, effective_batch_id, contract, int(max(5, timeout_seconds)))
 
     if api_result["status"] == "maintenance":
         overall_status = "maintenance"
-    elif api_result["status"] == "ok" and ui_result["status"] == "ok":
+    elif api_result["status"] == "ok" and ui_result["status"] in {"ok", "skipped"}:
         overall_status = "ok"
     else:
         overall_status = "error"
 
     artifact = {
         "batch_id": effective_batch_id,
+        "endpoint_id": endpoint_id or None,
+        "route_path": route_path,
         "status": overall_status,
         "api_smoke_status": api_result["status"],
         "ui_smoke_status": ui_result["status"],
-        "user_visible_delta_confirmed": api_result["status"] == "ok" and ui_result["status"] == "ok",
-        "public_urls_checked": list(
-            dict.fromkeys(
+        "contract_status": api_result.get("contract_status", "unknown"),
+        "metadata_status": api_result.get("metadata_status", "unknown"),
+        "fallback_status": api_result.get("fallback_status", "unknown"),
+        "user_visible_delta_confirmed": api_result["status"] == "ok" and ui_result["status"] in {"ok", "skipped"},
+        "public_url": api_result.get("public_urls_checked", [None])[0],
+        "public_urls_checked": [
+            url
+            for url in dict.fromkeys(
                 [
                     *api_result.get("public_urls_checked", []),
-                    str(ui_result.get("url", "")).strip(),
+                    str(ui_result.get("url", "")).strip() if str(ui_result.get("url", "")).strip() else "",
                 ]
             )
-        ),
+            if str(url or "").strip()
+        ],
         "timestamp": _utc_now(),
         "contract_source": contract_source,
         "contract": contract,
@@ -251,15 +336,16 @@ def run_public_proof(
     artifact["proof_ref"] = str(proof_path)
     persist_public_proof(root, artifact)
     if api_wave_mode_enabled(root):
-        apply_public_proof_result(root, batch_id=effective_batch_id, artifact=artifact)
+        apply_public_proof_result(root, batch_id=batch_id or effective_batch_id, artifact=artifact)
     return artifact
 
 
 def persist_public_proof(root: Path, artifact: dict[str, Any]) -> Path:
     batch_id = str(artifact.get("batch_id") or "").strip().upper()
-    if not batch_id:
+    endpoint_id = str(artifact.get("endpoint_id") or "").strip()
+    if not batch_id and not endpoint_id:
         raise ValueError("missing batch_id for public proof artifact")
-    return write_orchestrator_json(root, _proof_artifact_relative_path(batch_id), artifact, mirror_docs=False)
+    return write_orchestrator_json(root, _proof_artifact_relative_path(batch_id, endpoint_id=endpoint_id), artifact, mirror_docs=False)
 
 
 def build_parser() -> argparse.ArgumentParser:

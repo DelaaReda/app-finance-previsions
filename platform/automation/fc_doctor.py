@@ -155,7 +155,7 @@ def _planner_only_mode(root: Path) -> bool:
 def _expected_core_roles(root: Path) -> tuple[str, ...]:
     if _planner_only_mode(root):
         return ("planner",)
-    return ("planner", "dev")
+    return ("planner", "dev", "admin")
 
 
 def _expected_tmux_sessions(root: Path) -> list[str]:
@@ -507,7 +507,7 @@ def check_sessions(root: Path) -> CheckResult:
                 "expected_core": list(expected),
                 "expected_sessions": _expected_tmux_sessions(root),
                 "scheduler_inventory_mode": "remote_vm_authority",
-                "execution_mode": "planner_experimental" if expected == ("planner",) else "parallel_roles",
+                "execution_mode": "planner_experimental" if expected == ("planner",) else "api_autonomy_mode",
             },
         )
     runtime_state = _runtime_state_detail(root)
@@ -572,7 +572,7 @@ def check_sessions(root: Path) -> CheckResult:
                 "orphans": orphans[:60],
                 "quarantined_jobs": quarantined_jobs[:60],
                 "scheduler_inventory_mode": "quarantine" if _planner_only_mode(root) else "legacy_compatible",
-                "execution_mode": "planner_experimental" if expected == ("planner",) else "parallel_roles",
+                "execution_mode": "planner_experimental" if expected == ("planner",) else "api_autonomy_mode",
                 "runtime_lifecycle": runtime_state.get("lifecycle", "running"),
                 "advisory_optional": "scrum_master",
                 "stderr": err[:300],
@@ -613,7 +613,7 @@ def check_sessions(root: Path) -> CheckResult:
             "orphans": orphans[:60],
             "quarantined_jobs": quarantined_jobs[:60],
             "scheduler_inventory_mode": "quarantine" if _planner_only_mode(root) else "legacy_compatible",
-            "execution_mode": "planner_experimental" if expected == ("planner",) else "parallel_roles",
+            "execution_mode": "planner_experimental" if expected == ("planner",) else "api_autonomy_mode",
             "runtime_lifecycle": runtime_state.get("lifecycle", "running"),
             "advisory_optional": "scrum_master",
             "stderr": err[:300],
