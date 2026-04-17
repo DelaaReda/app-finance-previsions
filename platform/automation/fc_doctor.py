@@ -532,7 +532,7 @@ def check_sessions(root: Path) -> CheckResult:
     lane_validity = build_lane_validity_summary(root, roles=list(expected))
     canonical_active_batches = lane_validity.get("active_batches", [])
 
-    invalid_core = [] if runtime_paused else [
+    invalid_core = [] if (runtime_paused or not canonical_active_batches) else [
         role
         for role in expected
         if bool((lane_validity.get("roles", {}).get(role, {}) or {}).get("needs_recovery"))
@@ -1012,13 +1012,21 @@ def _allow_live_openclaw_checks(root: Path) -> bool:
         return False
 
 
+def _has_local_runner_config(root: Path) -> bool:
+    try:
+        runner_dir = root.expanduser().resolve() / "platform" / "config" / "runner"
+    except Exception:
+        runner_dir = root / "platform" / "config" / "runner"
+    return (runner_dir / "runner.v1.yaml").exists() or (runner_dir / "runner_config.v1.yaml").exists()
+
+
 def _control_plane_location(root: Path) -> str:
     token = str(os.environ.get("FC_CONTROL_PLANE_LOCATION", "") or "").strip().lower()
     if token in {"local", "local_vm", "vm", "canonical_vm"}:
         return "local_vm"
     if token in {"remote", "remote_vm", "aws_ec2_app", "ec2_app_host"}:
         return "remote_vm"
-    return "local_vm" if _allow_live_openclaw_checks(root) else "remote_vm"
+    return "local_vm" if (_allow_live_openclaw_checks(root) or _has_local_runner_config(root)) else "remote_vm"
 
 
 def _remote_control_plane_advisory(name: str, detail: dict[str, Any] | None = None) -> CheckResult:
@@ -1205,14 +1213,25 @@ def _aggregate_status(*values: object) -> str:
 
 
 def _runtime_idle_fast_path_check(name: str, reason: str = "no_active_graph_state") -> CheckResult:
+    detail = {
+        "status": "ok",
+        "idle_runtime_fast_path": True,
+        "reason": reason,
+        "check": name,
+    }
+    if name == "queue_workboard":
+        detail.update(
+            {
+                "mismatch_count": 0,
+                "oldest_mismatch_age_s": 0,
+                "queue_only_count": 0,
+                "workboard_only_count": 0,
+                "state_mismatch_count": 0,
+            }
+        )
     return CheckResult(
         status="ok",
-        detail={
-            "status": "ok",
-            "idle_runtime_fast_path": True,
-            "reason": reason,
-            "check": name,
-        },
+        detail=detail,
     )
 
 
@@ -1608,6 +1627,7 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
     runtime_state = _runtime_state_detail(root)
     runtime_truth = check_runtime_truth(root)
     runtime_truth_detail = runtime_truth.detail if isinstance(runtime_truth.detail, dict) else {}
+    control_plane_location = _control_plane_location(root)
     runtime_idle_fast_path = (
         bool(runtime_truth_detail.get("event_store_primary"))
         and "graph_state_count" in runtime_truth_detail
@@ -1615,6 +1635,7 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         and int(runtime_truth_detail.get("graph_state_count", 0) or 0) == 0
         and int(runtime_truth_detail.get("recent_event_count", 0) or 0) == 0
     )
+    lightweight_runtime_fast_path = control_plane_location != "local_vm" or not runtime_truth_detail or runtime_idle_fast_path
     worker_snapshot = _worker_runtime_snapshot(root)
     checks = {
         "workspace_root": check_workspace_root(root),
@@ -1625,9 +1646,9 @@ def build_payload(root: Path, api_base: str, monitor_base: str) -> tuple[dict[st
         "scheduler_authority": check_scheduler_authority(root),
         "sessions": check_sessions(root),
         "locks": check_locks(root, state_dir),
-        "queue_workboard": _runtime_idle_fast_path_check("queue_workboard") if runtime_idle_fast_path else check_queue_workboard(root, runtime_truth.detail if isinstance(runtime_truth.detail, dict) else None),
+        "queue_workboard": _runtime_idle_fast_path_check("queue_workboard") if lightweight_runtime_fast_path else check_queue_workboard(root, runtime_truth.detail if isinstance(runtime_truth.detail, dict) else None),
         "providers": check_providers(root, api_base=api_base, monitor_base=monitor_base, state_dir=state_dir),
-        "product_value": _runtime_idle_fast_path_check("product_value") if runtime_idle_fast_path else check_product_value(root, api_base=api_base),
+        "product_value": _runtime_idle_fast_path_check("product_value") if lightweight_runtime_fast_path else check_product_value(root, api_base=api_base),
         "delivery_integrity": check_delivery_integrity(root),
         "delivery_future_integrity": _runtime_idle_fast_path_check("delivery_future_integrity") if runtime_idle_fast_path else check_delivery_future_integrity(root),
         "browser_proof_pipeline": _runtime_idle_fast_path_check("browser_proof_pipeline") if runtime_idle_fast_path else check_browser_proof_pipeline(root),

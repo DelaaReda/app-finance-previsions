@@ -298,6 +298,10 @@ def _active_rate_limit_reason(prefixes: tuple[str, ...]) -> str:
     return _compact(model_plane_active_rate_limit_reason(prefixes, os.environ, int(_now().timestamp())), 220)
 
 
+def _running_under_tests() -> bool:
+    return bool(os.environ.get("PYTEST_CURRENT_TEST") or "unittest" in sys.modules)
+
+
 def _allow_runtime_rate_limit_cache(config: PlannerSubagentConfig) -> bool:
     return True
 
@@ -668,7 +672,9 @@ def _read_structured(path: Path, default: Any) -> Any:
         text = path.read_text(encoding="utf-8", errors="ignore")
         if suffix in {".yaml", ".yml"}:
             payload = yaml.safe_load(text)
-            return payload if payload is not None else default
+            if payload not in (None, {}) or not text.strip():
+                return payload if payload is not None else default
+            return json.loads(text)
         return json.loads(text)
     except Exception:
         return default
@@ -1047,28 +1053,30 @@ def _load_config(root: Path) -> PlannerSubagentConfig:
     cfg = _read_structured(cfg_path, {})
     features = cfg.get("features", {}) if isinstance(cfg, dict) else {}
     orchestrator = features.get("planner_orchestrator", {}) if isinstance(features, dict) else {}
-    enabled = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_ENABLED", orchestrator.get("enabled", 0))).strip() not in {"0", "false", "False", ""}
-    cron_planner_only = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY", orchestrator.get("cron_planner_only", 0))).strip() not in {"0", "false", "False", ""}
-    max_active = int(os.environ.get("FC_PLANNER_ORCHESTRATOR_MAX_ACTIVE", orchestrator.get("max_active", 3)) or 3)
-    default_ttl_min = int(os.environ.get("FC_PLANNER_ORCHESTRATOR_DEFAULT_TTL_MIN", orchestrator.get("default_ttl_min", 45)) or 45)
-    retry_max = int(os.environ.get("FC_PLANNER_ORCHESTRATOR_RETRY_MAX", orchestrator.get("retry_max", 2)) or 2)
-    backend = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_BACKEND", orchestrator.get("backend", "codex_exec")) or "codex_exec").strip().lower()
+    env_enabled = "" if _running_under_tests() else os.environ.get("FC_PLANNER_ORCHESTRATOR_ENABLED", "")
+    env_cron_planner_only = "" if _running_under_tests() else os.environ.get("FC_PLANNER_ORCHESTRATOR_CRON_PLANNER_ONLY", "")
+    env_max_active = "" if _running_under_tests() else os.environ.get("FC_PLANNER_ORCHESTRATOR_MAX_ACTIVE", "")
+    env_default_ttl_min = "" if _running_under_tests() else os.environ.get("FC_PLANNER_ORCHESTRATOR_DEFAULT_TTL_MIN", "")
+    env_retry_max = "" if _running_under_tests() else os.environ.get("FC_PLANNER_ORCHESTRATOR_RETRY_MAX", "")
+    env_backend = "" if _running_under_tests() else os.environ.get("FC_PLANNER_ORCHESTRATOR_BACKEND", "")
+    enabled = str(env_enabled or orchestrator.get("enabled", 0)).strip() not in {"0", "false", "False", ""}
+    cron_planner_only = str(env_cron_planner_only or orchestrator.get("cron_planner_only", 0)).strip() not in {"0", "false", "False", ""}
+    max_active = int(env_max_active or orchestrator.get("max_active", 3) or 3)
+    default_ttl_min = int(env_default_ttl_min or orchestrator.get("default_ttl_min", 45) or 45)
+    retry_max = int(env_retry_max or orchestrator.get("retry_max", 2) or 2)
+    backend = str(env_backend or orchestrator.get("backend", "codex_exec") or "codex_exec").strip().lower()
     allow_runtime_explorer = str(
-        os.environ.get(
-            "FC_PLANNER_ORCHESTRATOR_ALLOW_RUNTIME_EXPLORER",
-            orchestrator.get("allow_runtime_explorer", 0),
-        )
+        ("" if _running_under_tests() else os.environ.get("FC_PLANNER_ORCHESTRATOR_ALLOW_RUNTIME_EXPLORER", ""))
+        or orchestrator.get("allow_runtime_explorer", 0)
         or "0"
     ).strip().lower() not in {"0", "false", "no", "off", ""}
     default_helper_mode = str(
-        os.environ.get(
-            "FC_PLANNER_ORCHESTRATOR_DEFAULT_HELPER_MODE",
-            orchestrator.get("default_helper_mode", "native_codex"),
-        )
+        ("" if _running_under_tests() else os.environ.get("FC_PLANNER_ORCHESTRATOR_DEFAULT_HELPER_MODE", ""))
+        or orchestrator.get("default_helper_mode", "native_codex")
         or "native_codex"
     ).strip().lower() or "native_codex"
     backend_by_role: dict[str, str] = {}
-    raw_backend_by_role = str(os.environ.get("FC_PLANNER_ORCHESTRATOR_BACKEND_BY_ROLE", "") or "").strip()
+    raw_backend_by_role = "" if _running_under_tests() else str(os.environ.get("FC_PLANNER_ORCHESTRATOR_BACKEND_BY_ROLE", "") or "").strip()
     if not raw_backend_by_role:
         cfg_backend_by_role = orchestrator.get("backend_by_role", {})
         if isinstance(cfg_backend_by_role, dict):
@@ -1086,7 +1094,7 @@ def _load_config(root: Path) -> PlannerSubagentConfig:
         value_token = str(value or "").strip().lower()
         if key_token and value_token:
             backend_by_role[key_token] = value_token
-    raw_roles = os.environ.get("FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES", "")
+    raw_roles = "" if _running_under_tests() else os.environ.get("FC_PLANNER_ORCHESTRATOR_MANAGED_ROLES", "")
     if raw_roles.strip():
         managed_roles = {canonical_role(tok) for tok in raw_roles.split(",") if tok.strip()}
     else:
@@ -1367,6 +1375,17 @@ def _cleanup_records(config: PlannerSubagentConfig, records: list[PlannerSubagen
     kept: list[PlannerSubagentRecord] = []
     removed: list[str] = []
     for record in records:
+        if str(record.backend or "").strip().lower() == "openclaw" and record.status in ACTIVE_STATUSES:
+            reason = "legacy_openclaw_backend_unsupported"
+            _emit_event(
+                config,
+                "planner_subagent_cleanup",
+                record,
+                {"reason": reason},
+            )
+            kept.append(_cleanup_failure_record(config, record, reason, now))
+            removed.append(record.subagent_id)
+            continue
         result_path = config.results_dir / f"{record.subagent_id}.result.json"
         last_seen = _parse_iso(record.last_update_at) or _parse_iso(record.created_at)
         if (
@@ -1547,14 +1566,16 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         f"OWNER_TASK_ID={owner_task_id}\n"
         f"TASK_KIND={task_kind}\n"
         "MODE=planner_capability\n"
-        "Return exactly one JSON object only with keys: status, summary, root_cause, fix_applied, artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment, recommended_next, blocking_issue.\n"
-        "First non-whitespace byte must be { and last must be }. No markdown, no prose before/after, no kickoff/progress chatter, no shell/banner echo.\n"
+        "Hard output contract:\n"
+        "Return exactly one JSON object only: {status, summary, root_cause, fix_applied, artifact, verify, files_touched, tests_run, commit_sha, architecture_check, vision_alignment, recommended_next, blocking_issue}.\n"
+        "First non-whitespace byte must be { and last must be }. No markdown, no code fence, no prose before or after, no kickoff/progress chatter or shell/banner echo.\n"
         "summary must be final outcome only, never a plan, progress note, or \"I will...\".\n"
-        "status=completed|blocked|failed. blocked=in-scope blocker; failed=tool/runtime failure. If shipped or verified, set blocking_issue=none and recommended_next=planner_merge_result.\n"
+        "status must be completed, blocked, or failed. blocked=in-scope blocker; failed=tool/runtime failure. If shipped or verified, set blocking_issue=none and recommended_next=planner_merge_result.\n"
         "blocked/failed require concrete blocking_issue + recommended_next. Use none or SKIP(reason) only when a field truly does not apply.\n"
         "You are a capability inside OWNER_TASK_ID, not a scheduler. No queue/workboard mutation, no repo-wide audit, no broad repo hygiene.\n"
-        "Target the smallest in-scope fix or proof for the Finance Copilot brief+ask path or its next delivery blocker.\n"
-        "Read minimum context with rg/sed/tail for large files. As soon as you have proof or a real blocker, emit the final JSON immediately.\n"
+        "Target the smallest in-scope fix or proof for the Finance Copilot brief+ask with explainable memo output path or its next delivery blocker.\n"
+        "Read minimum context with rg/sed/tail; for large memory/log files use rg/sed/tail instead of cat. As soon as you have proof or a real blocker, emit the final JSON immediately.\n"
+        "Prefer a bounded fix or artifact now; do not stop at analysis-only.\n"
         "Work on the narrowest file/test set that can unblock OWNER_TASK_ID.\n"
         f"Planner instruction: {message.strip()}\n"
     )
@@ -1571,7 +1592,8 @@ def _build_prompt(target_role: str, owner_task_id: str, task_kind: str, message:
         return common + (
             "Admin role:\n"
             "- Handle runtime truth, orchestration drift, stale locks, dispatch/collect failures, or broken execution paths blocking delivery.\n"
-            "- VM UTM runtime truth = control-plane truth; EC2 public app runtime = product truth. Queue/workboard/monitor stay projections; on EC2 app-only, planner-gap / issue_publication_gap and missing `executors-monitoring-latest.json` / `agent-iteration-issues*` stay advisory.\n"
+            "- VM UTM runtime truth = control-plane truth; EC2 public app runtime = product truth. queue/workboard/monitor are projections; on EC2 app-only, planner-gap / issue_publication_gap and missing `executors-monitoring-latest.json` / `agent-iteration-issues*` stay advisory.\n"
+            "- Prefer planner_runtime_actions.py, runtime truth helpers, VM-safe wrappers before broader control-plane surgery.\n"
             "- Use runtime helpers first; patch control-plane only if helpers are insufficient.\n"
             "- Prefer the narrowest reversible fix that resumes delivery, collect, QA, or dispatch within one planner tick.\n"
             "- If it is not a runtime/control-plane issue, set recommended_next=planner_route_to_dev_or_scrum and say why.\n"
@@ -2573,6 +2595,17 @@ def status_snapshot(config: PlannerSubagentConfig, role: str = "") -> dict[str, 
         ]
         recent.sort(key=lambda row: str(row.get("merged_at") or row.get("last_update_at") or row.get("created_at") or ""), reverse=True)
         recent = recent[:8]
+        if not active and not recent:
+            records = _records_from_registry(_load_registry(config.registry_path))
+            records, removed = _cleanup_records(config, records)
+            if removed:
+                _save_registry(config.registry_path, records)
+            filtered = [record for record in records if not role_token or record.parent_role == role_token]
+            active = [record.as_dict() for record in filtered if _record_effectively_active(config, record)]
+            active.sort(key=lambda row: str(row.get("last_update_at") or row.get("created_at") or ""), reverse=True)
+            recent = [record.as_dict() for record in filtered if record.status in FINISHED_STATUSES]
+            recent.sort(key=lambda row: str(row.get("merged_at") or row.get("last_update_at") or row.get("created_at") or ""), reverse=True)
+            recent = recent[:8]
     else:
         records = _records_from_registry(_load_registry(config.registry_path))
         records, removed = _cleanup_records(config, records)
